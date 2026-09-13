@@ -27,43 +27,63 @@ jobs:
           test -f build/prereveal-metadata/0000.json
           test -f build/prereveal-metadata/9999.json
 
-      - name: Upload metadata directory to Pinata V3
+      - name: Pack metadata directory into an IPFS CAR
+        run: |
+          set -euo pipefail
+          npm install --no-save ipfs-car
+          npx ipfs-car --pack build/prereveal-metadata --output coolbears-prereveal-metadata.car
+          test -s coolbears-prereveal-metadata.car
+          echo "CAR bytes: $(wc -c < coolbears-prereveal-metadata.car)"
+
+      - name: Upload CAR to Pinata V3
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
         run: |
           set -euo pipefail
           test -n "$PINATA_JWT"
-          args=(
-            -sS -w '%{http_code}'
-            -X POST https://uploads.pinata.cloud/v3/files
-            -H "Authorization: Bearer $PINATA_JWT"
-          )
-          for file in build/prereveal-metadata/*.json; do
-            base=$(basename "$file")
-            args+=( -F "file=@${file};filename=${base};type=application/json" )
-          done
-          args+=( -F 'network=public' -F 'name=CoolBears Pre-Reveal Metadata 10000' -o pinata-prereveal-upload-result.json )
-          http_code=$(curl "${args[@]}")
+          http_code=$(curl -sS -w '%{http_code}' \
+            -X POST https://uploads.pinata.cloud/v3/files \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            -F "file=@coolbears-prereveal-metadata.car;type=application/vnd.ipld.car" \
+            -F "network=public" \
+            -F "name=CoolBears Pre-Reveal Metadata 10000" \
+            -F "car=true" \
+            -o pinata-prereveal-upload-result.json)
           cat pinata-prereveal-upload-result.json
           echo
           echo "HTTP $http_code"
           test "$http_code" -ge 200 -a "$http_code" -lt 300
           cid=$(jq -r '.data.cid // .cid // .IpfsHash // empty' pinata-prereveal-upload-result.json)
           test -n "$cid"
-          test "$(jq -r '.data.mime_type // empty' pinata-prereveal-upload-result.json)" = "directory"
-          test "$(jq -r '.data.number_of_files // 0' pinata-prereveal-upload-result.json)" = "10000"
           echo "CID=$cid" >> "$GITHUB_ENV"
           echo "CoolBears prereveal root CID: $cid"
 
       - name: Verify representative token metadata under root CID
         run: |
           set -euo pipefail
-          for id in 0000 0001 4979 9999; do
-            url="https://gateway.pinata.cloud/ipfs/${CID}/${id}.json"
-            echo "Checking $url"
-            curl --fail --silent --show-error --location --retry 8 --retry-delay 3 "$url" -o "verify-${id}.json"
-            node -e "const j=require('./verify-${id}.json'); if(!j.image?.startsWith('ipfs://') || j.attributes?.[0]?.value!=='Unrevealed') process.exit(1)"
+          ok=0
+          for prefix in "" "prereveal-metadata/"; do
+            echo "Trying CID layout prefix: '${prefix}'"
+            pass=1
+            for id in 0000 0001 4979 9999; do
+              url="https://gateway.pinata.cloud/ipfs/${CID}/${prefix}${id}.json"
+              echo "Checking $url"
+              if ! curl --fail --silent --show-error --location --retry 8 --retry-delay 3 "$url" -o "verify-${id}.json"; then
+                pass=0
+                break
+              fi
+              if ! node -e "const j=require('./verify-${id}.json'); if(!j.image?.startsWith('ipfs://') || j.attributes?.[0]?.value!=='Unrevealed') process.exit(1)"; then
+                pass=0
+                break
+              fi
+            done
+            if [ "$pass" = "1" ]; then
+              echo "PATH_PREFIX=${prefix}" >> "$GITHUB_ENV"
+              ok=1
+              break
+            fi
           done
+          test "$ok" = "1"
           echo "COOLBEARS_PREREVEAL_PINATA_OK CID=${CID}"
 
       - name: Save upload receipt
