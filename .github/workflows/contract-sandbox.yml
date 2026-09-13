@@ -1,0 +1,33 @@
+name: CoolBears TON Sandbox
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/src/**'
+      - 'contracts/tests/**'
+      - 'contracts/TON_REFERENCE.lock'
+      - '.github/workflows/contract-sandbox.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sandbox:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checkout pinned official TON reference
+        shell: bash
+        run: |
+          source contracts/TON_REFERENCE.lock
+          git clone --filter=blob:none https://github.com/${source_repository}.git /tmp/token-contract
+          git -C /tmp/token-contract checkout --detach "$source_commit"
+      - name: Install TON test dependencies
+        run: npm install --no-save @ton-community/func-js @ton/sandbox @ton/core
+      - name: Run TON Sandbox tests
+        run: node contracts/tests/sandbox.mjs
