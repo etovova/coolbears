@@ -1,0 +1,32 @@
+{
+  "network": "testnet",
+  "status": "prepared_not_deployed",
+  "contract": "contracts/src/coolbears-collection-mint.fc",
+  "settlementCurrency": "TON",
+  "displayPrice": "7 GRAM (TON)",
+  "priceNanoTon": 7000000000,
+  "supply": 10000,
+  "maxPerTransaction": 50,
+  "royaltyBps": 700,
+  "deployReserveNanoTonPerNft": 50000000,
+  "deployReserveTonPerNft": 0.05,
+  "requiredMintPaymentTonPerNftInCurrentContract": 7.05,
+  "sandboxMinimumPassingDeployReserveTon": 0.01,
+  "reserveDecision": "Use 0.05 TON per NFT for testnet as a conservative safety candidate. Do not reduce it to the Sandbox minimum until real testnet measurements are complete.",
+  "publicMintInitiallyPaused": true,
+  "mainnetBlockedUntilTestnetVerified": true,
+  "testnetChecksRequired": [
+    "deploy collection",
+    "verify get_collection_data and get_mint_state",
+    "verify standard royalty getter and message response",
+    "mint 1 NFT",
+    "mint multiple NFTs",
+    "verify treasury forwarding",
+    "verify NFT transfer before reveal",
+    "verify attacker cannot change metadata root",
+    "verify owner reveal switches metadata root without replacing NFT",
+    "verify marketplace/indexer discovery",
+    "record actual fees and reserve margin"
+  ],
+  "secretHandling": "Never commit or paste a mnemonic, seed phrase or private key. Deployment signing credentials must stay outside the repository."
+}
