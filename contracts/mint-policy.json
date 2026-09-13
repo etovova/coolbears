@@ -1,0 +1,17 @@
+{
+  "network": "mainnet",
+  "displayPrice": "7 GRAM (TON)",
+  "settlementCurrency": "TON",
+  "priceNanoTon": 7000000000,
+  "supply": 10000,
+  "maxPerTransaction": 50,
+  "lifetimeWalletLimit": null,
+  "royaltyBps": 700,
+  "treasuryAddress": "UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7",
+  "royaltyAddress": "UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7",
+  "revealDate": "2026-10-07",
+  "preRevealImageCid": "bafkreigjugpn3qqktlnmztc3dmtxcon357v2qdhugi5vdxkcf6c74bjh5y",
+  "preRevealMetadataCid": "bafkreihtd7ouj45unoqkciyri7gqd2ee5trtagoe2zdmd4uhhjckd5aquy",
+  "publicMintPausedByDefault": true,
+  "demoModeUntilTestnetVerified": true
+}
