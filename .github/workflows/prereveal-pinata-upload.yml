@@ -1,6 +1,10 @@
 name: Upload CoolBears prereveal metadata to Pinata
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/prereveal-pinata-upload.yml'
   workflow_dispatch:
 
 permissions:
