@@ -99,6 +99,15 @@ class Collection {
     const result = await provider.get('get_nft_address_by_index', [{ type: 'int', value: BigInt(index) }]);
     return result.stack.readAddress();
   }
+  async getMintState(provider) {
+    const result = await provider.get('get_mint_state', []);
+    return {
+      next: result.stack.readBigNumber(),
+      supply: result.stack.readBigNumber(),
+      price: result.stack.readBigNumber(),
+      paused: result.stack.readBigNumber(),
+    };
+  }
 }
 
 class NftItem {
@@ -121,6 +130,17 @@ function sumFees(transactions) {
   return total;
 }
 
+function txSummary(transactions) {
+  return (transactions ?? []).map((tx) => ({
+    account: tx.address?.toString?.() ?? null,
+    lt: tx.lt?.toString?.() ?? null,
+    success: tx.description?.computePhase?.success ?? null,
+    exitCode: tx.description?.computePhase?.exitCode ?? null,
+    actionSuccess: tx.description?.actionPhase?.success ?? null,
+    totalFeesNano: tx.totalFees?.coins?.toString?.() ?? null,
+  }));
+}
+
 const compileMode = process.env.COOLBEARS_COMPILE_MODE;
 if (compileMode === 'item') {
   await compileItemToBase64();
@@ -132,7 +152,9 @@ if (compileMode === 'collection') {
 }
 
 const itemCode = compileInFreshProcess('item');
-const candidates = [10_000_000n, 15_000_000n, 20_000_000n, 25_000_000n, 30_000_000n, 35_000_000n, 40_000_000n, 45_000_000n, 50_000_000n];
+// Start with the known-good 0.05 TON case used by the main Sandbox suite.
+// Once diagnostics match the main test, expand downward to find the true floor.
+const candidates = [50_000_000n];
 const results = [];
 
 for (const candidate of candidates) {
@@ -147,31 +169,49 @@ for (const candidate of candidates) {
   let ok = false;
   let fees = 0n;
   let txCount = 0;
+  let error = null;
+  let initialized = null;
+  let nftOwner = null;
+  let mintStateNext = null;
+  let nftAddressText = null;
+  let transactions = [];
+
   try {
     const mintResult = await collection.sendMint(buyer.getSender(), BASE_PRICE + candidate);
-    fees = sumFees(mintResult.transactions);
-    txCount = mintResult.transactions?.length ?? 0;
+    transactions = mintResult.transactions ?? [];
+    fees = sumFees(transactions);
+    txCount = transactions.length;
+    const mintState = await collection.getMintState();
+    mintStateNext = mintState.next.toString();
     const nftAddress = await collection.getNftAddress(0);
+    nftAddressText = nftAddress.toString();
     const nft = blockchain.openContract(new NftItem(nftAddress));
     const nftData = await nft.getData();
-    ok = nftData.initialized === -1n && nftData.owner.toString() === buyer.address.toString();
-  } catch {
-    ok = false;
+    initialized = nftData.initialized.toString();
+    nftOwner = nftData.owner.toString();
+    ok = nftData.initialized === -1n && nftOwner === buyer.address.toString();
+  } catch (e) {
+    error = e?.stack ?? String(e);
   }
 
   const record = {
     deployValueNano: candidate.toString(),
     deployValueTon: Number(candidate) / 1e9,
     nftInitialized: ok,
+    initialized,
+    nftOwner,
+    nftAddress: nftAddressText,
+    buyer: buyer.address.toString(),
+    mintStateNext,
     sandboxTotalFeesNano: fees.toString(),
     sandboxTransactionCount: txCount,
+    transactions: txSummary(transactions),
+    error,
   };
   results.push(record);
-  console.log(JSON.stringify(record));
+  console.log(`GAS_PROFILE_DIAGNOSTIC ${JSON.stringify(record)}`);
 }
 
 const passing = results.filter((r) => r.nftInitialized);
-assert.ok(passing.length > 0, 'No tested deployment reserve successfully initialized an NFT');
-const minimumPassing = passing[0];
-console.log(`Minimum passing tested reserve: ${minimumPassing.deployValueNano} nanoTON (${minimumPassing.deployValueTon} TON)`);
-console.log('NOTE: Sandbox measurement only. Testnet validation and a safety margin are still required before production.');
+assert.ok(passing.length > 0, 'Known-good 0.05 TON reserve did not initialize NFT; see GAS_PROFILE_DIAGNOSTIC');
+console.log('Known-good 0.05 TON profiler case matches the main Sandbox suite.');
