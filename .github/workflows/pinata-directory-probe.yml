@@ -1,0 +1,72 @@
+name: Probe Pinata V3 directory upload
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pinata-directory-probe.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-directory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build tiny directory probe
+        run: |
+          mkdir -p build/pinata-probe
+          printf '{"probe":"a"}\n' > build/pinata-probe/a.json
+          printf '{"probe":"b"}\n' > build/pinata-probe/b.json
+
+      - name: Try Pinata V3 multi-file directory upload
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          set -euo pipefail
+          test -n "$PINATA_JWT"
+
+          http_code=$(curl -sS -w '%{http_code}' \
+            -X POST https://uploads.pinata.cloud/v3/files \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            -F "file=@build/pinata-probe/a.json;filename=pinata-probe/a.json;type=application/json" \
+            -F "file=@build/pinata-probe/b.json;filename=pinata-probe/b.json;type=application/json" \
+            -F "network=public" \
+            -F "name=CoolBears Directory Probe" \
+            -o pinata-directory-probe-result.json)
+
+          cat pinata-directory-probe-result.json
+          echo
+          echo "HTTP $http_code"
+          test "$http_code" -ge 200 -a "$http_code" -lt 300
+
+          cid=$(jq -r '.data.cid // .cid // .IpfsHash // empty' pinata-directory-probe-result.json)
+          test -n "$cid"
+          echo "CID=$cid" >> "$GITHUB_ENV"
+          echo "Root CID: $cid"
+
+      - name: Verify directory paths through a public IPFS gateway
+        run: |
+          set -euo pipefail
+          for path in pinata-probe/a.json pinata-probe/b.json; do
+            url="https://gateway.pinata.cloud/ipfs/${CID}/${path}"
+            echo "Checking $url"
+            curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$url" -o "$(basename "$path")"
+          done
+          grep -q '"probe":"a"' a.json
+          grep -q '"probe":"b"' b.json
+          echo "PINATA_DIRECTORY_PROBE_OK CID=${CID}"
+
+      - name: Save probe result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coolbears-pinata-directory-probe
+          path: |
+            pinata-directory-probe-result.json
+            a.json
+            b.json
+          retention-days: 7
