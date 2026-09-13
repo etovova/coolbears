@@ -1,0 +1,184 @@
+;; CoolBears public-mint collection draft
+;; Derived conceptually from the pinned official TON editable NFT collection reference.
+;; IMPORTANT: this file is NOT approved for deployment until it compiles and passes TON sandbox/testnet tests.
+
+const int COOLBEARS_SUPPLY = 10000;
+const int COOLBEARS_PRICE = 7000000000;       ;; 7 TON = site label 7 GRAM (TON)
+const int COOLBEARS_MAX_PER_TX = 50;
+const int COOLBEARS_DEPLOY_VALUE = 50000000;  ;; provisional 0.05 TON per NFT, must be sandbox-tuned
+const int COOLBEARS_MINT_OP = 0x4d494e54;     ;; "MINT"
+const int COOLBEARS_PAUSE_OP = 0x50415553;    ;; "PAUS"
+const int COOLBEARS_UNPAUSE_OP = 0x554e5053;  ;; "UNPS"
+
+;; Extended storage:
+;; owner:MsgAddress next_item_index:uint64
+;; ^content ^nft_item_code ^royalty_params
+;; treasury:MsgAddress paused:uint1
+
+(slice, int, cell, cell, cell, slice, int) cb_load_data() inline {
+  var ds = get_data().begin_parse();
+  return (
+    ds~load_msg_addr(),
+    ds~load_uint(64),
+    ds~load_ref(),
+    ds~load_ref(),
+    ds~load_ref(),
+    ds~load_msg_addr(),
+    ds~load_uint(1)
+  );
+}
+
+() cb_save_data(slice owner, int next_index, cell content, cell item_code, cell royalty, slice treasury, int paused) impure inline {
+  set_data(begin_cell()
+    .store_slice(owner)
+    .store_uint(next_index, 64)
+    .store_ref(content)
+    .store_ref(item_code)
+    .store_ref(royalty)
+    .store_slice(treasury)
+    .store_uint(paused, 1)
+    .end_cell());
+}
+
+cell cb_item_state_init(int item_index, cell nft_item_code) {
+  cell data = begin_cell().store_uint(item_index, 64).store_slice(my_address()).end_cell();
+  return begin_cell().store_uint(0, 2).store_dict(nft_item_code).store_dict(data).store_uint(0, 1).end_cell();
+}
+
+slice cb_item_address(int wc, cell state_init) {
+  return begin_cell()
+    .store_uint(4, 3)
+    .store_int(wc, 8)
+    .store_uint(cell_hash(state_init), 256)
+    .end_cell()
+    .begin_parse();
+}
+
+builder cb_store_index(builder b, int index) {
+  if (index >= 1000) {
+    b = b.store_uint(48 + ((index / 1000) % 10), 8);
+  }
+  if (index >= 100) {
+    b = b.store_uint(48 + ((index / 100) % 10), 8);
+  }
+  if (index >= 10) {
+    b = b.store_uint(48 + ((index / 10) % 10), 8);
+  }
+  b = b.store_uint(48 + (index % 10), 8);
+  return b;
+}
+
+cell cb_item_content(int index) {
+  builder b = begin_cell();
+  b = cb_store_index(b, index);
+  ;; ".json"
+  b = b.store_uint(46, 8).store_uint(106, 8).store_uint(115, 8).store_uint(111, 8).store_uint(110, 8);
+  return b.end_cell();
+}
+
+() cb_deploy_nft(int item_index, cell nft_item_code, slice nft_owner) impure {
+  cell state_init = cb_item_state_init(item_index, nft_item_code);
+  slice nft_address = cb_item_address(workchain(), state_init);
+  cell individual_content = cb_item_content(item_index);
+
+  ;; NFT item init body: owner address + individual content.
+  cell init_body = begin_cell()
+    .store_slice(nft_owner)
+    .store_ref(individual_content)
+    .end_cell();
+
+  var msg = begin_cell()
+    .store_uint(0x18, 6)
+    .store_slice(nft_address)
+    .store_coins(COOLBEARS_DEPLOY_VALUE)
+    .store_uint(4 + 2 + 1, 1 + 4 + 4 + 64 + 32 + 1 + 1 + 1)
+    .store_ref(state_init)
+    .store_ref(init_body);
+  send_raw_message(msg.end_cell(), 1);
+}
+
+() cb_send_value(slice destination, int amount) impure inline {
+  var msg = begin_cell()
+    .store_uint(0x10, 6)
+    .store_slice(destination)
+    .store_coins(amount)
+    .store_uint(0, 1 + 4 + 4 + 64 + 32 + 1 + 1)
+    .end_cell();
+  send_raw_message(msg, 1);
+}
+
+() recv_internal(int msg_value, cell in_msg_full, slice in_msg_body) impure {
+  if (in_msg_body.slice_empty?()) {
+    return ();
+  }
+
+  slice cs = in_msg_full.begin_parse();
+  int flags = cs~load_uint(4);
+  if (flags & 1) {
+    return ();
+  }
+  slice sender = cs~load_msg_addr();
+  int op = in_msg_body~load_uint(32);
+  int query_id = in_msg_body~load_uint(64);
+  var (owner, next_index, content, item_code, royalty, treasury, paused) = cb_load_data();
+
+  if (op == COOLBEARS_MINT_OP) {
+    int count = in_msg_body~load_uint(8);
+    throw_unless(700, paused == 0);
+    throw_unless(701, (count >= 1) & (count <= COOLBEARS_MAX_PER_TX));
+    throw_unless(702, next_index + count <= COOLBEARS_SUPPLY);
+
+    ;; Price is 7 TON per NFT; provisional deployment value is additionally required.
+    int required = count * (COOLBEARS_PRICE + COOLBEARS_DEPLOY_VALUE);
+    throw_unless(703, msg_value >= required);
+
+    int i = 0;
+    while (i < count) {
+      cb_deploy_nft(next_index + i, item_code, sender);
+      i += 1;
+    }
+
+    cb_send_value(treasury, count * COOLBEARS_PRICE);
+    next_index += count;
+    cb_save_data(owner, next_index, content, item_code, royalty, treasury, paused);
+    return ();
+  }
+
+  ;; Everything below this line is administrator-only.
+  throw_unless(401, equal_slices(sender, owner));
+
+  if (op == COOLBEARS_PAUSE_OP) {
+    cb_save_data(owner, next_index, content, item_code, royalty, treasury, 1);
+    return ();
+  }
+
+  if (op == COOLBEARS_UNPAUSE_OP) {
+    cb_save_data(owner, next_index, content, item_code, royalty, treasury, 0);
+    return ();
+  }
+
+  ;; Owner-only collection maintenance ops stay aligned with the pinned TON reference.
+  if (op == 3) {
+    slice new_owner = in_msg_body~load_msg_addr();
+    cb_save_data(new_owner, next_index, content, item_code, royalty, treasury, paused);
+    return ();
+  }
+
+  if (op == 4) {
+    cb_save_data(owner, next_index, in_msg_body~load_ref(), item_code, in_msg_body~load_ref(), treasury, paused);
+    return ();
+  }
+
+  throw(0xffff);
+}
+
+(int, int, int, int) get_mint_state() method_id {
+  var (_, next_index, _, _, _, _, paused) = cb_load_data();
+  return (next_index, COOLBEARS_SUPPLY, COOLBEARS_PRICE, paused);
+}
+
+(int, int, slice) royalty_params() method_id {
+  var (_, _, _, _, royalty, _, _) = cb_load_data();
+  slice rs = royalty.begin_parse();
+  return (rs~load_uint(16), rs~load_uint(16), rs~load_msg_addr());
+}
