@@ -81,14 +81,14 @@ class Collection {
     const init = { code, data: data(owner, treasury, itemCode) };
     return new Collection(contractAddress(0, init), init);
   }
-  async deploy(provider, via) {
+  async sendDeploy(provider, via) {
     return provider.internal(via, {
       value: toNano('0.2'),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell().endCell(),
     });
   }
-  async mint(provider, via, value) {
+  async sendMint(provider, via, value) {
     return provider.internal(via, {
       value,
       sendMode: SendMode.PAY_GAS_SEPARATELY,
@@ -142,13 +142,13 @@ for (const candidate of candidates) {
   const treasury = await blockchain.treasury(`treasury-${candidate}`);
   const buyer = await blockchain.treasury(`buyer-${candidate}`);
   const collection = blockchain.openContract(Collection.create(owner.address, treasury.address, collectionCode, itemCode));
-  await collection.deploy(owner.getSender());
+  await collection.sendDeploy(owner.getSender());
 
   let ok = false;
   let fees = 0n;
   let txCount = 0;
   try {
-    const mintResult = await collection.mint(buyer.getSender(), BASE_PRICE + candidate);
+    const mintResult = await collection.sendMint(buyer.getSender(), BASE_PRICE + candidate);
     fees = sumFees(mintResult.transactions);
     txCount = mintResult.transactions?.length ?? 0;
     const nftAddress = await collection.getNftAddress(0);
