@@ -1,5 +1,8 @@
 #include "stdlib.fc";
 
+;; Same helper used by the pinned official TON NFT reference.
+int workchain() asm "0 PUSHINT";
+
 ;; CoolBears public-mint collection draft
 ;; Derived conceptually from the pinned official TON editable NFT collection reference.
 ;; IMPORTANT: this file is NOT approved for deployment until it compiles and passes TON sandbox/testnet tests.
