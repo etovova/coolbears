@@ -9,6 +9,7 @@ const TON_ROOT = '/tmp/token-contract';
 const OP_MINT = 0x4d494e54;
 const OP_PAUSE = 0x50415553;
 const OP_UNPAUSE = 0x554e5053;
+const OP_NFT_TRANSFER = 0x5fcc3d14;
 
 async function compileCollection() {
   const result = await compileFunc({
@@ -109,6 +110,21 @@ class NftItem {
   constructor(address) {
     this.address = address;
   }
+  async sendTransfer(provider, via, newOwner) {
+    return provider.internal(via, {
+      value: toNano('0.1'),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell()
+        .storeUint(OP_NFT_TRANSFER, 32)
+        .storeUint(0, 64)
+        .storeAddress(newOwner)
+        .storeAddress(null)
+        .storeBit(0)
+        .storeCoins(0)
+        .storeBit(0)
+        .endCell(),
+    });
+  }
   async getData(provider) {
     const result = await provider.get('get_nft_data', []);
     return {
@@ -127,6 +143,7 @@ const blockchain = await Blockchain.create();
 const owner = await blockchain.treasury('owner');
 const treasury = await blockchain.treasury('treasury');
 const buyer = await blockchain.treasury('buyer');
+const recipient = await blockchain.treasury('recipient');
 const attacker = await blockchain.treasury('attacker');
 
 const collection = blockchain.openContract(
@@ -152,12 +169,23 @@ assert.equal(state.next, 1n);
 
 const nft0Address = await collection.getNftAddress(0);
 const nft0 = blockchain.openContract(new NftItem(nft0Address));
-const nft0Data = await nft0.getData();
+let nft0Data = await nft0.getData();
 assert.equal(nft0Data.initialized, -1n);
 assert.equal(nft0Data.index, 0n);
 assert.equal(nft0Data.collection.toString(), collection.address.toString());
 assert.equal(nft0Data.owner.toString(), buyer.address.toString());
 assert.equal(nft0Data.content.beginParse().loadStringTail(), '0000.json');
+
+// Pre-reveal transfer uses the official TON NFT transfer opcode. The same NFT,
+// collection link, index and metadata suffix remain intact while ownership changes.
+await nft0.sendTransfer(buyer.getSender(), recipient.address);
+nft0Data = await nft0.getData();
+assert.equal(nft0Data.initialized, -1n);
+assert.equal(nft0Data.index, 0n);
+assert.equal(nft0Data.collection.toString(), collection.address.toString());
+assert.equal(nft0Data.owner.toString(), recipient.address.toString());
+assert.equal(nft0Data.content.beginParse().loadStringTail(), '0000.json');
+assert.equal((await collection.getNftAddress(0)).toString(), nft0Address.toString());
 
 // Same wallet may mint again: there is no lifetime wallet cap.
 await collection.sendMint(buyer.getSender(), 1, toNano('7.05'));
@@ -219,4 +247,4 @@ await edgeCollection.sendMint(buyer.getSender(), 1, toNano('7.05'));
 edgeState = await edgeCollection.getMintState();
 assert.equal(edgeState.next, 10000n);
 
-console.log('CoolBears TON Sandbox boundary + metadata tests: OK');
+console.log('CoolBears TON Sandbox boundary + metadata + transfer tests: OK');
