@@ -40,21 +40,12 @@ function makeContent(commonPrefix) {
   const commonContent = beginCell().storeStringTail(commonPrefix).endCell();
   return beginCell().storeRef(collectionContent).storeRef(commonContent).endCell();
 }
-
 function makeRoyalty(address) {
   return beginCell().storeUint(7, 16).storeUint(100, 16).storeAddress(address).endCell();
 }
-
 function collectionData(owner, treasury, itemCode) {
-  return beginCell()
-    .storeAddress(owner)
-    .storeUint(0, 64)
-    .storeRef(makeContent('ipfs://PRE_REVEAL_ROOT/'))
-    .storeRef(itemCode)
-    .storeRef(makeRoyalty(treasury))
-    .storeAddress(treasury)
-    .storeUint(0, 1)
-    .endCell();
+  return beginCell().storeAddress(owner).storeUint(0, 64).storeRef(makeContent('ipfs://PRE_REVEAL_ROOT/'))
+    .storeRef(itemCode).storeRef(makeRoyalty(treasury)).storeAddress(treasury).storeUint(0, 1).endCell();
 }
 
 class Collection {
@@ -63,66 +54,46 @@ class Collection {
     const init = { code, data: collectionData(owner, treasury, itemCode) };
     return new Collection(contractAddress(0, init), init);
   }
-  async sendDeploy(provider, via) {
-    return provider.internal(via, {
-      value: toNano('0.2'),
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().endCell(),
-    });
-  }
-  async sendMint(provider, via) {
-    return provider.internal(via, {
-      value: toNano('7.05'),
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell().storeUint(OP_MINT, 32).storeUint(0, 64).storeUint(1, 8).endCell(),
-    });
-  }
+  async sendDeploy(provider, via) { return provider.internal(via, { value: toNano('0.2'), sendMode: SendMode.PAY_GAS_SEPARATELY, body: beginCell().endCell() }); }
+  async sendMint(provider, via) { return provider.internal(via, { value: toNano('7.05'), sendMode: SendMode.PAY_GAS_SEPARATELY, body: beginCell().storeUint(OP_MINT, 32).storeUint(0, 64).storeUint(1, 8).endCell() }); }
   async sendContentUpdate(provider, via, prefix, treasury) {
-    return provider.internal(via, {
-      value: toNano('0.1'),
-      sendMode: SendMode.PAY_GAS_SEPARATELY,
-      body: beginCell()
-        .storeUint(OP_EDIT_CONTENT, 32)
-        .storeUint(0, 64)
-        .storeRef(makeContent(prefix))
-        .storeRef(makeRoyalty(treasury))
-        .endCell(),
-    });
+    return provider.internal(via, { value: toNano('0.1'), sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell().storeUint(OP_EDIT_CONTENT, 32).storeUint(0, 64).storeRef(makeContent(prefix)).storeRef(makeRoyalty(treasury)).endCell() });
   }
   async getCollectionData(provider) {
     const result = await provider.get('get_collection_data', []);
-    return {
-      next: result.stack.readBigNumber(),
-      collectionContent: result.stack.readCell(),
-      owner: result.stack.readAddress(),
-    };
+    return { next: result.stack.readBigNumber(), collectionContent: result.stack.readCell(), owner: result.stack.readAddress() };
   }
   async getNftAddress(provider, index) {
     const result = await provider.get('get_nft_address_by_index', [{ type: 'int', value: BigInt(index) }]);
     return result.stack.readAddress();
   }
+  async getNftContent(provider, index, individualContent) {
+    const result = await provider.get('get_nft_content', [
+      { type: 'int', value: BigInt(index) },
+      { type: 'cell', cell: individualContent },
+    ]);
+    return result.stack.readCell();
+  }
   async getRoyalty(provider) {
     const result = await provider.get('royalty_params', []);
-    return {
-      factor: result.stack.readBigNumber(),
-      base: result.stack.readBigNumber(),
-      address: result.stack.readAddress(),
-    };
+    return { factor: result.stack.readBigNumber(), base: result.stack.readBigNumber(), address: result.stack.readAddress() };
   }
 }
-
 class NftItem {
   constructor(address) { this.address = address; }
   async getData(provider) {
     const result = await provider.get('get_nft_data', []);
-    return {
-      initialized: result.stack.readBigNumber(),
-      index: result.stack.readBigNumber(),
-      collection: result.stack.readAddress(),
-      owner: result.stack.readAddress(),
-      content: result.stack.readCell(),
-    };
+    return { initialized: result.stack.readBigNumber(), index: result.stack.readBigNumber(), collection: result.stack.readAddress(), owner: result.stack.readAddress(), content: result.stack.readCell() };
   }
+}
+function parseOffchainContent(cell) {
+  const s = cell.beginParse();
+  assert.equal(s.loadUint(8), 1);
+  const prefix = s.loadStringTail();
+  assert.equal(s.remainingRefs, 1);
+  const suffix = s.loadRef().beginParse().loadStringTail();
+  return { prefix, suffix, uri: prefix + suffix };
 }
 
 const collectionCode = await compileCollection();
@@ -132,7 +103,6 @@ const owner = await blockchain.treasury('owner-reveal');
 const treasury = await blockchain.treasury('treasury-reveal');
 const buyer = await blockchain.treasury('buyer-reveal');
 const attacker = await blockchain.treasury('attacker-reveal');
-
 const collection = blockchain.openContract(Collection.create(owner.address, treasury.address, collectionCode, itemCode));
 await collection.sendDeploy(owner.getSender());
 await collection.sendMint(buyer.getSender());
@@ -144,19 +114,34 @@ assert.equal(before.index, 0n);
 assert.equal(before.owner.toString(), buyer.address.toString());
 assert.equal(before.content.beginParse().loadStringTail(), '0000.json');
 
-// A non-owner must not be able to change the reveal prefix.
+// Standard get_nft_content must resolve the minted suffix against the pre-reveal root.
+let resolved = parseOffchainContent(await collection.getNftContent(0, before.content));
+assert.equal(resolved.prefix, 'ipfs://PRE_REVEAL_ROOT/');
+assert.equal(resolved.suffix, '0000.json');
+assert.equal(resolved.uri, 'ipfs://PRE_REVEAL_ROOT/0000.json');
+
+// A non-owner attempts the reveal operation. It must not change the common metadata root.
 await collection.sendContentUpdate(attacker.getSender(), 'ipfs://ATTACKER_ROOT/', treasury.address);
 let data = await collection.getCollectionData();
 assert.equal(data.next, 1n);
 assert.equal(data.owner.toString(), owner.address.toString());
+resolved = parseOffchainContent(await collection.getNftContent(0, before.content));
+assert.equal(resolved.prefix, 'ipfs://PRE_REVEAL_ROOT/');
+assert.equal(resolved.uri, 'ipfs://PRE_REVEAL_ROOT/0000.json');
 
-// The owner performs reveal by changing only collection/common content.
+// The owner reveals by switching only the common metadata root.
 await collection.sendContentUpdate(owner.getSender(), 'ipfs://FINAL_METADATA_ROOT/', treasury.address);
+resolved = parseOffchainContent(await collection.getNftContent(0, before.content));
+assert.equal(resolved.prefix, 'ipfs://FINAL_METADATA_ROOT/');
+assert.equal(resolved.suffix, '0000.json');
+assert.equal(resolved.uri, 'ipfs://FINAL_METADATA_ROOT/0000.json');
 
+// Reveal must not replace or mutate the NFT itself.
 const nftAddressAfter = await collection.getNftAddress(0);
 assert.equal(nftAddressAfter.toString(), nftAddressBefore.toString());
 const after = await nft.getData();
 assert.equal(after.index, before.index);
+assert.equal(after.collection.toString(), before.collection.toString());
 assert.equal(after.owner.toString(), before.owner.toString());
 assert.equal(after.content.beginParse().loadStringTail(), '0000.json');
 
@@ -165,4 +150,4 @@ assert.equal(royalty.factor, 7n);
 assert.equal(royalty.base, 100n);
 assert.equal(royalty.address.toString(), treasury.address.toString());
 
-console.log('CoolBears reveal Sandbox test: same NFT survives owner-only metadata root change');
+console.log('CoolBears reveal Sandbox test: attacker blocked; owner switches root; same NFT resolves final metadata');
