@@ -29,5 +29,7 @@ jobs:
           git -C /tmp/token-contract checkout --detach "$source_commit"
       - name: Install TON test dependencies
         run: npm install --no-save @ton-community/func-js @ton/sandbox @ton/core
-      - name: Run TON Sandbox tests
+      - name: Run TON Sandbox mint and boundary tests
         run: node contracts/tests/sandbox.mjs
+      - name: Run TON Sandbox reveal lifecycle test
+        run: node contracts/tests/reveal-sandbox.mjs
