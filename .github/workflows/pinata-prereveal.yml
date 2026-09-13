@@ -16,20 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Upload official prereveal GIF to Pinata
+      - name: Upload official prereveal GIF to Pinata V3
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
         run: |
           test -n "$PINATA_JWT"
           test -f assets/coolbears-prereveal.gif
-          curl --fail-with-body -sS \
-            -X POST https://api.pinata.cloud/pinning/pinFileToIPFS \
+          http_code=$(curl -sS -w '%{http_code}' \
+            -X POST https://uploads.pinata.cloud/v3/files \
             -H "Authorization: Bearer $PINATA_JWT" \
             -F "file=@assets/coolbears-prereveal.gif" \
-            -F 'pinataMetadata={"name":"CoolBears Official Pre-Reveal"}' \
-            -o pinata-prereveal-result.json
+            -F "network=public" \
+            -F "name=CoolBears Official Pre-Reveal" \
+            -o pinata-prereveal-result.json)
           cat pinata-prereveal-result.json
+          test "$http_code" -ge 200 -a "$http_code" -lt 300
       - name: Save CID response
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coolbears-pinata-prereveal-cid
