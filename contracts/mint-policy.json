@@ -12,6 +12,8 @@
   "revealDate": "2026-10-07",
   "preRevealImageCid": "bafkreigjugpn3qqktlnmztc3dmtxcon357v2qdhugi5vdxkcf6c74bjh5y",
   "preRevealMetadataCid": "bafkreihtd7ouj45unoqkciyri7gqd2ee5trtagoe2zdmd4uhhjckd5aquy",
+  "preRevealMetadataRootCid": "bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u",
+  "preRevealMetadataRootIpfs": "ipfs://bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u/",
   "publicMintPausedByDefault": true,
   "demoModeUntilTestnetVerified": true
 }
