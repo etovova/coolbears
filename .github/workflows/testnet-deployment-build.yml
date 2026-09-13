@@ -1,0 +1,54 @@
+name: Build CoolBears testnet deployment package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-testnet-deployment.mjs'
+      - '.github/workflows/testnet-deployment-build.yml'
+      - 'contracts/src/**'
+      - 'contracts/mint-policy.json'
+      - 'contracts/TON_REFERENCE.lock'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checkout pinned official TON NFT reference
+        run: |
+          source contracts/TON_REFERENCE.lock
+          git clone --filter=blob:none https://github.com/${source_repository}.git /tmp/token-contract
+          git -C /tmp/token-contract checkout --detach "$source_commit"
+      - name: Install deterministic build dependencies
+        run: npm install --no-save @ton-community/func-js @ton/core
+      - name: Build deterministic paused testnet StateInit
+        run: node scripts/build-testnet-deployment.mjs
+      - name: Validate deployment package safety gates
+        run: |
+          set -euo pipefail
+          jq -e '.network == "testnet"' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.initialPaused == true' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.nextItemIndex == 0' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.priceNanoTon == 7000000000' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.maxPerTransaction == 50' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.supply == 10000' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.royaltyBps == 700' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.collectionMetadataIpfs == "ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e"' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.preRevealMetadataRootIpfs == "ipfs://bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u/"' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.stateInitBocBase64 | length > 100' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.collectionAddressTestnetNonBounceable | length > 40' build/testnet-deployment/deployment.json >/dev/null
+          echo 'CoolBears testnet deployment safety gates: OK'
+      - name: Upload unsigned deployment package
+        uses: actions/upload-artifact@v4
+        with:
+          name: coolbears-testnet-deployment-unsigned
+          path: build/testnet-deployment/
+          retention-days: 30
