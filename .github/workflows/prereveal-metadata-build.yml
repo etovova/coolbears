@@ -26,9 +26,11 @@ jobs:
         run: |
           set -euo pipefail
           test "$(find build/prereveal-metadata -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 10000
-          test -f build/prereveal-metadata/0.json
+          test -f build/prereveal-metadata/0000.json
+          test -f build/prereveal-metadata/0001.json
+          test -f build/prereveal-metadata/4979.json
           test -f build/prereveal-metadata/9999.json
-          node -e "const fs=require('fs'); for (const i of [0,4979,9999]) { const j=JSON.parse(fs.readFileSync('build/prereveal-metadata/'+i+'.json')); if (!j.image?.startsWith('ipfs://') || j.attributes?.[0]?.value !== 'Unrevealed') process.exit(1); }"
+          node -e "const fs=require('fs'); for (const i of ['0000','4979','9999']) { const j=JSON.parse(fs.readFileSync('build/prereveal-metadata/'+i+'.json')); if (!j.image?.startsWith('ipfs://') || j.attributes?.[0]?.value !== 'Unrevealed') process.exit(1); }"
       - name: Package metadata set
         run: tar -czf coolbears-prereveal-metadata.tar.gz -C build prereveal-metadata
       - uses: actions/upload-artifact@v4
