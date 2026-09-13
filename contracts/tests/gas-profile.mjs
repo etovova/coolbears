@@ -116,7 +116,10 @@ class NftItem {
     const result = await provider.get('get_nft_data', []);
     return {
       initialized: result.stack.readBigNumber(),
+      index: result.stack.readBigNumber(),
+      collection: result.stack.readAddress(),
       owner: result.stack.readAddress(),
+      content: result.stack.readCell(),
     };
   }
 }
@@ -152,9 +155,7 @@ if (compileMode === 'collection') {
 }
 
 const itemCode = compileInFreshProcess('item');
-// Start with the known-good 0.05 TON case used by the main Sandbox suite.
-// Once diagnostics match the main test, expand downward to find the true floor.
-const candidates = [50_000_000n];
+const candidates = [10_000_000n, 15_000_000n, 20_000_000n, 25_000_000n, 30_000_000n, 35_000_000n, 40_000_000n, 45_000_000n, 50_000_000n];
 const results = [];
 
 for (const candidate of candidates) {
@@ -189,7 +190,7 @@ for (const candidate of candidates) {
     const nftData = await nft.getData();
     initialized = nftData.initialized.toString();
     nftOwner = nftData.owner.toString();
-    ok = nftData.initialized === -1n && nftOwner === buyer.address.toString();
+    ok = nftData.initialized === -1n && nftData.index === 0n && nftOwner === buyer.address.toString();
   } catch (e) {
     error = e?.stack ?? String(e);
   }
@@ -213,5 +214,7 @@ for (const candidate of candidates) {
 }
 
 const passing = results.filter((r) => r.nftInitialized);
-assert.ok(passing.length > 0, 'Known-good 0.05 TON reserve did not initialize NFT; see GAS_PROFILE_DIAGNOSTIC');
-console.log('Known-good 0.05 TON profiler case matches the main Sandbox suite.');
+assert.ok(passing.length > 0, 'No tested reserve initialized NFT; see GAS_PROFILE_DIAGNOSTIC');
+const minimumPassing = passing[0];
+console.log(`Minimum passing tested reserve: ${minimumPassing.deployValueNano} nanoTON (${minimumPassing.deployValueTon} TON)`);
+console.log('NOTE: Sandbox measurement only. Testnet validation and a safety margin are still required before production.');
