@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           npm install --no-save ipfs-car
-          npx ipfs-car --pack build/prereveal-metadata --output coolbears-prereveal-metadata.car
+          npx ipfs-car pack build/prereveal-metadata --output coolbears-prereveal-metadata.car
           test -s coolbears-prereveal-metadata.car
           echo "CAR bytes: $(wc -c < coolbears-prereveal-metadata.car)"
 
