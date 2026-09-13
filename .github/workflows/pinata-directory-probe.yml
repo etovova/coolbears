@@ -45,19 +45,29 @@ jobs:
 
           cid=$(jq -r '.data.cid // .cid // .IpfsHash // empty' pinata-directory-probe-result.json)
           test -n "$cid"
+          test "$(jq -r '.data.mime_type // empty' pinata-directory-probe-result.json)" = "directory"
+          test "$(jq -r '.data.number_of_files // 0' pinata-directory-probe-result.json)" = "2"
           echo "CID=$cid" >> "$GITHUB_ENV"
           echo "Root CID: $cid"
 
-      - name: Verify directory paths through a public IPFS gateway
+      - name: Discover and verify preserved directory paths
         run: |
           set -euo pipefail
-          for path in pinata-probe/a.json pinata-probe/b.json; do
-            url="https://gateway.pinata.cloud/ipfs/${CID}/${path}"
-            echo "Checking $url"
-            curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$url" -o "$(basename "$path")"
+          ok=0
+          for prefix in "" "pinata-probe/"; do
+            echo "Trying root layout prefix: '${prefix}'"
+            if curl --fail --silent --show-error --location --retry 5 --retry-delay 2 \
+                "https://gateway.pinata.cloud/ipfs/${CID}/${prefix}a.json" -o a.json \
+              && curl --fail --silent --show-error --location --retry 5 --retry-delay 2 \
+                "https://gateway.pinata.cloud/ipfs/${CID}/${prefix}b.json" -o b.json; then
+              if grep -q '"probe":"a"' a.json && grep -q '"probe":"b"' b.json; then
+                echo "PATH_PREFIX=${prefix}" >> "$GITHUB_ENV"
+                ok=1
+                break
+              fi
+            fi
           done
-          grep -q '"probe":"a"' a.json
-          grep -q '"probe":"b"' b.json
+          test "$ok" = "1"
           echo "PINATA_DIRECTORY_PROBE_OK CID=${CID}"
 
       - name: Save probe result
