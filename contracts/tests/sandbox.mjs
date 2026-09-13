@@ -36,14 +36,14 @@ async function compileOfficialItem() {
   return Cell.fromBoc(Buffer.from(result.codeBoc, 'base64'))[0];
 }
 
-function collectionData(owner, treasury, itemCode, paused = 0) {
+function collectionData(owner, treasury, itemCode, nextIndex = 0, paused = 0) {
   const collectionContent = beginCell().storeUint(1, 8).storeStringTail('ipfs://collection.json').endCell();
   const commonContent = beginCell().storeStringTail('ipfs://PRE_REVEAL_ROOT/').endCell();
   const content = beginCell().storeRef(collectionContent).storeRef(commonContent).endCell();
   const royalty = beginCell().storeUint(7, 16).storeUint(100, 16).storeAddress(treasury).endCell();
   return beginCell()
     .storeAddress(owner)
-    .storeUint(0, 64)
+    .storeUint(nextIndex, 64)
     .storeRef(content)
     .storeRef(itemCode)
     .storeRef(royalty)
@@ -57,8 +57,8 @@ class CoolBearsCollection {
     this.address = address;
     this.init = init;
   }
-  static create(owner, treasury, code, itemCode) {
-    const init = { code, data: collectionData(owner, treasury, itemCode, 0) };
+  static create(owner, treasury, code, itemCode, nextIndex = 0, paused = 0) {
+    const init = { code, data: collectionData(owner, treasury, itemCode, nextIndex, paused) };
     return new CoolBearsCollection(contractAddress(0, init), init);
   }
   async sendDeploy(provider, via) {
@@ -99,6 +99,26 @@ class CoolBearsCollection {
       address: result.stack.readAddress(),
     };
   }
+  async getNftAddress(provider, index) {
+    const result = await provider.get('get_nft_address_by_index', [{ type: 'int', value: BigInt(index) }]);
+    return result.stack.readAddress();
+  }
+}
+
+class NftItem {
+  constructor(address) {
+    this.address = address;
+  }
+  async getData(provider) {
+    const result = await provider.get('get_nft_data', []);
+    return {
+      initialized: result.stack.readBigNumber(),
+      index: result.stack.readBigNumber(),
+      collection: result.stack.readAddress(),
+      owner: result.stack.readAddress(),
+      content: result.stack.readCell(),
+    };
+  }
 }
 
 const collectionCode = await compileCollection();
@@ -125,12 +145,21 @@ assert.equal(royalty.factor, 7n);
 assert.equal(royalty.base, 100n);
 assert.equal(royalty.address.toString(), treasury.address.toString());
 
-// One successful mint.
+// One successful mint creates token #0000 owned by the buyer.
 await collection.sendMint(buyer.getSender(), 1, toNano('7.05'));
 state = await collection.getMintState();
 assert.equal(state.next, 1n);
 
-// Same wallet may mint again (no lifetime wallet cap).
+const nft0Address = await collection.getNftAddress(0);
+const nft0 = blockchain.openContract(new NftItem(nft0Address));
+const nft0Data = await nft0.getData();
+assert.equal(nft0Data.initialized, -1n);
+assert.equal(nft0Data.index, 0n);
+assert.equal(nft0Data.collection.toString(), collection.address.toString());
+assert.equal(nft0Data.owner.toString(), buyer.address.toString());
+assert.equal(nft0Data.content.beginParse().loadStringTail(), '0000.json');
+
+// Same wallet may mint again: there is no lifetime wallet cap.
 await collection.sendMint(buyer.getSender(), 1, toNano('7.05'));
 state = await collection.getMintState();
 assert.equal(state.next, 2n);
@@ -166,4 +195,28 @@ await collection.sendMint(buyer.getSender(), 1, toNano('7.05'));
 state = await collection.getMintState();
 assert.equal(state.next, 3n);
 
-console.log('CoolBears TON Sandbox tests: OK');
+// Boundary collection: mint exactly the final 50 tokens, from #9950 through #9999.
+const edgeCollection = blockchain.openContract(
+  CoolBearsCollection.create(owner.address, treasury.address, collectionCode, itemCode, 9950, 0),
+);
+await edgeCollection.sendDeploy(owner.getSender());
+let edgeState = await edgeCollection.getMintState();
+assert.equal(edgeState.next, 9950n);
+
+await edgeCollection.sendMint(buyer.getSender(), 50, toNano('352.5'));
+edgeState = await edgeCollection.getMintState();
+assert.equal(edgeState.next, 10000n);
+
+const nft9999Address = await edgeCollection.getNftAddress(9999);
+const nft9999 = blockchain.openContract(new NftItem(nft9999Address));
+const nft9999Data = await nft9999.getData();
+assert.equal(nft9999Data.index, 9999n);
+assert.equal(nft9999Data.owner.toString(), buyer.address.toString());
+assert.equal(nft9999Data.content.beginParse().loadStringTail(), '9999.json');
+
+// Sold out means no token #10000 can ever be minted.
+await edgeCollection.sendMint(buyer.getSender(), 1, toNano('7.05'));
+edgeState = await edgeCollection.getMintState();
+assert.equal(edgeState.next, 10000n);
+
+console.log('CoolBears TON Sandbox boundary + metadata tests: OK');
