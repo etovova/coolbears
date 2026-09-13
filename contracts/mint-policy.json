@@ -14,6 +14,8 @@
   "preRevealMetadataCid": "bafkreihtd7ouj45unoqkciyri7gqd2ee5trtagoe2zdmd4uhhjckd5aquy",
   "preRevealMetadataRootCid": "bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u",
   "preRevealMetadataRootIpfs": "ipfs://bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u/",
+  "collectionMetadataCid": "bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e",
+  "collectionMetadataIpfs": "ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e",
   "publicMintPausedByDefault": true,
   "demoModeUntilTestnetVerified": true
 }
