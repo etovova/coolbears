@@ -12,7 +12,7 @@ const OP_MINT = 0x4d494e54;
 const BASE_PRICE = toNano('7');
 const SELF = fileURLToPath(import.meta.url);
 
-async function compileOfficialItem() {
+async function compileItemToBase64() {
   const result = await compileFunc({
     targets: ['stdlib.fc', 'params.fc', 'op-codes.fc', 'nft-item.fc'],
     sources: {
@@ -23,10 +23,10 @@ async function compileOfficialItem() {
     },
   });
   if (result.status === 'error') throw new Error(result.message);
-  return Cell.fromBoc(Buffer.from(result.codeBoc, 'base64'))[0];
+  console.log(`COMPILED_BOC ${result.codeBoc}`);
 }
 
-async function compileCollection(deployValueNano) {
+async function compileCollectionToBase64(deployValueNano) {
   const original = fs.readFileSync(SRC_PATH, 'utf8');
   const patched = original.replace(
     /const int COOLBEARS_DEPLOY_VALUE = \d+;/,
@@ -40,7 +40,23 @@ async function compileCollection(deployValueNano) {
     },
   });
   if (result.status === 'error') throw new Error(result.message);
-  return Cell.fromBoc(Buffer.from(result.codeBoc, 'base64'))[0];
+  console.log(`COMPILED_BOC ${result.codeBoc}`);
+}
+
+function compileInFreshProcess(mode, candidate = '') {
+  const child = spawnSync(process.execPath, [SELF], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      COOLBEARS_COMPILE_MODE: mode,
+      COOLBEARS_COMPILE_CANDIDATE: candidate,
+    },
+  });
+  if (child.stderr) process.stderr.write(child.stderr);
+  assert.equal(child.status, 0, `${mode} compiler subprocess failed${candidate ? ` for ${candidate}` : ''}`);
+  const line = child.stdout.split('\n').find((x) => x.startsWith('COMPILED_BOC '));
+  assert.ok(line, `Missing compiler output for ${mode}`);
+  return Cell.fromBoc(Buffer.from(line.slice('COMPILED_BOC '.length), 'base64'))[0];
 }
 
 function data(owner, treasury, itemCode) {
@@ -105,14 +121,27 @@ function sumFees(transactions) {
   return total;
 }
 
-async function runSingleCandidate(candidate) {
-  const itemCode = await compileOfficialItem();
-  const code = await compileCollection(candidate);
+const compileMode = process.env.COOLBEARS_COMPILE_MODE;
+if (compileMode === 'item') {
+  await compileItemToBase64();
+  process.exit(0);
+}
+if (compileMode === 'collection') {
+  await compileCollectionToBase64(BigInt(process.env.COOLBEARS_COMPILE_CANDIDATE));
+  process.exit(0);
+}
+
+const itemCode = compileInFreshProcess('item');
+const candidates = [10_000_000n, 15_000_000n, 20_000_000n, 25_000_000n, 30_000_000n, 35_000_000n, 40_000_000n, 45_000_000n, 50_000_000n];
+const results = [];
+
+for (const candidate of candidates) {
+  const collectionCode = compileInFreshProcess('collection', candidate.toString());
   const blockchain = await Blockchain.create();
   const owner = await blockchain.treasury(`owner-${candidate}`);
   const treasury = await blockchain.treasury(`treasury-${candidate}`);
   const buyer = await blockchain.treasury(`buyer-${candidate}`);
-  const collection = blockchain.openContract(Collection.create(owner.address, treasury.address, code, itemCode));
+  const collection = blockchain.openContract(Collection.create(owner.address, treasury.address, collectionCode, itemCode));
   await collection.deploy(owner.getSender());
 
   let ok = false;
@@ -137,33 +166,12 @@ async function runSingleCandidate(candidate) {
     sandboxTotalFeesNano: fees.toString(),
     sandboxTransactionCount: txCount,
   };
-  console.log(`PROFILE_RESULT ${JSON.stringify(record)}`);
-}
-
-const single = process.env.COOLBEARS_PROFILE_CANDIDATE;
-if (single) {
-  await runSingleCandidate(BigInt(single));
-  process.exit(0);
-}
-
-const candidates = [10_000_000n, 15_000_000n, 20_000_000n, 25_000_000n, 30_000_000n, 35_000_000n, 40_000_000n, 45_000_000n, 50_000_000n];
-const results = [];
-
-for (const candidate of candidates) {
-  const child = spawnSync(process.execPath, [SELF], {
-    encoding: 'utf8',
-    env: { ...process.env, COOLBEARS_PROFILE_CANDIDATE: candidate.toString() },
-  });
-  if (child.stdout) process.stdout.write(child.stdout);
-  if (child.stderr) process.stderr.write(child.stderr);
-  assert.equal(child.status, 0, `Profiler child failed for reserve ${candidate}`);
-  const line = child.stdout.split('\n').find((x) => x.startsWith('PROFILE_RESULT '));
-  assert.ok(line, `Missing profile result for reserve ${candidate}`);
-  results.push(JSON.parse(line.slice('PROFILE_RESULT '.length)));
+  results.push(record);
+  console.log(JSON.stringify(record));
 }
 
 const passing = results.filter((r) => r.nftInitialized);
 assert.ok(passing.length > 0, 'No tested deployment reserve successfully initialized an NFT');
 const minimumPassing = passing[0];
 console.log(`Minimum passing tested reserve: ${minimumPassing.deployValueNano} nanoTON (${minimumPassing.deployValueTon} TON)`);
-console.log('NOTE: this is a Sandbox measurement only. A production/testnet safety margin is still required.');
+console.log('NOTE: Sandbox measurement only. Testnet validation and a safety margin are still required before production.');
