@@ -69,7 +69,8 @@ class NftItem {
 function parseOffchainContent(cell) {
   const s = cell.beginParse();
   assert.equal(s.loadUint(8), 1);
-  const prefix = s.loadStringTail();
+  assert.equal(s.remainingBits % 8, 0);
+  const prefix = s.loadBuffer(s.remainingBits / 8).toString('utf8');
   assert.equal(s.remainingRefs, 1);
   const suffix = s.loadRef().beginParse().loadStringTail();
   return { prefix, suffix, uri: prefix + suffix };
