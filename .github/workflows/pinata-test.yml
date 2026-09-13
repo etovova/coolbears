@@ -1,0 +1,31 @@
+name: Pinata connection test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-pinata:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PINATA_JWT is configured
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          if [ -z "$PINATA_JWT" ]; then
+            echo "PINATA_JWT is not configured"
+            exit 1
+          fi
+          echo "PINATA_JWT is configured"
+
+      - name: Authenticate with Pinata
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          status=$(curl -sS -o /tmp/pinata.json -w "%{http_code}" \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            https://api.pinata.cloud/data/testAuthentication)
+          cat /tmp/pinata.json
+          test "$status" = "200"

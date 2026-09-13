@@ -1,0 +1,14 @@
+# Private/reveal files
+collection/private/
+collection/final_metadata/
+collection/trait_assignments.json
+collection/top50.json
+.env
+.env.*
+*.key
+*.pem
+
+# Local artifacts
+.DS_Store
+Thumbs.db
+node_modules/
