@@ -1,0 +1,39 @@
+name: Audit prereveal GIF
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gif-audit.yml'
+      - 'assets/coolbears-prereveal.gif'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pillow
+      - name: Inspect GIF
+        run: |
+          python - <<'PY'
+          from PIL import Image
+          p='assets/coolbears-prereveal.gif'
+          im=Image.open(p)
+          frames=getattr(im,'n_frames',1)
+          durations=[]
+          for i in range(frames):
+              im.seek(i)
+              durations.append(im.info.get('duration',0))
+          print('GIF_SIZE', im.size)
+          print('GIF_FRAMES', frames)
+          print('GIF_LOOP', im.info.get('loop'))
+          print('GIF_DURATION_MS', sum(durations))
+          print('GIF_DURATION_VALUES', sorted(set(durations)))
+          print('GIF_FILE_BYTES', __import__('os').path.getsize(p))
+          assert frames > 1, 'GIF is not animated'
+          assert im.info.get('loop') == 0, 'GIF is not configured for infinite loop'
+          PY
