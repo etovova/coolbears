@@ -2,6 +2,10 @@ name: Pinata connection test
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pinata-test.yml'
 
 permissions:
   contents: read
