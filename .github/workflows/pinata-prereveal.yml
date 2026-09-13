@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'assets/coolbears-prereveal.gif'
+      - '.github/workflows/pinata-prereveal.yml'
   workflow_dispatch:
 
 permissions:
