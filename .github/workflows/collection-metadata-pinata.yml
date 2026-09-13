@@ -1,0 +1,49 @@
+name: Upload CoolBears collection metadata to Pinata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/collection-metadata-pinata.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate collection metadata
+        run: |
+          set -euo pipefail
+          jq -e '.name == "CoolBears"' metadata/collection.json >/dev/null
+          jq -e '.external_url == "https://coolbears-nfts.com/"' metadata/collection.json >/dev/null
+      - name: Upload collection metadata to Pinata
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          set -euo pipefail
+          test -n "$PINATA_JWT"
+          http_code=$(curl -sS -w '%{http_code}' \
+            -X POST https://uploads.pinata.cloud/v3/files \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            -F "file=@metadata/collection.json;type=application/json" \
+            -F "network=public" \
+            -F "name=CoolBears Collection Metadata" \
+            -o collection-metadata-pinata.json)
+          cat collection-metadata-pinata.json
+          echo
+          echo "HTTP $http_code"
+          test "$http_code" -ge 200 -a "$http_code" -lt 300
+          cid=$(jq -r '.data.cid // .cid // .IpfsHash // empty' collection-metadata-pinata.json)
+          test -n "$cid"
+          echo "COLLECTION_METADATA_CID=$cid" >> "$GITHUB_ENV"
+          echo "COOLBEARS_COLLECTION_METADATA_OK CID=$cid"
+      - name: Save receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: coolbears-collection-metadata-pinata-receipt
+          path: collection-metadata-pinata.json
+          retention-days: 30
