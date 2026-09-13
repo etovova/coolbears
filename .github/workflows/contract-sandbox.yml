@@ -33,3 +33,5 @@ jobs:
         run: node contracts/tests/sandbox.mjs
       - name: Run TON Sandbox reveal lifecycle test
         run: node contracts/tests/reveal-sandbox.mjs
+      - name: Profile NFT deploy reserve and fees
+        run: node contracts/tests/gas-profile.mjs
