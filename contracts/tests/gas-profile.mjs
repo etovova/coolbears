@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { compileFunc } from '@ton-community/func-js';
 import { Blockchain } from '@ton/sandbox';
 import { beginCell, Cell, contractAddress, SendMode, toNano } from '@ton/core';
@@ -8,6 +10,7 @@ const TON_ROOT = '/tmp/token-contract';
 const SRC_PATH = 'contracts/src/coolbears-collection-mint.fc';
 const OP_MINT = 0x4d494e54;
 const BASE_PRICE = toNano('7');
+const SELF = fileURLToPath(import.meta.url);
 
 async function compileOfficialItem() {
   const result = await compileFunc({
@@ -102,16 +105,13 @@ function sumFees(transactions) {
   return total;
 }
 
-const itemCode = await compileOfficialItem();
-const candidates = [10_000_000n, 15_000_000n, 20_000_000n, 25_000_000n, 30_000_000n, 35_000_000n, 40_000_000n, 45_000_000n, 50_000_000n];
-const results = [];
-
-for (const candidate of candidates) {
+async function runSingleCandidate(candidate) {
+  const itemCode = await compileOfficialItem();
+  const code = await compileCollection(candidate);
   const blockchain = await Blockchain.create();
   const owner = await blockchain.treasury(`owner-${candidate}`);
   const treasury = await blockchain.treasury(`treasury-${candidate}`);
   const buyer = await blockchain.treasury(`buyer-${candidate}`);
-  const code = await compileCollection(candidate);
   const collection = blockchain.openContract(Collection.create(owner.address, treasury.address, code, itemCode));
   await collection.deploy(owner.getSender());
 
@@ -130,18 +130,40 @@ for (const candidate of candidates) {
     ok = false;
   }
 
-  results.push({ candidate, ok, fees, txCount });
-  console.log(JSON.stringify({
+  const record = {
     deployValueNano: candidate.toString(),
     deployValueTon: Number(candidate) / 1e9,
     nftInitialized: ok,
     sandboxTotalFeesNano: fees.toString(),
     sandboxTransactionCount: txCount,
-  }));
+  };
+  console.log(`PROFILE_RESULT ${JSON.stringify(record)}`);
 }
 
-const passing = results.filter((r) => r.ok);
+const single = process.env.COOLBEARS_PROFILE_CANDIDATE;
+if (single) {
+  await runSingleCandidate(BigInt(single));
+  process.exit(0);
+}
+
+const candidates = [10_000_000n, 15_000_000n, 20_000_000n, 25_000_000n, 30_000_000n, 35_000_000n, 40_000_000n, 45_000_000n, 50_000_000n];
+const results = [];
+
+for (const candidate of candidates) {
+  const child = spawnSync(process.execPath, [SELF], {
+    encoding: 'utf8',
+    env: { ...process.env, COOLBEARS_PROFILE_CANDIDATE: candidate.toString() },
+  });
+  if (child.stdout) process.stdout.write(child.stdout);
+  if (child.stderr) process.stderr.write(child.stderr);
+  assert.equal(child.status, 0, `Profiler child failed for reserve ${candidate}`);
+  const line = child.stdout.split('\n').find((x) => x.startsWith('PROFILE_RESULT '));
+  assert.ok(line, `Missing profile result for reserve ${candidate}`);
+  results.push(JSON.parse(line.slice('PROFILE_RESULT '.length)));
+}
+
+const passing = results.filter((r) => r.nftInitialized);
 assert.ok(passing.length > 0, 'No tested deployment reserve successfully initialized an NFT');
 const minimumPassing = passing[0];
-console.log(`Minimum passing tested reserve: ${minimumPassing.candidate} nanoTON (${Number(minimumPassing.candidate) / 1e9} TON)`);
-console.log('NOTE: this is a Sandbox measurement, not yet a production reserve recommendation. Testnet margin is still required.');
+console.log(`Minimum passing tested reserve: ${minimumPassing.deployValueNano} nanoTON (${minimumPassing.deployValueTon} TON)`);
+console.log('NOTE: this is a Sandbox measurement only. A production/testnet safety margin is still required.');
