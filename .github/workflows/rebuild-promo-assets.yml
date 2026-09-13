@@ -1,0 +1,39 @@
+name: Rebuild CoolBears promo assets
+
+on:
+  push:
+    paths:
+      - '.asset_upload/READY_PROMOS'
+
+permissions:
+  contents: write
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild promo WebP files
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/nft
+          for n in 02 03 04 05 06 07; do
+            cat .asset_upload/web500chunk-${n}-*.txt | tr -d '\n\r' | base64 -d > assets/nft/promo-${n}.webp
+          done
+          echo 'db45cefa20d4e17ef33932dc4d2274a1558de5d61eb9f3f159c424bbc75bceff  assets/nft/promo-02.webp' | sha256sum -c -
+          echo '8260b83aeb5c82e1b48fabfa50d60bdecbeb3544321acb7819d35aebbe6f1961  assets/nft/promo-03.webp' | sha256sum -c -
+          echo '193cfb557f46162efd537b2703f6bb559560210a62674bd14c220f677739696a  assets/nft/promo-04.webp' | sha256sum -c -
+          echo '34d2912c15387ff0e9583571508f3b22656fd2374916a7f0b9df0980d40384cf  assets/nft/promo-05.webp' | sha256sum -c -
+          echo '41bee0b3a9a4bd95f9fc4080d70636181431976939a4b90d1b9d7c442216a72a  assets/nft/promo-06.webp' | sha256sum -c -
+          echo 'ccc3fec67a94667a731f754021e5dd145346ffedc2cba1cdc47abf085cf3d6cf  assets/nft/promo-07.webp' | sha256sum -c -
+          sed -i 's/promo-02.webp?v=3/promo-02.webp?v=4/g; s/promo-03.webp?v=3/promo-03.webp?v=4/g; s/promo-04.webp?v=3/promo-04.webp?v=4/g; s/promo-05.webp?v=3/promo-05.webp?v=4/g; s/promo-06.webp?v=3/promo-06.webp?v=4/g; s/promo-07.webp?v=3/promo-07.webp?v=4/g' index.html
+      - name: Commit rebuilt assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/nft/promo-02.webp assets/nft/promo-03.webp assets/nft/promo-04.webp assets/nft/promo-05.webp assets/nft/promo-06.webp assets/nft/promo-07.webp index.html
+          git commit -m 'Replace collection promos with distinct optimized CoolBears' || exit 0
+          git push
