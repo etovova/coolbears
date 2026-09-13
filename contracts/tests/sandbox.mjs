@@ -10,6 +10,8 @@ const OP_MINT = 0x4d494e54;
 const OP_PAUSE = 0x50415553;
 const OP_UNPAUSE = 0x554e5053;
 const OP_NFT_TRANSFER = 0x5fcc3d14;
+const OP_GET_ROYALTY = 0x693d3950;
+const OP_REPORT_ROYALTY = 0xa8cb00ad;
 
 async function compileCollection() {
   const result = await compileFunc({
@@ -81,6 +83,13 @@ class CoolBearsCollection {
       value: toNano('0.1'),
       sendMode: SendMode.PAY_GAS_SEPARATELY,
       body: beginCell().storeUint(op, 32).storeUint(0, 64).endCell(),
+    });
+  }
+  async sendRoyaltyQuery(provider, via, queryId) {
+    return provider.internal(via, {
+      value: toNano('0.05'),
+      sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell().storeUint(OP_GET_ROYALTY, 32).storeUint(queryId, 64).endCell(),
     });
   }
   async getMintState(provider) {
@@ -161,6 +170,27 @@ const royalty = await collection.getRoyalty();
 assert.equal(royalty.factor, 7n);
 assert.equal(royalty.base, 100n);
 assert.equal(royalty.address.toString(), treasury.address.toString());
+
+// Standard royalty query is message-based and must be available to any sender,
+// not only the collection owner. Verify the actual report_royalty_params reply.
+const royaltyQueryId = 0x1234n;
+const royaltyQueryResult = await collection.sendRoyaltyQuery(attacker.getSender(), royaltyQueryId);
+const royaltyResponseTx = royaltyQueryResult.transactions.find((tx) => {
+  const msg = tx.inMessage;
+  return msg?.info?.type === 'internal'
+    && msg.info.src?.toString() === collection.address.toString()
+    && msg.info.dest?.toString() === attacker.address.toString();
+});
+assert.ok(royaltyResponseTx, 'Royalty query must produce a response transaction to the requester');
+const royaltyBody = royaltyResponseTx.inMessage.body.beginParse();
+assert.equal(royaltyBody.loadUint(32), OP_REPORT_ROYALTY);
+assert.equal(royaltyBody.loadUintBig(64), royaltyQueryId);
+assert.equal(royaltyBody.loadUint(16), 7);
+assert.equal(royaltyBody.loadUint(16), 100);
+assert.equal(royaltyBody.loadAddress().toString(), treasury.address.toString());
+state = await collection.getMintState();
+assert.equal(state.next, 0n);
+assert.equal(state.paused, 0n);
 
 // One successful mint creates token #0000 owned by the buyer.
 await collection.sendMint(buyer.getSender(), 1, toNano('7.05'));
@@ -247,4 +277,4 @@ await edgeCollection.sendMint(buyer.getSender(), 1, toNano('7.05'));
 edgeState = await edgeCollection.getMintState();
 assert.equal(edgeState.next, 10000n);
 
-console.log('CoolBears TON Sandbox boundary + metadata + transfer tests: OK');
+console.log('CoolBears TON Sandbox boundary + royalty message + metadata + transfer tests: OK');
