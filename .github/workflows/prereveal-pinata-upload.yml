@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/prereveal-pinata-upload.yml'
+      - 'metadata/prereveal.json'
+      - 'scripts/generate-prereveal-metadata.mjs'
   workflow_dispatch:
 
 permissions:
