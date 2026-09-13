@@ -1,0 +1,36 @@
+name: Upload prereveal to Pinata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'assets/coolbears-prereveal.gif'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  upload-prereveal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload official prereveal GIF to Pinata
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: |
+          test -n "$PINATA_JWT"
+          test -f assets/coolbears-prereveal.gif
+          curl --fail-with-body -sS \
+            -X POST https://api.pinata.cloud/pinning/pinFileToIPFS \
+            -H "Authorization: Bearer $PINATA_JWT" \
+            -F "file=@assets/coolbears-prereveal.gif" \
+            -F 'pinataMetadata={"name":"CoolBears Official Pre-Reveal"}' \
+            -o pinata-prereveal-result.json
+          cat pinata-prereveal-result.json
+      - name: Save CID response
+        uses: actions/upload-artifact@v4
+        with:
+          name: coolbears-pinata-prereveal-cid
+          path: pinata-prereveal-result.json
+          retention-days: 30
