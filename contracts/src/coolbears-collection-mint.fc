@@ -1,3 +1,5 @@
+#include "stdlib.fc";
+
 ;; CoolBears public-mint collection draft
 ;; Derived conceptually from the pinned official TON editable NFT collection reference.
 ;; IMPORTANT: this file is NOT approved for deployment until it compiles and passes TON sandbox/testnet tests.
