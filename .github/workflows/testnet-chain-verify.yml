@@ -43,7 +43,10 @@ jobs:
         run: |
           set -euo pipefail
           ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
-          curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_mint_state" > /tmp/mint.json
+          curl -fsS --retry 3 --retry-delay 2 -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"address\":\"${ADDRESS}\",\"method\":\"get_mint_state\",\"stack\":[]}" \
+            "https://testnet.toncenter.com/api/v2/runGetMethod" > /tmp/mint.json
           jq -e '.ok == true and .result.exit_code == 0' /tmp/mint.json >/dev/null
           echo "GET_MINT_STATE_STACK=$(jq -c '.result.stack' /tmp/mint.json)"
           node -e "const j=require('/tmp/mint.json');const v=j.result.stack.slice(0,4).map(x=>BigInt(x[1]));const [n,s,p,z]=v;if(n!==0n||s!==10000n||p!==7000000000n||z!==1n)throw new Error('bad mint state '+v);console.log('MINT_STATE_OK next='+n+' supply='+s+' price='+p+' paused='+z)"
@@ -53,7 +56,10 @@ jobs:
         run: |
           set -euo pipefail
           ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
-          curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=royalty_params" > /tmp/royalty.json
+          curl -fsS --retry 3 --retry-delay 2 -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"address\":\"${ADDRESS}\",\"method\":\"royalty_params\",\"stack\":[]}" \
+            "https://testnet.toncenter.com/api/v2/runGetMethod" > /tmp/royalty.json
           jq -e '.ok == true and .result.exit_code == 0' /tmp/royalty.json >/dev/null
           echo "ROYALTY_STACK=$(jq -c '.result.stack' /tmp/royalty.json)"
           node -e "const j=require('/tmp/royalty.json');const n=BigInt(j.result.stack[0][1]);const d=BigInt(j.result.stack[1][1]);if(n!==7n||d!==100n)throw new Error('bad royalty '+n+'/'+d);console.log('ROYALTY_OK '+n+'/'+d)"
@@ -63,7 +69,10 @@ jobs:
         run: |
           set -euo pipefail
           ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
-          curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_collection_data" > /tmp/collection.json
+          curl -fsS --retry 3 --retry-delay 2 -X POST \
+            -H 'Content-Type: application/json' \
+            -d "{\"address\":\"${ADDRESS}\",\"method\":\"get_collection_data\",\"stack\":[]}" \
+            "https://testnet.toncenter.com/api/v2/runGetMethod" > /tmp/collection.json
           jq -e '.ok == true and .result.exit_code == 0' /tmp/collection.json >/dev/null
           echo "COLLECTION_GETTER_OK"
           jq -c '.result.stack' /tmp/collection.json
