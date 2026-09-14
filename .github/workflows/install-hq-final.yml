@@ -3,7 +3,7 @@ name: Install HQ CoolBears assets
 on:
   push:
     paths:
-      - '.asset_upload/hq-final/**'
+      - '.asset_upload/hq-final/READY'
 
 permissions:
   contents: write
@@ -30,22 +30,31 @@ jobs:
           p=Path('index.html')
           s=p.read_text()
           for old,new in [
-            ('hero-main.webp?v=2','hero-main.webp?v=6'),
-            ('hero-main.webp?v=1','hero-main.webp?v=6'),
-            ('promo-02.webp?v=4','promo-02.webp?v=6'),
-            ('promo-03.webp?v=4','promo-03.webp?v=6'),
-            ('promo-04.webp?v=4','promo-04.webp?v=6'),
-            ('promo-05.webp?v=4','promo-05.webp?v=6'),
-            ('promo-06.webp?v=4','promo-06.webp?v=6'),
-            ('promo-07.webp?v=4','promo-07.webp?v=6'),
-            ('promo-02.webp?v=3','promo-02.webp?v=6'),
-            ('promo-03.webp?v=3','promo-03.webp?v=6'),
-            ('promo-04.webp?v=3','promo-04.webp?v=6'),
-            ('promo-05.webp?v=3','promo-05.webp?v=6'),
-            ('promo-06.webp?v=3','promo-06.webp?v=6'),
-            ('promo-07.webp?v=3','promo-07.webp?v=6'),
+            ('hero-main.webp?v=1','hero-main.webp?v=7'),
+            ('hero-main.webp?v=2','hero-main.webp?v=7'),
+            ('hero-main.webp?v=6','hero-main.webp?v=7'),
+            ('promo-02.webp?v=3','promo-02.webp?v=7'),
+            ('promo-03.webp?v=3','promo-03.webp?v=7'),
+            ('promo-04.webp?v=3','promo-04.webp?v=7'),
+            ('promo-05.webp?v=3','promo-05.webp?v=7'),
+            ('promo-06.webp?v=3','promo-06.webp?v=7'),
+            ('promo-07.webp?v=3','promo-07.webp?v=7'),
+            ('promo-02.webp?v=4','promo-02.webp?v=7'),
+            ('promo-03.webp?v=4','promo-03.webp?v=7'),
+            ('promo-04.webp?v=4','promo-04.webp?v=7'),
+            ('promo-05.webp?v=4','promo-05.webp?v=7'),
+            ('promo-06.webp?v=4','promo-06.webp?v=7'),
+            ('promo-07.webp?v=4','promo-07.webp?v=7'),
+            ('promo-02.webp?v=6','promo-02.webp?v=7'),
+            ('promo-03.webp?v=6','promo-03.webp?v=7'),
+            ('promo-04.webp?v=6','promo-04.webp?v=7'),
+            ('promo-05.webp?v=6','promo-05.webp?v=7'),
+            ('promo-06.webp?v=6','promo-06.webp?v=7'),
+            ('promo-07.webp?v=6','promo-07.webp?v=7'),
           ]:
               s=s.replace(old,new)
+          if 'hq-hero.css' in s:
+              s=s.replace('<link rel="stylesheet" href="assets/nft/hq-hero.css">','')
           p.write_text(s)
           PY
           rm -rf .asset_upload/hq-final
