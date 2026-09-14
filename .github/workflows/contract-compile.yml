@@ -34,3 +34,5 @@ jobs:
         with:
           name: coolbears-func-build
           path: build/contracts/
+
+# verification trigger after prereveal root update: 2026-09-14
