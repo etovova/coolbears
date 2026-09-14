@@ -13,7 +13,7 @@ if (p.lifetimeWalletLimit !== null) fail('there must be no lifetime wallet limit
 if (p.royaltyBps !== 700) fail('royalty must be 7%');
 if (p.treasuryAddress !== p.royaltyAddress) fail('treasury/royalty recipient mismatch');
 if (!/^UQ[A-Za-z0-9_-]+$/.test(p.treasuryAddress)) fail('unexpected treasury address format');
-if (p.revealDate !== '2026-10-07') fail('reveal date mismatch');
+if (p.revealDate !== '2027-01-01') fail('reveal date mismatch');
 if (!p.preRevealImageCid.startsWith('baf')) fail('missing image CID');
 if (!p.preRevealMetadataCid.startsWith('baf')) fail('missing metadata CID');
 if (p.publicMintPausedByDefault !== true) fail('mint must start paused');
@@ -25,6 +25,7 @@ for (const expected of [
   "supply: 10000",
   "royaltyPercent: 7",
   "maxPerTransaction: 50",
+  "revealDate: '2027-01-01'",
   "collectionAddress: ''",
   "mintContractAddress: ''",
   "demoMode: true"
