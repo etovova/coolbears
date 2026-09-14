@@ -1,0 +1,10 @@
+{
+  "name": "CoolBears #0000 — Reveal Test",
+  "description": "CoolBears TON testnet reveal verification item. This metadata is test-only and is not the final production metadata.",
+  "image": "https://coolbears-nfts.com/assets/nft/hero-main.webp",
+  "attributes": [
+    {"trait_type": "Network", "value": "TON Testnet"},
+    {"trait_type": "Reveal", "value": "Working"},
+    {"trait_type": "Index", "value": "0000"}
+  ]
+}
