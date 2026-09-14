@@ -1,0 +1,45 @@
+name: Verify CoolBears testnet unpause
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/testnet-unpause-verify.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify mint is open and untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          for i in {1..12}; do
+            curl -fsS --retry 3 --retry-delay 2 -X POST \
+              -H 'Content-Type: application/json' \
+              -d "{\"address\":\"${ADDRESS}\",\"method\":\"get_mint_state\",\"stack\":[]}" \
+              'https://testnet.toncenter.com/api/v2/runGetMethod' > /tmp/mint.json || true
+            if jq -e '.ok == true and .result.exit_code == 0' /tmp/mint.json >/dev/null 2>&1; then
+              node - <<'NODE'
+const j=require('/tmp/mint.json');
+const v=j.result.stack.slice(0,4).map(x=>BigInt(x[1]));
+const [next,supply,price,paused]=v;
+console.log(`MINT_STATE next=${next} supply=${supply} price=${price} paused=${paused}`);
+if(next===0n && supply===10000n && price===7000000000n && paused===0n) process.exit(0);
+process.exit(2);
+NODE
+              rc=$?
+              if [ "$rc" -eq 0 ]; then exit 0; fi
+            fi
+            echo "Waiting for unpause confirmation... attempt $i"
+            sleep 10
+          done
+          echo 'Expected paused=0 and next=0, but state did not match.'
+          cat /tmp/mint.json || true
+          exit 1
