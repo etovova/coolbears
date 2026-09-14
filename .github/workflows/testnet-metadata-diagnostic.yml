@@ -1,0 +1,118 @@
+name: Diagnose CoolBears testnet NFT metadata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/testnet-metadata-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install TON client
+        run: npm install --no-save @ton/ton @ton/core
+      - name: Read live NFT #0000 and resolve metadata URI
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          cat > /tmp/diagnose.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { Address } from '@ton/core';
+          import { TonClient } from '@ton/ton';
+
+          const d = JSON.parse(fs.readFileSync('testnet/deployment.json','utf8'));
+          const client = new TonClient({ endpoint: process.env.TONCENTER_ENDPOINT });
+          const collection = Address.parse(d.collectionAddressTestnetNonBounceable);
+
+          const mint = await client.runMethod(collection, 'get_mint_state');
+          const next = mint.stack.readBigNumber();
+          const supply = mint.stack.readBigNumber();
+          const price = mint.stack.readBigNumber();
+          const paused = mint.stack.readBigNumber();
+          console.log(`MINT_STATE next=${next} supply=${supply} price=${price} paused=${paused}`);
+          if (next < 1n) throw new Error('Collection has no minted NFT #0000');
+
+          const addrRes = await client.runMethod(collection, 'get_nft_address_by_index', [{ type:'int', value:0n }]);
+          const nftAddress = addrRes.stack.readAddress();
+          console.log(`NFT0_ADDRESS=${nftAddress.toString({testOnly:true,bounceable:true})}`);
+
+          const nft = await client.runMethod(nftAddress, 'get_nft_data');
+          const initialized = nft.stack.readBigNumber();
+          const index = nft.stack.readBigNumber();
+          const nftCollection = nft.stack.readAddress();
+          const owner = nft.stack.readAddress();
+          const individual = nft.stack.readCell();
+          console.log(`NFT0 initialized=${initialized} index=${index}`);
+          console.log(`NFT0_COLLECTION=${nftCollection.toString({testOnly:true,bounceable:true})}`);
+          console.log(`NFT0_OWNER=${owner.toString({testOnly:true,bounceable:false})}`);
+          console.log(`NFT0_INDIVIDUAL=${individual.beginParse().loadStringTail()}`);
+
+          const full = await client.runMethod(collection, 'get_nft_content', [
+            { type:'int', value:index },
+            { type:'cell', cell:individual },
+          ]);
+          const content = full.stack.readCell();
+          const s = content.beginParse();
+          const tag = s.loadUint(8);
+          if (tag !== 1) throw new Error(`Unexpected offchain tag ${tag}`);
+          if (s.remainingBits % 8 !== 0) throw new Error('URI prefix is not byte-aligned');
+          const prefix = s.loadBuffer(s.remainingBits / 8).toString('utf8');
+          if (s.remainingRefs !== 1) throw new Error(`Expected one suffix ref, got ${s.remainingRefs}`);
+          const suffix = s.loadRef().beginParse().loadStringTail();
+          const uri = prefix + suffix;
+          console.log(`NFT0_PREFIX=${prefix}`);
+          console.log(`NFT0_SUFFIX=${suffix}`);
+          console.log(`NFT0_URI=${uri}`);
+          fs.writeFileSync('/tmp/nft0-uri.txt', uri);
+          NODE
+          node /tmp/diagnose.mjs
+
+      - name: Fetch resolved metadata through public IPFS gateways
+        run: |
+          set -euo pipefail
+          URI=$(cat /tmp/nft0-uri.txt)
+          case "$URI" in
+            ipfs://*) PATH_PART=${URI#ipfs://} ;;
+            *) echo "Resolved URI is not ipfs://: $URI"; exit 1 ;;
+          esac
+          ok=0
+          for gateway in \
+            'https://gateway.pinata.cloud/ipfs/' \
+            'https://ipfs.io/ipfs/' \
+            'https://cloudflare-ipfs.com/ipfs/'
+          do
+            echo "Trying ${gateway}${PATH_PART}"
+            if curl --fail --silent --show-error --location --retry 3 --retry-delay 2 \
+              "${gateway}${PATH_PART}" -o /tmp/nft0.json; then
+              if jq -e 'type=="object" and (.name|type=="string") and (.image|type=="string")' /tmp/nft0.json >/dev/null; then
+                echo "METADATA_GATEWAY_OK=${gateway}"
+                jq '{name,description,image,animation_url,attributes}' /tmp/nft0.json
+                ok=1
+                break
+              fi
+            fi
+          done
+          test "$ok" = "1"
+
+      - name: Verify prereveal image URI is reachable
+        run: |
+          set -euo pipefail
+          IMG=$(jq -r '.image' /tmp/nft0.json)
+          case "$IMG" in
+            ipfs://*) PATH_PART=${IMG#ipfs://}; URL="https://gateway.pinata.cloud/ipfs/${PATH_PART}" ;;
+            https://*) URL="$IMG" ;;
+            *) echo "Unsupported image URI: $IMG"; exit 1 ;;
+          esac
+          curl --fail --silent --show-error --location --retry 3 --retry-delay 2 "$URL" -o /tmp/prereveal.bin
+          test -s /tmp/prereveal.bin
+          file /tmp/prereveal.bin
+          echo "NFT0_METADATA_AND_IMAGE_REACHABLE=1"
