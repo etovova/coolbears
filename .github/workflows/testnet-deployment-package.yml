@@ -1,0 +1,55 @@
+name: CoolBears testnet deployment package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'contracts/src/**'
+      - 'contracts/mint-policy.json'
+      - 'contracts/TON_REFERENCE.lock'
+      - 'scripts/build-testnet-deployment.mjs'
+      - '.github/workflows/testnet-deployment-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Checkout pinned official TON reference
+        shell: bash
+        run: |
+          source contracts/TON_REFERENCE.lock
+          git clone --filter=blob:none https://github.com/${source_repository}.git /tmp/token-contract
+          git -C /tmp/token-contract checkout --detach "$source_commit"
+      - name: Install build dependencies
+        run: npm install --no-save @ton-community/func-js @ton/core
+      - name: Build deterministic unsigned testnet deployment package
+        run: node scripts/build-testnet-deployment.mjs
+      - name: Validate deployment package safety gates
+        shell: bash
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const x = JSON.parse(fs.readFileSync('build/testnet-deployment/deployment.json', 'utf8'));
+          if (x.network !== 'testnet') throw new Error('deployment package must target testnet');
+          if (x.initialPaused !== true) throw new Error('collection must deploy paused');
+          if (x.priceNanoTon !== 7000000000) throw new Error('price mismatch');
+          if (x.maxPerTransaction !== 50) throw new Error('max-per-tx mismatch');
+          if (x.supply !== 10000) throw new Error('supply mismatch');
+          if (x.royaltyBps !== 700) throw new Error('royalty mismatch');
+          if (!x.tonConnectDeployMessage?.stateInit || !x.tonConnectDeployMessage?.address) throw new Error('missing unsigned TonConnect deployment payload');
+          console.log('Unsigned testnet deployment package: READY');
+          NODE
+      - name: Upload unsigned testnet deployment package
+        uses: actions/upload-artifact@v4
+        with:
+          name: coolbears-testnet-deployment
+          path: build/testnet-deployment/
+          retention-days: 14
