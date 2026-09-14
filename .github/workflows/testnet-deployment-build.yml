@@ -53,3 +53,5 @@ jobs:
           name: coolbears-testnet-deployment-unsigned
           path: build/testnet-deployment/
           retention-days: 90
+
+# rebuild trigger: 2026-09-14 current verified prereveal root
