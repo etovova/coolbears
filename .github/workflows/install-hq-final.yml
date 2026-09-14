@@ -1,64 +1,50 @@
-name: Install HQ CoolBears assets
+name: Finalize CoolBears website artwork
 
 on:
   push:
     paths:
-      - '.asset_upload/hq-final3/READY'
+      - '.asset_upload/cleanup-hq/READY'
 
 permissions:
   contents: write
 
 jobs:
-  install:
+  finalize:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Download final 2000px artwork
+      - name: Remove temporary image overrides
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p assets/nft
-          curl -fL --retry 2 'https://uc4b5fa1616029954f7be1131215.dl.dropboxusercontent.com/cd/0/get/DIJXYkPN3ECGztgS0cfwMcb4D3lS_gO1V2AjLHBZMxE0bsNDyARUMcWLLnMg6_Y92Ro4USL8I_1K7Q1CptN8k4oDlmYsqEll6etBzpr6iakHD919jiHHpGVOXR_HkIy6jT1Hla91h6Xx_AorlwAaQZ-r7-bib-dIC07PP4Poye9EAw/file?c_luid=2f2d61d8' -o assets/nft/hero-main.webp
-          curl -fL --retry 2 'https://uc62f4ad23b10e7cd48f08fde812.dl.dropboxusercontent.com/cd/0/get/DIKUqvJ0bvRl4NDjctvRdPS_Cq9e6-2G5yxbov-suSPSkKWquGDX4qOhoWf82uudx5ZE0MDBSvMRRIM_qjzS5h5rTm-PagThFNCC_FcVJXV2E-cEzc2ZDATa5qPnPT0W2MT44b9ji5JKhuE_nTKHsK9l7GkHfos04sonUgsStolC2g/file?c_luid=2f2d61d8' -o assets/nft/promo-02.webp
-          curl -fL --retry 2 'https://uce596a6c21c1cc56d77c69d9a57.dl.dropboxusercontent.com/cd/0/get/DIIJvj6vA-_yNBfh4Fi78b9SeRvyHg4E5Zt6uHBCNE167D93lkno2TgCFsPtilzwWT0bMldDZb_UDPlOzJemAuwE2ScSmzKKujeA7GFQcs6JaMtgHrB833iDFWaxJoXha1KzwJcNN2YC0kZIvXuU9gaERRYJn_EUxhXjxi2hjEDC8A/file?c_luid=2f2d61d8' -o assets/nft/promo-03.webp
-          curl -fL --retry 2 'https://uc68b23556cb3aad4335cbb008b9.dl.dropboxusercontent.com/cd/0/get/DIJuAlR_I8oYfte5gt8TBSxD3I6CVMBBlCMfhDbVJjqWkR7qKfuNAkaxH7gk6Vn6LWr40hBWDBRhHNrE2n5i9gttXugISXa3YyZlpz4X95338aox3sb4dCp3IUpQddKywSdHESfdeXyIvXwAwOmqhOx44n6Ng5CZGsF600qHXOBvHA/file?c_luid=2f2d61d8' -o assets/nft/promo-04.webp
-          curl -fL --retry 2 'https://uc04d3a02fc225873f97cf6138a8.dl.dropboxusercontent.com/cd/0/get/DILDqiEi70CXqXfbX_o2Wkjy9F805vhe2jd4lpclUKct91M77gaT_GUqkpo3sc8zA-qHrQ_OTW21REDhuhecsRp5nLvbUqYLP7SbUlp1JS8OqId2i84QaUVjY2w1tkBt-uLs1hmsqRDKXOp3-VRLrqzgqv3TL7b9EsY91VqtB2GqzA/file?c_luid=2f2d61d8' -o assets/nft/promo-05.webp
-          curl -fL --retry 2 'https://uc8143d9ee51c64c8a9b2db35780.dl.dropboxusercontent.com/cd/0/get/DIKGaIkEQqQBY36INTeGuLvhFnUDWDTkPQEsXt25u25m1hynyYtLM0AIsOw_18dJx4hljAfVyVddoG7OO1dyNCcFrEwj2bgSRHVb260MFeojwqCr2maHnGJYhR4EehjT3pIkPerAeT1rxGKBMBnOOh29tAP1YeZnI96jZknZtx5_Ig/file?c_luid=2f2d61d8' -o assets/nft/promo-06.webp
-          curl -fL --retry 2 'https://uc028877517152d8eb437a72dd1f.dl.dropboxusercontent.com/cd/0/get/DIJ_wu_FknumrjSR2EzSTAZhFg_689RNjRRqkERXwQmIBlVeIYvfUgcxg-2vs7od5raMatCqoFIksDVwCBzPa5jf8qubLgFnbHmRtHC4Twc2e_7wH4gX_dSxU3MlXtFpiOq2A5vDzwm9gt5W06apsr5BBI65tRpeZ74w7arERrgZ8w/file?c_luid=2f2d61d8' -o assets/nft/promo-07.webp
           python3 - <<'PY'
           from pathlib import Path
-          expected={
-            'hero-main.webp':278434,
-            'promo-02.webp':235690,
-            'promo-03.webp':323680,
-            'promo-04.webp':176244,
-            'promo-05.webp':182260,
-            'promo-06.webp':175330,
-            'promo-07.webp':154532,
-          }
-          for name,size in expected.items():
-              p=Path('assets/nft')/name
-              actual=p.stat().st_size
-              if actual != size:
-                  raise SystemExit(f'{name}: expected {size}, got {actual}')
-              data=p.read_bytes()[:12]
-              if data[:4] != b'RIFF' or data[8:12] != b'WEBP':
-                  raise SystemExit(f'{name}: not WEBP')
           p=Path('index.html')
           s=p.read_text()
-          import re
-          for n in expected:
-              s=re.sub(re.escape(n)+r'\?v=\d+', n+'?v=10', s)
+          for href in [
+            'assets/nft/hq-hero.css?v=2',
+            'assets/nft/hq-gallery-1.css?v=1',
+            'assets/nft/hq-gallery-2.css?v=1',
+            'assets/nft/hq-gallery-3.css?v=1',
+            'assets/nft/hq-gallery-4.css?v=1',
+            'assets/nft/hq-gallery-5.css?v=1',
+            'assets/nft/hq-gallery-6.css?v=1',
+          ]:
+              s=s.replace(f'<link rel="stylesheet" href="{href}">','')
           p.write_text(s)
           PY
-          rm -rf .asset_upload/hq-final3
-      - name: Commit final artwork
+          rm -f assets/nft/hq-hero.css
+          rm -f assets/nft/hq-gallery-1.css assets/nft/hq-gallery-2.css assets/nft/hq-gallery-3.css assets/nft/hq-gallery-4.css assets/nft/hq-gallery-5.css assets/nft/hq-gallery-6.css
+          rm -f assets/nft/hero-main-hq.webp.b64.txt
+          rm -rf .asset_upload/cleanup-hq
+          rm -f .github/workflows/install-hq-final.yml
+      - name: Commit cleanup
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/nft index.html .asset_upload/hq-final3 || true
-          git commit -m 'Install final 2000px CoolBears website artwork' || exit 0
+          git add -A
+          git commit -m 'Remove temporary HQ image overrides' || exit 0
           git push
