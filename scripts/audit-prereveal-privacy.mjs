@@ -4,6 +4,11 @@ const policy = JSON.parse(fs.readFileSync('contracts/mint-policy.json','utf8'));
 const meta = JSON.parse(fs.readFileSync('metadata/prereveal.json','utf8'));
 const configText = fs.readFileSync('config.js','utf8');
 
+const permittedKeys = new Set(['name', 'description', 'image', 'animation_url', 'external_url', 'attributes']);
+for (const key of Object.keys(meta)) if (!permittedKeys.has(key)) throw new Error(`Unexpected public metadata field: ${key}`);
+const revealLabel = 'January 1, 2027';
+if (policy.revealDate !== '2027-01-01') throw new Error('Unexpected reveal date');
+if (!meta.description.includes(revealLabel) || meta.attributes?.find(a => a.trait_type === 'Reveal')?.value !== revealLabel) throw new Error('Prereveal date differs from policy');
 const expectedImage = `ipfs://${policy.preRevealImageCid}`;
 if (meta.image !== expectedImage) throw new Error(`Prereveal image mismatch: ${meta.image}`);
 if (meta.animation_url !== expectedImage) throw new Error('Prereveal animation_url must use hidden image only');

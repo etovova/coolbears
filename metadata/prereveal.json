@@ -1,11 +1,11 @@
 {
   "name": "CoolBears — Hidden Bear",
-  "description": "Your CoolBear is hiding. Final artwork, traits and rarity will be revealed on October 7, 2026. Everyone gets a bear. Not everyone gets a legend.",
+  "description": "Your CoolBear is hiding. Final artwork, traits and rarity will be revealed on January 1, 2027. Everyone gets a bear. Not everyone gets a legend.",
   "image": "ipfs://bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni",
   "animation_url": "ipfs://bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni",
   "external_url": "https://coolbears-nfts.com/",
   "attributes": [
     {"trait_type": "Status", "value": "Unrevealed"},
-    {"trait_type": "Reveal", "value": "October 7, 2026"}
+    {"trait_type": "Reveal", "value": "January 1, 2027"}
   ]
 }

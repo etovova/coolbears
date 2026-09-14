@@ -24,25 +24,25 @@ jobs:
           if marker not in s:
               insert=r'''
 
-  // clean-section-hash
-  document.addEventListener('click', (event) => {
-    const link = event.target.closest('a[href^="#"]');
-    if (!link) return;
-    const hash = link.getAttribute('href');
-    if (!hash || hash === '#') return;
-    const target = document.querySelector(hash);
-    if (!target) return;
-    event.preventDefault();
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    history.replaceState(null, '', location.pathname + location.search);
-  });
+            // clean-section-hash
+            document.addEventListener('click', (event) => {
+              const link = event.target.closest('a[href^="#"]');
+              if (!link) return;
+              const hash = link.getAttribute('href');
+              if (!hash || hash === '#') return;
+              const target = document.querySelector(hash);
+              if (!target) return;
+              event.preventDefault();
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              history.replaceState(null, '', location.pathname + location.search);
+            });
 
-  if (location.hash) {
-    requestAnimationFrame(() => {
-      history.replaceState(null, '', location.pathname + location.search);
-    });
-  }
-'''
+            if (location.hash) {
+              requestAnimationFrame(() => {
+                history.replaceState(null, '', location.pathname + location.search);
+              });
+            }
+          '''
               idx=s.rfind('})();')
               if idx == -1:
                   raise SystemExit('app.js wrapper end not found')

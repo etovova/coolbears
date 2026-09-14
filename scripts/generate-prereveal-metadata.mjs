@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import './audit-prereveal-privacy.mjs';
 
 const supply = Number(process.env.SUPPLY || 10000);
 const source = process.env.SOURCE || 'metadata/prereveal.json';
@@ -7,6 +8,8 @@ const outDir = process.env.OUT_DIR || 'build/prereveal-metadata';
 
 if (!Number.isInteger(supply) || supply < 1 || supply > 10000) throw new Error('Invalid SUPPLY');
 const template = JSON.parse(fs.readFileSync(source, 'utf8'));
+const canonical = JSON.parse(fs.readFileSync('metadata/prereveal.json', 'utf8'));
+if (JSON.stringify(template) !== JSON.stringify(canonical)) throw new Error('Only the audited hidden template may be published');
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
