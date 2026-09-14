@@ -5,7 +5,7 @@ window.COOLBEARS_CONFIG = {
   supply: 10000,
   royaltyPercent: 7,
   maxPerTransaction: 50,
-  revealDate: '2026-10-07',
+  revealDate: '2027-01-01',
   preRevealImageCid: 'bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni',
   preRevealMetadataCid: 'bafkreib7p7wx427quboakukbl6mebpksyjp4r5vurqif3p6bh3a7ssyzq4',
   preRevealMetadataRootCid: 'bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e',
