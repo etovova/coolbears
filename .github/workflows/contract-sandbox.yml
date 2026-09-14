@@ -35,3 +35,5 @@ jobs:
         run: node contracts/tests/reveal-sandbox.mjs
       - name: Profile NFT deploy reserve and fees
         run: node contracts/tests/gas-profile.mjs
+
+# verification trigger after prereveal root update: 2026-09-14
