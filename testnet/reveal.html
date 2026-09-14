@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow">
 <title>CoolBears Testnet Reveal</title>
-<style>body{font-family:system-ui;background:#111;color:#fff;max-width:760px;margin:32px auto;padding:20px}button{padding:14px 18px;font-weight:800;margin:6px 6px 6px 0}code{word-break:break-all}.ok{color:#78e08f}.bad{color:#ff7675}.warn{color:#feca57}.box{border:1px solid #333;border-radius:14px;padding:16px;margin:16px 0}button:disabled{opacity:.45}</style>
+<style>body{font-family:system-ui;background:#111;color:#fff;max-width:760px;margin:32px auto;padding:20px}button{padding:14px 18px;font-weight:800;margin:6px 6px 6px 0}code{word-break:break-all}.ok{color:#78e08f}.bad{color:#ff7675}.warn{color:#feca57}.box{border:1px solid #333;border-radius:14px;padding:16px;margin:16px 0}button:disabled{opacity:.45}a{color:#78e08f}</style>
 </head>
 <body>
 <h1>CoolBears — TON Testnet Reveal</h1>
@@ -13,7 +13,7 @@
 <div class="box">
 <h3>1. Reveal NFT #0000 on testnet</h3>
 <button id="reveal" disabled>REVEAL TEST NFT #0000</button>
-<p>Expected metadata: <a style="color:#78e08f" href="./reveal/0000.json" target="_blank">testnet/reveal/0000.json</a></p>
+<p>Expected metadata: <a href="./reveal/0000.json" target="_blank" rel="noopener">testnet/reveal/0000.json</a></p>
 </div>
 <div class="box">
 <h3>2. Restore hidden metadata after verification</h3>
@@ -23,7 +23,7 @@
 <p id="status"></p>
 <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 <script type="module">
-import { beginCell } from 'https://esm.sh/@ton/core@0.62.0?bundle';
+import { Address, beginCell } from 'https://esm.sh/@ton/core@0.62.0?bundle';
 const d=await fetch('./deployment.json',{cache:'no-store'}).then(r=>r.json());
 const $=id=>document.getElementById(id);
 $('collection').textContent=d.collectionAddressTestnetNonBounceable;
@@ -37,7 +37,7 @@ function updateBody(commonRoot){
   const collectionContent=beginCell().storeUint(1,8).storeStringTail(d.collectionMetadataIpfs).endCell();
   const commonContent=beginCell().storeStringTail(commonRoot).endCell();
   const content=beginCell().storeRef(collectionContent).storeRef(commonContent).endCell();
-  const royalty=beginCell().storeUint(7,16).storeUint(100,16).storeAddress(wallet.account.address).endCell();
+  const royalty=beginCell().storeUint(7,16).storeUint(100,16).storeAddress(Address.parse(d.treasuryAddressRaw)).endCell();
   return beginCell().storeUint(4,32).storeUint(0,64).storeRef(content).storeRef(royalty).endCell().toBoc().toString('base64');
 }
 async function send(root,label){
