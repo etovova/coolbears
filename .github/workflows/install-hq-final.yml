@@ -3,7 +3,7 @@ name: Install HQ CoolBears assets
 on:
   push:
     paths:
-      - '.asset_upload/hq-final2/READY'
+      - '.asset_upload/hq-final3/READY'
 
 permissions:
   contents: write
@@ -21,25 +21,25 @@ jobs:
           set -euo pipefail
           mkdir -p assets/nft
           for name in hero-main.webp promo-02.webp promo-03.webp promo-04.webp promo-05.webp promo-06.webp promo-07.webp; do
-            cat .asset_upload/hq-final2/${name}.*.part | tr -d '\n\r ' | base64 -d > assets/nft/$name
+            cat .asset_upload/hq-final3/${name}.*.part | tr -d '\n\r ' | base64 -d > assets/nft/$name
             test -s assets/nft/$name
             file assets/nft/$name
           done
           python3 - <<'PY'
           from pathlib import Path
+          import re
           p=Path('index.html')
           s=p.read_text()
           for n in ['hero-main.webp','promo-02.webp','promo-03.webp','promo-04.webp','promo-05.webp','promo-06.webp','promo-07.webp']:
-              import re
-              s=re.sub(re.escape(n)+r'\?v=\d+', n+'?v=8', s)
+              s=re.sub(re.escape(n)+r'\?v=\d+', n+'?v=9', s)
           p.write_text(s)
           PY
-          rm -rf .asset_upload/hq-final2
+          rm -rf .asset_upload/hq-final3
       - name: Commit rebuilt assets
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/nft index.html .asset_upload/hq-final2 || true
-          git commit -m 'Install sharp CoolBears website images' || exit 0
+          git add assets/nft index.html .asset_upload/hq-final3 || true
+          git commit -m 'Install final sharp CoolBears website images' || exit 0
           git push
