@@ -75,8 +75,10 @@ const deploymentAmount = toNano('0.2');
 fs.mkdirSync('build/testnet-deployment', { recursive: true });
 const out = {
   network: 'testnet',
+  ownerAddressRaw: owner.toRawString(),
   ownerAddressMainnetFriendly: owner.toString({ bounceable: false, testOnly: false }),
   ownerAddressTestnetFriendly: owner.toString({ bounceable: false, testOnly: true }),
+  treasuryAddressRaw: treasury.toRawString(),
   treasuryAddressMainnetFriendly: treasury.toString({ bounceable: false, testOnly: false }),
   treasuryAddressTestnetFriendly: treasury.toString({ bounceable: false, testOnly: true }),
   collectionAddressRaw: address.toRawString(),
