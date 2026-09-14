@@ -1,0 +1,59 @@
+name: Install HQ CoolBears assets
+
+on:
+  push:
+    paths:
+      - '.asset_upload/hq-final/**'
+
+permissions:
+  contents: write
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Rebuild images
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets/nft
+          for name in hero-main.webp promo-02.webp promo-03.webp promo-04.webp promo-05.webp promo-06.webp promo-07.webp; do
+            cat .asset_upload/hq-final/${name}.*.part | tr -d '\n\r ' | base64 -d > assets/nft/$name
+            test -s assets/nft/$name
+            file assets/nft/$name
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          for old,new in [
+            ('hero-main.webp?v=2','hero-main.webp?v=6'),
+            ('hero-main.webp?v=1','hero-main.webp?v=6'),
+            ('promo-02.webp?v=4','promo-02.webp?v=6'),
+            ('promo-03.webp?v=4','promo-03.webp?v=6'),
+            ('promo-04.webp?v=4','promo-04.webp?v=6'),
+            ('promo-05.webp?v=4','promo-05.webp?v=6'),
+            ('promo-06.webp?v=4','promo-06.webp?v=6'),
+            ('promo-07.webp?v=4','promo-07.webp?v=6'),
+            ('promo-02.webp?v=3','promo-02.webp?v=6'),
+            ('promo-03.webp?v=3','promo-03.webp?v=6'),
+            ('promo-04.webp?v=3','promo-04.webp?v=6'),
+            ('promo-05.webp?v=3','promo-05.webp?v=6'),
+            ('promo-06.webp?v=3','promo-06.webp?v=6'),
+            ('promo-07.webp?v=3','promo-07.webp?v=6'),
+          ]:
+              s=s.replace(old,new)
+          p.write_text(s)
+          PY
+          rm -rf .asset_upload/hq-final
+      - name: Commit rebuilt assets
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/nft index.html .asset_upload/hq-final || true
+          git commit -m 'Install final HQ CoolBears website images' || exit 0
+          git push
