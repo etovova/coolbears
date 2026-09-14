@@ -7,21 +7,22 @@
 <meta name="theme-color" content="#111111">
 <title>CoolBears — TON Testnet</title>
 <style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0d0d0f;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}.wrap{max-width:780px;margin:auto;padding:28px 18px 48px}.brand{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#aaa}.hero{margin:10px 0 24px;font-size:clamp(32px,8vw,60px);line-height:.95}.sub{color:#bdbdbd;max-width:620px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:28px 0}.card{display:block;text-decoration:none;color:#fff;border:1px solid #2b2b30;background:#151518;border-radius:18px;padding:18px;min-height:140px}.card:hover{border-color:#666}.card b{display:block;font-size:20px;margin-bottom:8px}.card span{color:#aaa}.box{border:1px solid #2b2b30;border-radius:18px;padding:18px;margin-top:14px;background:#111114}.ok{color:#72df8b}.bad{color:#ff7675}.muted{color:#999}code{word-break:break-all}a.inline{color:#9fd3ff}@media(max-width:650px){.grid{grid-template-columns:1fr}.card{min-height:auto}}
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0d0d0f;color:#fff;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}.wrap{max-width:820px;margin:auto;padding:28px 18px 48px}.brand{font-size:13px;letter-spacing:.16em;text-transform:uppercase;color:#aaa}.hero{margin:10px 0 24px;font-size:clamp(32px,8vw,60px);line-height:.95}.sub{color:#bdbdbd;max-width:620px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:28px 0}.card{display:block;text-decoration:none;color:#fff;border:1px solid #2b2b30;background:#151518;border-radius:18px;padding:18px;min-height:140px}.card:hover{border-color:#666}.card b{display:block;font-size:20px;margin-bottom:8px}.card span{color:#aaa}.box{border:1px solid #2b2b30;border-radius:18px;padding:18px;margin-top:14px;background:#111114}.ok{color:#72df8b}.bad{color:#ff7675}.muted{color:#999}code{word-break:break-all}a.inline{color:#9fd3ff}@media(max-width:650px){.grid{grid-template-columns:1fr}.card{min-height:auto}}
 </style>
 </head>
 <body>
 <main class="wrap">
 <div class="brand">CoolBears / private test area</div>
 <h1 class="hero">TON Testnet</h1>
-<p class="sub">Служебная страница для проверки тестовой коллекции. Она не индексируется поисковиками и не относится к публичному mint на mainnet.</p>
+<p class="sub">Служебная зона для безопасной проверки тестовой коллекции. Mainnet здесь не меняется.</p>
 <div class="grid">
+<a class="card" href="./status/"><b>Status</b><span>Проверка файлов, manifest и live состояния контракта без транзакций</span></a>
 <a class="card" href="./deploy/"><b>Deploy</b><span>Развёртывание и проверка тестовой коллекции</span></a>
 <a class="card" href="./mint/"><b>Mint</b><span>Безопасная проверка первого тестового mint</span></a>
 <a class="card" href="./reveal/"><b>Reveal</b><span>Проверка reveal для NFT #0000</span></a>
 </div>
 <div class="box">
-<b>Проверка файлов</b>
+<b>Быстрая проверка</b>
 <p id="state" class="muted">Проверяю deployment и metadata…</p>
 <p><a class="inline" href="./deployment.json" target="_blank" rel="noopener">deployment.json</a> · <a class="inline" href="./reveal/0000.json" target="_blank" rel="noopener">reveal/0000.json</a></p>
 </div>
@@ -36,7 +37,7 @@
    ]);
    if(!d.ok||!m.ok) throw new Error(`HTTP ${d.status}/${m.status}`);
    const dj=await d.json(), mj=await m.json();
-   if(!dj.collectionAddressTestnetNonBounceable||!mj.name) throw new Error('missing required fields');
+   if(!dj.collectionAddressTestnetNonBounceable||!mj.name||!mj.image) throw new Error('missing required fields');
    el.textContent='OK — testnet configuration и reveal metadata доступны.';
    el.className='ok';
  }catch(e){
