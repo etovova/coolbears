@@ -97,3 +97,5 @@ jobs:
             pinata-prereveal-upload-result.json
             verify-*.json
           retention-days: 30
+
+# verification trigger: 2026-09-14
