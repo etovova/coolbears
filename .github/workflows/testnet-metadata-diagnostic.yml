@@ -24,7 +24,7 @@ jobs:
         env:
           TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
         run: |
-          cat > /tmp/diagnose.mjs <<'NODE'
+          cat > diagnose-testnet-metadata.mjs <<'NODE'
           import fs from 'node:fs';
           import { Address } from '@ton/core';
           import { TonClient } from '@ton/ton';
@@ -74,7 +74,7 @@ jobs:
           console.log(`NFT0_URI=${uri}`);
           fs.writeFileSync('/tmp/nft0-uri.txt', uri);
           NODE
-          node /tmp/diagnose.mjs
+          node diagnose-testnet-metadata.mjs
 
       - name: Fetch resolved metadata through public IPFS gateways
         run: |
