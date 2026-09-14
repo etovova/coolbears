@@ -37,3 +37,4 @@ jobs:
         run: node contracts/tests/gas-profile.mjs
 
 # verification trigger after prereveal root update: 2026-09-14
+# verification trigger after final pre-deploy audit: 2026-09-14
