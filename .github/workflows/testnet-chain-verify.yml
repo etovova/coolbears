@@ -43,54 +43,27 @@ jobs:
         run: |
           set -euo pipefail
           ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
-          RESP=$(curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_mint_state")
-          echo "$RESP" > /tmp/mint.json
-          jq -e '.ok == true' /tmp/mint.json >/dev/null
-          jq -e '.result.exit_code == 0' /tmp/mint.json >/dev/null
-          STACK=$(jq -c '.result.stack' /tmp/mint.json)
-          echo "GET_MINT_STATE_STACK=$STACK"
-          NEXT=$(jq -r '.result.stack[0][1]' /tmp/mint.json)
-          SUPPLY=$(jq -r '.result.stack[1][1]' /tmp/mint.json)
-          PRICE=$(jq -r '.result.stack[2][1]' /tmp/mint.json)
-          PAUSED=$(jq -r '.result.stack[3][1]' /tmp/mint.json)
-          # Toncenter may encode ints as hex or decimal strings.
-          node - <<'NODE'
-          const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/mint.json','utf8'));
-          const vals=j.result.stack.slice(0,4).map(x=>BigInt(x[1]));
-          const [next,supply,price,paused]=vals;
-          if(next!==0n) throw new Error(`next_index ${next} != 0`);
-          if(supply!==10000n) throw new Error(`supply ${supply} != 10000`);
-          if(price!==7000000000n) throw new Error(`price ${price} != 7000000000`);
-          if(paused!==1n) throw new Error(`paused ${paused} != 1`);
-          console.log(`MINT_STATE_OK next=${next} supply=${supply} price=${price} paused=${paused}`);
-NODE
+          curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_mint_state" > /tmp/mint.json
+          jq -e '.ok == true and .result.exit_code == 0' /tmp/mint.json >/dev/null
+          echo "GET_MINT_STATE_STACK=$(jq -c '.result.stack' /tmp/mint.json)"
+          node -e "const j=require('/tmp/mint.json');const v=j.result.stack.slice(0,4).map(x=>BigInt(x[1]));const [n,s,p,z]=v;if(n!==0n||s!==10000n||p!==7000000000n||z!==1n)throw new Error('bad mint state '+v);console.log('MINT_STATE_OK next='+n+' supply='+s+' price='+p+' paused='+z)"
 
       - name: Verify royalty getter
         shell: bash
         run: |
           set -euo pipefail
           ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
-          RESP=$(curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=royalty_params")
-          echo "$RESP" > /tmp/royalty.json
-          jq -e '.ok == true' /tmp/royalty.json >/dev/null
-          jq -e '.result.exit_code == 0' /tmp/royalty.json >/dev/null
-          jq -c '.result.stack' /tmp/royalty.json
-          node - <<'NODE'
-          const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/royalty.json','utf8'));
-          const n=BigInt(j.result.stack[0][1]);
-          const d=BigInt(j.result.stack[1][1]);
-          if(n!==7n || d!==100n) throw new Error(`royalty ${n}/${d} != 7/100`);
-          console.log(`ROYALTY_OK ${n}/${d}`);
-NODE
+          curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=royalty_params" > /tmp/royalty.json
+          jq -e '.ok == true and .result.exit_code == 0' /tmp/royalty.json >/dev/null
+          echo "ROYALTY_STACK=$(jq -c '.result.stack' /tmp/royalty.json)"
+          node -e "const j=require('/tmp/royalty.json');const n=BigInt(j.result.stack[0][1]);const d=BigInt(j.result.stack[1][1]);if(n!==7n||d!==100n)throw new Error('bad royalty '+n+'/'+d);console.log('ROYALTY_OK '+n+'/'+d)"
 
       - name: Verify collection getter responds
         shell: bash
         run: |
           set -euo pipefail
           ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
-          RESP=$(curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_collection_data")
-          echo "$RESP" > /tmp/collection.json
-          jq -e '.ok == true' /tmp/collection.json >/dev/null
-          jq -e '.result.exit_code == 0' /tmp/collection.json >/dev/null
+          curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_collection_data" > /tmp/collection.json
+          jq -e '.ok == true and .result.exit_code == 0' /tmp/collection.json >/dev/null
           echo "COLLECTION_GETTER_OK"
           jq -c '.result.stack' /tmp/collection.json
