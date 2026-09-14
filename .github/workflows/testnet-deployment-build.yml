@@ -42,13 +42,14 @@ jobs:
           jq -e '.supply == 10000' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.royaltyBps == 700' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.collectionMetadataIpfs == "ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e"' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.preRevealMetadataRootIpfs == "ipfs://bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u/"' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.preRevealMetadataRootIpfs == "ipfs://bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e/"' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.stateInitBocBase64 | length > 100' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.collectionAddressTestnetNonBounceable | length > 40' build/testnet-deployment/deployment.json >/dev/null
           echo 'CoolBears testnet deployment safety gates: OK'
+          jq -r '"ADDRESS_BOUNCEABLE=" + .collectionAddressTestnetBounceable, "ADDRESS_NON_BOUNCEABLE=" + .collectionAddressTestnetNonBounceable, "ADDRESS_RAW=" + .collectionAddressRaw' build/testnet-deployment/deployment.json
       - name: Upload unsigned deployment package
         uses: actions/upload-artifact@v4
         with:
           name: coolbears-testnet-deployment-unsigned
           path: build/testnet-deployment/
-          retention-days: 30
+          retention-days: 90
