@@ -79,6 +79,8 @@ function parseOffchainContent(cell) {
 const collectionCode = compileFresh('collection');
 const itemCode = compileFresh('item');
 const blockchain = await Blockchain.create();
+const revealAt = 1798761600;
+blockchain.now = revealAt - 86400;
 const owner = await blockchain.treasury('owner-reveal');
 const treasury = await blockchain.treasury('treasury-reveal');
 const buyer = await blockchain.treasury('buyer-reveal');
@@ -106,6 +108,16 @@ resolved = parseOffchainContent(await collection.getNftContent(0, before.content
 assert.equal(resolved.prefix, 'ipfs://PRE_REVEAL_ROOT/');
 assert.equal(resolved.uri, 'ipfs://PRE_REVEAL_ROOT/0000.json');
 
+// The owner cannot reveal even one second before the deadline.
+blockchain.now = revealAt - 1;
+const early = await collection.sendContentUpdate(owner.getSender(), 'ipfs://FINAL_METADATA_ROOT/', attacker.address);
+assert.ok(early.transactions.some(tx => tx.inMessage?.info.type === 'internal' && tx.inMessage.info.dest.equals(collection.address) && tx.description.type === 'generic' && tx.description.computePhase.type === 'vm' && tx.description.computePhase.exitCode === 704));
+resolved = parseOffchainContent(await collection.getNftContent(0, before.content));
+assert.equal(resolved.uri, 'ipfs://PRE_REVEAL_ROOT/0000.json');
+assert.equal((await collection.getRoyalty()).address.toString(), treasury.address.toString());
+blockchain.now = revealAt;
+await collection.sendContentUpdate(attacker.getSender(), 'ipfs://ATTACKER_ROOT/', attacker.address);
+assert.equal(parseOffchainContent(await collection.getNftContent(0, before.content)).uri, 'ipfs://PRE_REVEAL_ROOT/0000.json');
 await collection.sendContentUpdate(owner.getSender(), 'ipfs://FINAL_METADATA_ROOT/', treasury.address);
 resolved = parseOffchainContent(await collection.getNftContent(0, before.content));
 assert.equal(resolved.prefix, 'ipfs://FINAL_METADATA_ROOT/');

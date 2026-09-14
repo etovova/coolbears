@@ -9,7 +9,7 @@ Production parameters:
 - Lifetime wallet limit: none
 - Royalty: 7%
 - Treasury / royalty recipient: `UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7`
-- Reveal: 2026-10-07
+- Reveal: 2027-01-01 (00:00 UTC)
 - Pre-reveal image: `ipfs://bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni`
 - Pre-reveal metadata: `ipfs://bafkreib7p7wx427quboakukbl6mebpksyjp4r5vurqif3p6bh3a7ssyzq4`
 - Verified pre-reveal metadata root (10,000 items): `ipfs://bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e/`
@@ -47,3 +47,7 @@ Never commit a seed phrase, private key, mnemonic, wallet backup, deployment key
 ## Founder reserve
 
 No rare NFT is secretly assigned in this contract plan. If a Founder/Team Legendary is reserved, it must be explicitly configured and disclosed before deployment, with the public mint allocation adjusted accordingly.
+
+## Reveal lock
+
+New builds reject all owner metadata/royalty content updates before 2027-01-01 00:00 UTC (exit code 704). This does not modify the already deployed legacy testnet collection or its deployment package. Final artwork-to-index assignments must remain private; a time lock cannot prevent disclosure of externally published files.

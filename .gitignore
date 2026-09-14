@@ -12,3 +12,7 @@ collection/top50.json
 .DS_Store
 Thumbs.db
 node_modules/
+
+# Generated packages are never site source
+build/
+public-site/

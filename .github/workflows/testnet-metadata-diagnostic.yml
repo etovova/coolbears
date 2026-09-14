@@ -114,24 +114,25 @@ jobs:
           NODE
           node diagnose-testnet-metadata.mjs
 
-      - name: Fetch resolved metadata through public IPFS gateways
+      - name: Fetch resolved IPFS or HTTPS metadata
         run: |
           set -euo pipefail
           URI=$(cat /tmp/nft0-uri.txt)
           case "$URI" in
-            ipfs://*) PATH_PART=${URI#ipfs://} ;;
-            *) echo "Resolved URI is not ipfs://: $URI"; exit 1 ;;
+            ipfs://*)
+              PATH_PART=${URI#ipfs://}
+              URLS=("https://gateway.pinata.cloud/ipfs/${PATH_PART}" "https://ipfs.io/ipfs/${PATH_PART}")
+              ;;
+            https://*) URLS=("$URI") ;;
+            *) echo "Unsupported metadata URI: $URI"; exit 1 ;;
           esac
           ok=0
-          for gateway in \
-            'https://gateway.pinata.cloud/ipfs/' \
-            'https://ipfs.io/ipfs/'
-          do
-            echo "Trying ${gateway}${PATH_PART}"
+          for URL in "${URLS[@]}"; do
+            echo "Trying $URL"
             if curl --fail --silent --show-error --location --retry 4 --retry-delay 2 \
-              "${gateway}${PATH_PART}" -o /tmp/nft0.json; then
+              "$URL" -o /tmp/nft0.json; then
               if jq -e 'type=="object" and (.name|type=="string") and (.image|type=="string")' /tmp/nft0.json >/dev/null; then
-                echo "METADATA_GATEWAY_OK=${gateway}"
+                echo "METADATA_URL_OK=$URL"
                 jq '{name,description,image,animation_url,attributes}' /tmp/nft0.json
                 ok=1
                 break
@@ -140,7 +141,7 @@ jobs:
           done
           test "$ok" = "1"
 
-      - name: Verify prereveal image URI is reachable
+      - name: Verify resolved NFT image URI is reachable
         run: |
           set -euo pipefail
           IMG=$(jq -r '.image' /tmp/nft0.json)

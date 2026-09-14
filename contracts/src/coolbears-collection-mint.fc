@@ -2,6 +2,9 @@
 
 int workchain() asm "0 PUSHINT";
 
+;; 2027-01-01 00:00:00 UTC; no owner bypass.
+const int COOLBEARS_REVEAL_AT = 1798761600;
+
 const int COOLBEARS_SUPPLY = 10000;
 const int COOLBEARS_PRICE = 7000000000;
 const int COOLBEARS_MAX_PER_TX = 50;
@@ -170,6 +173,7 @@ cell cb_item_content(int index) {
   }
 
   if (op == 4) {
+    throw_unless(704, now() >= COOLBEARS_REVEAL_AT);
     cb_save_data(owner, next_index, in_msg_body~load_ref(), item_code, in_msg_body~load_ref(), treasury, paused);
     return ();
   }
