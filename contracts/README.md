@@ -10,8 +10,10 @@ Production parameters:
 - Royalty: 7%
 - Treasury / royalty recipient: `UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7`
 - Reveal: 2026-10-07
-- Pre-reveal image: `ipfs://bafkreigjugpn3qqktlnmztc3dmtxcon357v2qdhugi5vdxkcf6c74bjh5y`
-- Pre-reveal metadata: `ipfs://bafkreihtd7ouj45unoqkciyri7gqd2ee5trtagoe2zdmd4uhhjckd5aquy`
+- Pre-reveal image: `ipfs://bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni`
+- Pre-reveal metadata: `ipfs://bafkreib7p7wx427quboakukbl6mebpksyjp4r5vurqif3p6bh3a7ssyzq4`
+- Verified pre-reveal metadata root (10,000 items): `ipfs://bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e/`
+- Collection metadata: `ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e`
 
 ## Contract baseline
 
@@ -29,6 +31,10 @@ The mint layer must enforce on-chain rather than trusting the website:
 8. 7% royalty parameters returned by the collection;
 9. failed/underpaid requests must not silently mint;
 10. public mint can be paused before deployment/reveal operations.
+
+## Pre-reveal privacy
+
+Before reveal, public token metadata must expose only the hidden/pre-reveal image and the unrevealed status. Final artwork, final traits and rarity must not be published through the active metadata root. Reveal is performed by the owner changing the common metadata root, while preserving each NFT address, index and owner.
 
 ## Security rule
 
