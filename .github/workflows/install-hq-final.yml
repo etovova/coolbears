@@ -3,7 +3,7 @@ name: Install HQ CoolBears assets
 on:
   push:
     paths:
-      - '.asset_upload/hq-final/READY'
+      - '.asset_upload/hq-final2/READY'
 
 permissions:
   contents: write
@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           mkdir -p assets/nft
           for name in hero-main.webp promo-02.webp promo-03.webp promo-04.webp promo-05.webp promo-06.webp promo-07.webp; do
-            cat .asset_upload/hq-final/${name}.*.part | tr -d '\n\r ' | base64 -d > assets/nft/$name
+            cat .asset_upload/hq-final2/${name}.*.part | tr -d '\n\r ' | base64 -d > assets/nft/$name
             test -s assets/nft/$name
             file assets/nft/$name
           done
@@ -29,40 +29,17 @@ jobs:
           from pathlib import Path
           p=Path('index.html')
           s=p.read_text()
-          for old,new in [
-            ('hero-main.webp?v=1','hero-main.webp?v=7'),
-            ('hero-main.webp?v=2','hero-main.webp?v=7'),
-            ('hero-main.webp?v=6','hero-main.webp?v=7'),
-            ('promo-02.webp?v=3','promo-02.webp?v=7'),
-            ('promo-03.webp?v=3','promo-03.webp?v=7'),
-            ('promo-04.webp?v=3','promo-04.webp?v=7'),
-            ('promo-05.webp?v=3','promo-05.webp?v=7'),
-            ('promo-06.webp?v=3','promo-06.webp?v=7'),
-            ('promo-07.webp?v=3','promo-07.webp?v=7'),
-            ('promo-02.webp?v=4','promo-02.webp?v=7'),
-            ('promo-03.webp?v=4','promo-03.webp?v=7'),
-            ('promo-04.webp?v=4','promo-04.webp?v=7'),
-            ('promo-05.webp?v=4','promo-05.webp?v=7'),
-            ('promo-06.webp?v=4','promo-06.webp?v=7'),
-            ('promo-07.webp?v=4','promo-07.webp?v=7'),
-            ('promo-02.webp?v=6','promo-02.webp?v=7'),
-            ('promo-03.webp?v=6','promo-03.webp?v=7'),
-            ('promo-04.webp?v=6','promo-04.webp?v=7'),
-            ('promo-05.webp?v=6','promo-05.webp?v=7'),
-            ('promo-06.webp?v=6','promo-06.webp?v=7'),
-            ('promo-07.webp?v=6','promo-07.webp?v=7'),
-          ]:
-              s=s.replace(old,new)
-          if 'hq-hero.css' in s:
-              s=s.replace('<link rel="stylesheet" href="assets/nft/hq-hero.css">','')
+          for n in ['hero-main.webp','promo-02.webp','promo-03.webp','promo-04.webp','promo-05.webp','promo-06.webp','promo-07.webp']:
+              import re
+              s=re.sub(re.escape(n)+r'\?v=\d+', n+'?v=8', s)
           p.write_text(s)
           PY
-          rm -rf .asset_upload/hq-final
+          rm -rf .asset_upload/hq-final2
       - name: Commit rebuilt assets
         shell: bash
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add assets/nft index.html .asset_upload/hq-final || true
-          git commit -m 'Install final HQ CoolBears website images' || exit 0
+          git add assets/nft index.html .asset_upload/hq-final2 || true
+          git commit -m 'Install sharp CoolBears website images' || exit 0
           git push
