@@ -1,0 +1,26 @@
+name: Build HQ site images
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.asset_upload/hq-build-trigger.txt'
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rebuild HQ artwork
+        shell: bash
+        run: |
+          set -euo pipefail
+          for f in hero-main.webp promo-02.webp promo-03.webp promo-04.webp promo-05.webp promo-06.webp promo-07.webp; do
+            cat .asset_upload/hq-parts/${f}.*.part | tr -d '\n\r' | base64 -d > assets/nft/${f}
+          done
+          sed -i 's/hero-main\.webp?v=1/hero-main.webp?v=5/g; s/promo-02\.webp?v=3/promo-02.webp?v=5/g; s/promo-03\.webp?v=3/promo-03.webp?v=5/g; s/promo-04\.webp?v=3/promo-04.webp?v=5/g; s/promo-05\.webp?v=3/promo-05.webp?v=5/g; s/promo-06\.webp?v=3/promo-06.webp?v=5/g; s/promo-07\.webp?v=3/promo-07.webp?v=5/g' index.html
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add assets/nft/hero-main.webp assets/nft/promo-02.webp assets/nft/promo-03.webp assets/nft/promo-04.webp assets/nft/promo-05.webp assets/nft/promo-06.webp assets/nft/promo-07.webp index.html
+          git diff --cached --quiet || git commit -m 'Build HQ CoolBears site artwork'
+          git push
