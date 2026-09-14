@@ -1,0 +1,96 @@
+name: Verify CoolBears TON testnet deployment
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/testnet-chain-verify.yml'
+      - 'testnet/deployment.json'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify account is active on TON testnet
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          echo "EXPECTED_ADDRESS=$ADDRESS"
+          for i in {1..12}; do
+            RESP=$(curl -fsS --retry 2 --retry-delay 2 "https://testnet.toncenter.com/api/v2/getAddressInformation?address=${ADDRESS}") || true
+            echo "$RESP" > /tmp/address.json
+            STATE=$(jq -r '.result.state // empty' /tmp/address.json 2>/dev/null || true)
+            if [ "$STATE" = "active" ]; then
+              echo "TON_TESTNET_ACCOUNT_ACTIVE=1"
+              jq -r '"balance=" + (.result.balance // ""), "state=" + (.result.state // ""), "last_transaction_id.lt=" + (.result.last_transaction_id.lt // "")' /tmp/address.json
+              exit 0
+            fi
+            echo "Attempt $i: account state=${STATE:-unknown}; waiting 10s"
+            sleep 10
+          done
+          echo "Contract did not become active within verification window"
+          cat /tmp/address.json || true
+          exit 1
+
+      - name: Verify mint state getter
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          RESP=$(curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_mint_state")
+          echo "$RESP" > /tmp/mint.json
+          jq -e '.ok == true' /tmp/mint.json >/dev/null
+          jq -e '.result.exit_code == 0' /tmp/mint.json >/dev/null
+          STACK=$(jq -c '.result.stack' /tmp/mint.json)
+          echo "GET_MINT_STATE_STACK=$STACK"
+          NEXT=$(jq -r '.result.stack[0][1]' /tmp/mint.json)
+          SUPPLY=$(jq -r '.result.stack[1][1]' /tmp/mint.json)
+          PRICE=$(jq -r '.result.stack[2][1]' /tmp/mint.json)
+          PAUSED=$(jq -r '.result.stack[3][1]' /tmp/mint.json)
+          # Toncenter may encode ints as hex or decimal strings.
+          node - <<'NODE'
+          const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/mint.json','utf8'));
+          const vals=j.result.stack.slice(0,4).map(x=>BigInt(x[1]));
+          const [next,supply,price,paused]=vals;
+          if(next!==0n) throw new Error(`next_index ${next} != 0`);
+          if(supply!==10000n) throw new Error(`supply ${supply} != 10000`);
+          if(price!==7000000000n) throw new Error(`price ${price} != 7000000000`);
+          if(paused!==1n) throw new Error(`paused ${paused} != 1`);
+          console.log(`MINT_STATE_OK next=${next} supply=${supply} price=${price} paused=${paused}`);
+NODE
+
+      - name: Verify royalty getter
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          RESP=$(curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=royalty_params")
+          echo "$RESP" > /tmp/royalty.json
+          jq -e '.ok == true' /tmp/royalty.json >/dev/null
+          jq -e '.result.exit_code == 0' /tmp/royalty.json >/dev/null
+          jq -c '.result.stack' /tmp/royalty.json
+          node - <<'NODE'
+          const fs=require('fs'); const j=JSON.parse(fs.readFileSync('/tmp/royalty.json','utf8'));
+          const n=BigInt(j.result.stack[0][1]);
+          const d=BigInt(j.result.stack[1][1]);
+          if(n!==7n || d!==100n) throw new Error(`royalty ${n}/${d} != 7/100`);
+          console.log(`ROYALTY_OK ${n}/${d}`);
+NODE
+
+      - name: Verify collection getter responds
+        shell: bash
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          RESP=$(curl -fsS --retry 3 --retry-delay 2 "https://testnet.toncenter.com/api/v2/runGetMethod?address=${ADDRESS}&method=get_collection_data")
+          echo "$RESP" > /tmp/collection.json
+          jq -e '.ok == true' /tmp/collection.json >/dev/null
+          jq -e '.result.exit_code == 0' /tmp/collection.json >/dev/null
+          echo "COLLECTION_GETTER_OK"
+          jq -c '.result.stack' /tmp/collection.json
