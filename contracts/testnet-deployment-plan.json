@@ -18,7 +18,7 @@
   "initialNextItemIndex": 0,
   "publicMintInitiallyPaused": true,
   "collectionMetadataIpfs": "ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e",
-  "preRevealMetadataRootIpfs": "ipfs://bafybeib2xpnz4ke7wus2jesx26v6dtmmhs6zpglowqpt2mabwobawx3d4u/",
+  "preRevealMetadataRootIpfs": "ipfs://bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e/",
   "revealDate": "2026-10-07",
   "security": {
     "storeSeedOrPrivateKeyInRepository": false,
