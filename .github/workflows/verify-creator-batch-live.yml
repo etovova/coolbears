@@ -1,0 +1,125 @@
+name: Verify creator batch live testnet state
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/verify-creator-batch-live.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install TON client
+        run: npm install --no-save @ton/ton @ton/core
+      - name: Verify live collection and NFTs 0-2
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          cat > verify-live.mjs <<'NODE'
+          import fs from 'node:fs';
+          import { Address } from '@ton/core';
+          import { TonClient } from '@ton/ton';
+
+          const d = JSON.parse(fs.readFileSync('testnet/creator/deployment.json','utf8'));
+          const client = new TonClient({ endpoint: process.env.TONCENTER_ENDPOINT });
+          const sleep = ms => new Promise(r => setTimeout(r, ms));
+          async function run(address, method, stack=[]) {
+            let last;
+            for (let i=1;i<=8;i++) {
+              try {
+                const r = await client.runMethod(address, method, stack);
+                await sleep(1700);
+                return r;
+              } catch (e) {
+                last=e;
+                if (e?.response?.status !== 429 || i===8) throw e;
+                console.log(`429 on ${method}; retry ${i}/8`);
+                await sleep(i*3000);
+              }
+            }
+            throw last;
+          }
+
+          const collection = Address.parse(d.collectionAddressTestnetNonBounceable);
+          const mint = await run(collection,'get_mint_state');
+          const next = mint.stack.readBigNumber();
+          const supply = mint.stack.readBigNumber();
+          const price = mint.stack.readBigNumber();
+          const paused = mint.stack.readBigNumber();
+          console.log(`COLLECTION next=${next} supply=${supply} price=${price} paused=${paused}`);
+          if(next!==3n) throw new Error(`Expected next=3, got ${next}`);
+          if(supply!==10000n) throw new Error(`Expected supply=10000, got ${supply}`);
+          if(price!==7000000000n) throw new Error(`Expected price=7000000000, got ${price}`);
+          if(paused!==1n) throw new Error(`Expected paused=1, got ${paused}`);
+
+          const expectedOwnerRaw = d.treasuryAddressRaw;
+          const out=[];
+          for(let i=0;i<3;i++){
+            const ar=await run(collection,'get_nft_address_by_index',[{type:'int',value:BigInt(i)}]);
+            const nftAddr=ar.stack.readAddress();
+            const nr=await run(nftAddr,'get_nft_data');
+            const initialized=nr.stack.readBigNumber();
+            const index=nr.stack.readBigNumber();
+            const coll=nr.stack.readAddress();
+            const owner=nr.stack.readAddress();
+            const individual=nr.stack.readCell();
+            const suffix=individual.beginParse().loadStringTail();
+            console.log(`NFT${i} address=${nftAddr.toString({testOnly:true,bounceable:true})} initialized=${initialized} index=${index} owner=${owner.toRawString()} suffix=${suffix}`);
+            if(initialized!==-1n) throw new Error(`NFT ${i} not initialized`);
+            if(index!==BigInt(i)) throw new Error(`NFT ${i} index mismatch ${index}`);
+            if(coll.toRawString()!==collection.toRawString()) throw new Error(`NFT ${i} collection mismatch`);
+            if(owner.toRawString()!==expectedOwnerRaw) throw new Error(`NFT ${i} owner mismatch: ${owner.toRawString()}`);
+
+            const cr=await run(collection,'get_nft_content',[{type:'int',value:BigInt(i)},{type:'cell',cell:individual}]);
+            const full=cr.stack.readCell();
+            const s=full.beginParse();
+            const tag=s.loadUint(8);
+            if(tag!==1) throw new Error(`NFT ${i} offchain tag ${tag}`);
+            if(s.remainingBits%8!==0) throw new Error(`NFT ${i} prefix alignment error`);
+            const prefix=s.loadBuffer(s.remainingBits/8).toString('utf8');
+            if(s.remainingRefs!==1) throw new Error(`NFT ${i} expected suffix ref`);
+            const suffix2=s.loadRef().beginParse().loadStringTail();
+            const uri=prefix+suffix2;
+            console.log(`NFT${i}_URI=${uri}`);
+            out.push({i,address:nftAddr.toString({testOnly:true,bounceable:true}),owner:owner.toRawString(),uri});
+          }
+          fs.writeFileSync('/tmp/live-nfts.json',JSON.stringify(out,null,2));
+          NODE
+          node verify-live.mjs
+
+      - name: Verify metadata and prereveal image for NFTs 0-2
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs=require('fs');
+          const a=JSON.parse(fs.readFileSync('/tmp/live-nfts.json','utf8'));
+          for(const x of a){ if(!x.uri.startsWith('ipfs://')) throw new Error(`NFT${x.i} URI not ipfs: ${x.uri}`); }
+          NODE
+          for i in 0 1 2; do
+            URI=$(jq -r ".[$i].uri" /tmp/live-nfts.json)
+            P=${URI#ipfs://}
+            URL="https://gateway.pinata.cloud/ipfs/${P}"
+            echo "Fetching NFT $i metadata: $URL"
+            curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$URL" -o "/tmp/nft-$i.json"
+            jq -e 'type=="object" and (.name|type=="string") and (.image|type=="string")' "/tmp/nft-$i.json" >/dev/null
+            jq '{name,image,animation_url,attributes}' "/tmp/nft-$i.json"
+          done
+          IMG=$(jq -r '.image' /tmp/nft-0.json)
+          case "$IMG" in
+            ipfs://*) IMGURL="https://gateway.pinata.cloud/ipfs/${IMG#ipfs://}" ;;
+            https://*) IMGURL="$IMG" ;;
+            *) echo "Unsupported image URI $IMG"; exit 1 ;;
+          esac
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$IMGURL" -o /tmp/prereveal.bin
+          test -s /tmp/prereveal.bin
+          file /tmp/prereveal.bin
+          echo 'LIVE_CREATOR_BATCH_VERIFIED=1'
