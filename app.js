@@ -145,10 +145,19 @@
   walletStatus.setAttribute('aria-live', 'polite');
   walletStatus.hidden = true;
   document.body.append(walletStatus);
+  let walletMessageTimer = null;
+  let walletNoteText = '';
   function walletMessage(key) {
-    walletStatus.textContent = key ? t(key) : '';
+    clearTimeout(walletMessageTimer);
+    walletMessageTimer = null;
+    if (note && note.textContent === walletNoteText) note.textContent = t('mintFoot');
+    walletNoteText = key ? t(key) : '';
+    walletStatus.textContent = walletNoteText;
     walletStatus.hidden = !key;
-    if (note && key) note.textContent = t(key);
+    if (note && key) note.textContent = walletNoteText;
+    if (key && key !== 'walletLoading') {
+      walletMessageTimer = setTimeout(() => walletMessage(null), 3000);
+    }
   }
   async function loadWalletSdk() {
     if (window.TON_CONNECT_UI) return;
