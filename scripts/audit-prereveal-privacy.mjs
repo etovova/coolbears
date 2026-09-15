@@ -32,10 +32,25 @@ for (const key of forbiddenKeys) {
 
 if (!policy.preRevealMetadataRootIpfs?.startsWith('ipfs://')) throw new Error('Missing prereveal root');
 if (!configText.includes(`preRevealMetadataRootCid: '${policy.preRevealMetadataRootCid}'`)) throw new Error('config.js prereveal root mismatch');
-if (!configText.includes('demoMode: true')) throw new Error('demoMode must stay true before testnet verification');
-if (!configText.includes("collectionAddress: ''")) throw new Error('Production collectionAddress must stay empty');
-if (!configText.includes("mintContractAddress: ''")) throw new Error('Production mintContractAddress must stay empty');
+
+// Production addresses may be preloaded only after the exact tested package has
+// been promoted to mainnet. The public mint must still remain gated until the
+// live contract, creator NFT #0 and metadata are verified on mainnet.
+if (!configText.includes('demoMode: true')) throw new Error('Production mint must remain gated before live mainnet verification');
+const ownerPackagePath = 'mainnet/owner/deployment.json';
+if (fs.existsSync(ownerPackagePath)) {
+  const mainnet = JSON.parse(fs.readFileSync(ownerPackagePath,'utf8'));
+  if (mainnet.network !== 'mainnet') throw new Error('Owner package is not mainnet');
+  if (!mainnet.initialPaused || Number(mainnet.nextItemIndex) !== 0) throw new Error('Unsafe mainnet initial state');
+  if (!configText.includes(`collectionAddress: '${mainnet.collectionAddressMainnetNonBounceable}'`)) throw new Error('Production collectionAddress does not match verified package');
+  if (!configText.includes(`mintContractAddress: '${mainnet.collectionAddressMainnetBounceable}'`)) throw new Error('Production mintContractAddress does not match verified package');
+  if (!configText.includes(`collectionCodeHash: '${mainnet.collectionCodeHash}'`)) throw new Error('Production code hash does not match verified package');
+} else {
+  if (!configText.includes("collectionAddress: ''")) throw new Error('Production collectionAddress must stay empty without a verified mainnet package');
+  if (!configText.includes("mintContractAddress: ''")) throw new Error('Production mintContractAddress must stay empty without a verified mainnet package');
+}
 
 console.log('PREREVEAL_PRIVACY_AUDIT_OK');
 console.log(`Root: ${policy.preRevealMetadataRootIpfs}`);
 console.log(`Hidden image: ${expectedImage}`);
+console.log('Production mint gate: CLOSED');
