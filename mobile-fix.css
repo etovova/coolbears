@@ -38,3 +38,10 @@ body.wallet-open .back-top{display:none!important}
 .back-top.show{opacity:1;visibility:visible;transform:none}
 
 #walletStatus:not([hidden]){position:fixed;top:96px;left:50%;transform:translateX(-50%);z-index:101;max-width:calc(100% - 32px);padding:14px 20px;background:#111;color:#fff;border:2px solid #ffd51f;box-shadow:0 6px 24px #0008;text-align:center;font-size:15px}
+
+/* Prelaunch state and complete reveal date */
+#mintBtn:disabled{cursor:not-allowed;opacity:.7}
+.mint-fees{font-size:14px;line-height:1.5;color:#ccc}
+.reveal-date b{font-size:clamp(22px,4vw,36px);overflow-wrap:anywhere}
+.mint-topline{gap:12px;flex-wrap:wrap}
+.progress[hidden]{display:none!important}
