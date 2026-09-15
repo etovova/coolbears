@@ -33,3 +33,5 @@ for (const expected of [
   if (!config.includes(expected)) fail(`site config safety mismatch: ${expected}`);
 }
 console.log('CoolBears mint policy: OK');
+
+if (p.creatorReservation?.tokenIndex !== 0 || p.creatorReservation?.beneficiaryAddress !== p.treasuryAddress || p.creatorReservation?.claimOpcode !== '0x52535630') fail('creator reservation mismatch');

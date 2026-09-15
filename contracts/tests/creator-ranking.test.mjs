@@ -1,0 +1,10 @@
+import assert from 'node:assert/strict';
+import {reserveRarest} from '../../scripts/reserve-rarest.mjs';
+const make=(a,b)=>({image:`ipfs://private-${a}-${b}`,attributes:[{trait_type:'Body',value:a},{trait_type:'Eyes',value:b}]});
+const records=[make('a','c'),make('a','d'),make('b','c'),make('special','special'),make('b','d')];
+const r=reserveRarest(records,5);assert.equal(r.metadata[0].image,records[3].image);assert.equal(r.ranking[0].rank,1);assert.equal(r.ranking[0].tokenId,0);assert.equal(r.ranking[0].scoreNumerator,'10');
+assert.throws(()=>reserveRarest(records.slice(0,3).concat(records[4]),4),/tied/);
+assert.throws(()=>reserveRarest([...records,records[0]],6),/Duplicate combination/);
+assert.throws(()=>reserveRarest(records),/size mismatch/);
+assert.equal(new Set(r.ranking.map(x=>x.tokenId)).size,5);
+console.log('Creator ranking: unique maximum assigned to 0; ties, duplicates and wrong supply rejected');

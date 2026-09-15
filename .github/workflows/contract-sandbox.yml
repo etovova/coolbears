@@ -7,6 +7,7 @@ on:
       - 'contracts/src/**'
       - 'contracts/tests/**'
       - 'contracts/TON_REFERENCE.lock'
+      - 'scripts/reserve-rarest.mjs'
       - '.github/workflows/contract-sandbox.yml'
   workflow_dispatch:
 
@@ -33,6 +34,8 @@ jobs:
         run: node contracts/tests/sandbox.mjs
       - name: Run TON Sandbox reveal lifecycle test
         run: node contracts/tests/reveal-sandbox.mjs
+      - name: Verify unique creator rarity assignment
+        run: node contracts/tests/creator-ranking.test.mjs
       - name: Profile NFT deploy reserve and fees
         run: node contracts/tests/gas-profile.mjs
 

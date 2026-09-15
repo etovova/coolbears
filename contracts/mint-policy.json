@@ -17,5 +17,13 @@
   "collectionMetadataCid": "bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e",
   "collectionMetadataIpfs": "ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e",
   "publicMintPausedByDefault": true,
-  "demoModeUntilTestnetVerified": true
+  "demoModeUntilTestnetVerified": true,
+  "creatorReservation": {
+    "tokenIndex": 0,
+    "beneficiaryAddress": "UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7",
+    "claimOpcode": "0x52535630",
+    "claimWhilePaused": true,
+    "ranking": "unique maximum of sum(supply / trait frequency), computed from final traits",
+    "publicDisclosureRequired": true
+  }
 }

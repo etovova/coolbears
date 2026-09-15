@@ -9,6 +9,7 @@ const policy = JSON.parse(fs.readFileSync('contracts/mint-policy.json', 'utf8'))
 const ownerText = process.env.OWNER_ADDRESS || policy.treasuryAddress;
 const owner = Address.parse(ownerText);
 const treasury = Address.parse(policy.treasuryAddress);
+if (!treasury.equals(Address.parse(policy.creatorReservation.beneficiaryAddress))) throw Error('Creator beneficiary differs from immutable treasury');
 
 async function compileCollection() {
   const r = await compileFunc({
@@ -84,6 +85,11 @@ const out = {
   collectionAddressRaw: address.toRawString(),
   collectionAddressTestnetBounceable: address.toString({ bounceable: true, testOnly: true }),
   collectionAddressTestnetNonBounceable: address.toString({ bounceable: false, testOnly: true }),
+  creatorReservation: { tokenIndex: 0, beneficiaryAddressRaw: treasury.toRawString(), opcode: '0x52535630' },
+  tonConnectCreatorClaimRequest: {
+    network: '-3', from: treasury.toRawString(),
+    messages: [{address: address.toString({bounceable:true,testOnly:true}),amount:'7100000000',payload:beginCell().storeUint(0x52535630,32).storeUint(0,64).endCell().toBoc().toString('base64')}]
+  },
   initialPaused: true,
   nextItemIndex: 0,
   priceNanoTon: policy.priceNanoTon,

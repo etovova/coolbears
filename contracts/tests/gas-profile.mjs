@@ -66,7 +66,7 @@ function data(owner, treasury, itemCode) {
   const royalty = beginCell().storeUint(7, 16).storeUint(100, 16).storeAddress(treasury).endCell();
   return beginCell()
     .storeAddress(owner)
-    .storeUint(0, 64)
+    .storeUint(1, 64) // Public mint gas after creator claim
     .storeRef(content)
     .storeRef(itemCode)
     .storeRef(royalty)
@@ -184,13 +184,13 @@ for (const candidate of candidates) {
     txCount = transactions.length;
     const mintState = await collection.getMintState();
     mintStateNext = mintState.next.toString();
-    const nftAddress = await collection.getNftAddress(0);
+    const nftAddress = await collection.getNftAddress(1);
     nftAddressText = nftAddress.toString();
     const nft = blockchain.openContract(new NftItem(nftAddress));
     const nftData = await nft.getData();
     initialized = nftData.initialized.toString();
     nftOwner = nftData.owner.toString();
-    ok = nftData.initialized === -1n && nftData.index === 0n && nftOwner === buyer.address.toString();
+    ok = nftData.initialized === -1n && nftData.index === 1n && nftOwner === buyer.address.toString();
   } catch (e) {
     error = e?.stack ?? String(e);
   }
