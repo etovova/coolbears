@@ -1,0 +1,82 @@
+name: Prepare CoolBears mainnet release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/promote-mainnet-package.mjs'
+      - '.github/workflows/prepare-mainnet-release.yml'
+      - 'testnet/creator/deployment.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install TON core
+        run: npm install --no-save @ton/core
+      - name: Promote the exact tested package to mainnet
+        run: node scripts/promote-mainnet-package.mjs
+      - name: Validate generated package
+        run: |
+          set -euo pipefail
+          P=build/mainnet-release/deployment.json
+          jq -e '.network == "mainnet"' "$P" >/dev/null
+          jq -e '.initialPaused == true' "$P" >/dev/null
+          jq -e '.nextItemIndex == 0' "$P" >/dev/null
+          jq -e '.priceNanoTon == 7000000000' "$P" >/dev/null
+          jq -e '.supply == 10000' "$P" >/dev/null
+          jq -e '.maxPerTransaction == 50' "$P" >/dev/null
+          jq -e '.royaltyBps == 700' "$P" >/dev/null
+          jq -e '.revealAt == 1798761600' "$P" >/dev/null
+          jq -e '.revealAtUtc == "2027-01-01T00:00:00Z"' "$P" >/dev/null
+          jq -e '.tonConnectCreatorClaimRequest.network == "-239"' "$P" >/dev/null
+          jq -e '.tonConnectCreatorClaimRequest.messages[0].amount == "7100000000"' "$P" >/dev/null
+          jq -e '.tonConnectDeployMessage.amount == "200000000"' "$P" >/dev/null
+          test -n "$(jq -r '.collectionAddressMainnetNonBounceable' "$P")"
+          test -n "$(jq -r '.collectionAddressMainnetBounceable' "$P")"
+          echo MAINNET_PACKAGE_STRUCTURE_OK=1
+      - name: Confirm destination is not active on TON mainnet
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressMainnetNonBounceable' build/mainnet-release/deployment.json)
+          ok=0
+          for i in {1..6}; do
+            if curl -fsS --retry 2 --retry-delay 2 "https://toncenter.com/api/v2/getAddressInformation?address=${ADDRESS}" -o /tmp/mainnet-address.json; then
+              STATE=$(jq -r '.result.state // empty' /tmp/mainnet-address.json)
+              echo "MAINNET_ADDRESS_STATE=${STATE:-unknown}"
+              if [ "$STATE" = "active" ]; then
+                echo 'Mainnet destination is already ACTIVE; refusing to overwrite release package.'
+                exit 1
+              fi
+              if [ "$STATE" = "uninitialized" ] || [ "$STATE" = "nonexist" ] || [ -z "$STATE" ]; then
+                ok=1
+                break
+              fi
+            fi
+            sleep $((i*3))
+          done
+          test "$ok" = "1"
+      - name: Publish unsigned mainnet owner package into repository
+        run: |
+          set -euo pipefail
+          mkdir -p mainnet/owner
+          cp build/mainnet-release/deployment.json mainnet/owner/deployment.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add mainnet/owner/deployment.json
+          if git diff --cached --quiet; then
+            echo 'Mainnet package already up to date.'
+            exit 0
+          fi
+          git commit -m 'Publish verified unsigned mainnet deployment package'
+          git push
