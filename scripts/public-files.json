@@ -18,6 +18,7 @@
   "mainnet/owner/owner.js",
   "metadata/collection.json",
   "metadata/prereveal.json",
+  "mint-live.js",
   "mobile-fix.css",
   "privacy.html",
   "robots.txt",
