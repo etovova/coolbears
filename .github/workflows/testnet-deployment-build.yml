@@ -41,7 +41,7 @@ jobs:
           jq -e '.maxPerTransaction == 50' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.supply == 10000' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.royaltyBps == 700' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.collectionMetadataIpfs == "ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e"' build/testnet-deployment/deployment.json >/dev/null
+          jq -e '.collectionMetadataIpfs == "ipfs://bafkreidhyuzo4lkhtsy2uipzfucvz6hiyeu5zo2zvxtficrlo7wzlyv3ui"' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.preRevealMetadataRootIpfs == "ipfs://bafybeibx4t7s52qghnosicl3fd2t2pjdxs2oij5sez3mri3k5q5y7wdtsm/"' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.stateInitBocBase64 | length > 100' build/testnet-deployment/deployment.json >/dev/null
           jq -e '.collectionAddressTestnetNonBounceable | length > 40' build/testnet-deployment/deployment.json >/dev/null
