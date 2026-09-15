@@ -13,7 +13,7 @@ Production parameters:
 - Pre-reveal image: `ipfs://bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni`
 - Pre-reveal metadata: `ipfs://bafkreiawi23ti2ptlsg62ljsafxt6fzyv4pw55iaxvdm2vaktow253nx5i`
 - Verified pre-reveal metadata root (10,000 items): `ipfs://bafybeibx4t7s52qghnosicl3fd2t2pjdxs2oij5sez3mri3k5q5y7wdtsm/`
-- Collection metadata: `ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e`
+- Collection metadata: `ipfs://bafkreidhyuzo4lkhtsy2uipzfucvz6hiyeu5zo2zvxtficrlo7wzlyv3ui`
 
 ## Contract baseline
 
