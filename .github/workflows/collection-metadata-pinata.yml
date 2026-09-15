@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/collection-metadata-pinata.yml'
+      - 'metadata/collection.json'
   workflow_dispatch:
 
 permissions:
