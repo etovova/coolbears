@@ -6,7 +6,7 @@
   const tr = {
     en: {
       navMint:'Mint', navReveal:'Reveal', navCollection:'Collection', navRarity:'Rarity', navFaq:'FAQ',
-      connectWallet:'Connect wallet', connected:'Wallet connected',
+      connectWallet:'Connect wallet', connected:'Wallet connected', walletLoading:'Opening wallet…', walletFailed:'Could not open wallets. Please try again.', walletChoose:'Choose a wallet in the window.',
       kicker:'10,000 UNIQUE BEARS • BUILT ON GRAM',
       heroLine1:'EVERYONE GETS A BEAR.', heroLine2:'NOT EVERYONE GETS A LEGEND.',
       heroText:'Mint a mystery CoolBear for 7 GRAM (TON). Trade it immediately. Your real bear and traits are revealed on January 1.',
@@ -28,7 +28,7 @@
     },
     ru: {
       navMint:'Минт', navReveal:'Раскрытие', navCollection:'Коллекция', navRarity:'Редкость', navFaq:'Вопросы',
-      connectWallet:'Подключить кошелёк', connected:'Кошелёк подключён',
+      connectWallet:'Подключить кошелёк', connected:'Кошелёк подключён', walletLoading:'Открываю кошелёк…', walletFailed:'Не удалось открыть кошельки. Нажми ещё раз.', walletChoose:'Выбери кошелёк в открывшемся окне.',
       kicker:'10 000 УНИКАЛЬНЫХ МЕДВЕДЕЙ • НА GRAM',
       heroLine1:'МЕДВЕДЯ ПОЛУЧИТ КАЖДЫЙ.', heroLine2:'ЛЕГЕНДУ — НЕ КАЖДЫЙ.',
       heroText:'Замить загадочного CoolBear за 7 GRAM (TON). Им можно торговать сразу. Настоящий медведь и его характеристики раскроются 1 января.',
@@ -50,7 +50,7 @@
     },
     zh: {
       navMint:'铸造', navReveal:'揭晓', navCollection:'系列', navRarity:'稀有度', navFaq:'常见问题',
-      connectWallet:'连接钱包', connected:'钱包已连接',
+      connectWallet:'连接钱包', connected:'钱包已连接', walletLoading:'正在打开钱包…', walletFailed:'无法打开钱包，请重试。', walletChoose:'请在窗口中选择钱包。',
       kicker:'10,000 只独特酷熊 • 基于 GRAM',
       heroLine1:'每个人都能得到一只熊。', heroLine2:'但不是每个人都能得到传奇。',
       heroText:'以 7 GRAM (TON) 铸造一只神秘 CoolBear。铸造后可立即交易。真正的熊及其属性将在 1 月 1 日揭晓。',
@@ -137,40 +137,81 @@
   if ($('#minted')) $('#minted').textContent = `${minted.toLocaleString('en-US')} / ${supply.toLocaleString('en-US')}`;
   if ($('#mintBar')) $('#mintBar').style.width = `${Math.min(100, minted / supply * 100)}%`;
 
-  function ensureTonConnect() {
-    if (!window.TON_CONNECT_UI) return null;
+  let sdkLoading = null;
+  let openingWallet = false;
+  const walletStatus = document.createElement('div');
+  walletStatus.id = 'walletStatus';
+  walletStatus.setAttribute('role', 'status');
+  walletStatus.setAttribute('aria-live', 'polite');
+  walletStatus.hidden = true;
+  document.body.append(walletStatus);
+  function walletMessage(key) {
+    walletStatus.textContent = key ? t(key) : '';
+    walletStatus.hidden = !key;
+    if (note && key) note.textContent = t(key);
+  }
+  async function loadWalletSdk() {
+    if (window.TON_CONNECT_UI) return;
+    if (!sdkLoading) sdkLoading = (async () => {
+      for (const src of [
+        'https://cdn.jsdelivr.net/npm/@tonconnect/ui@3.0.2/dist/tonconnect-ui.min.js',
+        'https://unpkg.com/@tonconnect/ui@3.0.2/dist/tonconnect-ui.min.js'
+      ]) {
+        try {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            const timer = setTimeout(() => { script.remove(); reject(new Error('Wallet SDK timeout')); }, 10000);
+            script.src = src;
+            script.onload = () => { clearTimeout(timer); resolve(); };
+            script.onerror = () => { clearTimeout(timer); script.remove(); reject(new Error('Wallet SDK unavailable')); };
+            document.head.append(script);
+          });
+          if (window.TON_CONNECT_UI) return;
+        } catch { /* Try the secondary CDN. */ }
+      }
+      throw new Error('Wallet SDK unavailable');
+    })().catch(error => { sdkLoading = null; throw error; });
+    await sdkLoading;
+  }
+  async function ensureTonConnect() {
+    await loadWalletSdk();
     if (!tc) {
-      tc = window.tc || new window.TON_CONNECT_UI.TonConnectUI({
+      const instance = new window.TON_CONNECT_UI.TonConnectUI({
         manifestUrl: new URL('tonconnect-manifest.json', location.href).href
       });
-      window.tc = tc;
-      connected = Boolean(tc.wallet);
-      tc.onStatusChange(walletInfo => {
+      instance.onStatusChange(walletInfo => {
         connected = Boolean(walletInfo);
         renderConnectionState();
-        document.body.classList.toggle('wallet-open', false);
+        if (connected) walletMessage(null);
       });
+      instance.onModalStateChange(state => {
+        document.body.classList.toggle('wallet-open', state.status === 'opened');
+        if (state.status === 'opened') walletMessage(null);
+        else if (state.closeReason === 'action-cancelled' && !connected) walletMessage('connectCancelled');
+      });
+      tc = instance;
+      connected = Boolean(tc.wallet);
+      renderConnectionState();
     }
     return tc;
   }
-
   async function connect() {
-    const ui = ensureTonConnect();
-    if (!ui) {
-      if (note) note.textContent = t('tonUnavailable');
-      return;
-    }
-    if (connected) return;
+    if (openingWallet) return;
+    if (connected) { walletMessage('connected'); return; }
+    openingWallet = true;
+    walletBtn?.setAttribute('aria-busy', 'true');
+    walletMessage('walletLoading');
     try {
-      document.body.classList.add('wallet-open');
+      const ui = await ensureTonConnect();
       await ui.openModal();
-      connected = Boolean(ui.wallet);
-      renderConnectionState();
-      if (!connected && note) note.textContent = t('connectCancelled');
+      // openModal resolves when the window opens, not when a wallet connects.
     } catch (err) {
-      if (note) note.textContent = t('connectCancelled');
-    } finally {
       document.body.classList.remove('wallet-open');
+      walletMessage('walletFailed');
+      console.warn('Wallet dialog could not open:', err?.message);
+    } finally {
+      openingWallet = false;
+      walletBtn?.removeAttribute('aria-busy');
     }
   }
 
@@ -190,7 +231,7 @@
     updateBackTop();
   }
 
-  ensureTonConnect();
+  ensureTonConnect().catch(() => { /* Clicking the button retries with visible feedback. */ });
   clamp();
   apply(lang);
 })();

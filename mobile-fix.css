@@ -36,3 +36,5 @@ body.wallet-open .back-top{display:none!important}
 }
 .back-top{position:fixed;right:18px;bottom:18px;width:48px;height:48px;border:2px solid #f4f0e5;background:#111;color:#fff;font-size:24px;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:30;opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .2s,transform .2s,visibility .2s;cursor:pointer;box-shadow:4px 4px 0 #ffd51f}
 .back-top.show{opacity:1;visibility:visible;transform:none}
+
+#walletStatus:not([hidden]){position:fixed;top:96px;left:50%;transform:translateX(-50%);z-index:101;max-width:calc(100% - 32px);padding:14px 20px;background:#111;color:#fff;border:2px solid #ffd51f;box-shadow:0 6px 24px #0008;text-align:center;font-size:15px}
