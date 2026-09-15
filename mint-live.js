@@ -89,9 +89,8 @@
   }
 
   mintBtn?.addEventListener('click',e=>{e.preventDefault();e.stopImmediatePropagation();mint();},true);
-  for(const sel of ['#minus','#plus','#qty','.bear-lang'])document.addEventListener('click',e=>{if(e.target.closest(sel))setTimeout(refreshText,0)},true);
+  for(const sel of ['#minus','#plus','.bear-lang'])document.addEventListener('click',e=>{if(e.target.closest(sel))setTimeout(refreshText,0)},true);
   qty?.addEventListener('input',()=>setTimeout(refreshText,0));
-  const observer=new MutationObserver(()=>setTimeout(refreshText,0));if(mintBtn)observer.observe(mintBtn,{attributes:true,childList:true,subtree:true});
   ensureUi().then(()=>checkLive()).catch(e=>{if(note)note.textContent=t('failed')+(e?.message||e);refreshText();});
   refreshText();
 })();
