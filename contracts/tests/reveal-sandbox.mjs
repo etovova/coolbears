@@ -8,7 +8,7 @@ import { beginCell, Cell, contractAddress, SendMode, toNano } from '@ton/core';
 
 const TON_ROOT = '/tmp/token-contract';
 const COLLECTION_SRC = 'contracts/src/coolbears-collection-mint.fc';
-const OP_MINT = 0x4d494e54;
+const OP_MINT = 0x52535630;
 const OP_EDIT_CONTENT = 4;
 const SELF = fileURLToPath(import.meta.url);
 
@@ -87,13 +87,13 @@ const buyer = await blockchain.treasury('buyer-reveal');
 const attacker = await blockchain.treasury('attacker-reveal');
 const collection = blockchain.openContract(Collection.create(owner.address, treasury.address, collectionCode, itemCode));
 await collection.sendDeploy(owner.getSender());
-await collection.sendMint(buyer.getSender());
+await collection.sendMint(treasury.getSender());
 
 const nftAddressBefore = await collection.getNftAddress(0);
 const nft = blockchain.openContract(new NftItem(nftAddressBefore));
 const before = await nft.getData();
 assert.equal(before.index, 0n);
-assert.equal(before.owner.toString(), buyer.address.toString());
+assert.equal(before.owner.toString(), treasury.address.toString());
 assert.equal(before.content.beginParse().loadStringTail(), '0000.json');
 let resolved = parseOffchainContent(await collection.getNftContent(0, before.content));
 assert.equal(resolved.prefix, 'ipfs://PRE_REVEAL_ROOT/');

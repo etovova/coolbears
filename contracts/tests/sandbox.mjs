@@ -78,6 +78,10 @@ class CoolBearsCollection {
       body: beginCell().storeUint(OP_MINT, 32).storeUint(0, 64).storeUint(count, 8).endCell(),
     });
   }
+  async sendReserved(provider, via, value = toNano('7.05')) {
+    return provider.internal(via, { value, sendMode: SendMode.PAY_GAS_SEPARATELY,
+      body: beginCell().storeUint(0x52535630,32).storeUint(0,64).endCell() });
+  }
   async sendAdmin(provider, via, op) {
     return provider.internal(via, {
       value: toNano('0.1'),
@@ -192,8 +196,20 @@ state = await collection.getMintState();
 assert.equal(state.next, 0n);
 assert.equal(state.paused, 0n);
 
-// One successful mint creates token #0000 owned by the buyer.
-await collection.sendMint(buyer.getSender(), 1, toNano('7.05'));
+// Public mint cannot consume token zero even when unpaused.
+function rejected(result, code) {
+  assert.ok(result.transactions.some(tx => tx.inMessage?.info.type === 'internal' && tx.inMessage.info.dest.equals(collection.address) && tx.description.type === 'generic' && tx.description.computePhase.type === 'vm' && tx.description.computePhase.exitCode === code));
+}
+rejected(await collection.sendMint(buyer.getSender(), 1, toNano('7.05')),705);
+rejected(await collection.sendReserved(attacker.getSender()),706);
+rejected(await collection.sendReserved(owner.getSender()),706);
+rejected(await collection.sendReserved(treasury.getSender(),toNano('7.049')),703);
+assert.equal((await collection.getMintState()).next,0n);
+await collection.sendAdmin(owner.getSender(), OP_PAUSE);
+await collection.sendReserved(treasury.getSender());
+assert.equal((await collection.getMintState()).paused,1n);
+rejected(await collection.sendReserved(treasury.getSender()),707);
+await collection.sendAdmin(owner.getSender(), OP_UNPAUSE);
 state = await collection.getMintState();
 assert.equal(state.next, 1n);
 
@@ -203,12 +219,12 @@ let nft0Data = await nft0.getData();
 assert.equal(nft0Data.initialized, -1n);
 assert.equal(nft0Data.index, 0n);
 assert.equal(nft0Data.collection.toString(), collection.address.toString());
-assert.equal(nft0Data.owner.toString(), buyer.address.toString());
+assert.equal(nft0Data.owner.toString(), treasury.address.toString());
 assert.equal(nft0Data.content.beginParse().loadStringTail(), '0000.json');
 
 // Pre-reveal transfer uses the official TON NFT transfer opcode. The same NFT,
 // collection link, index and metadata suffix remain intact while ownership changes.
-await nft0.sendTransfer(buyer.getSender(), recipient.address);
+await nft0.sendTransfer(treasury.getSender(), recipient.address);
 nft0Data = await nft0.getData();
 assert.equal(nft0Data.initialized, -1n);
 assert.equal(nft0Data.index, 0n);

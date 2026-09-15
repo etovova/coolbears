@@ -9,6 +9,7 @@ const int COOLBEARS_SUPPLY = 10000;
 const int COOLBEARS_PRICE = 7000000000;
 const int COOLBEARS_MAX_PER_TX = 50;
 const int COOLBEARS_DEPLOY_VALUE = 50000000;
+const int COOLBEARS_RESERVE_OP = 0x52535630; ;; RSV0: creator claims token 0
 const int COOLBEARS_MINT_OP = 0x4d494e54;
 const int COOLBEARS_PAUSE_OP = 0x50415553;
 const int COOLBEARS_UNPAUSE_OP = 0x554e5053;
@@ -133,9 +134,18 @@ cell cb_item_content(int index) {
     return ();
   }
 
-  if (op == COOLBEARS_MINT_OP) {
-    int count = in_msg_body~load_uint(8);
-    throw_unless(700, paused == 0);
+  if ((op == COOLBEARS_MINT_OP) | (op == COOLBEARS_RESERVE_OP)) {
+    int count = 1;
+    if (op == COOLBEARS_RESERVE_OP) {
+      ;; The treasury is immutable, unlike the administrative owner.
+      throw_unless(706, equal_slices(sender, treasury));
+      throw_unless(707, next_index == 0);
+      ;; Creator claim is allowed while public mint is paused.
+    } else {
+      count = in_msg_body~load_uint(8);
+      throw_unless(700, paused == 0);
+      throw_unless(705, next_index > 0);
+    }
     throw_unless(701, (count >= 1) & (count <= COOLBEARS_MAX_PER_TX));
     throw_unless(702, next_index + count <= COOLBEARS_SUPPLY);
 
@@ -214,4 +224,9 @@ cell get_nft_content(int index, cell individual_nft_content) method_id {
   var (_, _, _, _, royalty, _, _) = cb_load_data();
   slice rs = royalty.begin_parse();
   return (rs~load_uint(16), rs~load_uint(16), rs~load_msg_addr());
+}
+
+(int, slice) get_creator_reservation() method_id {
+  var (_, next_index, _, _, _, treasury, _) = cb_load_data();
+  return (next_index > 0, treasury);
 }
