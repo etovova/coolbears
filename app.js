@@ -6,7 +6,7 @@
   const tr = {
     en: {
       navMint:'Mint', navReveal:'Reveal', navCollection:'Collection', navRarity:'Rarity', navFaq:'FAQ',
-      connectWallet:'Connect wallet', connected:'Wallet connected', walletLoading:'Opening wallet…', walletFailed:'Could not open wallets. Please try again.', walletChoose:'Choose a wallet in the window.',
+      connectWallet:'Connect wallet', connected:'Wallet connected', disconnectWallet:'Disconnect wallet', walletDisconnected:'Wallet disconnected.', disconnectFailed:'Could not disconnect. Please try again.', walletLoading:'Opening wallet…', walletFailed:'Could not open wallets. Please try again.', walletChoose:'Choose a wallet in the window.',
       kicker:'10,000 UNIQUE BEARS • BUILT ON GRAM',
       heroLine1:'EVERYONE GETS A BEAR.', heroLine2:'NOT EVERYONE GETS A LEGEND.',
       heroText:'Mint a mystery CoolBear for 7 GRAM (TON). Trade it immediately. Your real bear and traits are revealed on January 1.',
@@ -28,7 +28,7 @@
     },
     ru: {
       navMint:'Минт', navReveal:'Раскрытие', navCollection:'Коллекция', navRarity:'Редкость', navFaq:'Вопросы',
-      connectWallet:'Подключить кошелёк', connected:'Кошелёк подключён', walletLoading:'Открываю кошелёк…', walletFailed:'Не удалось открыть кошельки. Нажми ещё раз.', walletChoose:'Выбери кошелёк в открывшемся окне.',
+      connectWallet:'Подключить кошелёк', connected:'Кошелёк подключён', disconnectWallet:'Отключить кошелёк', walletDisconnected:'Кошелёк отключён.', disconnectFailed:'Не удалось отключить кошелёк. Попробуй ещё раз.', walletLoading:'Открываю кошелёк…', walletFailed:'Не удалось открыть кошельки. Нажми ещё раз.', walletChoose:'Выбери кошелёк в открывшемся окне.',
       kicker:'10 000 УНИКАЛЬНЫХ МЕДВЕДЕЙ • НА GRAM',
       heroLine1:'МЕДВЕДЯ ПОЛУЧИТ КАЖДЫЙ.', heroLine2:'ЛЕГЕНДУ — НЕ КАЖДЫЙ.',
       heroText:'Замить загадочного CoolBear за 7 GRAM (TON). Им можно торговать сразу. Настоящий медведь и его характеристики раскроются 1 января.',
@@ -50,7 +50,7 @@
     },
     zh: {
       navMint:'铸造', navReveal:'揭晓', navCollection:'系列', navRarity:'稀有度', navFaq:'常见问题',
-      connectWallet:'连接钱包', connected:'钱包已连接', walletLoading:'正在打开钱包…', walletFailed:'无法打开钱包，请重试。', walletChoose:'请在窗口中选择钱包。',
+      connectWallet:'连接钱包', connected:'钱包已连接', disconnectWallet:'断开钱包', walletDisconnected:'钱包已断开。', disconnectFailed:'无法断开钱包，请重试。', walletLoading:'正在打开钱包…', walletFailed:'无法打开钱包，请重试。', walletChoose:'请在窗口中选择钱包。',
       kicker:'10,000 只独特酷熊 • 基于 GRAM',
       heroLine1:'每个人都能得到一只熊。', heroLine2:'但不是每个人都能得到传奇。',
       heroText:'以 7 GRAM (TON) 铸造一只神秘 CoolBear。铸造后可立即交易。真正的熊及其属性将在 1 月 1 日揭晓。',
@@ -87,7 +87,7 @@
   const backTop = $('#backTop');
 
   function renderConnectionState() {
-    if (walletBtn) walletBtn.textContent = connected ? t('connected') : t('connectWallet');
+    if (walletBtn) walletBtn.textContent = connected ? t('disconnectWallet') : t('connectWallet');
     if (mintBtn) mintBtn.textContent = connected ? t('mintN').replace('{n}', qty?.value || 1) : t('connectToMint');
   }
 
@@ -197,7 +197,22 @@
   }
   async function connect() {
     if (openingWallet) return;
-    if (connected) { walletMessage('connected'); return; }
+    if (connected) {
+      openingWallet = true;
+      walletBtn?.setAttribute('aria-busy', 'true');
+      try {
+        await tc.disconnect();
+        connected = Boolean(tc.wallet);
+        renderConnectionState();
+        walletMessage(connected ? 'disconnectFailed' : 'walletDisconnected');
+      } catch (err) {
+        walletMessage('disconnectFailed');
+      } finally {
+        openingWallet = false;
+        walletBtn?.removeAttribute('aria-busy');
+      }
+      return;
+    }
     openingWallet = true;
     walletBtn?.setAttribute('aria-busy', 'true');
     walletMessage('walletLoading');
