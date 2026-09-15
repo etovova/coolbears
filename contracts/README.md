@@ -11,8 +11,8 @@ Production parameters:
 - Treasury / royalty recipient: `UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7`
 - Reveal: 2027-01-01 (00:00 UTC)
 - Pre-reveal image: `ipfs://bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni`
-- Pre-reveal metadata: `ipfs://bafkreib7p7wx427quboakukbl6mebpksyjp4r5vurqif3p6bh3a7ssyzq4`
-- Verified pre-reveal metadata root (10,000 items): `ipfs://bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e/`
+- Pre-reveal metadata: `ipfs://bafkreiawi23ti2ptlsg62ljsafxt6fzyv4pw55iaxvdm2vaktow253nx5i`
+- Verified pre-reveal metadata root (10,000 items): `ipfs://bafybeibx4t7s52qghnosicl3fd2t2pjdxs2oij5sez3mri3k5q5y7wdtsm/`
 - Collection metadata: `ipfs://bafkreibxu7idtw4s2zwvtvhjhdwxfeahizx3mkn6akqvxus37q2zgcc24e`
 
 ## Contract baseline
@@ -51,3 +51,5 @@ No rare NFT is secretly assigned in this contract plan. If a Founder/Team Legend
 ## Reveal lock
 
 New builds reject all owner metadata/royalty content updates before 2027-01-01 00:00 UTC (exit code 704). This does not modify the already deployed legacy testnet collection or its deployment package. Final artwork-to-index assignments must remain private; a time lock cannot prevent disclosure of externally published files.
+
+The 2026-10-07 hidden metadata root `bafybeihbfkbjdlnvtm4pchzdqktyskxpyuzwqqxymiqtolzftgbou2qj2e` remains pinned as a historical version. Existing legacy testnet deployment.json still describes its original StateInit and is intentionally unchanged. The new root was verified via 0000, 0001, 4979 and 9999 on 2026-09-15.

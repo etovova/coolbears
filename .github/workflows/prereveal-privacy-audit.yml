@@ -10,6 +10,7 @@ on:
       - 'scripts/generate-prereveal-metadata.mjs'
       - 'scripts/audit-prereveal-privacy.mjs'
       - '.github/workflows/prereveal-privacy-audit.yml'
+      - 'scripts/verify-pinned-prereveal.mjs'
   workflow_dispatch:
 
 permissions:
@@ -44,3 +45,6 @@ jobs:
             exit 1
           fi
           echo 'COOLBEARS_PREREVEAL_PRIVACY_10000_OK'
+
+      - name: Verify published IPFS metadata matches audited template
+        run: node scripts/verify-pinned-prereveal.mjs
