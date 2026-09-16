@@ -5,9 +5,9 @@
   const $ = s => document.querySelector(s);
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const labels = {
-    en:{hero:'Mint is open. Each NFT costs 7 GRAM (TON), plus creation reserve and network fees. Reveal is planned for January 1, 2027.',heroBtn:'MINT NOW',title:'MINT<br>YOUR COOLBEAR',text:'Choose between 1 and 50 NFTs. There is no lifetime wallet limit. Each NFT costs 7 GRAM (TON).',connect:'CONNECT WALLET TO MINT',mint:'MINT {n} NFT — {amount} TON',fee:'The signed transaction sends 7.10 TON per NFT: 7 TON mint price, 0.05 TON NFT creation reserve and 0.05 TON execution buffer. Wallet/network fees are additional. Unused buffer remains in the collection contract.',checking:'CHECKING MAINNET…',paused:'MINT PAUSED',sold:'SOLD OUT',wrong:'SWITCH WALLET TO TON MAINNET',sent:'Transaction sent. Waiting for blockchain confirmation…',confirmed:'Mint confirmed on TON mainnet.',failed:'Mint was not completed: '},
-    ru:{hero:'Минт открыт. Цена одного NFT — 7 GRAM (TON), плюс резерв на создание и комиссия сети. Раскрытие запланировано на 1 января 2027 года.',heroBtn:'ЗАМИНТИТЬ',title:'ЗАМИНТЬ<br>СВОЕГО COOLBEAR',text:'Выбери от 1 до 50 NFT за транзакцию. Общего лимита на кошелёк нет. Цена одного NFT — 7 GRAM (TON).',connect:'ПОДКЛЮЧИТЬ КОШЕЛЁК',mint:'ЗАМИНТИТЬ {n} NFT — {amount} TON',fee:'Подписываемая транзакция отправляет 7,10 TON за NFT: 7 TON — цена минта, 0,05 TON — создание NFT и 0,05 TON — запас на выполнение. Комиссия кошелька/сети оплачивается дополнительно. Неиспользованный запас остаётся в контракте коллекции.',checking:'ПРОВЕРЯЮ MAINNET…',paused:'МИНТ НА ПАУЗЕ',sold:'РАСПРОДАНО',wrong:'ПЕРЕКЛЮЧИ КОШЕЛЁК НА TON MAINNET',sent:'Транзакция отправлена. Жду подтверждения в блокчейне…',confirmed:'Минт подтверждён в TON mainnet.',failed:'Минт не завершён: '},
-    zh:{hero:'铸造已开放。每个 NFT 价格为 7 GRAM (TON)，另加创建储备和网络费用。计划于 2027 年 1 月 1 日揭晓。',heroBtn:'立即铸造',title:'铸造你的<br>COOLBEAR',text:'每笔交易可选择 1–50 个 NFT。钱包没有总数量限制。每个 NFT 价格为 7 GRAM (TON)。',connect:'连接钱包开始铸造',mint:'铸造 {n} 个 NFT — {amount} TON',fee:'签名交易每个 NFT 发送 7.10 TON：7 TON 为铸造价格，0.05 TON 用于创建 NFT，0.05 TON 为执行缓冲。钱包/网络费用另计。未使用的缓冲留在系列合约中。',checking:'正在检查主网…',paused:'铸造已暂停',sold:'已售罄',wrong:'请将钱包切换到 TON 主网',sent:'交易已发送，正在等待链上确认…',confirmed:'已在 TON 主网上确认铸造。',failed:'铸造未完成：'}
+    en:{hero:'Mint is open. Each NFT costs 7 GRAM (TON), plus creation reserve and network fees. Reveal is planned for January 1, 2027.',heroBtn:'MINT NOW',title:'MINT<br>YOUR COOLBEAR',text:'Choose between 1 and 50 NFTs. There is no lifetime wallet limit. Each NFT costs 7 GRAM (TON).',connect:'CONNECT WALLET TO MINT',mint:'MINT {n} NFT — {amount} TON',fee:'The signed transaction sends 7.10 TON per NFT: 7 TON mint price, 0.05 TON NFT creation reserve and 0.05 TON execution buffer. Wallet/network fees are additional. Unused buffer remains in the collection contract.',checking:'CHECKING MAINNET…',paused:'MINT PAUSED',sold:'SOLD OUT',wrong:'SWITCH WALLET TO TON MAINNET',sent:'Request returned by the wallet. Execution is not yet confirmed. Check your transaction and NFT receipt in the wallet before retrying.',activity:'Collection activity detected. This alone does not confirm your mint. Check your transaction and NFT receipt in the wallet.',failed:'Mint was not completed: '},
+    ru:{hero:'Минт открыт. Цена одного NFT — 7 GRAM (TON), плюс резерв на создание и комиссия сети. Раскрытие запланировано на 1 января 2027 года.',heroBtn:'ЗАМИНТИТЬ',title:'ЗАМИНТЬ<br>СВОЕГО COOLBEAR',text:'Выбери от 1 до 50 NFT за транзакцию. Общего лимита на кошелёк нет. Цена одного NFT — 7 GRAM (TON).',connect:'ПОДКЛЮЧИТЬ КОШЕЛЁК',mint:'ЗАМИНТИТЬ {n} NFT — {amount} TON',fee:'Подписываемая транзакция отправляет 7,10 TON за NFT: 7 TON — цена минта, 0,05 TON — создание NFT и 0,05 TON — запас на выполнение. Комиссия кошелька/сети оплачивается дополнительно. Неиспользованный запас остаётся в контракте коллекции.',checking:'ПРОВЕРЯЮ MAINNET…',paused:'МИНТ НА ПАУЗЕ',sold:'РАСПРОДАНО',wrong:'ПЕРЕКЛЮЧИ КОШЕЛЁК НА TON MAINNET',sent:'Запрос передан кошельку. Выполнение ещё не подтверждено. Перед повторной отправкой проверь транзакцию и получение NFT в кошельке.',activity:'В коллекции появились новые NFT. Это не подтверждает именно твой минт. Проверь транзакцию и получение NFT в кошельке.',failed:'Минт не завершён: '},
+    zh:{hero:'铸造已开放。每个 NFT 价格为 7 GRAM (TON)，另加创建储备和网络费用。计划于 2027 年 1 月 1 日揭晓。',heroBtn:'立即铸造',title:'铸造你的<br>COOLBEAR',text:'每笔交易可选择 1–50 个 NFT。钱包没有总数量限制。每个 NFT 价格为 7 GRAM (TON)。',connect:'连接钱包开始铸造',mint:'铸造 {n} 个 NFT — {amount} TON',fee:'签名交易每个 NFT 发送 7.10 TON：7 TON 为铸造价格，0.05 TON 用于创建 NFT，0.05 TON 为执行缓冲。钱包/网络费用另计。未使用的缓冲留在系列合约中。',checking:'正在检查主网…',paused:'铸造已暂停',sold:'已售罄',wrong:'请将钱包切换到 TON 主网',sent:'请求已交给钱包，执行结果尚未确认。重试前请在钱包中检查交易和 NFT 是否到账。',activity:'检测到系列新增 NFT，但这不能确认您的铸造。请在钱包中检查交易和 NFT 是否到账。',failed:'铸造未完成：'}
   };
   const lang=()=>{const x=localStorage.getItem('coolbears_lang')||'en';return labels[x]?x:'en';};
   const t=k=>labels[lang()][k]||labels.en[k];
@@ -48,6 +48,7 @@
     if(cfg.collectionCodeHash&&Cell.fromBase64(j.result.code).hash().toString('hex')!==cfg.collectionCodeHash)throw Error('Mainnet contract code mismatch');
     const s=Cell.fromBase64(j.result.data).beginParse();
     const owner=s.loadAddress();const next=Number(s.loadUintBig(64));s.loadRef();s.loadRef();s.loadRef();const treasury=s.loadAddress();const paused=s.loadBit();
+    if(!Number.isSafeInteger(next)||next<0||next>Number(cfg.supply||10000)||s.remainingBits!==0||s.remainingRefs!==0)throw Error('Invalid mainnet mint state');
     if(cfg.treasuryAddress&&treasury.toRawString()!==core.Address.parse(cfg.treasuryAddress).toRawString())throw Error('Treasury mismatch');
     return {owner,next,paused,soldOut:next>=Number(cfg.supply||10000)};
   }
@@ -64,7 +65,9 @@
     ui=new window.TON_CONNECT_UI.TonConnectUI({manifestUrl:new URL('tonconnect-manifest.json',location.href).href});
     const changed=w=>{wallet=w||null;refreshText();};ui.onStatusChange(changed);changed(ui.wallet);return ui;
   }
-  async function confirmIncrease(before,count){
+  // A global supply counter cannot prove the outcome of this wallet transaction.
+  // Poll only to refresh collection activity; never label it a successful mint.
+  async function observeCollectionActivity(before,count){
     for(let i=0;i<12;i++){await sleep(4000);try{const s=await checkLive();if(s.next>=before+count)return true;}catch{}}
     return false;
   }
@@ -77,13 +80,13 @@
       const c=await getCore();
       const friendly=c.Address.parseFriendly(cfg.mintContractAddress);if(friendly.isTestOnly)throw Error('Configured destination is testnet');
       const count=n();const s=await checkLive();
-      if(s.paused)throw Error(t('paused'));if(s.soldOut)throw Error(t('sold'));if(s.next+count>Number(cfg.supply||10000))throw Error('Not enough NFTs remaining');
+      if(s.next<1)throw Error('Creator reservation is not confirmed');if(s.paused)throw Error(t('paused'));if(s.soldOut)throw Error(t('sold'));if(s.next+count>Number(cfg.supply||10000))throw Error('Not enough NFTs remaining');
       const body=c.beginCell().storeUint(0x4d494e54,32).storeUint(BigInt(Date.now()),64).storeUint(count,8).endCell();
       const amount=(BigInt(count)*BigInt(cfg.mintPaymentPerNftNano||7100000000)).toString();
       if(note)note.textContent=t('sent');
       await tc.sendTransaction({validUntil:Math.floor(Date.now()/1000)+300,network:'-239',from:wallet.account.address,messages:[{address:cfg.mintContractAddress,amount,payload:body.toBoc().toString('base64')}]});
       if(note)note.textContent=t('sent');
-      const ok=await confirmIncrease(s.next,count);if(note)note.textContent=ok?t('confirmed'):t('sent');
+      const activity=await observeCollectionActivity(s.next,count);if(note)note.textContent=activity?t('activity'):t('sent');
     }catch(e){if(note)note.textContent=t('failed')+(e?.message||e);}
     finally{busy=false;refreshText();}
   }

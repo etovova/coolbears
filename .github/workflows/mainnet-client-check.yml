@@ -8,6 +8,7 @@ on:
       - 'mint-live.js'
       - 'config.js'
       - 'scripts/public-files.json'
+      - 'scripts/test-owner-launch.mjs'
       - '.github/workflows/mainnet-client-check.yml'
   workflow_dispatch:
 
@@ -27,6 +28,8 @@ jobs:
           node --check mainnet/owner/owner.js
           node --check mint-live.js
           node --check config.js
+      - name: Offline owner and mint safety checks
+        run: node scripts/test-owner-launch.mjs
       - name: Verify launch remains gated
         run: |
           set -euo pipefail
