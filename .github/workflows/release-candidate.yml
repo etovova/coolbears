@@ -12,6 +12,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -21,11 +23,19 @@ jobs:
           source contracts/TON_REFERENCE.lock
           git clone --filter=blob:none https://github.com/${source_repository}.git /tmp/token-contract
           git -C /tmp/token-contract checkout --detach "$source_commit"
-      - name: Install sandbox dependencies and record exact versions
+      - name: Install versioned sandbox dependencies
         run: |
-          npm install --no-save @ton-community/func-js @ton/core @ton/sandbox
+          npm install --no-save @ton-community/func-js@0.11.0 @ton/core@0.63.1 @ton/sandbox@0.44.0
           mkdir -p build/candidate
           npm ls --json > build/candidate/dependencies.json
+      - name: Save offline reproduction environment (no secrets or git credentials)
+        run: |
+          cp /tmp/token-contract/stdlib.fc build/candidate/stdlib.fc
+          tar -czf build/candidate/offline-environment.tar.gz --exclude='.git' node_modules contracts scripts mainnet config.js mint-live.js index.html
+      - name: Concise compile diagnostics
+        run: |
+          node contracts/candidate/compile.mjs contracts/src/coolbears-collection-mint.fc > build/candidate/legacy.b64
+          node contracts/candidate/compile.mjs contracts/candidate/collection.fc > build/candidate/candidate.b64
       - name: Compile, prove source matches legacy package and test candidate
         run: node contracts/candidate/test.mjs
       - name: Upload offline evidence only
