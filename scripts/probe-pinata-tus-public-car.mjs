@@ -1,5 +1,6 @@
 // Harmless protocol probe: publish a tiny CAR containing only the bytes "hello".
 // This validates Pinata TUS + car=true behavior without using any CoolBears NFT data.
+// 2026-09-17: explicitly re-run before freezing the Jan 1 reveal publication path.
 import crypto from 'node:crypto';
 import {client,requireThat} from './pinata-backup-io.mjs';
 const NAME='CoolBears harmless public TUS CAR protocol probe v1';
