@@ -1,47 +1,25 @@
-name: Update reveal date
+name: Audit public reveal date text
+
 on:
-  push:
-    paths:
-      - '.github/workflows/update-reveal-date.yml'
+  workflow_dispatch:
+
 permissions:
-  contents: write
+  contents: read
+
 jobs:
-  update:
-    runs-on: ubuntu-latest
+  audit:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Replace reveal date everywhere on public site
+        with:
+          persist-credentials: false
+      - name: Confirm January 1 reveal date text only
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          files = [Path('index.html'), Path('app.js')]
-          replacements = [
-              ('OCTOBER 7', 'JANUARY 1'),
-              ('October 7', 'January 1'),
-              ('7 ОКТЯБРЯ', '1 ЯНВАРЯ'),
-              ('7 октября', '1 января'),
-              ('10 月 7 日', '1 月 1 日'),
-          ]
-          for p in files:
-              s = p.read_text(encoding='utf-8')
-              old = s
-              for a,b in replacements:
-                  s = s.replace(a,b)
-              if s == old:
-                  print(f'No date replacements needed in {p}')
-              else:
-                  p.write_text(s, encoding='utf-8')
-                  print(f'Updated {p}')
-          PY
-      - name: Verify old reveal date is gone
-        run: |
+          set -euo pipefail
           ! grep -E -i 'October 7|7 октября|10 月 7 日' index.html app.js
           grep -E -i 'January 1|1 января|1 月 1 日' index.html app.js
-      - name: Commit changes
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add index.html app.js
-          git diff --cached --quiet && exit 0
-          git commit -m 'Set CoolBears reveal date to January 1'
-          git push
+          echo 'PUBLIC_REVEAL_DATE_TEXT_OK'
+
+# Legacy self-modifying date replacement is deliberately retired. The authoritative
+# reveal deadline is the frozen candidate value 1798761600 (2027-01-01T00:00:00Z),
+# enforced by the contract and the guarded automatic reveal workflow.
