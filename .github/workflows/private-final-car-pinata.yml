@@ -1,0 +1,64 @@
+name: Store exact final CoolBears CAR in PRIVATE Pinata
+on:
+  push:
+    branches: [main]
+    paths: ['release/private-final-car-upload-request.json']
+permissions:
+  contents: read
+jobs:
+  build-upload-readback:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify one-time request and exact release binding
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const r=JSON.parse(fs.readFileSync('release/private-final-car-upload-request.json'));
+          const p=fs.readFileSync('launch/candidate.json');
+          if(r.schema!==1||r.action!=='store-exact-final-car-private-pinata'||r.authorized!==true) throw Error('REQUEST_NOT_AUTHORIZED');
+          if(r.packageSha256!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('WRONG_PACKAGE_REQUEST');
+          if(r.carSha256!=='3d6377484e3d27361c367be7b002a065d83426342df30f25e1d681b4d50f820c') throw Error('WRONG_CAR_REQUEST');
+          if(crypto.createHash('sha256').update(p).digest('hex')!==r.packageSha256) throw Error('CURRENT_CANDIDATE_CHANGED');
+          NODE
+      - name: Free runner disk while keeping system Python and Node
+        run: |
+          df -h /
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
+          df -h /
+      - name: Restore sealed PRIVATE recovery already stored in Pinata
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/restore-private-recovery.mjs
+      - name: Install exact image library used by verifier
+        run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+      - name: Rebuild exact final 10000-image CAR and require committed hashes
+        run: python3 scripts/build-exact-final-car-from-recovery.py
+      - name: Upload exact CAR to PRIVATE Pinata and read it all back
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/upload-private-final-car.mjs
+      - name: Confirm production remains held
+        run: node scripts/validate-release-state.mjs
+      - name: Remove decrypted recovery, rendered collection, CAR and readback
+        if: always()
+        run: |
+          rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery" "$RUNNER_TEMP/coolbears-final-car-work" "$RUNNER_TEMP/CoolBears_v3_final.readback.car"
+      - name: Preserve nonsensitive verification evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-final-car-pinata-evidence
+          path: |
+            build/private-final-car/build-summary.json
+            build/private-final-car/storage-summary.json
+          retention-days: 30
