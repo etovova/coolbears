@@ -1,0 +1,27 @@
+name: Probe Pinata public CAR resumable upload protocol
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/probe-pinata-tus-public-car.mjs'
+      - '.github/workflows/probe-pinata-tus-public-car.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify TUS CAR import with harmless hello-only public CAR
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: node scripts/probe-pinata-tus-public-car.mjs
