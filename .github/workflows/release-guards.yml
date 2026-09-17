@@ -1,0 +1,62 @@
+name: Validate and install release guards
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/install-release-guards.mjs', '.github/workflows/release-guards.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: coolbears-release-guards
+  cancel-in-progress: false
+jobs:
+  install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require held release, never open mint
+        run: |
+          node scripts/validate-release-state.mjs
+          node --input-type=module -e "import fs from 'node:fs';if(JSON.parse(fs.readFileSync('release/launch-state.json')).phase!=='hold')throw Error('Installer only operates on a held release');"
+      - name: Apply and verify idempotence
+        run: |
+          node scripts/install-release-guards.mjs
+          git diff > /tmp/first.diff
+          node scripts/install-release-guards.mjs
+          git diff > /tmp/second.diff
+          cmp /tmp/first.diff /tmp/second.diff
+      - name: Test guard, wallet logic and policy regressions
+        run: |
+          mkdir -p build/release-guards
+          node --check mainnet/owner/owner.js
+          node --check mint-live.js
+          node scripts/test-release-guard.mjs | tee build/release-guards/guard-tests.log
+          node scripts/test-owner-launch.mjs | tee build/release-guards/owner-tests.log
+          node scripts/test-mint-policy-config.mjs | tee build/release-guards/policy-tests.log
+          node scripts/validate-mint-policy.mjs
+          node scripts/audit-prereveal-privacy.mjs
+          node scripts/stage-public-site.mjs
+      - name: Save only tested integration files
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/audit-prereveal-privacy.mjs scripts/validate-mint-policy.mjs scripts/test-owner-launch.mjs scripts/test-mint-policy-config.mjs scripts/test-release-guard.mjs scripts/public-files.json mainnet/owner/owner.js mainnet/owner/index.html mint-live.js config.js .github/workflows/mainnet-client-check.yml .github/workflows/activate-mainnet-site.yml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Install tested package-bound launch guards without opening sales'
+            git push origin HEAD:main
+          fi
+          git rev-parse HEAD > build/release-guards/installed-commit.txt
+          cp release/launch-state.json build/release-guards/launch-state.json
+          echo GUARDS_INSTALLED_SALES_CLOSED=1
+      - name: Preserve test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-guard-evidence
+          path: build/release-guards/
+          retention-days: 30

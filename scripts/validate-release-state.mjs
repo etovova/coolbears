@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import vm from 'node:vm';
+import crypto from 'node:crypto';
+import {validateLaunch} from '../release-guard.mjs';
+const raw=fs.readFileSync('mainnet/owner/deployment.json');
+const context=vm.createContext({window:{},document:{addEventListener(){}}});
+vm.runInContext(fs.readFileSync('config.js','utf8'),context,{timeout:1000});
+const state=JSON.parse(fs.readFileSync('release/launch-state.json','utf8'));
+export const gate=validateLaunch(context.window.COOLBEARS_CONFIG,JSON.parse(raw),state,crypto.createHash('sha256').update(raw).digest('hex'));
+console.log('RELEASE_STATE_OK',gate.phase,'sales='+gate.sales,'automaticReveal='+gate.automaticReveal);
