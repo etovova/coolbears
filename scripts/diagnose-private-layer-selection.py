@@ -1,4 +1,6 @@
-"""Diagnose v3 layer-selection ambiguity without exposing trait values, paths, CIDs or images."""
+"""Diagnose v3 layer-selection ambiguity without exposing trait values, paths, CIDs or images.
+This file intentionally emits structural counts only.
+"""
 from pathlib import Path
 from collections import defaultdict, Counter
 import io, json, os, zipfile
