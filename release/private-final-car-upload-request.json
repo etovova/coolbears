@@ -7,6 +7,6 @@
   "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
   "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
   "carBytes": 12779698835,
-  "attempt": 1,
-  "reason": "Store only the corrected v3-glasses-correction-1 CAR in PRIVATE Pinata. Rebuild from the sealed source recovery, require exact corrected hashes, upload/reuse 48 private parts, read every part back, and verify the full reassembly SHA-256. Do not change sales, wallet, mainnet or public reveal state."
+  "attempt": 2,
+  "reason": "Retry corrected v3-glasses-correction-1 private storage after removing reliance on Pinata size metadata. Rebuild exact corrected CAR, upload or reuse 48 private parts, require real downloaded byte counts and SHA-256 for every part, and verify full CAR reassembly hash. Do not change sales, wallet, mainnet or public reveal state."
 }
