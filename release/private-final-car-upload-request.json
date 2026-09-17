@@ -1,9 +1,12 @@
 {
   "schema": 1,
   "action": "store-exact-final-car-private-pinata",
-  "authorized": false,
-  "packageSha256": "10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa",
-  "carSha256": "3d6377484e3d27361c367be7b002a065d83426342df30f25e1d681b4d50f820c",
-  "attempt": 4,
-  "reason": "Superseded. This request belongs to the old v3 package. The active candidate is v3-glasses-correction-1 and uses a different package, manifest, CAR and collection address. Do not rerun this request."
+  "authorized": true,
+  "collectionRevision": "v3-glasses-correction-1",
+  "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+  "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
+  "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+  "carBytes": 12779698835,
+  "attempt": 1,
+  "reason": "Store only the corrected v3-glasses-correction-1 CAR in PRIVATE Pinata. Rebuild from the sealed source recovery, require exact corrected hashes, upload/reuse 48 private parts, read every part back, and verify the full reassembly SHA-256. Do not change sales, wallet, mainnet or public reveal state."
 }
