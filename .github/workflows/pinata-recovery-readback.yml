@@ -1,0 +1,35 @@
+name: Verify PRIVATE Pinata recovery bytes (no upload)
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/pinata-backup-io.mjs', 'scripts/test-pinata-backup-io.mjs', 'scripts/verify-pinata-first-part.mjs', '.github/workflows/pinata-recovery-readback.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: coolbears-private-readback
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test byte integrity and request restrictions offline
+        run: node scripts/test-pinata-backup-io.mjs
+      - name: Read existing private file, decrypt and compare hashes
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/verify-pinata-first-part.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pinata-readback-evidence
+          path: build/pinata-readback/
+          retention-days: 30
