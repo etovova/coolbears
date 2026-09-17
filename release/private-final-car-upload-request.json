@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "action": "store-exact-final-car-private-pinata",
-  "authorized": true,
+  "authorized": false,
   "packageSha256": "10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa",
   "carSha256": "3d6377484e3d27361c367be7b002a065d83426342df30f25e1d681b4d50f820c",
   "attempt": 4,
-  "reason": "Retry after fixing private Pinata pagination. Rebuild the exact committed CAR, store as verified private chunks, perform full chunk read-back and full reassembly SHA-256 verification; do not change sales, wallet, mainnet or public reveal state."
+  "reason": "Superseded. This request belongs to the old v3 package. The active candidate is v3-glasses-correction-1 and uses a different package, manifest, CAR and collection address. Do not rerun this request."
 }
