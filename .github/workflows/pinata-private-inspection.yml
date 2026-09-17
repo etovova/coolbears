@@ -1,0 +1,29 @@
+name: Inspect saved private recovery part (read only)
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/inspect-pinata-private-backup.mjs', '.github/workflows/pinata-private-inspection.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read private part metadata only
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: node scripts/inspect-pinata-private-backup.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pinata-private-inspection
+          path: build/pinata-private-inspection/
+          retention-days: 30
