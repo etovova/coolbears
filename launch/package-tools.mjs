@@ -3,7 +3,7 @@
 export const EXPECTED_CODE = '4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
 export const EXPECTED_ITEM = 'ba4d975d2b66231c1f0a0ccca6e8ff8f7ba0610c4b7639584b8e98303dc3128c';
 export const EXPECTED_OWNER = '0:6ea2cc995c7d4f236441c6c520b236c3e919ec54e331b4269528428c651a5717';
-export const PACKAGE_SHA256 = '10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa';
+export const PACKAGE_SHA256 = '241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
 export const REVEAL_AT = 1798761600;
 export const requireThat=(ok,message)=>{if(!ok)throw Error(message);};
 const hash=c=>c.hash().toString('hex');
@@ -16,7 +16,7 @@ export function parseData(cell){
 export function verifyPackage(core,p){
  const {Cell,Address,loadStateInit,contractAddress}=core;
  requireThat(p.version==='committed-reveal-v1'&&p.network==='mainnet','Wrong candidate version/network');
- for(const [k,v] of Object.entries({supply:10000,priceNanoTon:7000000000,maxPerTransaction:50,royaltyBps:700,revealAt:REVEAL_AT,nextItemIndex:0,initialPaused:true,collectionRevision:'v3'}))requireThat(p[k]===v,'Wrong policy: '+k);
+ for(const [k,v] of Object.entries({supply:10000,priceNanoTon:7000000000,maxPerTransaction:50,royaltyBps:700,revealAt:REVEAL_AT,nextItemIndex:0,initialPaused:true,collectionRevision:'v3-glasses-correction-1'}))requireThat(p[k]===v,'Wrong policy: '+k);
  const s=Cell.fromBase64(p.stateInitBocBase64).beginParse(),init=loadStateInit(s);requireThat(empty(s),'Extra StateInit fields');
  const address=contractAddress(0,init),d=parseData(init.data);
  requireThat(hash(init.code)===EXPECTED_CODE&&p.collectionCodeHash===EXPECTED_CODE,'Collection code mismatch');
