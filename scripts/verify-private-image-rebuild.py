@@ -13,7 +13,7 @@ recovery = base / 'recovery.zip'
 if not recovery.exists(): raise FileNotFoundError('recovery.zip missing')
 
 def h(b): return hashlib.sha256(b).hexdigest()
-
+def norm(v): return ''.join(ch.lower() for ch in str(v) if ch.isalnum())
 def open_nested(z, name): return zipfile.ZipFile(io.BytesIO(z.read(name)))
 
 with zipfile.ZipFile(recovery) as rz:
@@ -32,9 +32,6 @@ for x in layers_report:
 
 with zipfile.ZipFile(io.BytesIO(source_bytes)) as sz:
     members=[n for n in sz.namelist() if not n.endswith('/')]
-    suffix_map=defaultdict(list)
-    for n in members:
-        suffix_map[n].append(n)
     cache={}
     def member_for(rel):
         exact=[n for n in members if n==rel or n.endswith('/'+rel)]
@@ -53,6 +50,8 @@ with zipfile.ZipFile(io.BytesIO(source_bytes)) as sz:
         body=attrs.get('Body')
         exact=[x for x in choices if x.get('mouth_body')==body]
         if len(exact)==1: return exact[0]
+        normalized=[x for x in choices if norm(x.get('mouth_body'))==norm(body)]
+        if len(normalized)==1: return normalized[0]
         generic=[x for x in choices if x.get('mouth_body') in (None,'','None')]
         if len(generic)==1: return generic[0]
         raise ValueError('ambiguous layer selection')
