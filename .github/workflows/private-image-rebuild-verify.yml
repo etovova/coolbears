@@ -1,0 +1,44 @@
+name: Verify private v3 image rebuild pixel-exact
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/verify-private-image-rebuild.py'
+      - '.github/workflows/private-image-rebuild-verify.yml'
+      - 'scripts/restore-private-recovery.mjs'
+      - 'release/pinata-recovery-complete.sealed.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore sealed PRIVATE recovery
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/restore-private-recovery.mjs
+      - name: Install exact image library
+        run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+      - name: Rebuild all 10000 images privately and verify pixel hashes
+        run: python3 scripts/verify-private-image-rebuild.py
+      - name: Confirm launch remains blocked
+        run: node scripts/validate-release-state.mjs
+      - name: Remove all decrypted and generated private material
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
+      - name: Preserve nonsensitive hash-verification evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-image-rebuild-verify
+          path: build/private-image-rebuild-verify/
+          retention-days: 30
