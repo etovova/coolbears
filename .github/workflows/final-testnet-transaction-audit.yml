@@ -1,0 +1,32 @@
+name: Audit final TESTNET transactions (read only)
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/audit-final-testnet.mjs', 'scripts/test-final-testnet-audit.mjs', '.github/workflows/final-testnet-transaction-audit.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned transaction decoder and TVM sandbox
+        run: npm install --no-save @ton/core@0.63.1 @ton/sandbox@0.44.0
+      - name: Negative tests against in-memory TVM receipts
+        run: node scripts/test-final-testnet-audit.mjs
+      - name: Audit existing testnet transactions without signing or sending
+        run: node scripts/audit-final-testnet.mjs --read-testnet
+      - name: Preserve scoped audit results, not wallet history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-testnet-transaction-audit
+          path: build/final-testnet-audit/
+          retention-days: 30
