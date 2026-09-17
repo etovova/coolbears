@@ -36,7 +36,14 @@ export function client(jwt,fetchFn=fetch){
   const d=j.data,rows=Array.isArray(d)?d:Array.isArray(d?.rows)?d.rows:Array.isArray(d?.gateways)?d.gateways:null;
   requireThat(rows&&rows.length,'PRIVATE_GATEWAY_NOT_FOUND');
   // Only use the account's gateway domain returned by the authenticated API.
-  for(const row of rows){const name=row.domain??row.gateway_domain;try{if(name)return validateGateway(name);}catch{}}
+  function hostValues(x,depth=0){
+   if(depth>4||!x)return [];
+   if(typeof x==='string')return x.includes('.mypinata.cloud')?[x]:[];
+   if(Array.isArray(x))return x.flatMap(y=>hostValues(y,depth+1));
+   if(typeof x==='object')return Object.values(x).flatMap(y=>hostValues(y,depth+1));return [];
+  }
+  for(const row of rows)for(const name of hostValues(row)){try{return validateGateway(name);}catch{}}
+  console.log('PINATA_GATEWAY_FIELDS',JSON.stringify(rows.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,typeof value])))));
   throw Error('PRIVATE_GATEWAY_DOMAIN_NOT_FOUND');
  }
  async function readPart(part,key,origin){
