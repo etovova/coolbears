@@ -1,0 +1,42 @@
+name: Preflight final image rebuild from PRIVATE recovery
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/inspect-final-image-rebuild.py'
+      - '.github/workflows/final-image-rebuild-preflight.yml'
+      - 'scripts/restore-private-recovery.mjs'
+      - 'release/pinata-recovery-complete.sealed.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Restore existing PRIVATE recovery only
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/restore-private-recovery.mjs
+      - name: Inspect deterministic rebuild inputs without exposing private traits or CIDs
+        run: python3 scripts/inspect-final-image-rebuild.py
+      - name: Confirm sales remain on hold
+        run: node scripts/validate-release-state.mjs
+      - name: Remove decrypted temporary files
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
+      - name: Preserve nonsensitive preflight evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-image-rebuild-preflight
+          path: build/final-image-rebuild-preflight/
+          retention-days: 30
