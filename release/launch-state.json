@@ -3,13 +3,32 @@
   "phase": "hold",
   "candidateVersion": "committed-reveal-v1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
-  "testnetVerified": false,
+  "testnetVerified": true,
   "privateStorageVerified": false,
   "mainnetVerified": false,
   "creatorNftVerified": false,
   "publicMintApproved": false,
   "automaticRevealArmed": false,
   "packageSha256": null,
-  "evidence": {},
-  "note": "Production is on hold. Offline tests are not live verification. Do not deploy the legacy package."
+  "evidence": {
+    "testnet": {
+      "status": "passed",
+      "network": "testnet",
+      "checkedAt": "2026-09-17T12:50:40.500Z",
+      "packageSha256": "10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa",
+      "codeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "collectionAddressRaw": "0:448f3a0635df2718811ebece60fd1fe6911dc6f56ed995670851ef46d1830c1f",
+      "transactionHashes": [
+        "638ea243acda1ab5c50bb3055325b50eb3e646265594d08091eab9482d69381a",
+        "64977b3fb8ac509047f615ab99a194031e33c02301271dfb8d0e583f509b2a49",
+        "d5ffcd4f4b9b451ca0ea7c32ae01553723db57155a88c7977244bbb0cf605cc1",
+        "eafc789c790c10a733bdd77e20cb5ced3d83423e0300bf2c9a386bd99a788c71"
+      ],
+      "auditRunUrl": "https://github.com/etovova/coolbears/actions/runs/35223414205",
+      "transactionHistoryVerified": true,
+      "receiptsMatchedByMessageHash": true,
+      "mediaPlayback": "User confirmed direct IPFS GIF playback; explorer preview is static"
+    }
+  },
+  "note": "Candidate testnet transactions verified; production remains held until full storage verification and installation of the exact final mainnet package. Do not deploy the legacy package."
 }
