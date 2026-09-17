@@ -1,6 +1,7 @@
 // Store the hash-verified corrected final CAR as fixed private Pinata chunks.
 // Each chunk is independently downloaded and SHA-256 verified; all readbacks are
 // rehashed in order to prove byte-for-byte reconstruction of the original CAR.
+// Pinata metadata size is informational only; downloaded bytes are authoritative.
 // Private file IDs, CIDs, signed URLs and secrets are never logged.
 import fs from 'node:fs';
 import crypto from 'node:crypto';
@@ -88,10 +89,9 @@ try{
     requireThat(existing.length<=1,'DUPLICATE_PRIVATE_FINAL_CAR_PART');
     let row;
     if(existing.length===1){
-      row=existing[0];requireThat(Number(row.size)===expectedPartBytes(i),'EXISTING_PRIVATE_PART_SIZE_MISMATCH');reused++;
+      row=existing[0];reused++;
     }else{
-      row=await uploadPart(jwt,partFile,name);requireThat((row.network??'private')==='private','PRIVATE_PART_NETWORK_NOT_CONFIRMED');
-      if(row.size!==undefined)requireThat(Number(row.size)===expectedPartBytes(i),'UPLOADED_PRIVATE_PART_SIZE_MISMATCH');uploaded++;rows.push(row);
+      row=await uploadPart(jwt,partFile,name);requireThat((row.network??'private')==='private','PRIVATE_PART_NETWORK_NOT_CONFIRMED');uploaded++;rows.push(row);
     }
     await signedDownload(api,gateway,row,readback);
     requireThat(fs.statSync(readback).size===expectedPartBytes(i),'PRIVATE_PART_READBACK_SIZE_MISMATCH');
@@ -103,6 +103,6 @@ try{
   const reassembledHash=reassembly.digest('hex');
   requireThat(totalReadback===EXPECTED_BYTES,'FULL_PRIVATE_READBACK_SIZE_MISMATCH');
   requireThat(reassembledHash===EXPECTED,'FULL_PRIVATE_READBACK_HASH_MISMATCH');
-  const summary={schema:4,status:'PRIVATE_CORRECTED_FINAL_CAR_CHUNKED_READBACK_VERIFIED',collectionRevision:REVISION,checkedAt:new Date().toISOString(),carSha256:EXPECTED,carBytes:EXPECTED_BYTES,partBytes:PART_BYTES,partsExpected:PARTS,partsVerified:verified,newPartsUploaded:uploaded,reusedExistingParts:reused,lastPartBytes:expectedPartBytes(PARTS-1),privateListPagesScanned:listing.pages,network:'private',privateMetadataMatched:true,allPartHashesVerified:true,fullReassemblyHashVerified:true,walletOperations:false,salesChanged:false,publicIpfsPublication:false,privateIdentifiersExposed:false};
+  const summary={schema:5,status:'PRIVATE_CORRECTED_FINAL_CAR_CHUNKED_READBACK_VERIFIED',collectionRevision:REVISION,checkedAt:new Date().toISOString(),carSha256:EXPECTED,carBytes:EXPECTED_BYTES,partBytes:PART_BYTES,partsExpected:PARTS,partsVerified:verified,newPartsUploaded:uploaded,reusedExistingParts:reused,lastPartBytes:expectedPartBytes(PARTS-1),privateListPagesScanned:listing.pages,network:'private',privateMetadataMatched:true,pinataSizeMetadataTrusted:false,allPartHashesVerified:true,fullReassemblyHashVerified:true,walletOperations:false,salesChanged:false,publicIpfsPublication:false,privateIdentifiersExposed:false};
   fs.mkdirSync('build/private-final-car',{recursive:true});fs.writeFileSync('build/private-final-car/storage-summary.json',JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
 } finally { fs.rmSync(tmp,{recursive:true,force:true}); }
