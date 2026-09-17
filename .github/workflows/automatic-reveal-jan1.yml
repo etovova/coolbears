@@ -1,6 +1,14 @@
 name: CoolBears guarded automatic reveal Jan 1 2027
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/automatic-reveal-jan1.yml'
+      - 'scripts/automatic-reveal.mjs'
+      - 'contracts/candidate/collection.fc'
+      - 'launch/candidate.json'
+      - 'launch/package-tools.mjs'
   schedule:
     # GitHub Actions cron uses UTC. Retry every 5 minutes during the first hour
     # so a delayed single scheduler tick cannot prevent reveal.
@@ -51,7 +59,7 @@ jobs:
         run: |
           python3 scripts/verify-restored-recovery.py
           node scripts/verify-restored-reveal.mjs
-      - name: Prepare only on manual runs; broadcast only on scheduled Jan 1 run
+      - name: Prepare only on nonscheduled runs; broadcast only on scheduled Jan 1 run
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
         run: |
