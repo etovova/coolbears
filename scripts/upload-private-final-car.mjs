@@ -46,6 +46,17 @@ async function signedDownload(api,gateway,row,target){
   const u=new URL(link),wanted=new URL(url);requireThat(u.origin===wanted.origin&&u.pathname===wanted.pathname&&!u.username&&!u.password,'SIGNED_PART_TARGET_MISMATCH');
   await runCurl(['--fail','--silent','--show-error','--location','--retry','5','--retry-delay','3','--output',target,u.href],{capture:false});
 }
+async function listAllPrivate(api){
+  const all=[];let token=null,pages=0;
+  do{
+    const qs=new URLSearchParams({limit:'100'});if(token)qs.set('pageToken',token);
+    const j=await api.api('/v3/files/private?'+qs.toString());
+    requireThat(Array.isArray(j?.data?.files),'PRIVATE_LIST_SHAPE_MISMATCH');
+    all.push(...j.data.files);token=j.data.next_page_token||null;pages++;
+    requireThat(pages<=100,'PRIVATE_LIST_TOO_MANY_PAGES');
+  }while(token);
+  return {rows:all,pages};
+}
 
 const carPath=fs.readFileSync('build/private-final-car/car-path.txt','utf8').trim();
 requireThat(fs.existsSync(carPath),'CAR_NOT_FOUND');
@@ -54,12 +65,8 @@ requireThat((await hashFile(carPath))===EXPECTED,'PREUPLOAD_CAR_HASH_MISMATCH');
 requireThat(PARTS===48&&expectedPartBytes(PARTS-1)===165287691,'PARTITION_POLICY_MISMATCH');
 const jwt=process.env.PINATA_JWT;requireThat(jwt&&jwt.length>=32,'PINATA_SECRET_MISSING');
 const api=client(jwt),gateway=await api.gateway(process.env.PINATA_GATEWAY);
-const listing=await api.api('/v3/files/private?limit=100');
-requireThat(Array.isArray(listing?.data?.files),'PRIVATE_LIST_SHAPE_MISMATCH');
-// With the four recovery parts plus 48 final-CAR chunks, the intended set is <100.
-// Refuse an unexpected pagination state rather than risk missing a duplicate chunk.
-requireThat(!listing.data.next_page_token,'PRIVATE_LIST_UNEXPECTED_PAGINATION');
-const rows=listing.data.files;
+const listing=await listAllPrivate(api),rows=listing.rows;
+console.log(`PRIVATE_LIST_PAGES_SCANNED ${listing.pages}`);
 
 const tmp=path.join(process.env.RUNNER_TEMP,'coolbears-final-car-parts');
 fs.rmSync(tmp,{recursive:true,force:true});fs.mkdirSync(tmp,{recursive:true,mode:0o700});
@@ -92,7 +99,7 @@ try{
   const reassembledHash=reassembly.digest('hex');
   requireThat(totalReadback===EXPECTED_BYTES,'FULL_PRIVATE_READBACK_SIZE_MISMATCH');
   requireThat(reassembledHash===EXPECTED,'FULL_PRIVATE_READBACK_HASH_MISMATCH');
-  const summary={schema:2,status:'PRIVATE_FINAL_CAR_CHUNKED_READBACK_VERIFIED',checkedAt:new Date().toISOString(),carSha256:EXPECTED,carBytes:EXPECTED_BYTES,partBytes:PART_BYTES,partsExpected:PARTS,partsVerified:verified,newPartsUploaded:uploaded,reusedExistingParts:reused,lastPartBytes:expectedPartBytes(PARTS-1),network:'private',privateMetadataMatched:true,allPartHashesVerified:true,fullReassemblyHashVerified:true,walletOperations:false,salesChanged:false,publicIpfsPublication:false,privateIdentifiersExposed:false};
+  const summary={schema:3,status:'PRIVATE_FINAL_CAR_CHUNKED_READBACK_VERIFIED',checkedAt:new Date().toISOString(),carSha256:EXPECTED,carBytes:EXPECTED_BYTES,partBytes:PART_BYTES,partsExpected:PARTS,partsVerified:verified,newPartsUploaded:uploaded,reusedExistingParts:reused,lastPartBytes:expectedPartBytes(PARTS-1),privateListPagesScanned:listing.pages,network:'private',privateMetadataMatched:true,allPartHashesVerified:true,fullReassemblyHashVerified:true,walletOperations:false,salesChanged:false,publicIpfsPublication:false,privateIdentifiersExposed:false};
   fs.mkdirSync('build/private-final-car',{recursive:true});fs.writeFileSync('build/private-final-car/storage-summary.json',JSON.stringify(summary,null,2)+'\n');
   console.log(JSON.stringify(summary));
 } finally { fs.rmSync(tmp,{recursive:true,force:true}); }
