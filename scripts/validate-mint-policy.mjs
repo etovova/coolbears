@@ -1,37 +1,46 @@
 import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
 
 const p = JSON.parse(fs.readFileSync('contracts/mint-policy.json', 'utf8'));
-const fail = (m) => { throw new Error(m); };
-
-if (p.network !== 'mainnet') fail('network must be mainnet');
-if (p.displayPrice !== '7 GRAM (TON)') fail('display price mismatch');
-if (p.settlementCurrency !== 'TON') fail('settlement currency must remain TON');
-if (p.priceNanoTon !== 7_000_000_000) fail('mint price must be exactly 7 TON');
-if (p.supply !== 10_000) fail('supply must be 10000');
-if (p.maxPerTransaction !== 50) fail('max per transaction must be 50');
-if (p.lifetimeWalletLimit !== null) fail('there must be no lifetime wallet limit');
-if (p.royaltyBps !== 700) fail('royalty must be 7%');
-if (p.treasuryAddress !== p.royaltyAddress) fail('treasury/royalty recipient mismatch');
-if (!/^UQ[A-Za-z0-9_-]+$/.test(p.treasuryAddress)) fail('unexpected treasury address format');
-if (p.revealDate !== '2027-01-01') fail('reveal date mismatch');
-if (!p.preRevealImageCid.startsWith('baf')) fail('missing image CID');
-if (!p.preRevealMetadataCid.startsWith('baf')) fail('missing metadata CID');
-if (p.publicMintPausedByDefault !== true) fail('mint must start paused');
-if (p.demoModeUntilTestnetVerified !== true) fail('testnet deployment gate must remain enabled');
-
-const config = fs.readFileSync('config.js', 'utf8');
-for (const expected of [
-  "priceTon: 7",
-  "supply: 10000",
-  "royaltyPercent: 7",
-  "maxPerTransaction: 50",
-  "revealDate: '2027-01-01'",
-  "collectionAddress: ''",
-  "mintContractAddress: ''",
-  "demoMode: true"
-]) {
-  if (!config.includes(expected)) fail(`site config safety mismatch: ${expected}`);
+const d = JSON.parse(fs.readFileSync('mainnet/owner/deployment.json', 'utf8'));
+const context = vm.createContext({window: {}, document: {addEventListener() {}}});
+vm.runInContext(fs.readFileSync('config.js', 'utf8'), context, {timeout: 1000});
+const c = context.window.COOLBEARS_CONFIG;
+assert.ok(c && typeof c === 'object', 'Site configuration is missing');
+for (const [key, value] of Object.entries({network:'mainnet',displayPrice:'7 GRAM (TON)',settlementCurrency:'TON',priceNanoTon:7000000000,supply:10000,maxPerTransaction:50,lifetimeWalletLimit:null,royaltyBps:700,revealDate:'2027-01-01',publicMintPausedByDefault:true,demoModeUntilTestnetVerified:true})) {
+  assert.equal(p[key], value, `Mint policy mismatch: ${key}`);
 }
-console.log('CoolBears mint policy: OK');
+assert.equal(p.treasuryAddress, p.royaltyAddress, 'Treasury/royalty recipient mismatch');
+assert.match(p.treasuryAddress, /^UQ[A-Za-z0-9_-]{46}$/, 'Invalid treasury address format');
+assert.equal(d.network, 'mainnet');
+assert.equal(d.initialPaused, true);
+assert.equal(d.nextItemIndex, 0);
+assert.equal(d.priceNanoTon, p.priceNanoTon);
+assert.equal(d.supply, p.supply);
+assert.equal(d.maxPerTransaction, p.maxPerTransaction);
+assert.equal(d.royaltyBps, p.royaltyBps);
+assert.equal(d.revealAt, 1798761600);
+assert.equal(d.treasuryAddressMainnetFriendly, p.treasuryAddress);
+assert.equal(d.creatorReservation.tokenIndex, 0);
+assert.equal(d.creatorReservation.beneficiaryAddressRaw, d.treasuryAddressRaw);
+assert.equal(p.creatorReservation?.tokenIndex, 0);
+assert.equal(p.creatorReservation?.beneficiaryAddress, p.treasuryAddress);
+assert.equal(p.creatorReservation?.claimOpcode, '0x52535630');
 
-if (p.creatorReservation?.tokenIndex !== 0 || p.creatorReservation?.beneficiaryAddress !== p.treasuryAddress || p.creatorReservation?.claimOpcode !== '0x52535630') fail('creator reservation mismatch');
+// Compare actual values to the unsigned package; comments and partial string
+// matches are not evidence. A configured address is not permission to sell.
+for (const [key, value] of Object.entries({network:'mainnet',priceTon:7,supply:10000,royaltyPercent:7,maxPerTransaction:50,revealDate:'2027-01-01',mintPaymentPerNftTon:7.10,mintPaymentPerNftNano:7100000000,treasuryAddress:p.treasuryAddress,royaltyAddress:p.royaltyAddress,collectionAddress:d.collectionAddressMainnetNonBounceable,mintContractAddress:d.collectionAddressMainnetBounceable,collectionCodeHash:d.collectionCodeHash})) {
+  assert.ok(value !== undefined && value !== '', `Missing expected value: ${key}`);
+  assert.equal(c[key], value, `Site/package mismatch: ${key}`);
+}
+for (const key of ['preRevealImageCid','preRevealMetadataCid','preRevealMetadataRootCid','collectionMetadataCid']) {
+  assert.match(p[key], /^baf[a-z2-7]+$/, `Missing or malformed CID: ${key}`);
+  assert.equal(c[key], p[key], `Site/policy CID mismatch: ${key}`);
+}
+assert.equal(c.preRevealMetadataRootIpfs, d.preRevealMetadataRootIpfs);
+assert.equal(c.collectionMetadataIpfs, d.collectionMetadataIpfs);
+// This is deliberately a PRELAUNCH gate. A future production phase needs its
+// own verified release approval. Merely changing demoMode must not pass CI.
+assert.equal(c.demoMode, true, 'Prelaunch sale gate must remain closed');
+console.log('CoolBears mint policy: package, metadata references and CLOSED gate OK');

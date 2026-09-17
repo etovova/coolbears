@@ -6,7 +6,9 @@ on:
     paths:
       - 'contracts/**'
       - 'config.js'
+      - 'mainnet/owner/deployment.json'
       - 'scripts/validate-mint-policy.mjs'
+      - 'scripts/test-mint-policy-config.mjs'
       - '.github/workflows/mint-policy-check.yml'
   workflow_dispatch:
 
@@ -15,11 +17,13 @@ permissions:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate immutable launch parameters and deployment gate
+      - name: Validate launch parameters against actual deployment package
         run: node scripts/validate-mint-policy.mjs
+      - name: Reject wrong destinations and unauthorized mode changes
+        run: node scripts/test-mint-policy-config.mjs
