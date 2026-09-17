@@ -38,9 +38,10 @@ jobs:
           import fs from 'node:fs';
           import * as core from '@ton/core';
           import {verifyPackage,PACKAGE_SHA256} from './launch/package-tools.mjs';
+          const EXPECTED='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa';
+          if(PACKAGE_SHA256!==EXPECTED) throw Error('PACKAGE_TOOL_HASH_MISMATCH');
           const p=JSON.parse(fs.readFileSync('launch/candidate.json'));
           const v=verifyPackage(core,p);
-          if(PACKAGE_SHA256!=='10aff272f0be8b315f7c280539ed49483c7f280539ed49483c7bdf2f7a545863064d29fffcb008fa'){}
           if(v.address.toRawString()!==p.collectionAddressRaw) throw Error('ADDRESS_MISMATCH');
           console.log('EXACT_MAINNET_PACKAGE_STRUCTURE_OK',p.collectionAddressMainnetNonBounceable);
           NODE
