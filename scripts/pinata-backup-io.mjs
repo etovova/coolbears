@@ -35,7 +35,6 @@ export function client(jwt,fetchFn=fetch){
   const j=await api('/v3/ipfs/gateways');
   const d=j.data,rows=Array.isArray(d)?d:Array.isArray(d?.rows)?d.rows:Array.isArray(d?.gateways)?d.gateways:null;
   requireThat(rows&&rows.length,'PRIVATE_GATEWAY_NOT_FOUND');
-  // Only use the account's gateway domain returned by the authenticated API.
   function hostValues(x,depth=0){
    if(depth>4||!x)return [];
    if(typeof x==='string')return x.includes('.mypinata.cloud')?[x]:[];
@@ -43,7 +42,9 @@ export function client(jwt,fetchFn=fetch){
    if(typeof x==='object')return Object.values(x).flatMap(y=>hostValues(y,depth+1));return [];
   }
   for(const row of rows)for(const name of hostValues(row)){try{return validateGateway(name);}catch{}}
-  console.log('PINATA_GATEWAY_FIELDS',JSON.stringify(rows.map(row=>Object.fromEntries(Object.entries(row).map(([key,value])=>[key,typeof value])))));
+  // Pinata also returns its managed subdomain label in the domain field.
+  // No custom host or user-supplied suffix is accepted.
+  for(const row of rows)if(typeof row.domain==='string'&&/^[a-z0-9][a-z0-9-]{0,62}$/.test(row.domain))return validateGateway(row.domain+'.mypinata.cloud');
   throw Error('PRIVATE_GATEWAY_DOMAIN_NOT_FOUND');
  }
  async function readPart(part,key,origin){
@@ -56,7 +57,6 @@ export function client(jwt,fetchFn=fetch){
   const link=typeof signed.data==='string'?signed.data:signed.data?.url;
   requireThat(typeof link==='string','NO_SIGNED_DOWNLOAD');const u=new URL(link),wanted=new URL(url);
   requireThat(u.origin===wanted.origin&&u.pathname===wanted.pathname&&!u.username&&!u.password,'SIGNED_LINK_TARGET_MISMATCH');
-  // No Authorization header leaves api.pinata.cloud/uploads.pinata.cloud.
   const r=await fetchFn(u.href,{redirect:'error',signal:AbortSignal.timeout(180000)});
   const bytes=await readBounded(r,part.bytes),clear=verifyEncryptedPart(bytes,part,key);
   return {clear,metadataSize:meta.data.size,downloadedBytes:bytes.length,ciphertextSha256:digest(bytes)};
