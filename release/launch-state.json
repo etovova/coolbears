@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "phase": "hold",
+  "candidateVersion": "committed-reveal-v1",
+  "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+  "testnetVerified": false,
+  "privateStorageVerified": false,
+  "mainnetVerified": false,
+  "creatorNftVerified": false,
+  "publicMintApproved": false,
+  "automaticRevealArmed": false,
+  "packageSha256": null,
+  "evidence": {},
+  "note": "Production is on hold. Offline tests are not live verification. Do not deploy the legacy package."
+}
