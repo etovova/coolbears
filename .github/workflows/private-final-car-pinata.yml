@@ -1,4 +1,4 @@
-name: Store exact final CoolBears CAR in PRIVATE Pinata
+name: Store corrected final CoolBears CAR in PRIVATE Pinata
 on:
   push:
     branches: [main]
@@ -16,15 +16,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify one-time request and exact release binding
+      - name: Verify one-time corrected request and exact release binding
         run: |
           node - <<'NODE'
           const fs=require('fs'),crypto=require('crypto');
           const r=JSON.parse(fs.readFileSync('release/private-final-car-upload-request.json'));
-          const p=fs.readFileSync('launch/candidate.json');
+          const p=fs.readFileSync('launch/candidate.json'),c=JSON.parse(p);
           if(r.schema!==1||r.action!=='store-exact-final-car-private-pinata'||r.authorized!==true) throw Error('REQUEST_NOT_AUTHORIZED');
-          if(r.packageSha256!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('WRONG_PACKAGE_REQUEST');
-          if(r.carSha256!=='3d6377484e3d27361c367be7b002a065d83426342df30f25e1d681b4d50f820c') throw Error('WRONG_CAR_REQUEST');
+          if(r.collectionRevision!=='v3-glasses-correction-1'||c.collectionRevision!=='v3-glasses-correction-1') throw Error('WRONG_COLLECTION_REVISION');
+          if(r.packageSha256!=='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f') throw Error('WRONG_PACKAGE_REQUEST');
+          if(r.carSha256!=='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84') throw Error('WRONG_CAR_REQUEST');
+          if(r.manifestSha256!=='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96') throw Error('WRONG_MANIFEST_REQUEST');
           if(crypto.createHash('sha256').update(p).digest('hex')!==r.packageSha256) throw Error('CURRENT_CANDIDATE_CHANGED');
           NODE
       - name: Free runner disk while keeping system Python and Node
@@ -33,16 +35,16 @@ jobs:
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
           sudo rm -rf /opt/hostedtoolcache/CodeQL || true
           df -h /
-      - name: Restore sealed PRIVATE recovery already stored in Pinata
+      - name: Restore sealed PRIVATE source recovery already stored in Pinata
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
           PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
         run: node scripts/restore-private-recovery.mjs
       - name: Install exact image library used by verifier
         run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
-      - name: Rebuild exact final 10000-image CAR and require committed hashes
+      - name: Apply frozen glasses correction and rebuild exact 10000-image CAR
         run: python3 scripts/build-exact-final-car-from-recovery.py
-      - name: Upload exact CAR to PRIVATE Pinata and read it all back
+      - name: Upload corrected CAR to PRIVATE Pinata and read all 48 parts back
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
           PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
@@ -57,7 +59,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: private-final-car-pinata-evidence
+          name: corrected-private-final-car-pinata-evidence
           path: |
             build/private-final-car/build-summary.json
             build/private-final-car/storage-summary.json
