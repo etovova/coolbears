@@ -1,0 +1,42 @@
+name: Complete and verify encrypted PRIVATE recovery
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/finish-pinata-private-recovery.mjs', 'scripts/test-pinata-resume.mjs', 'release/pinata-recovery-resume.sealed.json', '.github/workflows/pinata-recovery-resume.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: coolbears-pinata-private-recovery
+  cancel-in-progress: false
+jobs:
+  complete:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test authenticated reads and partial-upload recovery
+        run: |
+          set -euo pipefail
+          node scripts/test-pinata-backup-io.mjs
+          node scripts/test-pinata-resume.mjs
+          node scripts/validate-release-state.mjs
+      - name: Finish explicitly requested private backup only
+        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[pinata-resume]')
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+          COOLBEARS_RESUME_PRIVATE: '1'
+        run: node scripts/finish-pinata-private-recovery.mjs --resume
+      - name: Preserve only encrypted recovery receipt and nonsensitive verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pinata-completed-backup-evidence
+          path: build/pinata-completed-backup/
+          retention-days: 30
