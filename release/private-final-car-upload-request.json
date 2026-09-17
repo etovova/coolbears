@@ -4,6 +4,6 @@
   "authorized": true,
   "packageSha256": "10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa",
   "carSha256": "3d6377484e3d27361c367be7b002a065d83426342df30f25e1d681b4d50f820c",
-  "attempt": 2,
-  "reason": "Retry after fixing the exact sealed recovery packer path. User explicitly approved completing exact final private Pinata storage with read-back verification; do not change sales, wallet or public reveal state."
+  "attempt": 3,
+  "reason": "Retry using the current verified chunked private Pinata storage path. User explicitly approved completing exact final CAR private storage with full read-back verification; do not change sales, wallet or public reveal state."
 }
