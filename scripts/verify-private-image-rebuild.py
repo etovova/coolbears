@@ -1,5 +1,6 @@
 """Rebuild CoolBears v3 images privately and verify pixels against the sealed V3 checksum report.
 No traits, layer paths, CIDs or generated images are written to artifacts or logs.
+This file is also the explicit trigger surface for the private pixel-verification workflow.
 """
 from pathlib import Path
 from collections import defaultdict
