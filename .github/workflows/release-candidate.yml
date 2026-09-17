@@ -1,0 +1,37 @@
+name: Test release candidate (no chain transactions)
+on:
+  push:
+    branches: [main]
+    paths: ['contracts/candidate/**', '.github/workflows/release-candidate.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sandbox:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Pinned TON reference for compiler standard library
+        run: |
+          set -euo pipefail
+          source contracts/TON_REFERENCE.lock
+          git clone --filter=blob:none https://github.com/${source_repository}.git /tmp/token-contract
+          git -C /tmp/token-contract checkout --detach "$source_commit"
+      - name: Install sandbox dependencies and record exact versions
+        run: |
+          npm install --no-save @ton-community/func-js @ton/core @ton/sandbox
+          mkdir -p build/candidate
+          npm ls --json > build/candidate/dependencies.json
+      - name: Compile, prove source matches legacy package and test candidate
+        run: node contracts/candidate/test.mjs
+      - name: Upload offline evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: candidate-offline-evidence
+          path: build/candidate/
+          retention-days: 30
