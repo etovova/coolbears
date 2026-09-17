@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import {client,requireThat} from './pinata-backup-io.mjs';
 const NAME='CoolBears v3 FINAL CAR private verified';
 const EXPECTED_MIN=10_000_000_000;
+const TUS_META_NAME='CoolBears private TUS protocol probe v1';
+const TUS_FILENAME='coolbears-tus-probe.txt';
+const TUS_BYTES=40;
 const jwt=process.env.PINATA_JWT;requireThat(jwt&&jwt.length>=32,'PINATA_SECRET_MISSING');
 const api=client(jwt);
-// This is the authenticated PRIVATE listing endpoint; individual rows do not repeat
-// a `network` field, so privacy is established by the endpoint itself.
 const j=await api.api('/v3/files/private?limit=100');
 const d=j?.data;
 const arrays=[];
@@ -15,7 +16,9 @@ if(d&&typeof d==='object') for(const v of Object.values(d)) if(Array.isArray(v))
 const rows=arrays.sort((a,b)=>b.length-a.length)[0]||[];
 const matches=rows.filter(x=>x&&x.name===NAME);
 const plausible=matches.filter(x=>Number(x.size||0)>=EXPECTED_MIN&&typeof x.id==='string'&&typeof x.cid==='string');
-const result={schema:1,status:'PRIVATE_FINAL_CAR_LIST_PROBED',privateEndpoint:true,rootKeys:Object.keys(j||{}),dataKeys:d&&typeof d==='object'&&!Array.isArray(d)?Object.keys(d):[],rowsDetected:rows.length,exactNameMatches:matches.length,plausibleLargePrivateMatches:plausible.length,rowFieldNames:rows[0]&&typeof rows[0]==='object'?Object.keys(rows[0]):[],idsExposed:false,cidsExposed:false,urlsExposed:false,uploadsPerformed:false};
+const tusMetaMatches=rows.filter(x=>x?.name===TUS_META_NAME&&Number(x?.size||0)===TUS_BYTES).length;
+const tusFilenameMatches=rows.filter(x=>x?.name===TUS_FILENAME&&Number(x?.size||0)===TUS_BYTES).length;
+const result={schema:2,status:'PRIVATE_FINAL_CAR_LIST_PROBED',privateEndpoint:true,rootKeys:Object.keys(j||{}),dataKeys:d&&typeof d==='object'&&!Array.isArray(d)?Object.keys(d):[],rowsDetected:rows.length,exactNameMatches:matches.length,plausibleLargePrivateMatches:plausible.length,tusMetaNameMatches:tusMetaMatches,tusFilenameMatches,rowFieldNames:rows[0]&&typeof rows[0]==='object'?Object.keys(rows[0]):[],idsExposed:false,cidsExposed:false,urlsExposed:false,namesExposed:false,uploadsPerformed:false};
 fs.mkdirSync('build/private-final-car-locator',{recursive:true});
 fs.writeFileSync('build/private-final-car-locator/summary.json',JSON.stringify(result,null,2)+'\n');
 console.log(JSON.stringify(result));
