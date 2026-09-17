@@ -1,0 +1,73 @@
+name: CoolBears guarded automatic reveal Jan 1 2027
+
+on:
+  schedule:
+    # GitHub Actions cron uses UTC. Retry every 5 minutes during the first hour
+    # so a delayed single scheduler tick cannot prevent reveal.
+    - cron: '*/5 0 1 1 *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: coolbears-automatic-reveal-jan1
+  cancel-in-progress: false
+
+jobs:
+  reveal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact TON library
+        run: npm install --no-save --ignore-scripts '@ton/core@0.63.1'
+      - name: Verify immutable public candidate before private restore
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const b=fs.readFileSync('launch/candidate.json'),p=JSON.parse(b),s=JSON.parse(fs.readFileSync('release/launch-state.json'));
+          if(crypto.createHash('sha256').update(b).digest('hex')!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('CANDIDATE_SHA_MISMATCH');
+          if(p.revealAt!==1798761600) throw Error('REVEAL_DATE_MISMATCH');
+          if(process.env.GITHUB_EVENT_NAME==='schedule'){
+            const now=Math.floor(Date.now()/1000),year=new Date().getUTCFullYear();
+            if(year!==2027) throw Error('SCHEDULE_NOT_2027');
+            if(now<1798761600) throw Error('SCHEDULE_TOO_EARLY');
+            if(s.automaticRevealArmed!==true||s.privateStorageVerified!==true||s.mainnetVerified!==true||s.creatorNftVerified!==true) throw Error('REVEAL_NOT_FULLY_ARMED');
+            if(s.packageSha256!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('ARMED_PACKAGE_MISMATCH');
+          }
+          NODE
+      - name: Restore sealed PRIVATE recovery containing committed reveal preimage
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/restore-private-recovery.mjs
+      - name: Verify recovery inventory and exact reveal binding again
+        run: |
+          python3 scripts/verify-restored-recovery.py
+          node scripts/verify-restored-reveal.mjs
+      - name: Prepare only on manual runs; broadcast only on scheduled Jan 1 run
+        env:
+          TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            node scripts/automatic-reveal.mjs --broadcast
+          else
+            node scripts/automatic-reveal.mjs --prepare-only
+          fi
+      - name: Remove private reveal material
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
+      - name: Preserve nonsensitive reveal verification evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: automatic-reveal-nonsensitive-evidence
+          path: build/automatic-reveal/summary.json
+          if-no-files-found: ignore
+          retention-days: 30
