@@ -23,6 +23,19 @@ def safe_extract(z,dest):
         if n.startswith(('/', '\\')) or '..' in parts: raise ValueError('unsafe zip member')
     z.extractall(dest)
 
+def packer_command(packer, rendered, release):
+    """Choose only a CLI shape explicitly declared by the sealed packer itself."""
+    text=packer.read_text(encoding='utf-8',errors='strict')
+    if '--input' in text and '--output' in text:
+        return [sys.executable,str(packer),'--input',str(rendered),'--output',str(release)]
+    if '--source' in text and '--output' in text:
+        return [sys.executable,str(packer),'--source',str(rendered),'--output',str(release)]
+    if '--input' in text and '--out' in text:
+        return [sys.executable,str(packer),'--input',str(rendered),'--out',str(release)]
+    if '--source' in text and '--out' in text:
+        return [sys.executable,str(packer),'--source',str(rendered),'--out',str(release)]
+    raise ValueError('UNSUPPORTED_IPFS_PACKER_CLI')
+
 def main():
     restored=Path(os.environ['RUNNER_TEMP'])/'coolbears-verified-recovery'/'recovery.zip'
     if not restored.exists(): raise FileNotFoundError(restored)
@@ -35,7 +48,14 @@ def main():
         committed=Path('launch/candidate.json').read_bytes()
         if candidate!=committed: raise ValueError('RECOVERY_CANDIDATE_BYTES_DIFFER_FROM_COMMITTED')
         orig_bytes=outer.read('original_private_recovery.zip')
-        tool_names=[n for n in outer.namelist() if n.startswith('tools/') and 'prepare_ipfs' in n and n.endswith('.py')]
+        # The current sealed recovery stores the exact packer at archive root.
+        # Older recovery variants stored it under tools/, so accept that only as a
+        # compatibility fallback while requiring a single unambiguous match.
+        names=outer.namelist()
+        if 'prepare_ipfs_release.py' in names:
+            tool_names=['prepare_ipfs_release.py']
+        else:
+            tool_names=[n for n in names if n.startswith('tools/') and 'prepare_ipfs' in n and n.endswith('.py')]
         if len(tool_names)!=1: raise ValueError('EXACT_IPFS_PACKER_NOT_FOUND')
         packer=work/'prepare_ipfs_release.py'; packer.write_bytes(outer.read(tool_names[0]))
     with zipfile.ZipFile(io.BytesIO(orig_bytes)) as orig:
@@ -50,7 +70,7 @@ def main():
     env=dict(os.environ); env['PYTHONHASHSEED']='0'
     subprocess.run([sys.executable,str(root/'build_collection_v3.py'),'--source',str(source),'--data',str(root),'--output',str(rendered),'--workers','4'],check=True,env=env)
     release=work/'release'; release.mkdir()
-    subprocess.run([sys.executable,str(packer),'--input',str(rendered),'--output',str(release)],check=True,env=env)
+    subprocess.run(packer_command(packer,rendered,release),check=True,env=env)
     car=release/'CoolBears_v3_final.car'
     if not car.exists(): raise FileNotFoundError(car)
     car_sha=sha256_file(car)
