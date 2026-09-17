@@ -48,7 +48,7 @@ async function scenario(name,options,verify){
     }
   });
   const offline=source.replace(/^import[^\n]+\n/,'').slice(0,source.replace(/^import[^\n]+\n/,'').lastIndexOf('\ninit().catch'));
-  vm.runInContext(offline+`\nglobalThis.api={check,allowed,confirmed,send,setUp(p,h){d=p;wallet={account:{chain:'-239',address:p.ownerAddressRaw}};expectedContentHash=h.content;expectedItemCodeHash=h.item;expectedRoyaltyHash=h.royalty;ui={sendTransaction:async()=>recordTransaction()};},setPending(v){pending=v;},get pending(){return pending;},get state(){return state;}};`,context);
+  vm.runInContext(offline+`\nglobalThis.api={check,allowed,confirmed,send,setUp(p,h){d=p;releaseAllows=async()=>true;wallet={account:{chain:'-239',address:p.ownerAddressRaw}};expectedContentHash=h.content;expectedItemCodeHash=h.item;expectedRoyaltyHash=h.royalty;ui={sendTransaction:async()=>recordTransaction()};},setPending(v){pending=v;},get pending(){return pending;},get state(){return state;}};`,context);
   context.recordTransaction=()=>{transactions++;};
   const api=context.api;api.setUp(packageData,hashes);
   if(p.pending)api.setPending(p.pending);
@@ -77,7 +77,7 @@ await scenario('Canceled public-unpause confirmation submits nothing',{confirm:f
 await scenario('Open state still requires verified creator NFT',{paused:false,pending:'unpause'},a=>{assert.equal(a.pending,null);assert.equal(a.confirmed('unpause'),true);});
 const cfgContext={window:{},document:{addEventListener(){}}};vm.createContext(cfgContext);
 vm.runInContext(fs.readFileSync('config.js','utf8'),cfgContext);
-assert.equal(cfgContext.window.COOLBEARS_CONFIG.demoMode,true,'Sales must remain closed during preparation');
+await import('./validate-release-state.mjs');
 assert.equal(cfgContext.window.COOLBEARS_CONFIG.priceTon,7);
 assert.equal(cfgContext.window.COOLBEARS_CONFIG.revealDate,'2027-01-01');
 console.log('OWNER_LAUNCH_OFFLINE_TESTS_OK',tests,'scenarios; sales gate unchanged');

@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Require an approved candidate before activation checks
+        run: |
+          node scripts/validate-release-state.mjs
+          node --input-type=module -e "import fs from 'node:fs'; const s=JSON.parse(fs.readFileSync('release/launch-state.json')); if(s.phase!=='approved')throw Error('Release is not approved');"
       - name: Install TON client
         run: npm install --no-save @ton/ton @ton/core
       - name: Verify live mainnet collection, creator NFT and metadata
@@ -81,10 +85,12 @@ jobs:
           h=h.replace('config.js"></script>','config.js?v=mainnet1"></script>')
           q.write_text(h)
           PY
+          node --input-type=module -e "import fs from 'node:fs'; const p='release/launch-state.json';const s=JSON.parse(fs.readFileSync(p));s.phase='live';fs.writeFileSync(p,JSON.stringify(s,null,2)+'\n');"
+          node scripts/validate-release-state.mjs
           node --check config.js
           grep -q 'demoMode: false' config.js
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add config.js index.html
+          git add config.js index.html release/launch-state.json
           git commit -m 'Activate verified CoolBears mainnet mint'
           git push

@@ -2,7 +2,7 @@ import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:asser
 import {validateLaunch,canOperate,revealDue,CANDIDATE_HASH,OWNER_RAW,REVEAL_AT} from '../release-guard.mjs';
 const raw=fs.readFileSync('mainnet/owner/deployment.json'),legacy=JSON.parse(raw);
 const ctx=vm.createContext({window:{},document:{addEventListener(){}}});vm.runInContext(fs.readFileSync('config.js','utf8'),ctx);
-const cfg=ctx.window.COOLBEARS_CONFIG,hold=JSON.parse(fs.readFileSync('release/launch-state.json','utf8'));
+const cfg={...ctx.window.COOLBEARS_CONFIG,demoMode:true},hold={...JSON.parse(fs.readFileSync('release/launch-state.json','utf8')),phase:'hold',testnetVerified:false,privateStorageVerified:false,mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false,packageSha256:null,evidence:{}};
 let passed=0;const test=(name,fn)=>{fn();passed++;console.log('PASS',name);};
 const clone=structuredClone,hash='a'.repeat(64),manifest='b'.repeat(64);
 const p={...legacy,version:'committed-reveal-v1',collectionCodeHash:CANDIDATE_HASH,finalContentCommitment:'c'.repeat(64),releaseManifestSha256:manifest};

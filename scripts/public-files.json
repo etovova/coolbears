@@ -20,6 +20,8 @@
   "mint-live.js",
   "mobile-fix.css",
   "privacy.html",
+  "release-guard.mjs",
+  "release/launch-state.json",
   "robots.txt",
   "sitemap.xml",
   "style.css",

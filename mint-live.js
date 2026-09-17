@@ -71,6 +71,15 @@
     for(let i=0;i<12;i++){await sleep(4000);try{const s=await checkLive();if(s.next>=before+count)return true;}catch{}}
     return false;
   }
+  async function approvedRelease(){
+    const {validateLaunch}=await import('./release-guard.mjs');
+    const [pr,sr]=await Promise.all([fetch('mainnet/owner/deployment.json',{cache:'no-store',signal:AbortSignal.timeout(15000)}),fetch('release/launch-state.json',{cache:'no-store',signal:AbortSignal.timeout(15000)})]);
+    if(!pr.ok||!sr.ok)throw Error('Launch approval unavailable');
+    const raw=await pr.arrayBuffer();const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),x=>x.toString(16).padStart(2,'0')).join('');
+    const p=JSON.parse(new TextDecoder().decode(raw));
+    if(!validateLaunch(cfg,p,await sr.json(),hash).sales)throw Error('Public mint has not been approved');
+    return p;
+  }
   async function mint(){
     if(busy)return;busy=true;refreshText();
     try{
@@ -79,6 +88,7 @@
       if(wallet.account.chain!=='-239'){await tc.openModal();return;}
       const c=await getCore();
       const friendly=c.Address.parseFriendly(cfg.mintContractAddress);if(friendly.isTestOnly)throw Error('Configured destination is testnet');
+      await approvedRelease();
       const count=n();const s=await checkLive();
       if(s.next<1)throw Error('Creator reservation is not confirmed');if(s.paused)throw Error(t('paused'));if(s.soldOut)throw Error(t('sold'));if(s.next+count>Number(cfg.supply||10000))throw Error('Not enough NFTs remaining');
       const body=c.beginCell().storeUint(0x4d494e54,32).storeUint(BigInt(Date.now()),64).storeUint(count,8).endCell();

@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // and demoMode is deliberately switched off by the release gate.
   if (!window.COOLBEARS_CONFIG.demoMode && window.COOLBEARS_CONFIG.mintContractAddress) {
     const liveMint = document.createElement('script');
-    liveMint.src = 'mint-live.js?v=1';
+    liveMint.src = 'mint-live.js?v=release-guard-1';
     liveMint.defer = true;
     document.body.appendChild(liveMint);
   }

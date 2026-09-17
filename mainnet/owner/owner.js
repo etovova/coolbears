@@ -95,11 +95,25 @@ async function check(){
   })();
   try{await checking;}finally{checking=null;}
 }
+async function releaseAllows(action){
+  const {validateLaunch,canOperate,OWNER_FRIENDLY}=await import('../../release-guard.mjs');
+  const response=await fetch('deployment.json',{cache:'no-store',signal:AbortSignal.timeout(15000)});
+  if(!response.ok)throw Error('Пакет запуска недоступен');
+  const raw=await response.arrayBuffer(),p=JSON.parse(new TextDecoder().decode(raw));
+  if(p.stateInitBocBase64!==d.stateInitBocBase64)throw Error('Пакет изменился. Перезагрузи страницу');
+  const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',raw)),x=>x.toString(16).padStart(2,'0')).join('');
+  const responseState=await fetch('../../release/launch-state.json',{cache:'no-store',signal:AbortSignal.timeout(15000)});
+  if(!responseState.ok)throw Error('Разрешение запуска недоступно');
+  const c={network:'mainnet',priceTon:7,supply:10000,royaltyPercent:7,maxPerTransaction:50,revealDate:'2027-01-01',mintPaymentPerNftTon:7.1,mintPaymentPerNftNano:7100000000,treasuryAddress:OWNER_FRIENDLY,royaltyAddress:OWNER_FRIENDLY,collectionAddress:p.collectionAddressMainnetNonBounceable,mintContractAddress:p.collectionAddressMainnetBounceable,collectionCodeHash:p.collectionCodeHash};
+  const release=await responseState.json();c.demoMode=release.phase!=='live';
+  return canOperate(action,validateLaunch(c,p,release,hash),state,isOwner());
+}
 async function send(action){
   if(busy||pending||!isOwner())return;
   busy=true;render();
   try{
     await check();if(!allowed(action))throw Error('Операция недоступна для текущего состояния');
+    if(!(await releaseAllows(action)))throw Error('Запуск заблокирован: пакет ещё не прошёл все этапы проверки');
     if(action==='unpause'&&!window.confirm('Это откроет публичный минт в блокчейне. Даже при выключенной кнопке сайта контракт сможет принимать прямые запросы. Продолжить?'))return;
     const message=actionMessage(action);
     $('status').className='';$('status').textContent='Подтверди операцию в основном TON-кошельке. Это реальная транзакция.';

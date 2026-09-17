@@ -4,8 +4,10 @@ import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
-const files=['scripts/validate-mint-policy.mjs','contracts/mint-policy.json','mainnet/owner/deployment.json','config.js'];
+const files=['scripts/validate-mint-policy.mjs','scripts/validate-release-state.mjs','release-guard.mjs','release/launch-state.json','contracts/mint-policy.json','mainnet/owner/deployment.json','config.js'];
 const base=Object.fromEntries(files.map(p=>[p,fs.readFileSync(p,'utf8')]));
+base['config.js']=base['config.js'].replace(/demoMode:\s*(true|false)/,'demoMode: true');
+base['release/launch-state.json']=JSON.stringify({...JSON.parse(base['release/launch-state.json']),phase:'hold',testnetVerified:false,privateStorageVerified:false,mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false,evidence:{},packageSha256:null});
 const cases=[
  ['valid closed configuration',null,null,true],
  ['wrong price','priceTon: 7,','priceTon: 70,',false],

@@ -1,20 +1,11 @@
 name: Validate CoolBears mainnet clients
-
 on:
   push:
     branches: [main]
-    paths:
-      - 'mainnet/owner/**'
-      - 'mint-live.js'
-      - 'config.js'
-      - 'scripts/public-files.json'
-      - 'scripts/test-owner-launch.mjs'
-      - '.github/workflows/mainnet-client-check.yml'
+    paths: ['mainnet/owner/**', 'mint-live.js', 'config.js', 'release-guard.mjs', 'release/**', 'scripts/**', '.github/workflows/mainnet-client-check.yml']
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   validate:
     runs-on: ubuntu-24.04
@@ -28,23 +19,11 @@ jobs:
           node --check mainnet/owner/owner.js
           node --check mint-live.js
           node --check config.js
-      - name: Offline owner and mint safety checks
+      - name: Validate package-bound release phase
+        run: node scripts/validate-release-state.mjs
+      - name: Validate mint policy and metadata references
+        run: node scripts/validate-mint-policy.mjs
+      - name: Test release permission boundaries
+        run: node scripts/test-release-guard.mjs
+      - name: Test wallet and creator-reserve logic offline
         run: node scripts/test-owner-launch.mjs
-      - name: Verify launch remains gated
-        run: |
-          set -euo pipefail
-          grep -q "demoMode: true" config.js
-          grep -q "collectionAddress: 'UQCaIEXpRw1EJzn6juFRXsywl9MWZ7QvlmkrA6_67ta2clK-'" config.js
-          grep -q "mintContractAddress: 'EQCaIEXpRw1EJzn6juFRXsywl9MWZ7QvlmkrA6_67ta2cg97'" config.js
-          grep -q 'mainnet/owner/deployment.json' scripts/public-files.json
-          grep -q 'mint-live.js' scripts/public-files.json
-          echo MAINNET_CLIENTS_GATED_OK=1
-      - name: Validate unsigned owner package
-        run: |
-          set -euo pipefail
-          jq -e '.network == "mainnet"' mainnet/owner/deployment.json >/dev/null
-          jq -e '.initialPaused == true and .nextItemIndex == 0' mainnet/owner/deployment.json >/dev/null
-          jq -e '.priceNanoTon == 7000000000 and .supply == 10000 and .royaltyBps == 700' mainnet/owner/deployment.json >/dev/null
-          jq -e '.tonConnectCreatorClaimRequest.network == "-239"' mainnet/owner/deployment.json >/dev/null
-          jq -e '.collectionCodeHash == "9fc5ea62b3c0ad943cec55deef509bdf9fabafa2cca0616f74f4fae46587f231"' mainnet/owner/deployment.json >/dev/null
-          echo MAINNET_UNSIGNED_PACKAGE_OK=1

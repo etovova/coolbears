@@ -36,7 +36,7 @@ if (!configText.includes(`preRevealMetadataRootCid: '${policy.preRevealMetadataR
 // Production addresses may be preloaded only after the exact tested package has
 // been promoted to mainnet. The public mint must still remain gated until the
 // live contract, creator NFT #0 and metadata are verified on mainnet.
-if (!configText.includes('demoMode: true')) throw new Error('Production mint must remain gated before live mainnet verification');
+await import('./validate-release-state.mjs');
 const ownerPackagePath = 'mainnet/owner/deployment.json';
 if (fs.existsSync(ownerPackagePath)) {
   const mainnet = JSON.parse(fs.readFileSync(ownerPackagePath,'utf8'));
@@ -53,4 +53,4 @@ if (fs.existsSync(ownerPackagePath)) {
 console.log('PREREVEAL_PRIVACY_AUDIT_OK');
 console.log(`Root: ${policy.preRevealMetadataRootIpfs}`);
 console.log(`Hidden image: ${expectedImage}`);
-console.log('Production mint gate: CLOSED');
+console.log('Production mint gate validated against release/launch-state.json');

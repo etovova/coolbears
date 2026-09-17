@@ -42,5 +42,5 @@ assert.equal(c.preRevealMetadataRootIpfs, d.preRevealMetadataRootIpfs);
 assert.equal(c.collectionMetadataIpfs, d.collectionMetadataIpfs);
 // This is deliberately a PRELAUNCH gate. A future production phase needs its
 // own verified release approval. Merely changing demoMode must not pass CI.
-assert.equal(c.demoMode, true, 'Prelaunch sale gate must remain closed');
-console.log('CoolBears mint policy: package, metadata references and CLOSED gate OK');
+await import('./validate-release-state.mjs');
+console.log('CoolBears mint policy: package, metadata references and release gate OK');
