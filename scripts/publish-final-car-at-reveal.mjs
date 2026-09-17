@@ -3,14 +3,13 @@
 // 2) reconstruct the exact final CAR from all 48 verified PRIVATE Pinata chunks;
 // 3) require exact byte count + committed CAR SHA-256;
 // 4) publish that CAR to PUBLIC Pinata using resumable TUS;
-// 5) require the public root CID and real metadata+PNG bytes to match the private manifest;
+// 5) require the expected public bundle root CID plus real metadata+PNG bytes;
 // Only after this script succeeds may automatic-reveal.mjs broadcast the on-chain reveal.
 // Nonscheduled prepare-only mode performs zero Pinata/public-network requests.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {spawn} from 'node:child_process';
-import {pipeline} from 'node:stream/promises';
 import {client,requireThat} from './pinata-backup-io.mjs';
 
 const PACKAGE_SHA='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa';
@@ -43,11 +42,12 @@ const manifest=JSON.parse(fs.readFileSync(path.join(recoveryDir,'manifest.json')
 requireThat(reveal.carSha256===CAR_SHA&&reveal.bundleCid===manifest.bundleCid,'PRIVATE_REVEAL_CAR_BINDING_MISMATCH');
 requireThat(manifest.revision==='v3'&&manifest.images===10000&&manifest.metadata===10000&&Array.isArray(manifest.records)&&manifest.records.length===10000,'PRIVATE_MANIFEST_POLICY_MISMATCH');
 requireThat(typeof manifest.metadataRootIpfs==='string'&&manifest.metadataRootIpfs.startsWith('ipfs://'),'FINAL_METADATA_ROOT_MISSING');
+requireThat(typeof manifest.bundleCid==='string'&&/^(b[a-z2-7]+|Qm[1-9A-HJ-NP-Za-km-z]+)$/.test(manifest.bundleCid),'FINAL_BUNDLE_CID_INVALID');
 for(const id of SAMPLE){const r=manifest.records[id];requireThat(r?.id===id&&/^[a-f0-9]{64}$/.test(r.metadataSha256)&&/^[a-f0-9]{64}$/.test(r.pngSha256)&&typeof r.imageCid==='string','SAMPLE_MANIFEST_RECORD_INVALID');}
 
 const outDir='build/automatic-reveal';fs.mkdirSync(outDir,{recursive:true});
 if(mode==='prepare-only'){
- const result={schema:2,status:'FINAL_PUBLICATION_GATE_PREPARED',mode,packageSha256:PACKAGE_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,privatePartsRequired:PARTS,revealAt:REVEAL_AT,sampleRecordsChecked:SAMPLE.length,publicationOrder:['reconstruct-private-car','verify-car-sha256','public-tus-upload','verify-public-root-cid','verify-public-metadata-and-png','allow-onchain-reveal'],networkRequests:0,uploadsPerformed:false,privateIdsExposed:false,privateCidsExposed:false};
+ const result={schema:3,status:'FINAL_PUBLICATION_GATE_PREPARED',mode,packageSha256:PACKAGE_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,privatePartsRequired:PARTS,revealAt:REVEAL_AT,sampleRecordsChecked:SAMPLE.length,publicationOrder:['reconstruct-private-car','verify-car-sha256','public-tus-upload','verify-public-bundle-root','verify-public-metadata-and-png','allow-onchain-reveal'],networkRequests:0,uploadsPerformed:false,privateIdsExposed:false,privateCidsExposed:false};
  fs.writeFileSync(outDir+'/publication-summary.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));process.exit(0);
 }
 
@@ -67,6 +67,12 @@ async function fetchBounded(url,limit){
  const r=await fetch(url,{redirect:'follow',signal:AbortSignal.timeout(60000)});requireThat(r.ok,'PUBLIC_GATEWAY_HTTP_'+r.status);
  const chunks=[];let n=0;for await(const b of r.body){n+=b.length;requireThat(n<=limit,'PUBLIC_OBJECT_TOO_LARGE');chunks.push(b);}return Buffer.concat(chunks);
 }
+async function publicRootVisible(){
+ try{
+  const r=await fetch(publicUrl('ipfs://'+manifest.bundleCid),{method:'HEAD',redirect:'follow',signal:AbortSignal.timeout(30000)});
+  return r.ok;
+ }catch{return false;}
+}
 async function verifyPublicSample(){
  try{
   for(const id of SAMPLE){
@@ -79,11 +85,14 @@ async function verifyPublicSample(){
   return true;
  }catch{return false;}
 }
+async function writeSuccess(status,uploadedNow){
+ const result={schema:3,status,packageSha256:PACKAGE_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,privatePartsReconstructed:PARTS,privateCarFullHashVerified:true,publicTusUploadVerified:uploadedNow,publicBundleRootReachable:true,sampleMetadataAndImagesVerified:SAMPLE.length,publicReady:true,uploadedNow,onChainRevealAllowed:true,privateIdsExposed:false,privateCidsExposed:false};
+ fs.writeFileSync(outDir+'/publication-summary.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
+}
 
-// On a retry, if representative committed final objects are already publicly retrievable
-// byte-for-byte, do not upload a duplicate CAR.
-if(await verifyPublicSample()){
- const result={schema:2,status:'FINAL_PUBLIC_CONTENT_ALREADY_VERIFIED',packageSha256:PACKAGE_SHA,carSha256:CAR_SHA,sampleMetadataAndImagesVerified:SAMPLE.length,publicReady:true,uploadedNow:false,onChainRevealAllowed:true,privateIdsExposed:false,privateCidsExposed:false};
+// If the exact final content is already public byte-for-byte, a retry must not upload again.
+if(await publicRootVisible()&&await verifyPublicSample()){
+ const result={schema:3,status:'FINAL_PUBLIC_CONTENT_ALREADY_VERIFIED',packageSha256:PACKAGE_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,publicBundleRootReachable:true,sampleMetadataAndImagesVerified:SAMPLE.length,publicReady:true,uploadedNow:false,onChainRevealAllowed:true,privateIdsExposed:false,privateCidsExposed:false};
  fs.writeFileSync(outDir+'/publication-summary.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));process.exit(0);
 }
 
@@ -117,49 +126,46 @@ try{
  requireThat(totalHash.digest('hex')===CAR_SHA,'PRIVATE_CAR_RECONSTRUCTED_STREAM_HASH_MISMATCH');
  requireThat((await hashFile(car))===CAR_SHA,'PRIVATE_CAR_RECONSTRUCTED_FILE_HASH_MISMATCH');
 
- // A completed TUS import may be listed before the public gateway has propagated.
- // Reuse it only if its committed root CID is exact; never create a duplicate.
- const publicListing=await api.api('/v3/files/public?limit=100');
- const prows=publicListing?.data?.files;requireThat(Array.isArray(prows),'PUBLIC_LIST_SHAPE_MISMATCH');
- const existing=prows.filter(x=>x?.name===PUBLIC_NAME);requireThat(existing.length<=1,'PUBLIC_FINAL_CAR_DUPLICATE');
- let uploadedNow=false;
- if(existing.length===1){requireThat(existing[0].cid===manifest.bundleCid,'EXISTING_PUBLIC_CAR_ROOT_CID_MISMATCH');}
- else {
-  const meta=`filename ${enc('CoolBears_v3_FINAL_reveal.car')},network ${enc('public')},name ${enc(PUBLIC_NAME)},car ${enc('true')}`;
-  const create=await fetch('https://uploads.pinata.cloud/v3/files',{method:'POST',headers:{Authorization:'Bearer '+jwt,'Tus-Resumable':'1.0.0','Upload-Length':String(CAR_BYTES),'Upload-Metadata':meta},redirect:'manual',signal:AbortSignal.timeout(30000)});
-  requireThat(create.status===201,'TUS_PUBLIC_CAR_CREATE_HTTP_'+create.status);
-  const loc=create.headers.get('location');requireThat(loc,'TUS_PUBLIC_CAR_LOCATION_MISSING');
-  const tus=new URL(loc,'https://uploads.pinata.cloud/v3/files');requireThat(tus.protocol==='https:'&&tus.hostname==='uploads.pinata.cloud'&&!tus.username&&!tus.password,'TUS_PUBLIC_CAR_LOCATION_UNTRUSTED');
-  let offset=0,part=0;
-  while(offset<CAR_BYTES){
-   const target=Math.min(offset+PART_BYTES,CAR_BYTES),length=target-offset;let done=false;
-   for(let attempt=0;attempt<5&&!done;attempt++){
-    try{
-     const body=fs.createReadStream(car,{start:offset,end:target-1});
-     const patch=await fetch(tus.href,{method:'PATCH',headers:{Authorization:'Bearer '+jwt,'Tus-Resumable':'1.0.0','Upload-Offset':String(offset),'Content-Type':'application/offset+octet-stream','Content-Length':String(length)},body,duplex:'half',redirect:'manual',signal:AbortSignal.timeout(900000)});
-     requireThat(patch.status===204,'TUS_PUBLIC_CAR_PATCH_HTTP_'+patch.status);
-     requireThat(Number(patch.headers.get('upload-offset'))===target,'TUS_PUBLIC_CAR_OFFSET_MISMATCH');done=true;
-    }catch(e){
-     const head=await fetch(tus.href,{method:'HEAD',headers:{Authorization:'Bearer '+jwt,'Tus-Resumable':'1.0.0'},redirect:'manual',signal:AbortSignal.timeout(30000)});
-     requireThat(head.ok||head.status===204,'TUS_PUBLIC_CAR_HEAD_HTTP_'+head.status);const remote=Number(head.headers.get('upload-offset'));
-     if(remote===target){done=true;break}requireThat(remote===offset,'TUS_PUBLIC_CAR_REMOTE_OFFSET_UNEXPECTED');if(attempt===4)throw e;
-     await new Promise(r=>setTimeout(r,3000*(attempt+1)));
-    }
-   }
-   requireThat(done,'TUS_PUBLIC_CAR_PART_NOT_CONFIRMED');offset=target;part++;console.log(`PUBLIC_FINAL_CAR_TUS_PART_CONFIRMED ${part}/${PARTS}`);
-  }
-  requireThat(offset===CAR_BYTES,'TUS_PUBLIC_CAR_FINAL_OFFSET_MISMATCH');uploadedNow=true;
-  let found=null;
-  for(let i=0;i<180;i++){
-   const list=await api.api('/v3/files/public?limit=100');const rr=list?.data?.files;requireThat(Array.isArray(rr),'PUBLIC_LIST_SHAPE_MISMATCH');
-   const hits=rr.filter(x=>x?.name===PUBLIC_NAME);requireThat(hits.length<=1,'PUBLIC_FINAL_CAR_DUPLICATE');if(hits.length===1){found=hits[0];break}await new Promise(r=>setTimeout(r,2000));
-  }
-  requireThat(found,'PUBLIC_FINAL_CAR_NOT_LISTED_AFTER_TUS');requireThat(found.cid===manifest.bundleCid,'PUBLIC_CAR_ROOT_CID_MISMATCH');
+ // If the bundle root is already visible but sample objects are still propagating,
+ // wait rather than creating a duplicate public import.
+ if(await publicRootVisible()){
+  let ready=false;for(let i=0;i<60;i++){if(await verifyPublicSample()){ready=true;break}await new Promise(r=>setTimeout(r,10000));}
+  requireThat(ready,'EXISTING_PUBLIC_ROOT_WITHOUT_VERIFIED_OBJECTS');
+  await writeSuccess('FINAL_PUBLIC_CONTENT_PROPAGATION_VERIFIED',false);process.exit(0);
  }
 
- let ready=false;
- for(let i=0;i<60;i++){if(await verifyPublicSample()){ready=true;break}await new Promise(r=>setTimeout(r,10000));}
- requireThat(ready,'PUBLIC_FINAL_CONTENT_NOT_GATEWAY_VERIFIED');
- const result={schema:2,status:'FINAL_PUBLIC_CAR_AND_OBJECTS_GATEWAY_VERIFIED',packageSha256:PACKAGE_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,privatePartsReconstructed:PARTS,privateCarFullHashVerified:true,publicTusUploadVerified:true,publicRootCidMatchedPrivateManifest:true,sampleMetadataAndImagesVerified:SAMPLE.length,publicReady:true,uploadedNow,onChainRevealAllowed:true,privateIdsExposed:false,privateCidsExposed:false};
- fs.writeFileSync(outDir+'/publication-summary.json',JSON.stringify(result,null,2)+'\n');console.log(JSON.stringify(result));
+ const meta=`filename ${enc('CoolBears_v3_FINAL_reveal.car')},network ${enc('public')},name ${enc(PUBLIC_NAME)},car ${enc('true')}`;
+ const create=await fetch('https://uploads.pinata.cloud/v3/files',{method:'POST',headers:{Authorization:'Bearer '+jwt,'Tus-Resumable':'1.0.0','Upload-Length':String(CAR_BYTES),'Upload-Metadata':meta},redirect:'manual',signal:AbortSignal.timeout(30000)});
+ requireThat(create.status===201,'TUS_PUBLIC_CAR_CREATE_HTTP_'+create.status);
+ const loc=create.headers.get('location');requireThat(loc,'TUS_PUBLIC_CAR_LOCATION_MISSING');
+ const tus=new URL(loc,'https://uploads.pinata.cloud/v3/files');requireThat(tus.protocol==='https:'&&tus.hostname==='uploads.pinata.cloud'&&!tus.username&&!tus.password,'TUS_PUBLIC_CAR_LOCATION_UNTRUSTED');
+ let offset=0,part=0;
+ while(offset<CAR_BYTES){
+  const target=Math.min(offset+PART_BYTES,CAR_BYTES),length=target-offset;let done=false;
+  for(let attempt=0;attempt<5&&!done;attempt++){
+   try{
+    const body=fs.createReadStream(car,{start:offset,end:target-1});
+    const patch=await fetch(tus.href,{method:'PATCH',headers:{Authorization:'Bearer '+jwt,'Tus-Resumable':'1.0.0','Upload-Offset':String(offset),'Content-Type':'application/offset+octet-stream','Content-Length':String(length)},body,duplex:'half',redirect:'manual',signal:AbortSignal.timeout(900000)});
+    requireThat(patch.status===204,'TUS_PUBLIC_CAR_PATCH_HTTP_'+patch.status);
+    requireThat(Number(patch.headers.get('upload-offset'))===target,'TUS_PUBLIC_CAR_OFFSET_MISMATCH');done=true;
+   }catch(e){
+    const head=await fetch(tus.href,{method:'HEAD',headers:{Authorization:'Bearer '+jwt,'Tus-Resumable':'1.0.0'},redirect:'manual',signal:AbortSignal.timeout(30000)});
+    requireThat(head.ok||head.status===204,'TUS_PUBLIC_CAR_HEAD_HTTP_'+head.status);const remote=Number(head.headers.get('upload-offset'));
+    if(remote===target){done=true;break}requireThat(remote===offset,'TUS_PUBLIC_CAR_REMOTE_OFFSET_UNEXPECTED');if(attempt===4)throw e;
+    await new Promise(r=>setTimeout(r,3000*(attempt+1)));
+   }
+  }
+  requireThat(done,'TUS_PUBLIC_CAR_PART_NOT_CONFIRMED');offset=target;part++;console.log(`PUBLIC_FINAL_CAR_TUS_PART_CONFIRMED ${part}/${PARTS}`);
+ }
+ requireThat(offset===CAR_BYTES,'TUS_PUBLIC_CAR_FINAL_OFFSET_MISMATCH');
+
+ let rootReady=false,objectsReady=false;
+ for(let i=0;i<90;i++){
+  rootReady=await publicRootVisible();
+  if(rootReady&&await verifyPublicSample()){objectsReady=true;break}
+  await new Promise(r=>setTimeout(r,10000));
+ }
+ requireThat(rootReady,'PUBLIC_FINAL_BUNDLE_ROOT_NOT_GATEWAY_VERIFIED');
+ requireThat(objectsReady,'PUBLIC_FINAL_CONTENT_NOT_GATEWAY_VERIFIED');
+ await writeSuccess('FINAL_PUBLIC_CAR_AND_OBJECTS_GATEWAY_VERIFIED',true);
 } finally {fs.rmSync(partTmp,{force:true});fs.rmSync(car,{force:true});}
