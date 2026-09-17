@@ -6,12 +6,13 @@ on:
     paths:
       - '.github/workflows/automatic-reveal-jan1.yml'
       - 'scripts/automatic-reveal.mjs'
+      - 'scripts/publish-final-car-at-reveal.mjs'
       - 'contracts/candidate/collection.fc'
       - 'launch/candidate.json'
       - 'launch/package-tools.mjs'
   schedule:
-    # GitHub Actions cron uses UTC. Retry every 5 minutes during the first hour
-    # so a delayed single scheduler tick cannot prevent reveal.
+    # GitHub Actions cron uses UTC. Retry every 5 minutes during the first hour.
+    # Only the 2027 scheduled run is authorized by the script/state guards.
     - cron: '*/5 0 1 1 *'
   workflow_dispatch:
 
@@ -25,7 +26,7 @@ concurrency:
 jobs:
   reveal:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
         with:
@@ -50,6 +51,12 @@ jobs:
             if(s.packageSha256!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('ARMED_PACKAGE_MISMATCH');
           }
           NODE
+      - name: Free disk for final CAR transfer on the scheduled reveal run
+        if: github.event_name == 'schedule'
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
+          sudo docker system prune -af || true
+          df -h /
       - name: Restore sealed PRIVATE recovery containing committed reveal preimage
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
@@ -59,7 +66,17 @@ jobs:
         run: |
           python3 scripts/verify-restored-recovery.py
           node scripts/verify-restored-reveal.mjs
-      - name: Prepare only on nonscheduled runs; broadcast only on scheduled Jan 1 run
+      - name: Make exact final content public and verify it before reveal
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+            node scripts/publish-final-car-at-reveal.mjs --publish
+          else
+            node scripts/publish-final-car-at-reveal.mjs --prepare-only
+          fi
+      - name: Prepare only on nonscheduled runs; broadcast only after public-content gate on scheduled Jan 1 run
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
         run: |
@@ -68,14 +85,18 @@ jobs:
           else
             node scripts/automatic-reveal.mjs --prepare-only
           fi
-      - name: Remove private reveal material
+      - name: Remove private reveal material and transferred CAR
         if: always()
-        run: rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
+        run: |
+          rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
+          rm -f -- "$RUNNER_TEMP/CoolBears_v3_FINAL_for_public_reveal.car"
       - name: Preserve nonsensitive reveal verification evidence only
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: automatic-reveal-nonsensitive-evidence
-          path: build/automatic-reveal/summary.json
+          path: |
+            build/automatic-reveal/summary.json
+            build/automatic-reveal/publication-summary.json
           if-no-files-found: ignore
           retention-days: 30
