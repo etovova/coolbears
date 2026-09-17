@@ -1,19 +1,25 @@
 name: Activate CoolBears mainnet site after live verification
-
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'mainnet/owner/ACTIVATE'
-      - '.github/workflows/activate-mainnet-site.yml'
   workflow_dispatch:
-
+    inputs:
+      confirmation:
+        description: 'Type OPEN_PUBLIC_MINT_SITE only after owner approval and on-chain checks'
+        required: true
+        type: string
 permissions:
   contents: write
-
+  pages: write
+  id-token: write
+concurrency:
+  group: coolbears-site-activation
+  cancel-in-progress: false
 jobs:
   verify-and-activate:
+    if: inputs.confirmation == 'OPEN_PUBLIC_MINT_SITE'
     runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,76 +27,74 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Require an approved candidate before activation checks
+      - name: Require approved candidate and exact release evidence
         run: |
           node scripts/validate-release-state.mjs
-          node --input-type=module -e "import fs from 'node:fs'; const s=JSON.parse(fs.readFileSync('release/launch-state.json')); if(s.phase!=='approved')throw Error('Release is not approved');"
+          node --input-type=module -e "import fs from 'node:fs';const s=JSON.parse(fs.readFileSync('release/launch-state.json'));if(s.phase!=='approved')throw Error('Release is not approved');"
       - name: Install TON client
-        run: npm install --no-save @ton/ton @ton/core
-      - name: Verify live mainnet collection, creator NFT and metadata
+        run: npm install --no-save @ton/ton @ton/core@0.63.1
+      - name: Read live mainnet contract, creator NFT and metadata
         env:
           TONCENTER_ENDPOINT: https://toncenter.com/api/v2/jsonRPC
         run: |
+          cat > /tmp/unused-marker <<'TXT'
+          Read-only verification below; no wallet signing or transaction sending.
+          TXT
           cat > verify-mainnet-launch.mjs <<'NODE'
           import fs from 'node:fs';
-          import { Address } from '@ton/core';
-          import { TonClient } from '@ton/ton';
-          const d=JSON.parse(fs.readFileSync('mainnet/owner/deployment.json','utf8'));
+          import {Address,Cell} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+          const d=JSON.parse(fs.readFileSync('mainnet/owner/deployment.json'));
           const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
-          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-          async function run(a,m,stack=[]){let last;for(let i=1;i<=8;i++){try{const r=await client.runMethod(a,m,stack);await sleep(1700);return r;}catch(e){last=e;if(e?.response?.status!==429||i===8)throw e;await sleep(i*3000)}}throw last;}
-          const collection=Address.parse(d.collectionAddressMainnetNonBounceable);
-          const mint=await run(collection,'get_mint_state');
-          const next=mint.stack.readBigNumber(), supply=mint.stack.readBigNumber(), price=mint.stack.readBigNumber(), paused=mint.stack.readBigNumber();
-          console.log(`MAINNET next=${next} supply=${supply} price=${price} paused=${paused}`);
-          if(next!==1n||supply!==10000n||price!==7000000000n||paused!==0n)throw Error('Mainnet launch state is not exactly next=1,supply=10000,price=7TON,open');
-          const rr=await run(collection,'royalty_params');
-          const factor=rr.stack.readBigNumber(),base=rr.stack.readBigNumber(),royalty=rr.stack.readAddress();
-          if(factor!==7n||base!==100n||royalty.toRawString()!==d.treasuryAddressRaw)throw Error('Royalty mismatch');
-          const ar=await run(collection,'get_nft_address_by_index',[{type:'int',value:0n}]);
-          const nftAddr=ar.stack.readAddress();
-          const nr=await run(nftAddr,'get_nft_data');
-          const initialized=nr.stack.readBigNumber(),index=nr.stack.readBigNumber(),coll=nr.stack.readAddress(),owner=nr.stack.readAddress(),individual=nr.stack.readCell();
-          if(initialized!==-1n||index!==0n||coll.toRawString()!==collection.toRawString()||owner.toRawString()!==d.treasuryAddressRaw)throw Error('Creator NFT #0 verification failed');
-          const cr=await run(collection,'get_nft_content',[{type:'int',value:0n},{type:'cell',cell:individual}]);
-          const full=cr.stack.readCell();const s=full.beginParse();if(s.loadUint(8)!==1)throw Error('Bad offchain tag');
-          const prefix=s.loadBuffer(s.remainingBits/8).toString('utf8');const suffix=s.loadRef().beginParse().loadStringTail();const uri=prefix+suffix;
-          if(uri!==d.preRevealMetadataRootIpfs+'0000.json')throw Error(`Unexpected NFT0 metadata URI ${uri}`);
-          fs.writeFileSync('/tmp/mainnet-uri.txt',uri);
-          console.log(`NFT0=${nftAddr.toString({bounceable:true,testOnly:false})}`);
-          console.log(`NFT0_URI=${uri}`);
+          const wait=ms=>new Promise(r=>setTimeout(r,ms));
+          async function run(a,m,stack=[]){for(let i=1;i<=6;i++){try{const r=await client.runMethod(a,m,stack);await wait(1700);return r;}catch(e){if(e?.response?.status!==429||i===6)throw e;await wait(i*3000);}}}
+          const address=Address.parse(d.collectionAddressMainnetNonBounceable);
+          const account=await client.getContractState(address);
+          if(account.state!=='active'||!account.code||Cell.fromBoc(account.code)[0].hash().toString('hex')!==d.collectionCodeHash)throw Error('Live code differs from approved release');
+          await wait(1700);
+          const mint=(await run(address,'get_mint_state')).stack;
+          const next=mint.readBigNumber(),supply=mint.readBigNumber(),price=mint.readBigNumber(),paused=mint.readBigNumber();
+          if(next<1n||next>10000n||supply!==10000n||price!==7000000000n||paused!==0n)throw Error('Mint state is not open and valid');
+          const royalty=(await run(address,'royalty_params')).stack;
+          if(royalty.readBigNumber()!==7n||royalty.readBigNumber()!==100n||royalty.readAddress().toRawString()!==d.treasuryAddressRaw)throw Error('Royalty mismatch');
+          const reveal=(await run(address,'get_reveal_state')).stack;
+          if(reveal.readBigNumber()!==1798761600n||reveal.readBigNumber()!==0n||reveal.readBigNumber()!==BigInt('0x'+d.finalContentCommitment))throw Error('Reveal commitment/state mismatch');
+          const nft=(await run(address,'get_nft_address_by_index',[{type:'int',value:0n}])).stack.readAddress();
+          const data=(await run(nft,'get_nft_data')).stack;
+          if(data.readBigNumber()!==-1n||data.readBigNumber()!==0n||data.readAddress().toRawString()!==address.toRawString()||data.readAddress().toRawString()!==d.treasuryAddressRaw)throw Error('Creator NFT owner mismatch');
+          const individual=data.readCell();if(individual.beginParse().loadStringTail()!=='0000.json')throw Error('Creator suffix mismatch');
+          const full=(await run(address,'get_nft_content',[{type:'int',value:0n},{type:'cell',cell:individual}])).stack.readCell().beginParse();
+          if(full.loadUint(8)!==1)throw Error('Invalid metadata tag');
+          const uri=full.loadStringTail();if(uri!==d.preRevealMetadataRootIpfs+'0000.json')throw Error('Wrong prereveal root');
+          const res=await fetch('https://gateway.pinata.cloud/ipfs/'+uri.slice(7),{signal:AbortSignal.timeout(30000)});if(!res.ok)throw Error('Hidden metadata unavailable');const meta=await res.json();
+          if(meta.name!=='CoolBears #0000 — Hidden Bear'||!meta.image?.startsWith('ipfs://'))throw Error('Hidden metadata mismatch');
+          const ir=await fetch('https://gateway.pinata.cloud/ipfs/'+meta.image.slice(7),{signal:AbortSignal.timeout(30000)});if(!ir.ok)throw Error('Hidden media unavailable');const bytes=Buffer.from(await ir.arrayBuffer());if(!['GIF87a','GIF89a'].includes(bytes.subarray(0,6).toString()))throw Error('Hidden media is not GIF');
+          console.log('MAINNET_APPROVED_STATE_AND_CREATOR_VERIFIED');
           NODE
           node verify-mainnet-launch.mjs
-          URI=$(cat /tmp/mainnet-uri.txt)
-          META="https://gateway.pinata.cloud/ipfs/${URI#ipfs://}"
-          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$META" -o /tmp/mainnet-nft0.json
-          jq -e '.name == "CoolBears #0000 — Hidden Bear" and (.image|startswith("ipfs://"))' /tmp/mainnet-nft0.json >/dev/null
-          IMG=$(jq -r '.image' /tmp/mainnet-nft0.json)
-          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "https://gateway.pinata.cloud/ipfs/${IMG#ipfs://}" -o /tmp/mainnet-prereveal.bin
-          file /tmp/mainnet-prereveal.bin | grep -q 'GIF image data'
-          echo MAINNET_LIVE_VERIFIED=1
-      - name: Activate production mint client
+      - name: Activate config and stage site atomically
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import json
           from pathlib import Path
-          p=Path('config.js')
-          s=p.read_text()
-          if "demoMode: true" not in s:
-              raise SystemExit('Expected gated demoMode: true before activation')
-          s=s.replace('demoMode: true','demoMode: false',1)
-          p.write_text(s)
-          q=Path('index.html')
-          h=q.read_text()
-          h=h.replace('config.js"></script>','config.js?v=mainnet1"></script>')
-          q.write_text(h)
+          p=Path('config.js');s=p.read_text()
+          if s.count('demoMode: true')!=1: raise SystemExit('Expected one closed mint flag')
+          p.write_text(s.replace('demoMode: true','demoMode: false',1))
+          p=Path('release/launch-state.json');s=json.loads(p.read_text());s['phase']='live';p.write_text(json.dumps(s,indent=2)+'\n')
           PY
-          node --input-type=module -e "import fs from 'node:fs'; const p='release/launch-state.json';const s=JSON.parse(fs.readFileSync(p));s.phase='live';fs.writeFileSync(p,JSON.stringify(s,null,2)+'\n');"
           node scripts/validate-release-state.mjs
-          node --check config.js
-          grep -q 'demoMode: false' config.js
+          node scripts/test-release-guard.mjs
+          node scripts/test-mint-policy-config.mjs
+          node scripts/stage-public-site.mjs
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add config.js index.html release/launch-state.json
-          git commit -m 'Activate verified CoolBears mainnet mint'
-          git push
+          git add config.js release/launch-state.json
+          git commit -m 'Activate owner-approved and live-verified CoolBears site'
+          git push origin HEAD:main
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public-site
+      - uses: actions/deploy-pages@v4
+        id: deployment
