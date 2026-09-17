@@ -10,13 +10,7 @@ const SELF=fileURLToPath(import.meta.url);
 const OLD='contracts/src/coolbears-collection-mint.fc';
 const SRC='contracts/candidate/collection.fc';
 const AT=1798761600, OP={mint:0x4d494e54,claim:0x52535630,pause:0x50415553,open:0x554e5053,reveal:0x5245564c,sweep:0x53574550};
-if(process.argv[2]==='compile'){
-  const src=process.argv[3];
-  const r=await compileFunc({targets:['collection.fc'],sources:{'stdlib.fc':fs.readFileSync('/tmp/token-contract/stdlib.fc','utf8'),'collection.fc':fs.readFileSync(src,'utf8')}});
-  if(r.status!=='ok')throw Error(r.message);
-  console.log(r.codeBoc);process.exit(0);
-}
-function compile(src){const r=spawnSync(process.execPath,[SELF,'compile',src],{encoding:'utf8',maxBuffer:1000000});if(r.status!==0)throw Error(r.stderr||r.stdout);return Cell.fromBase64(r.stdout.trim());}
+function compile(src){console.log('COMPILE',src);const r=spawnSync(process.execPath,['contracts/candidate/compile.mjs',src],{encoding:'utf8',maxBuffer:1000000});if(r.status!==0)throw Error(r.stderr||r.stdout);return Cell.fromBase64(r.stdout.trim());}
 const original=JSON.parse(fs.readFileSync('mainnet/owner/deployment.json','utf8'));
 const oldInit=loadStateInit(Cell.fromBase64(original.stateInitBocBase64).beginParse());
 assert.equal(compile(OLD).hash().toString('hex'),original.collectionCodeHash,'Existing source does not match existing deployment bytecode');
@@ -83,6 +77,11 @@ success(await edge.send(buyer.getSender(),command(OP.mint,50),'355'),edge);
 for(let i=9950;i<10000;i++)await verifyItem(edge,i,buyer.address);
 rejected(await edge.send(buyer.getSender(),command(OP.mint,1),'7.10'),edge,702);pass('Last 50 NFTs all initialized, no token 10000');
 const fixedRoyalty=await c.getRoyalty();assert.deepEqual(fixedRoyalty,[7n,100n,treasury.address.toRawString()]);
+const query=await c.send(attacker.getSender(),command(0x693d3950),'0.05');success(query,c);
+const reply=query.transactions.find(t=>t.inMessage?.info.type==='internal'&&t.inMessage.info.src.equals(c.address)&&t.inMessage.info.dest.equals(attacker.address));
+assert.ok(reply);const rs=reply.inMessage.body.beginParse();assert.equal(rs.loadUint(32),0xa8cb00ad);assert.equal(rs.loadUintBig(64),1n);assert.equal(rs.loadUint(16),7);assert.equal(rs.loadUint(16),100);assert.ok(rs.loadAddress().equals(treasury.address));
+pass('Standard royalty query works for any requester');
+
 rejected(await c.send(owner.getSender(),command(4,undefined,wrong)),c,65535);pass('Legacy arbitrary metadata/royalty edit disabled');
 async function rejectExternal(target,body){const before=(await bc.getContract(target.address)).balance;let refused=false;try{const r=await bc.sendMessage(external({to:target.address,body}));refused=!r.transactions.some(t=>t.description.type==='generic'&&!t.description.aborted);}catch{refused=true;}assert.ok(refused,'Invalid external message accepted');assert.equal((await bc.getContract(target.address)).balance,before,'Unaccepted external message spent contract funds');}
 bc.now=AT-1;await rejectExternal(c,revealBody());assert.equal((await c.getReveal()).revealed,0n);pass('External reveal one second early rejected without spending balance');
