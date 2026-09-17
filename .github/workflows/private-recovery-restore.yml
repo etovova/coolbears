@@ -1,0 +1,42 @@
+name: Verify restored PRIVATE recovery and release binding
+on:
+  push:
+    branches: [main]
+    paths: ['release/pinata-recovery-complete.sealed.json', 'scripts/restore-private-recovery.mjs', 'scripts/verify-restored-recovery.py', 'scripts/verify-restored-reveal.mjs', '.github/workflows/private-recovery-restore.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  restore-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install exact public cell decoder before private restore
+        run: npm install --no-save @ton/core@0.63.1
+      - name: Restore existing four parts, with no upload and no wallet operations
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/restore-private-recovery.mjs
+      - name: Verify archive, source layers, 10000 metadata and exact rarity
+        run: python3 scripts/verify-restored-recovery.py
+      - name: Verify final private content matches committed on-chain package
+        run: node scripts/verify-restored-reveal.mjs
+      - name: Confirm sales remain on hold
+        run: node scripts/validate-release-state.mjs
+      - name: Remove decrypted temporary files
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
+      - name: Preserve nonsensitive verification only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: private-recovery-restore-evidence
+          path: build/private-recovery-restore/
+          retention-days: 30

@@ -1,40 +1,11 @@
-name: Prepare or transfer encrypted PRIVATE Pinata recovery
+name: Legacy private recovery upload (retired)
 on:
-  push:
-    branches: [main]
-    paths: ['scripts/pinata-private-recovery.mjs', 'scripts/test-pinata-private-recovery.mjs', 'release/pinata-recovery-request.sealed.json', '.github/workflows/pinata-private-recovery.yml']
   workflow_dispatch:
 permissions:
   contents: read
-concurrency:
-  group: coolbears-pinata-private-recovery
-  cancel-in-progress: false
 jobs:
-  recovery:
+  notice:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Test sealed requests and restricted sources
-        run: node scripts/test-pinata-private-recovery.mjs
-      - name: Prepare recipient public key without exposing credential
-        env:
-          PINATA_JWT: ${{ secrets.PINATA_JWT }}
-        run: node scripts/pinata-private-recovery.mjs
-      - name: Transfer only explicitly requested backup; never publish final artwork
-        if: github.event_name == 'push' && contains(github.event.head_commit.message, '[pinata-transfer]')
-        env:
-          PINATA_JWT: ${{ secrets.PINATA_JWT }}
-        run: node scripts/pinata-private-recovery.mjs --transfer
-      - name: Preserve public status and encrypted receipt only
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: pinata-private-recovery-status
-          path: build/pinata-private-recovery/
-          retention-days: 30
+      - name: Do not duplicate the completed backup
+        run: echo 'Legacy upload retired. Use private-recovery-restore.yml for read-only verification of the completed four-part backup. No upload is performed.'
