@@ -2,8 +2,9 @@
   "schema": 1,
   "phase": "hold",
   "candidateVersion": "committed-reveal-v1",
+  "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
-  "testnetVerified": true,
+  "testnetVerified": false,
   "privateStorageVerified": false,
   "mainnetVerified": false,
   "creatorNftVerified": false,
@@ -11,8 +12,8 @@
   "automaticRevealArmed": false,
   "packageSha256": null,
   "evidence": {
-    "testnet": {
-      "status": "passed",
+    "legacyTestnet": {
+      "status": "passed-for-superseded-v3-only",
       "network": "testnet",
       "checkedAt": "2026-09-17T12:50:40.500Z",
       "packageSha256": "10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa",
@@ -27,8 +28,9 @@
       "auditRunUrl": "https://github.com/etovova/coolbears/actions/runs/35223414205",
       "transactionHistoryVerified": true,
       "receiptsMatchedByMessageHash": true,
-      "mediaPlayback": "User confirmed direct IPFS GIF playback; explorer preview is static"
+      "mediaPlayback": "User confirmed direct IPFS GIF playback; explorer preview is static",
+      "appliesToCurrentCandidate": false
     }
   },
-  "note": "Candidate testnet transactions verified; production remains held until full storage verification and installation of the exact final mainnet package. Do not deploy the legacy package."
+  "note": "Current candidate is v3-glasses-correction-1. The previous successful testnet run belongs only to the superseded v3 package and must not be used to authorize current mainnet deployment. Production remains held until corrected private storage, corrected-package testnet verification, mainnet verification and creator NFT verification are complete."
 }
