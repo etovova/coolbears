@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>CoolBears — Getgems TESTNET debug</title>
+<style>
+body{font:16px/1.5 system-ui;background:#0f1012;color:#eee;max-width:920px;margin:auto;padding:20px}
+h1,h2{line-height:1.2}button{font:inherit;font-weight:800;padding:14px 18px;border:0;border-radius:10px;margin:6px 6px 6px 0;background:#ffd51f;color:#111}
+button.secondary{background:#ddd}.ok{color:#70df8a}.bad{color:#ff8585}.muted{color:#aaa}
+.card{border:1px solid #444;border-radius:14px;padding:16px;margin:16px 0;background:#17181b}
+pre{white-space:pre-wrap;word-break:break-word;background:#090a0c;padding:12px;border-radius:10px;max-height:420px;overflow:auto}
+code{word-break:break-all}
+</style>
+</head>
+<body>
+<a href="../" style="color:#9fd3ff">← TESTNET</a>
+<h1>Getgems TESTNET metadata debug</h1>
+<p class="muted">Страница не отправляет TON-транзакции и не использует кошелёк. Она читает публичные metadata и TESTNET GraphQL Getgems. Кнопка синхронизации вызывает только metadata reindex в Getgems.</p>
+
+<div class="card">
+<h2>Адреса</h2>
+<p>Collection: <code id="collection"></code></p>
+<p>#0000: <code id="nft0"></code></p>
+<p>#0001: <code id="nft1"></code></p>
+</div>
+
+<div class="card">
+<h2>1. Проверка из браузера</h2>
+<button id="read">Проверить всё</button>
+<button id="copy" class="secondary">Скопировать отчёт</button>
+<pre id="readout">Ожидание…</pre>
+</div>
+
+<div class="card">
+<h2>2. Принудительная синхронизация Getgems</h2>
+<p>Запускаются новые TESTNET mutations <code>syncCollection</code> и <code>syncNft</code>. В ответе Getgems должны появиться <code>status</code> и <code>reason</code>.</p>
+<button id="sync">Синхронизировать коллекцию + #0000 + #0001</button>
+<pre id="syncout">Не запускалось.</pre>
+</div>
+
+<div class="card">
+<h2>3. Legacy refresh</h2>
+<p class="muted">Только если новые sync-операции не помогают. Это эквивалент старого механизма «Обновить метаданные».</p>
+<button id="legacy">Запустить legacy refresh</button>
+<pre id="legacyout">Не запускалось.</pre>
+</div>
+
+<script>
+const API='https://api.testnet.getgems.io/graphql/';
+const A={
+ collection:'kQA4ey0_IqjzpWDmTuKFyVYJK_2d3HtSkslW0hwUNs_V3eeB',
+ nft0:'kQB1Rf_DJDopEY_R4TaqXIWBFneqmEFQhl9lI8YSk3eAa3g_',
+ nft1:'kQB_cDSCL8uSekg2zv1w9utxshmx4BAAGGr4xJf6Vsm1p7Gw'
+};
+const IPFS={
+ collection:'https://gateway.pinata.cloud/ipfs/bafkreidhyuzo4lkhtsy2uipzfucvz6hiyeu5zo2zvxtficrlo7wzlyv3ui',
+ nft0:'https://gateway.pinata.cloud/ipfs/bafybeibx4t7s52qghnosicl3fd2t2pjdxs2oij5sez3mri3k5q5y7wdtsm/0000.json',
+ nft1:'https://gateway.pinata.cloud/ipfs/bafybeibx4t7s52qghnosicl3fd2t2pjdxs2oij5sez3mri3k5q5y7wdtsm/0001.json',
+ gif:'https://gateway.pinata.cloud/ipfs/bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni'
+};
+for(const k of Object.keys(A))document.getElementById(k).textContent=A[k];
+
+const QCOL=`query GetCollection($address:String!){nftCollectionByAddress(address:$address){address name description rawMetadata isApproved isVerified image{originalUrl} coverImage{originalUrl}}}`;
+const QNFT=`query GetNft($address:String!){alphaNftItemByAddress(address:$address){address name description rawMetadata metadataSourceType contentSourceType content{__typename ... on NftContentImage{originalUrl} ... on NftContentNotLoaded{notLoaded} ... on NftContentVideo{baseUrl} ... on NftContentLottie{lottie}} collection{address name description}}}`;
+const SCOL=`mutation SyncCollection($address:String!){syncCollection(address:$address){status reason collection{address name description rawMetadata image{originalUrl} coverImage{originalUrl}}}}`;
+const SNFT=`mutation SyncNft($address:String!){syncNft(address:$address){status reason nft{address name description rawMetadata metadataSourceType contentSourceType content{__typename ... on NftContentImage{originalUrl} ... on NftContentNotLoaded{notLoaded} ... on NftContentVideo{baseUrl} ... on NftContentLottie{lottie}}}}}`;
+const LCOL=`mutation LegacyCollection($address:String!){collectionRefreshMetadata(address:$address){address name description rawMetadata image{originalUrl}}}`;
+const LNFT=`mutation LegacyNft($address:String!){nftRefreshMetadata(address:$address){address name description rawMetadata metadataSourceType contentSourceType content{__typename ... on NftContentImage{originalUrl} ... on NftContentNotLoaded{notLoaded}}}}`;
+
+async function gql(query,variables){
+ const started=Date.now();
+ try{
+  const r=await fetch(API,{method:'POST',headers:{'content-type':'application/json','accept':'application/json'},body:JSON.stringify({query,variables}),cache:'no-store'});
+  const text=await r.text();
+  let json;try{json=JSON.parse(text)}catch{json={raw:text}};
+  return {ok:r.ok,http:r.status,ms:Date.now()-started,json};
+ }catch(e){return {ok:false,http:0,ms:Date.now()-started,error:String(e)}}
+}
+async function http(url,kind){
+ const u=url+(url.includes('?')?'&':'?')+'cb='+Date.now();
+ try{
+  const r=await fetch(u,{cache:'no-store'});
+  const b=await r.arrayBuffer();
+  let parsed=null;
+  if(kind==='json'){try{parsed=JSON.parse(new TextDecoder().decode(b))}catch{}}
+  return {ok:r.ok,http:r.status,contentType:r.headers.get('content-type'),bytes:b.byteLength,parsed};
+ }catch(e){return {ok:false,http:0,error:String(e)}}
+}
+function render(el,obj){document.getElementById(el).textContent=JSON.stringify(obj,null,2)}
+async function runRead(){
+ const el=document.getElementById('readout');el.textContent='Проверяю…';
+ const report={
+  at:new Date().toISOString(),
+  direct:{
+   collection:await http(IPFS.collection,'json'),
+   nft0000:await http(IPFS.nft0,'json'),
+   nft0001:await http(IPFS.nft1,'json'),
+   gif:await http(IPFS.gif,'bin')
+  },
+  getgems:{
+   collection:await gql(QCOL,{address:A.collection}),
+   nft0000:await gql(QNFT,{address:A.nft0}),
+   nft0001:await gql(QNFT,{address:A.nft1})
+  }
+ };
+ window.lastReport=report;render('readout',report);return report;
+}
+document.getElementById('read').onclick=runRead;
+document.getElementById('sync').onclick=async()=>{
+ const el=document.getElementById('syncout');el.textContent='Синхронизация…';
+ const out={
+  at:new Date().toISOString(),
+  collection:await gql(SCOL,{address:A.collection}),
+  nft0000:await gql(SNFT,{address:A.nft0}),
+  nft0001:await gql(SNFT,{address:A.nft1})
+ };
+ render('syncout',out);
+ await new Promise(r=>setTimeout(r,2500));
+ await runRead();
+};
+document.getElementById('legacy').onclick=async()=>{
+ const el=document.getElementById('legacyout');el.textContent='Legacy refresh…';
+ const out={
+  at:new Date().toISOString(),
+  collection:await gql(LCOL,{address:A.collection}),
+  nft0000:await gql(LNFT,{address:A.nft0}),
+  nft0001:await gql(LNFT,{address:A.nft1})
+ };
+ render('legacyout',out);
+ await new Promise(r=>setTimeout(r,2500));
+ await runRead();
+};
+document.getElementById('copy').onclick=async()=>{
+ const text=[document.getElementById('readout').textContent,document.getElementById('syncout').textContent,document.getElementById('legacyout').textContent].join('\n\n');
+ try{await navigator.clipboard.writeText(text);document.getElementById('copy').textContent='Скопировано'}catch{document.getElementById('copy').textContent='Не удалось скопировать'}
+};
+runRead();
+</script>
+</body>
+</html>
