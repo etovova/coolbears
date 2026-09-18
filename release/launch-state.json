@@ -250,7 +250,31 @@
       "productionHold": true,
       "mainnetTouched": false,
       "transactionsSent": 0
+    },
+    "getgemsValidGifProbeNft0000": {
+      "status": "verified-live-testnet-and-tonapi",
+      "checkedAt": "2026-09-18T08:25:41Z",
+      "diagnosticOnly": true,
+      "variant": "valid-gif-https",
+      "collectionAddressTestnetBounceable": "kQBVhRQTLoCdicQPOHeht8IZGJ40oM3Lkt3jn_CmRBPPXG7c",
+      "nft0000AddressTestnetBounceable": "kQA-AKXbssgFKP7VX-Awwa7M6fnWLIPNxPHblhyjtNOjtaH3",
+      "nextItemIndex": 1,
+      "paused": true,
+      "ownerVerified": true,
+      "tonapiMetadataComplete": true,
+      "gifStrictValid": true,
+      "gifFrames": 50,
+      "gifSize": [
+        640,
+        640
+      ],
+      "gifDurationMs": 1710,
+      "gifBytes": 440601,
+      "gifSha256": "550c9cd5498461d086fca9a69b9ead8053056c9f0009ea58f00b85f05e0899b8",
+      "workflowRunId": 35324278068,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. A second isolated TESTNET A/B probe using strict-valid animated GIF media over HTTPS has been published and verified. Avatar=50 frames, cover=20 frames, NFT=50 frames; all strict-decode and exact published hashes passed. The probe remains undeployed and is ready for a user-approved TESTNET-only deployment to test actual Getgems animation behavior."
+  "note": "Production remains HOLD. The isolated valid-GIF TESTNET probe #0000 is live and fully indexed by TonAPI, with strict-valid 50-frame GIF bytes referenced directly by metadata. The remaining check is Getgems UI playback behavior for this exact NFT."
 }
