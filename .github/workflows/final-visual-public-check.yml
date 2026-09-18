@@ -1,0 +1,93 @@
+name: Verify clean final visual TESTNET package
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-visual-public-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+
+      - name: Verify published files and exact metadata
+        run: |
+          set -euo pipefail
+          BASE='https://coolbears-nfts.com/testnet/getgems-final-visual'
+          mkdir -p /tmp/fv
+          for path in index.html probe.js deployment.json collection.json 0000.json 0001.json 0002.json 0003.json assets/CoolBears_Getgems_Square_Logo_1000x1000.png assets/CoolBears_Getgems_Banner_2880x680.png; do
+            safe=$(printf '%s' "$path" | tr '/' '_')
+            code=$(curl -fsSL --retry 5 --retry-delay 2 -D "/tmp/fv/${safe}.headers" -w '%{http_code}' -o "/tmp/fv/${safe}" "$BASE/$path")
+            test "$code" = '200'
+            test -s "/tmp/fv/${safe}"
+          done
+          cmp --silent testnet/getgems-final-visual/deployment.json /tmp/fv/deployment.json
+          cmp --silent testnet/getgems-final-visual/collection.json /tmp/fv/collection.json
+          for i in 0000 0001 0002 0003; do cmp --silent "testnet/getgems-final-visual/$i.json" "/tmp/fv/$i.json"; done
+          test "$(sha256sum /tmp/fv/assets_CoolBears_Getgems_Square_Logo_1000x1000.png | awk '{print $1}')" = '5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7'
+          test "$(sha256sum /tmp/fv/assets_CoolBears_Getgems_Banner_2880x680.png | awk '{print $1}')" = 'd3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95'
+          echo PUBLISHED_FINAL_VISUAL_BYTES_OK
+
+      - name: Verify all four published NFTs use full-speed GIF and seven attributes
+        run: |
+          python3 - <<'PY'
+          import json,collections
+          cats=['Background','Body','Clothes','Mouth','Eyes','Head','Ears']
+          imgs=set(); metas=[]
+          for i in range(4):
+              m=json.load(open(f'/tmp/fv/{i:04d}.json'))
+              assert m['name']==f'CoolBears #{i:04d}'
+              assert len(m['attributes'])==7
+              d={a['trait_type']:a['value'] for a in m['attributes']}
+              assert set(d)==set(cats)
+              assert m['image']==m['animation_url']
+              imgs.add(m['image']); metas.append(d)
+          assert len(imgs)==1
+          rows={}
+          for c in cats:
+              cnt=collections.Counter(m[c] for m in metas)
+              rows[c]={k:v/4*100 for k,v in cnt.items()}
+          pcts=sorted({p for d in rows.values() for p in d.values()})
+          assert pcts==[25.0,50.0,75.0],pcts
+          print('PUBLISHED_RARITY_LAYOUT_OK',rows)
+          PY
+          GIF=$(jq -r '.image' /tmp/fv/0000.json)
+          curl -fsSL --retry 5 "$GIF" -o /tmp/fv/prereveal.gif
+          python3 - <<'PY'
+          from PIL import Image,ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=False
+          im=Image.open('/tmp/fv/prereveal.gif'); n=getattr(im,'n_frames',1); ds=[]
+          for i in range(n):
+              im.seek(i); ds.append(im.info.get('duration',0)); im.load()
+          assert n==148 and sum(ds)==4950 and im.size==(640,640) and im.info.get('loop')==0
+          print('PUBLISHED_GIF_OK frames=148 duration=4950')
+          PY
+
+      - name: Verify fresh address still undeployed
+        run: |
+          set -euo pipefail
+          A=$(jq -r '.collectionAddressRaw' testnet/getgems-final-visual/deployment.json)
+          R=$(curl -fsSL --retry 3 "https://testnet.toncenter.com/api/v2/getAddressInformation?address=$A")
+          S=$(printf '%s' "$R" | jq -r '.result.state // empty')
+          test "$S" = 'uninitialized' -o "$S" = 'nonexist'
+          echo FINAL_VISUAL_UNDEPLOYED_OK
+
+      - name: Reconfirm production HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
