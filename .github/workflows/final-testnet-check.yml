@@ -37,3 +37,4 @@ jobs:
           name: final-package-testnet-evidence
           path: build/final-testnet/
           retention-days: 30
+# corrected candidate verification trigger: v3-glasses-correction-1
