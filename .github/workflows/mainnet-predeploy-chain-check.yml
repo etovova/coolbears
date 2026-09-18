@@ -1,0 +1,51 @@
+name: Verify corrected MAINNET address before deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/mainnet-predeploy-chain-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Bind exact corrected package
+        run: |
+          set -euo pipefail
+          PACKAGE='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f'
+          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "$PACKAGE"
+          test "$(sha256sum mainnet/owner/deployment.json | awk '{print $1}')" = "$PACKAGE"
+          test "$(jq -r '.collectionRevision' launch/candidate.json)" = "v3-glasses-correction-1"
+          cmp --silent launch/candidate.json mainnet/owner/deployment.json
+          echo CORRECTED_MAINNET_PACKAGE_BINDING_OK
+
+      - name: Require corrected MAINNET address to be undeployed
+        run: |
+          set -euo pipefail
+          ADDRESS=$(jq -r '.collectionAddressRaw' launch/candidate.json)
+          for i in {1..6}; do
+            RESP=$(curl -fsS --retry 2 --retry-delay 2 "https://toncenter.com/api/v2/getAddressInformation?address=${ADDRESS}") || true
+            printf '%s' "$RESP" > /tmp/mainnet-address.json
+            STATE=$(jq -r '.result.state // empty' /tmp/mainnet-address.json 2>/dev/null || true)
+            if [ "$STATE" = "uninitialized" ] || [ "$STATE" = "nonexist" ]; then
+              echo "CORRECTED_MAINNET_ADDRESS_UNDEPLOYED=1"
+              echo "state=$STATE"
+              exit 0
+            fi
+            if [ "$STATE" = "active" ] || [ "$STATE" = "frozen" ]; then
+              echo "Unexpected existing MAINNET state: $STATE"
+              exit 1
+            fi
+            sleep $((i*2))
+          done
+          echo "Could not obtain trustworthy MAINNET state"
+          exit 1
