@@ -88,6 +88,9 @@ jobs:
           jq '{name,description,image,animation_url,external_url,attributes}' /tmp/nft0.json
           echo NFT0_DESCRIPTION_AND_ANIMATION_URL_LIVE_OK
 
+      - name: Install GIF inspector
+        run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+
       - name: Fetch and inspect exact public GIF
         run: |
           set -euo pipefail
