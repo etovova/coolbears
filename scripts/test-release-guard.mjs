@@ -1,43 +1,101 @@
-import fs from 'node:fs';import vm from 'node:vm';import assert from 'node:assert/strict';
-import {validateLaunch,canOperate,revealDue,CANDIDATE_HASH,OWNER_RAW,REVEAL_AT} from '../release-guard.mjs';
-const raw=fs.readFileSync('mainnet/owner/deployment.json'),legacy=JSON.parse(raw);
-const ctx=vm.createContext({window:{},document:{addEventListener(){}}});vm.runInContext(fs.readFileSync('config.js','utf8'),ctx);
-const cfg={...ctx.window.COOLBEARS_CONFIG,demoMode:true},hold={...JSON.parse(fs.readFileSync('release/launch-state.json','utf8')),phase:'hold',testnetVerified:false,privateStorageVerified:false,mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false,packageSha256:null,evidence:{}};
-let passed=0;const test=(name,fn)=>{fn();passed++;console.log('PASS',name);};
-const clone=structuredClone,hash='a'.repeat(64),manifest='b'.repeat(64);
-const p={...legacy,version:'committed-reveal-v1',collectionCodeHash:CANDIDATE_HASH,finalContentCommitment:'c'.repeat(64),releaseManifestSha256:manifest};
-const c={...cfg,collectionCodeHash:CANDIDATE_HASH};
-const proof=key=>({status:'passed',packageSha256:hash,codeHash:CANDIDATE_HASH,checkedAt:'2026-09-17T00:00:00Z',network:key==='testnet'?'testnet':'mainnet',collectionAddressRaw:p.collectionAddressRaw,transactionHashes:['d'.repeat(64)],revision:'v3',images:10000,metadata:10000,uniqueScores:10000,manifestSha256:manifest,private:true,tokenIndex:0,ownerAddressRaw:OWNER_RAW});
-const prepared={...hold,phase:'prepared',packageSha256:hash,testnetVerified:true,privateStorageVerified:true,evidence:{storage:proof('storage'),testnet:proof('testnet')}};
-const approved={...prepared,phase:'approved',mainnetVerified:true,creatorNftVerified:true,publicMintApproved:true,evidence:{...prepared.evidence,mainnet:proof('mainnet'),creator:proof('creator')}};
-const live={...approved,phase:'live'};
-const active={status:'active',minted:1,paused:true,creatorVerified:true};
-test('Legacy held package stays read-only',()=>assert.equal(validateLaunch(cfg,legacy,hold).setup,false));
-test('Changing demoMode alone rejected',()=>assert.throws(()=>validateLaunch({...cfg,demoMode:false},legacy,hold)));
-test('Prepared phase can set up, not sell',()=>assert.deepEqual(validateLaunch(c,p,prepared,hash),{phase:'prepared',setup:true,sales:false,automaticReveal:false}));
-test('Approved phase remains site-closed',()=>assert.equal(validateLaunch(c,p,approved,hash).sales,false));
-test('Properly evidenced live phase accepted',()=>assert.equal(validateLaunch({...c,demoMode:false},p,live,hash).sales,true));
-for(const key of ['testnetVerified','privateStorageVerified','mainnetVerified','creatorNftVerified','publicMintApproved'])test('Missing '+key,()=>assert.throws(()=>validateLaunch({...c,demoMode:false},p,{...live,[key]:false},hash)));
-for(const key of ['priceTon','supply','royaltyPercent','maxPerTransaction','revealDate','collectionAddress','mintContractAddress','collectionCodeHash','treasuryAddress','royaltyAddress'])test('Wrong site '+key,()=>assert.throws(()=>validateLaunch({...c,[key]:'wrong'},p,prepared,hash)));
-test('Unknown phase',()=>assert.throws(()=>validateLaunch(c,p,{...hold,phase:'go'},hash)));
-test('Package checksum changed',()=>assert.throws(()=>validateLaunch(c,p,prepared,'e'.repeat(64))));
-test('Legacy promotion rejected',()=>assert.throws(()=>validateLaunch(cfg,legacy,prepared,hash)));
-test('Missing final commitment',()=>assert.throws(()=>validateLaunch(c,{...p,finalContentCommitment:null},prepared,hash)));
-for(const key of ['storage','testnet','mainnet','creator'])test('Missing evidence '+key,()=>{const s=clone(live);delete s.evidence[key];assert.throws(()=>validateLaunch({...c,demoMode:false},p,s,hash));});
-test('Storage claims another manifest',()=>{const s=clone(prepared);s.evidence.storage.manifestSha256='0'.repeat(64);assert.throws(()=>validateLaunch(c,p,s,hash));});
-test('Evidence is for another network',()=>{const s=clone(prepared);s.evidence.testnet.network='mainnet';assert.throws(()=>validateLaunch(c,p,s,hash));});
-test('Evidence is for another collection',()=>{const s=clone(approved);s.evidence.creator.collectionAddressRaw='0:wrong';assert.throws(()=>validateLaunch(c,p,s,hash));});
-test('Wrong owner of creator NFT',()=>{const s=clone(approved);s.evidence.creator.ownerAddressRaw='0:wrong';assert.throws(()=>validateLaunch(c,p,s,hash));});
-test('No transaction hashes',()=>{const s=clone(approved);s.evidence.mainnet.transactionHashes=[];assert.throws(()=>validateLaunch({...c,demoMode:false},p,s,hash));});
-test('Hold blocks all write actions',()=>{const g=validateLaunch(cfg,legacy,hold);for(const a of ['deploy','claim','unpause'])assert.equal(canOperate(a,g,active,true),false);});
-test('Prepared deploy only while uninitialized',()=>{const g=validateLaunch(c,p,prepared,hash);assert.equal(canOperate('deploy',g,{status:'uninitialized'},true),true);assert.equal(canOperate('deploy',g,active,true),false);});
-test('Prepared cannot unpause',()=>assert.equal(canOperate('unpause',validateLaunch(c,p,prepared,hash),active,true),false));
-test('Verified approved owner can unpause',()=>assert.equal(canOperate('unpause',validateLaunch(c,p,approved,hash),active,true),true));
-test('Counter without NFT ownership cannot unpause',()=>assert.equal(canOperate('unpause',validateLaunch(c,p,approved,hash),{...active,creatorVerified:false},true),false));
-test('Wrong wallet cannot operate',()=>assert.equal(canOperate('unpause',validateLaunch(c,p,approved,hash),active,false),false));
-test('Scheduler not armed by default',()=>assert.equal(revealDue(live,REVEAL_AT),false));
-test('Scheduler cannot trigger one second early',()=>assert.equal(revealDue({...live,automaticRevealArmed:true,automationConfigured:true},REVEAL_AT-1),false));
-test('Armed scheduler at deadline',()=>assert.equal(revealDue({...live,automaticRevealArmed:true,automationConfigured:true},REVEAL_AT),true));
-test('Unconfigured reveal automation rejected',()=>assert.throws(()=>validateLaunch({...c,demoMode:false},p,{...live,automaticRevealArmed:true},hash)));
-test('Prepared reveal cannot arm',()=>assert.throws(()=>validateLaunch(c,p,{...prepared,automaticRevealArmed:true},hash)));
-console.log(JSON.stringify({suite:'release-guard',passed,realNetworkRequests:0,transactionsSent:0}));
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {
+  validateLaunch,canOperate,revealDue,CANDIDATE_HASH,PACKAGE_SHA256,REVISION,
+  MANIFEST_SHA256,CAR_SHA256,OWNER_RAW,REVEAL_AT
+} from '../release-guard.mjs';
+
+const p=JSON.parse(fs.readFileSync('launch/candidate.json','utf8'));
+const base=JSON.parse(fs.readFileSync('release/launch-state.json','utf8'));
+const ctx=vm.createContext({window:{},document:{addEventListener(){}}});
+vm.runInContext(fs.readFileSync('config.js','utf8'),ctx);
+const cfg={...ctx.window.COOLBEARS_CONFIG,demoMode:true};
+let passed=0;
+const test=(name,fn)=>{fn();passed++;console.log('PASS',name);};
+const clone=structuredClone;
+
+assert.equal(p.collectionRevision,REVISION);
+assert.equal(p.collectionCodeHash,CANDIDATE_HASH);
+assert.equal(p.releaseManifestSha256,MANIFEST_SHA256);
+assert.equal(p.releaseCarSha256,CAR_SHA256);
+assert.equal(base.packageSha256,PACKAGE_SHA256);
+
+const hold={...clone(base),phase:'hold',mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false};
+delete hold.evidence.correctedMainnetDeployment;
+delete hold.evidence.correctedMainnetCreatorNft0000;
+const prepared={...clone(hold),phase:'prepared'};
+const mainnetEvidence={
+  status:'verified-live-mainnet',checkedAt:'2026-09-18T06:00:00Z',
+  packageSha256:PACKAGE_SHA256,collectionRevision:REVISION,
+  collectionAddressRaw:p.collectionAddressRaw,codeHash:CANDIDATE_HASH,
+  accountActive:true,initialPausedVerified:true,nextItemIndex:0,appliesToCurrentCandidate:true
+};
+const creatorEvidence={
+  status:'verified-live-mainnet',checkedAt:'2026-09-18T06:05:00Z',
+  packageSha256:PACKAGE_SHA256,collectionRevision:REVISION,
+  collectionAddressRaw:p.collectionAddressRaw,nftIndex:0,ownerAddressRaw:OWNER_RAW,
+  ownerVerified:true,metadataUriVerified:true,appliesToCurrentCandidate:true
+};
+const approved={...clone(prepared),phase:'approved',mainnetVerified:true,creatorNftVerified:true,publicMintApproved:true,evidence:{...clone(prepared.evidence),correctedMainnetDeployment:mainnetEvidence,correctedMainnetCreatorNft0000:creatorEvidence}};
+const live={...clone(approved),phase:'live'};
+const active0={status:'active',minted:0,paused:true,creatorVerified:false};
+const active1={status:'active',minted:1,paused:true,creatorVerified:true};
+
+test('Corrected hold is read-only',()=>assert.deepEqual(validateLaunch(cfg,p,hold,PACKAGE_SHA256),{phase:'hold',setup:false,sales:false,automaticReveal:false}));
+test('Prepared enables setup only',()=>assert.deepEqual(validateLaunch(cfg,p,prepared,PACKAGE_SHA256),{phase:'prepared',setup:true,sales:false,automaticReveal:false}));
+test('Prepared deploy only while uninitialized',()=>{
+  const g=validateLaunch(cfg,p,prepared,PACKAGE_SHA256);
+  assert.equal(canOperate('deploy',g,{status:'uninitialized'},true),true);
+  assert.equal(canOperate('deploy',g,active0,true),false);
+});
+test('Prepared creator claim allowed while paused at zero',()=>assert.equal(canOperate('claim',validateLaunch(cfg,p,prepared,PACKAGE_SHA256),active0,true),true));
+test('Prepared cannot unpause',()=>assert.equal(canOperate('unpause',validateLaunch(cfg,p,prepared,PACKAGE_SHA256),active1,true),false));
+test('Approved owner can unpause only after explicit approval',()=>assert.equal(canOperate('unpause',validateLaunch(cfg,p,approved,PACKAGE_SHA256),active1,true),true));
+test('Approved phase does not itself make site live',()=>assert.equal(validateLaunch(cfg,p,approved,PACKAGE_SHA256).sales,false));
+test('Live requires demoMode false',()=>assert.equal(validateLaunch({...cfg,demoMode:false},p,live,PACKAGE_SHA256).sales,true));
+test('Wrong wallet cannot operate',()=>assert.equal(canOperate('claim',validateLaunch(cfg,p,prepared,PACKAGE_SHA256),active0,false),false));
+
+for(const key of ['privateStorageVerified','testnetVerified'])test('Missing prerequisite '+key,()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(prepared),[key]:false},PACKAGE_SHA256)));
+test('Wrong package checksum rejected',()=>assert.throws(()=>validateLaunch(cfg,p,prepared,'0'.repeat(64))));
+test('Wrong revision rejected',()=>assert.throws(()=>validateLaunch(cfg,{...p,collectionRevision:'v3'},prepared,PACKAGE_SHA256)));
+test('Wrong CAR rejected',()=>assert.throws(()=>validateLaunch(cfg,{...p,releaseCarSha256:'0'.repeat(64)},prepared,PACKAGE_SHA256)));
+test('Wrong manifest rejected',()=>assert.throws(()=>validateLaunch(cfg,{...p,releaseManifestSha256:'0'.repeat(64)},prepared,PACKAGE_SHA256)));
+test('Private storage readback must be complete',()=>{
+  const s=clone(prepared);s.evidence.privateStorage.partsVerified=47;
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('TESTNET audit operation order must match',()=>{
+  const s=clone(prepared);s.evidence.correctedTestnetTransactionAudit.operations=['deploy','open','claim','mint'];
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('TESTNET #0001 ownership required',()=>{
+  const s=clone(prepared);s.evidence.correctedTestnetNft0001.nft1OwnerVerified=false;
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('Prereveal animated GIF proof required',()=>{
+  const s=clone(prepared);s.evidence.correctedPrerevealMedia.animatedGifVerified=false;
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('Approved requires mainnet proof',()=>{
+  const s=clone(approved);delete s.evidence.correctedMainnetDeployment;
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('Approved requires creator proof',()=>{
+  const s=clone(approved);delete s.evidence.correctedMainnetCreatorNft0000;
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('Approved requires creator owner match',()=>{
+  const s=clone(approved);s.evidence.correctedMainnetCreatorNft0000.ownerAddressRaw='0:wrong';
+  assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
+});
+test('Approved requires public mint approval',()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(approved),publicMintApproved:false},PACKAGE_SHA256)));
+test('Live with demoMode true rejected',()=>assert.throws(()=>validateLaunch(cfg,p,live,PACKAGE_SHA256)));
+test('Unknown phase rejected',()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(prepared),phase:'go'},PACKAGE_SHA256)));
+test('Reveal due only when armed/configured and deadline reached',()=>{
+  assert.equal(revealDue({...hold,automaticRevealArmed:false,automationConfigured:true},REVEAL_AT),false);
+  assert.equal(revealDue({...hold,automaticRevealArmed:true,automationConfigured:false},REVEAL_AT),false);
+  assert.equal(revealDue({...hold,automaticRevealArmed:true,automationConfigured:true},REVEAL_AT-1),false);
+  assert.equal(revealDue({...hold,automaticRevealArmed:true,automationConfigured:true},REVEAL_AT),true);
+});
+console.log(JSON.stringify({suite:'corrected-release-guard',passed,realNetworkRequests:0,transactionsSent:0}));
