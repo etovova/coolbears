@@ -1,0 +1,69 @@
+name: Verify published Getgems A/B probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/getgems-ab-public-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify published HTTPS files and exact bytes
+        run: |
+          set -euo pipefail
+          BASE='https://coolbears-nfts.com/testnet/getgems-ab'
+          mkdir -p /tmp/ab
+          for path in index.html deployment.json collection.json 0000.json assets/image.png assets/cover.png; do
+            safe=$(printf '%s' "$path" | tr '/' '_')
+            code=$(curl -fsSL --retry 5 --retry-delay 2 -D "/tmp/ab/${safe}.headers" -w '%{http_code}' -o "/tmp/ab/${safe}" "$BASE/$path")
+            test "$code" = "200"
+            test -s "/tmp/ab/${safe}"
+          done
+          cmp --silent testnet/getgems-ab/deployment.json /tmp/ab/deployment.json
+          cmp --silent testnet/getgems-ab/collection.json /tmp/ab/collection.json
+          cmp --silent testnet/getgems-ab/0000.json /tmp/ab/0000.json
+          test "$(sha256sum /tmp/ab/assets_image.png | awk '{print $1}')" = "$(jq -r '.sha256.image' testnet/getgems-ab/deployment.json)"
+          test "$(sha256sum /tmp/ab/assets_cover.png | awk '{print $1}')" = "$(jq -r '.sha256.cover' testnet/getgems-ab/deployment.json)"
+          grep -qi '^content-type: image/png' /tmp/ab/assets_image.png.headers
+          grep -qi '^content-type: image/png' /tmp/ab/assets_cover.png.headers
+          grep -qi '^content-type: application/json' /tmp/ab/collection.json.headers
+          grep -qi '^content-type: application/json' /tmp/ab/0000.json.headers
+          echo PUBLISHED_AB_BYTES_AND_MIME_OK
+
+      - name: Verify probe address remains undeployed on TESTNET
+        run: |
+          set -euo pipefail
+          A=$(jq -r '.collectionAddressRaw' testnet/getgems-ab/deployment.json)
+          for i in {1..6}; do
+            R=$(curl -fsSL --retry 2 "https://testnet.toncenter.com/api/v2/getAddressInformation?address=$A" || true)
+            S=$(printf '%s' "$R" | jq -r '.result.state // empty' 2>/dev/null || true)
+            if [ "$S" = "uninitialized" ] || [ "$S" = "nonexist" ]; then
+              echo "PROBE_UNDEPLOYED_OK state=$S"
+              exit 0
+            fi
+            if [ "$S" = "active" ] || [ "$S" = "frozen" ]; then
+              echo "Unexpected existing state: $S"
+              exit 1
+            fi
+            sleep $((i*2))
+          done
+          echo "No trustworthy TESTNET state"
+          exit 1
+
+      - name: Reconfirm production stays HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = "hold"
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = "false"
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = "false"
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = "false"
+          echo PRODUCTION_HOLD_OK
