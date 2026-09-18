@@ -608,8 +608,8 @@
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
       "appliesToCurrentCandidate": true,
-      "checkedAt": "2026-09-18T17:16:36.686854+00:00",
-      "status": "partial-nft0001-loaded",
+      "checkedAt": "2026-09-18T18:05:15.193663+00:00",
+      "status": "partial-both-nfts-loaded",
       "collectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
       "metadataUnavailable": true,
       "tonapiMetadataComplete": false,
@@ -617,19 +617,25 @@
       "reindexHttp200ForAllThreeAccounts": true,
       "logoVisible": false,
       "bannerVisible": false,
-      "gifAnimated": false,
-      "attributesAbsent": null,
-      "percentagesAbsent": null,
-      "rankAbsent": null,
-      "absenceCannotBeConfirmedUntilMetadataLoads": true,
+      "gifAnimated": true,
+      "attributesAbsent": true,
+      "percentagesAbsent": true,
+      "rankAbsent": true,
+      "absenceCannotBeConfirmedUntilMetadataLoads": false,
       "report": "release/current-testnet-prereveal-media.json",
       "items": {
         "0": {
-          "metadataLoaded": false,
-          "gifAnimated": null,
-          "attributesAbsent": null,
-          "percentagesAbsent": null,
-          "rankAbsent": null
+          "metadataLoaded": true,
+          "name": "CoolBears #0000 — Hidden Bear",
+          "descriptionMatched": true,
+          "ownerMatched": true,
+          "gifAnimated": true,
+          "animationVerification": "Browser screenshots showed different intended GIF frames: hidden bear with flower and eyes on black background.",
+          "attributesAbsent": true,
+          "percentagesAbsent": true,
+          "rankAbsent": true,
+          "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQC2oPd4XeV-Rf5GqPAc-VVnGj5NGINtD9QKwU18pka38EUK",
+          "checkedAt": "2026-09-18T18:05:15.193663+00:00"
         },
         "1": {
           "metadataLoaded": true,
@@ -644,10 +650,9 @@
           "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQAf5JDAb6daOfAurvk_tS1Xwc8DSC6n9Y_nchavnbmpxaxd"
         }
       },
-      "allMintedItemsVerified": false,
+      "allMintedItemsVerified": true,
       "refreshRequestedForRemaining": [
-        "collection",
-        "NFT0000"
+        "collection"
       ],
       "independentIpfsRetrievalVerified": true
     },

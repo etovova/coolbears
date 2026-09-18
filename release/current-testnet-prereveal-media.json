@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "status": "PUBLIC_PREREVEAL_BYTES_VERIFIED_GETGEMS_PARTIALLY_LOADED",
-  "checkedAt": "2026-09-18T17:16:36.686854+00:00",
+  "status": "GETGEMS_BOTH_NFTS_VERIFIED_COLLECTION_METADATA_PENDING",
+  "checkedAt": "2026-09-18T18:05:15.193663+00:00",
   "network": "testnet",
   "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
   "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
@@ -99,16 +99,20 @@
   "transactionsSent": 0,
   "finalFilesPublished": false,
   "publicBytesCheckedAt": "2026-09-18T16:29:55.232558+00:00",
-  "getgemsItemErrors": {
-    "0": "Metadata Unavailable"
-  },
+  "getgemsItemErrors": {},
   "getgemsItems": {
     "0": {
-      "metadataLoaded": false,
-      "gifAnimated": null,
-      "attributesAbsent": null,
-      "percentagesAbsent": null,
-      "rankAbsent": null
+      "metadataLoaded": true,
+      "name": "CoolBears #0000 — Hidden Bear",
+      "descriptionMatched": true,
+      "ownerMatched": true,
+      "gifAnimated": true,
+      "animationVerification": "Browser screenshots showed different intended GIF frames: hidden bear with flower and eyes on black background.",
+      "attributesAbsent": true,
+      "percentagesAbsent": true,
+      "rankAbsent": true,
+      "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQC2oPd4XeV-Rf5GqPAc-VVnGj5NGINtD9QKwU18pka38EUK",
+      "checkedAt": "2026-09-18T18:05:15.193663+00:00"
     },
     "1": {
       "metadataLoaded": true,
@@ -184,10 +188,9 @@
   },
   "indexerNote": "Getgems NFT0001 loaded while TonAPI still returned empty metadata. Treat them as separate observations; do not infer Getgems state only from TonAPI.",
   "remainingUiChecks": [
-    "collection name/description/logo/banner",
-    "NFT0000 image/name/description",
-    "absence of rank/attributes/percentages on NFT0000"
+    "collection name/description/logo/banner"
   ],
   "httpsAlternativePublished": false,
-  "newDeploymentRequested": false
+  "newDeploymentRequested": false,
+  "collectionRefreshRequestedAt": "2026-09-18T18:05:15.193663+00:00"
 }
