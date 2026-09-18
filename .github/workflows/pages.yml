@@ -32,14 +32,3 @@ jobs:
           path: public-site
       - uses: actions/deploy-pages@v4
         id: deployment
-  # RESET_ONLY_START
-  finish-reset:
-    needs: deploy
-    if: contains(github.event.head_commit.message, '[finish-reset]')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - run: python3 scripts/reset-git-history.py
-  # RESET_ONLY_END
