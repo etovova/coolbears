@@ -625,7 +625,7 @@
     },
     "prerevealGetgemsUi": {
       "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
-      "checkedAt": "2026-09-18T20:12:53.928Z",
+      "checkedAt": "2026-09-18T20:22:57.179198+00:00",
       "collectionAddressRaw": "0:d74270933ec9dbd9f23cfc210bdd30be80ab132bf6dbc0f91238fa1eae470079",
       "network": "testnet",
       "collectionRevision": "v3-glasses-correction-1",
@@ -635,9 +635,8 @@
       "metadataUnavailable": true,
       "collectionRefreshRequested": true,
       "collectionRefreshAccepted": true,
-      "itemRefreshRequested": false,
-      "itemRefreshBlockedByAutomaticApproval": true,
-      "approvalBlockReason": "Explicit permission required for Getgems item Refresh requests",
+      "itemRefreshRequested": true,
+      "itemRefreshBlockedByAutomaticApproval": false,
       "logoVisible": false,
       "bannerVisible": false,
       "gifAnimated": false,
@@ -648,7 +647,38 @@
         "collection branding and approved description",
         "both hidden NFT GIFs and date-only descriptions",
         "no traits, rarity percentages or ranks"
-      ]
+      ],
+      "itemRefreshExplicitlyAuthorized": true,
+      "itemRefreshUserAuthorization": "Да даю — in direct reply to permission to refresh #0000 and #0001",
+      "itemRefreshAcceptedFor": [
+        0,
+        1
+      ],
+      "itemRefreshResponse": "Refreshing Metadata / It may take a few minutes",
+      "itemRefreshRequestedAt": "2026-09-18T20:22:57.179198+00:00",
+      "historicalApprovalBlockReason": "Explicit permission required for Getgems item Refresh requests",
+      "items": {
+        "0": {
+          "metadataLoaded": false,
+          "refreshRequested": true,
+          "refreshAccepted": true,
+          "response": "Refreshing Metadata / It may take a few minutes",
+          "ownerMatched": true,
+          "tokenIdMatched": true,
+          "checkedAt": "2026-09-18T20:22:57.179198+00:00",
+          "detailsPageUrl": "https://testnet.getgems.io/collection/EQDXQnCTPsnb2fI8_CEL3TC-gKsTK_bbwPkSOPoerkcAeZSj/EQD-5of7TvHZBEwf1pgxuD7GZABb7WR2hetMc2Bko6Ad8Zt3"
+        },
+        "1": {
+          "metadataLoaded": false,
+          "refreshRequested": true,
+          "refreshAccepted": true,
+          "response": "Refreshing Metadata / It may take a few minutes",
+          "ownerMatched": true,
+          "tokenIdMatched": true,
+          "checkedAt": "2026-09-18T20:22:57.179198+00:00",
+          "detailsPageUrl": "https://testnet.getgems.io/collection/EQDXQnCTPsnb2fI8_CEL3TC-gKsTK_bbwPkSOPoerkcAeZSj/EQDDary7PODFhVXV0xmHdR4XNzwlfwm4OMsEy8RS0l-ZV9IO"
+        }
+      }
     },
     "prerevealOfflineTests": {
       "status": "passed-offline-only",
@@ -1265,6 +1295,6 @@
       "doesNotVerifyMarketplaceRendering": true
     }
   },
-  "note": "HOLD. Current approved-date-only candidate deployed and all four TESTNET transactions audited successfully; both NFTs owned by the expected wallet. Getgems has not loaded collection/item metadata. Collection refresh accepted; individual Refresh requests blocked by automatic approval pending explicit user permission. MAINNET, public sales, reveal and new transactions remain disabled.",
+  "note": "HOLD. Current approved-date-only TESTNET passed all four transaction audits and both NFT ownership checks. Public metadata and animated GIF readback passed. User explicitly authorized individual Getgems Refresh; both requests accepted. Collection and NFT display still pending. No mainnet transactions, public sales or reveal authorized.",
   "metadataCorrectionPending": false
 }
