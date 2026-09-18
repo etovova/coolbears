@@ -608,15 +608,15 @@
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
       "appliesToCurrentCandidate": true,
-      "checkedAt": "2026-09-18T18:59:57.452856+00:00",
-      "status": "partial-banner-pending",
+      "checkedAt": "2026-09-18T19:02:41.582152+00:00",
+      "status": "rendering-passed-description-rejected",
       "collectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
       "metadataUnavailable": false,
       "tonapiMetadataComplete": false,
       "refreshRequested": true,
       "reindexHttp200ForAllThreeAccounts": true,
       "logoVisible": true,
-      "bannerVisible": false,
+      "bannerVisible": true,
       "gifAnimated": true,
       "attributesAbsent": true,
       "percentagesAbsent": true,
@@ -656,12 +656,10 @@
       ],
       "independentIpfsRetrievalVerified": true,
       "collectionNameMatched": true,
-      "collectionDescriptionMatched": true,
+      "collectionDescriptionMatched": false,
       "collectionWebsiteMatched": true,
       "collectionCreatorMatched": true,
-      "remainingUiChecks": [
-        "collection banner"
-      ],
+      "remainingUiChecks": [],
       "collectionRefreshRequestedAt": "2026-09-18T18:59:57.452856+00:00"
     },
     "prerevealOfflineTests": {
@@ -860,7 +858,19 @@
       "samePrerevealImage": true,
       "animatedGifVerified": true,
       "appliesToCurrentCandidate": false
+    },
+    "descriptionCorrection": {
+      "status": "prepared-offline-not-activated",
+      "requestedAt": "2026-09-18T19:05:00Z",
+      "approvedDescriptionPath": "metadata/collection.json",
+      "existingTestnetMetadataImmutable": true,
+      "finalDescriptionAlsoNeedsCorrection": true,
+      "newContractDeployed": false,
+      "preparationReport": "release/description-correction/preparation.json",
+      "draftPackageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+      "publicSiteSourceCorrected": true
     }
   },
-  "note": "HOLD. Current candidate TESTNET deployment, reserved #0000, unpause and #0001 mint passed the full transaction BOC audit; both NFTs belong to the approved owner. Public prereveal metadata and all three media files match approved bytes; GIF 148 frames/4950ms. Getgems still shows metadata unavailable and TonAPI metadata is empty after accepted reindex requests. Marketplace prereveal UI remains unverified, so aggregate testnetVerified is false. MAINNET, real sales and automatic reveal remain disabled. No new chain transactions were sent by the auditor and no final files were published."
+  "note": "HOLD. Current candidate TESTNET deployment, reserved #0000, unpause and #0001 mint passed the full transaction BOC audit; both NFTs belong to the approved owner. Public prereveal metadata and all three media files match approved bytes; GIF 148 frames/4950ms. Getgems still shows metadata unavailable and TonAPI metadata is empty after accepted reindex requests. Marketplace prereveal UI remains unverified, so aggregate testnetVerified is false. MAINNET, real sales and automatic reveal remain disabled. No new chain transactions were sent by the auditor and no final files were published.",
+  "metadataCorrectionPending": true
 }

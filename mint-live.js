@@ -90,7 +90,7 @@
       const friendly=c.Address.parseFriendly(cfg.mintContractAddress);if(friendly.isTestOnly)throw Error('Configured destination is testnet');
       await approvedRelease();
       const count=n();const s=await checkLive();
-      if(s.next<1)throw Error('Creator reservation is not confirmed');if(s.paused)throw Error(t('paused'));if(s.soldOut)throw Error(t('sold'));if(s.next+count>Number(cfg.supply||10000))throw Error('Not enough NFTs remaining');
+      if(s.next<1)throw Error('Mint is not available yet');if(s.paused)throw Error(t('paused'));if(s.soldOut)throw Error(t('sold'));if(s.next+count>Number(cfg.supply||10000))throw Error('Not enough NFTs remaining');
       const body=c.beginCell().storeUint(0x4d494e54,32).storeUint(BigInt(Date.now()),64).storeUint(count,8).endCell();
       const amount=(BigInt(count)*BigInt(cfg.mintPaymentPerNftNano||7100000000)).toString();
       if(note)note.textContent=t('sent');

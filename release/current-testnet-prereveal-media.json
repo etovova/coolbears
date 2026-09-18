@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "status": "GETGEMS_COLLECTION_LOADED_BANNER_PENDING",
-  "checkedAt": "2026-09-18T18:59:57.452856+00:00",
+  "status": "GETGEMS_RENDERING_VERIFIED_DESCRIPTION_REJECTED",
+  "checkedAt": "2026-09-18T19:02:41.582152+00:00",
   "network": "testnet",
   "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
   "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
@@ -94,7 +94,7 @@
   "getgemsCollectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
   "getgemsCollectionError": null,
   "tonapiMetadataComplete": false,
-  "getgemsUiVerified": false,
+  "getgemsUiVerified": true,
   "mainnetReady": false,
   "transactionsSent": 0,
   "finalFilesPublished": false,
@@ -187,22 +187,22 @@
     }
   },
   "indexerNote": "Getgems NFT0001 loaded while TonAPI still returned empty metadata. Treat them as separate observations; do not infer Getgems state only from TonAPI.",
-  "remainingUiChecks": [
-    "collection banner"
-  ],
+  "remainingUiChecks": [],
   "httpsAlternativePublished": false,
   "newDeploymentRequested": false,
   "collectionRefreshRequestedAt": "2026-09-18T18:59:57.452856+00:00",
   "getgemsCollection": {
-    "checkedAt": "2026-09-18T18:59:57.452856+00:00",
+    "checkedAt": "2026-09-18T19:02:41.582152+00:00",
     "name": "CoolBears",
     "nameMatched": true,
-    "descriptionMatched": true,
+    "descriptionMatched": false,
     "websiteMatched": true,
     "creatorMatched": true,
     "logoVisible": true,
-    "bannerVisible": false,
+    "bannerVisible": true,
     "metadataErrorVisible": false,
-    "refreshResponse": "Refreshing Metadata / It may take a few minutes"
-  }
+    "refreshResponse": "Refreshing Metadata / It may take a few minutes",
+    "descriptionMatchesDeployedSource": true
+  },
+  "approvedDescriptionMatched": false
 }

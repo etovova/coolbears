@@ -41,7 +41,7 @@ async function send(action){
  if(busy||pending)return;busy=true;render();
  try{
   await check();const request=testnetRequest(core,p,action,wallet,state,BigInt(Date.now()));
-  const m=request.messages[0],labels={deploy:'создание контракта',claim:'резервный #0000',open:'открытие тестового минта',mint:'обычный тестовый #0001'};
+  const m=request.messages[0],labels={deploy:'создание контракта',claim:'тестовый #0000',open:'открытие тестового минта',mint:'обычный тестовый #0001'};
   if(!confirm(`TESTNET — только тестовые TON.\n${labels[action]}\nОтправка: ${Number(m.amount)/1e9} тестовых TON плюс комиссия.\nПродолжить?`))return;
   pending={action,createdAt:new Date().toISOString(),packageSha256:PACKAGE_SHA256};localStorage.setItem(pendingKey,JSON.stringify(pending));render();
   $('status').textContent='Подтверди TESTNET-запрос в кошельке. Реальные TON не требуются.';

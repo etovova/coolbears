@@ -10,7 +10,25 @@ concurrency:
   group: coolbears-hidden-metadata
   cancel-in-progress: false
 jobs:
+  selected-description:
+    runs-on: ubuntu-24.04
+    outputs:
+      ready: ${{ steps.selection.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: selection
+        name: Hold IPFS publication while the selected package needs corrected copy
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const state = JSON.parse(fs.readFileSync('release/launch-state.json'));
+          const ready = state.metadataCorrectionPending !== true;
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `ready=${ready}\n`);
+          if (!ready) console.log('Description correction is prepared separately; active IPFS publication stays held.');
+          NODE
   prepare:
+    needs: selected-description
+    if: needs.selected-description.outputs.ready == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

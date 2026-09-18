@@ -48,7 +48,7 @@ async function check(){
         const s=Cell.fromBase64(j.result.data).beginParse();
         if(s.loadAddress().toRawString()!==d.ownerAddressRaw)throw Error('Владелец не совпадает');
         const minted=Number(s.loadUintBig(64));s.loadRef();s.loadRef();s.loadRef();
-        if(s.loadAddress().toRawString()!==d.treasuryAddressRaw)throw Error('Получатель резерва не совпадает');
+        if(s.loadAddress().toRawString()!==d.treasuryAddressRaw)throw Error('Получатель NFT не совпадает');
         const paused=s.loadBit();state={status:'active',minted,paused};
         $('chain').textContent=`Контракт активен · Выпущено ${minted}/10000 · ${paused?'Публичный минт на паузе':'Публичный минт открыт'}`;
       }else throw Error('Неожиданное состояние адреса');
@@ -80,11 +80,11 @@ async function init(){
   if(p.network!=='testnet'||p.revealAt!==1798761600||p.initialPaused!==true||actual.toRawString()!==p.collectionAddressRaw||init.code.hash().toString('hex')!==p.collectionCodeHash)throw Error('Неверный пакет');
   const data=init.data.beginParse();if(data.loadAddress().toRawString()!==p.ownerAddressRaw||data.loadUintBig(64)!==0n)throw Error('Неверные начальные данные');
   const content=data.loadRef().beginParse();const cc=content.loadRef().beginParse();if(cc.loadUint(8)!==1||cc.loadStringTail()!==p.collectionMetadataIpfs||content.loadRef().beginParse().loadStringTail()!==p.preRevealMetadataRootIpfs)throw Error('Метаданные не совпадают');
-  data.loadRef();data.loadRef();if(data.loadAddress().toRawString()!==p.treasuryAddressRaw||!data.loadBit())throw Error('Неверный резерв или пауза');
+  data.loadRef();data.loadRef();if(data.loadAddress().toRawString()!==p.treasuryAddressRaw||!data.loadBit())throw Error('Неверная конфигурация или пауза');
   const deploy=p.tonConnectDeployMessage,claim=p.tonConnectCreatorClaimRequest;
   for(const m of [deploy,claim.messages[0]])if(!Address.parse(m.address).equals(actual)||!Address.parseFriendly(m.address).isTestOnly)throw Error('Неверный адрес отправки');
   if(deploy.amount!=='200000000'||deploy.stateInit!==p.stateInitBocBase64||claim.network!=='-3'||claim.from!==p.treasuryAddressRaw||claim.messages.length!==1||claim.messages[0].amount!=='7100000000')throw Error('Неверная транзакция');
-  const body=Cell.fromBase64(claim.messages[0].payload).beginParse();if(body.loadUint(32)!==0x52535630||body.loadUintBig(64)!==0n||body.remainingBits!==0||body.remainingRefs!==0)throw Error('Неверная команда резерва');
+  const body=Cell.fromBase64(claim.messages[0].payload).beginParse();if(body.loadUint(32)!==0x52535630||body.loadUintBig(64)!==0n||body.remainingBits!==0||body.remainingRefs!==0)throw Error('Неверная команда получения NFT');
   d=p;$('address').textContent=d.collectionAddressTestnetNonBounceable;
   if(!window.TON_CONNECT_UI)throw Error('Подключение кошелька не загрузилось. Обнови страницу.');
   ui=new TON_CONNECT_UI.TonConnectUI({manifestUrl:'https://coolbears-nfts.com/tonconnect-manifest.json',buttonRootId:'ton-connect'});

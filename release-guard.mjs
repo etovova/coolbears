@@ -25,6 +25,7 @@ function exactCandidate(p){
 }
 
 function correctedPrerequisites(s,p,packageHash){
+  yes(s.metadataCorrectionPending!==true,'Collection description correction is pending');
   yes(packageHash===PACKAGE_SHA256&&s.packageSha256===PACKAGE_SHA256,'Release is bound to different package bytes');
   yes(s.privateStorageVerified===true&&s.testnetVerified===true,'Corrected storage and TESTNET verification required');
 
@@ -110,7 +111,7 @@ export function validateLaunch(c,p,s,packageHash){
     return {phase:'prepared',setup:true,sales:false,automaticReveal:false};
   }
 
-  yes(s.mainnetVerified===true&&s.creatorNftVerified===true,'Mainnet and creator reserve verification required');
+  yes(s.mainnetVerified===true&&s.creatorNftVerified===true,'Mainnet and initial NFT verification required');
   mainnetProofs(s,p);
   yes(s.publicMintApproved===true,'Explicit public mint approval required');
   yes(c.demoMode===(s.phase!=='live'),'Site mode and approved phase disagree');

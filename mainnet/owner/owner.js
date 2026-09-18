@@ -90,7 +90,7 @@ async function verifyCreator(itemCode){
   const nft=contractAddress(0,{code:itemCode,data:initialData});
   const info=await addressInfo(nft.toRawString());
   if(['uninitialized','nonexist'].includes(info.state))return false;
-  if(info.state!=='active'||!info.code||!info.data)throw Error('Резервный NFT #0000 ещё не подтверждён');
+  if(info.state!=='active'||!info.code||!info.data)throw Error('NFT #0000 ещё не подтверждён');
   if(Cell.fromBase64(info.code).hash().toString('hex')!==expectedItemCodeHash)throw Error('Код NFT #0000 не совпадает с пакетом');
   const data=Cell.fromBase64(info.data).beginParse();
   if(data.loadUintBig(64)!==0n||!data.loadAddress().equals(collection))throw Error('Индекс или коллекция NFT #0000 не совпадают');

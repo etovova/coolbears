@@ -2,7 +2,7 @@
 import {PACKAGE_SHA256,REVISION,MANIFEST_SHA256,CAR_SHA256} from '../release-guard.mjs';
 export function preparedFixture(base,p){
   const binding={packageSha256:PACKAGE_SHA256,appliesToCurrentCandidate:true};
-  return {...structuredClone(base),phase:'prepared',testnetVerified:true,privateStorageVerified:true,mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false,
+  return {...structuredClone(base),phase:'prepared',metadataCorrectionPending:false,testnetVerified:true,privateStorageVerified:true,mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false,
     evidence:{
       privateStorage:{...binding,status:'passed',collectionRevision:REVISION,manifestSha256:MANIFEST_SHA256,carSha256:CAR_SHA256,partsExpected:48,partsVerified:48,allPartHashesVerified:true,fullReassemblyHashVerified:true},
       finalCollectionBranding:{...binding,status:'passed',manifestSha256:MANIFEST_SHA256,carSha256:CAR_SHA256,finalContentCommitment:p.finalContentCommitment,approvedLogoSha256:'5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7',approvedBannerSha256:'d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95',unchangedPngFiles:10000,unchangedMetadataFiles:10000,previousCarExactlyReproduced:true,actualRevealTvmVerified:true},

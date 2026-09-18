@@ -36,7 +36,7 @@ before publishing the final root. Original layers are still outstanding; no real
 
 ## Disclosure and rollout
 
-The public site discloses that the highest-ranked NFT is reserved for the creator.
+Public collection copy is maintained in metadata/collection.json.
 Its artwork and traits remain hidden. The reservation itself is not secret: observers
 can identify the reserved token and infer its intended rank. Do not describe public
 mint as giving buyers a chance at the collection's number-one NFT.

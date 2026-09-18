@@ -32,7 +32,7 @@ export function verifyPackage(core,p){
  for(const [k,bounce] of [['collectionAddressMainnetBounceable',true],['collectionAddressMainnetNonBounceable',false]]){
   const f=Address.parseFriendly(p[k]);requireThat(f.address.equals(address)&&f.isTestOnly===false&&f.isBounceable===bounce,'Incorrect mainnet address flag');
  }
- requireThat(p.creatorReservation?.tokenIndex===0&&p.creatorReservation.beneficiaryAddressRaw===EXPECTED_OWNER&&p.creatorReservation.opcode==='0x52535630','Creator reservation mismatch');
+ requireThat(p.creatorReservation?.tokenIndex===0&&p.creatorReservation.beneficiaryAddressRaw===EXPECTED_OWNER&&p.creatorReservation.opcode==='0x52535630','Initial NFT configuration mismatch');
  const dep=p.tonConnectDeployMessage,cl=p.tonConnectCreatorClaimRequest;
  requireThat(dep.address===p.collectionAddressMainnetNonBounceable&&dep.amount==='300000000'&&dep.stateInit===p.stateInitBocBase64&&empty(Cell.fromBase64(dep.payload).beginParse()),'Wrong deployment request');
  requireThat(cl.network==='-239'&&cl.from===EXPECTED_OWNER&&cl.messages?.length===1,'Wrong creator request');

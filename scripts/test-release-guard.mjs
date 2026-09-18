@@ -58,6 +58,7 @@ test('Live requires demoMode false',()=>assert.equal(validateLaunch({...cfg,demo
 test('Wrong wallet cannot operate',()=>assert.equal(canOperate('claim',validateLaunch(cfg,p,prepared,PACKAGE_SHA256),active0,false),false));
 
 for(const key of ['privateStorageVerified','testnetVerified'])test('Missing prerequisite '+key,()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(prepared),[key]:false},PACKAGE_SHA256)));
+test('Pending description correction blocks preparation',()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(prepared),metadataCorrectionPending:true},PACKAGE_SHA256)));
 test('Wrong package checksum rejected',()=>assert.throws(()=>validateLaunch(cfg,p,prepared,'0'.repeat(64))));
 test('Wrong revision rejected',()=>assert.throws(()=>validateLaunch(cfg,{...p,collectionRevision:'v3'},prepared,PACKAGE_SHA256)));
 test('Wrong CAR rejected',()=>assert.throws(()=>validateLaunch(cfg,{...p,releaseCarSha256:'0'.repeat(64)},prepared,PACKAGE_SHA256)));
@@ -78,7 +79,7 @@ test('Prereveal animated GIF proof required',()=>{
   const s=clone(prepared);s.evidence.correctedPrerevealMedia.animatedGifVerified=false;
   assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
 });
-test('Real release cannot be prepared by changing only its phase',()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(base),phase:'prepared'},PACKAGE_SHA256)));
+test('Unverified TESTNET cannot be prepared by changing only its phase',()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(base),testnetVerified:false,phase:'prepared'},PACKAGE_SHA256)));
 test('Held bytes must match package hash',()=>assert.throws(()=>validateLaunch(cfg,p,hold,'0'.repeat(64))));
 for(const name of ['prerevealMetadataPublication','prerevealGetgemsUi']){
   test('Missing '+name+' blocks preparation',()=>{const s=clone(prepared);delete s.evidence[name];assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
