@@ -42,7 +42,13 @@ jobs:
           grep -qi '^content-type: image/png' /tmp/rarity/assets_CoolBears_Getgems_Banner_2880x680.png.headers
           test "$(jq -r '.image' /tmp/rarity/collection.json)" = "https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png"
           test "$(jq -r '.cover_image' /tmp/rarity/collection.json)" = "https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png"
-          test "$(jq -r '.description|length' /tmp/rarity/collection.json)" -gt 200
+          test "$(jq -r '.name' /tmp/rarity/collection.json)" = "CoolBears"
+          EXPECTED='10,000 unique CoolBears on TON. Everyone gets a bear. Not everyone gets a legend.
+
+No real value. No financial returns. No celebrity backing. Don’t buy expecting profit. CoolBears is just for fun.
+
+Mint will be available at https://coolbears-nfts.com'
+          test "$(jq -r '.description' /tmp/rarity/collection.json)" = "$EXPECTED"
           for i in 0000 0001 0002 0003; do
             cmp --silent "testnet/rarity-probe/$i.json" "/tmp/rarity/$i.json"
             grep -qi '^content-type: image/png' "/tmp/rarity/assets_${i}.png.headers"
