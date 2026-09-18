@@ -274,7 +274,26 @@
       "workflowRunId": 35324278068,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsFinalMediaProbe": {
+      "status": "prepared-published-undeployed",
+      "checkedAt": "2026-09-18T08:43:00Z",
+      "diagnosticOnly": true,
+      "variant": "static-branding-full-original-gif",
+      "collectionAddressTestnetBounceable": "kQCJMZr97lvrX__EqQSO2wuWU9bhuxfPWKKE9hWMPElWQ9ww",
+      "codeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "collectionAvatarStaticPng": true,
+      "collectionCoverStaticPng": true,
+      "nftGifFrames": 148,
+      "nftGifDurationMs": 4950,
+      "nftGifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+      "publishedLayoutVerified": true,
+      "probeUndeployedVerified": true,
+      "publicCheckRunId": 35325797098,
+      "productionHold": true,
+      "mainnetTouched": false,
+      "transactionsSent": 0
     }
   },
-  "note": "Production remains HOLD. The isolated valid-GIF TESTNET probe #0000 is live and fully indexed by TonAPI, with strict-valid 50-frame GIF bytes referenced directly by metadata. The remaining check is Getgems UI playback behavior for this exact NFT."
+  "note": "Production remains HOLD. A final-layout diagnostic TESTNET probe is published and verified: separate static collection avatar/cover and the original strict-valid 148-frame, 4.95-second prereveal GIF on NFT #0000. Exact Getgems marketplace logo/banner remain separate approved branding assets and are not replaced by these technical probe PNGs."
 }
