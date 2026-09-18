@@ -1,11 +1,10 @@
 # CoolBears
 
-Official CoolBears website for https://coolbears-nfts.com/
+Сайт: https://coolbears-nfts.com
 
-- Network: TON mainnet
-- Supply: 10,000
-- Mint price: 7 TON
-- Royalty: 7%
-- Reveal: October 7, 2026
+Активная сборка: `fresh-20260918`.
+Текущее состояние: [docs/STATUS.md](docs/STATUS.md).
+Утверждённые тексты и параметры: [metadata/policy.json](metadata/policy.json).
 
-This repository contains the public website only. Final reveal mappings, private rarity data, unrevealed metadata, and private keys must never be committed here.
+Публикация: `node scripts/stage-site.mjs`.
+В Pages попадают только перечисленные файлы сайта и скрытые metadata.

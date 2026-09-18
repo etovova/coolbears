@@ -1,7 +1,0 @@
-{
-  "name": "CoolBears GIF Probe",
-  "description": "Getgems TESTNET compatibility probe using strict-valid animated GIF media and HTTPS metadata.",
-  "image": "https://coolbears-nfts.com/testnet/getgems-gif-ab/assets/avatar.gif",
-  "cover_image": "https://coolbears-nfts.com/testnet/getgems-gif-ab/assets/cover.gif",
-  "social_links": ["https://coolbears-nfts.com/"]
-}

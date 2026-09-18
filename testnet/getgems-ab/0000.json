@@ -1,8 +1,0 @@
-{
-  "name": "CoolBears Probe #0000",
-  "description": "Static HTTPS metadata compatibility probe.",
-  "image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/image.png",
-  "attributes": [
-    {"trait_type":"Status","value":"Probe"}
-  ]
-}

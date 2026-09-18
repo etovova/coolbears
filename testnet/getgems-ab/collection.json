@@ -1,7 +1,0 @@
-{
-  "name": "CoolBears Probe",
-  "description": "Getgems TESTNET metadata compatibility probe using static PNG images and HTTPS metadata only.",
-  "image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/image.png",
-  "cover_image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/cover.png",
-  "social_links": ["https://coolbears-nfts.com/"]
-}

@@ -1,0 +1,45 @@
+{
+  "version": "fresh-20260918",
+  "collectionName": "CoolBears",
+  "collectionDescription": "10,000 unique CoolBears on TON. Everyone gets a bear. Not everyone gets a legend.\n\nNo real value. No financial returns. No celebrity backing. Don’t buy expecting profit. CoolBears is just for fun.\n\nMint will be available at https://coolbears-nfts.com",
+  "hiddenDescription": "Your CoolBear is hiding. Final artwork, traits and rarity remain hidden until reveal, no earlier than January 1, 2027. Everyone gets a bear. Not everyone gets a legend.",
+  "hiddenName": "CoolBears #{index:04d} — Hidden Bear",
+  "revealedName": "CoolBears #{index:04d}",
+  "supply": 10000,
+  "priceTon": "7",
+  "attachmentPerNftTon": "7.10",
+  "royaltyPercent": 7,
+  "maxPerTransaction": 50,
+  "earliestRevealDate": "2027-01-01",
+  "website": "https://coolbears-nfts.com",
+  "owner": "0:6ea2cc995c7d4f236441c6c520b236c3e919ec54e331b4269528428c651a5717",
+  "publicAssets": {
+    "logo": {
+      "sha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+      "bytes": 416229,
+      "size": [
+        1000,
+        1000
+      ],
+      "frames": 1
+    },
+    "banner": {
+      "sha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+      "bytes": 685128,
+      "size": [
+        2048,
+        483
+      ],
+      "frames": 1
+    },
+    "gif": {
+      "sha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+      "bytes": 1319230,
+      "size": [
+        640,
+        640
+      ],
+      "frames": 148
+    }
+  }
+}
