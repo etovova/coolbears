@@ -308,7 +308,37 @@
       "workflowRunId": 35327051734,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsRarityProbe": {
+      "status": "prepared-published-undeployed",
+      "checkedAt": "2026-09-18T09:26:00Z",
+      "diagnosticOnly": true,
+      "variant": "getgems-rarity-four-item",
+      "collectionAddressRaw": "0:e0f02bce2f068f6d9ada35c322e14f01631480c3a2189f8a47b2f83a57ed66bc",
+      "collectionAddressTestnetBounceable": "kQDg8CvOLwaPbZraNcMi4U8BYxSAw6IYn4pHsvg6V-1mvDJI",
+      "collectionCodeHash": "c21c7ffd950930209705f131f6738a4a0e8ffc12331d95a0005a1b4aa36c4171",
+      "nftItemCodeHash": "ba4d975d2b66231c1f0a0ccca6e8ff8f7ba0610c4b7639584b8e98303dc3128c",
+      "supply": 4,
+      "priceNanoTon": 50000000,
+      "paymentNanoTon": 100000000,
+      "expectedPercentages": [
+        25,
+        50,
+        75
+      ],
+      "expectedRarityOrder": [
+        "0000",
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "publishedBytesVerified": true,
+      "probeUndeployedVerified": true,
+      "publicCheckRunId": 35329538703,
+      "productionHold": true,
+      "mainnetTouched": false,
+      "transactionsSent": 0
     }
   },
-  "note": "Production remains HOLD. The final-layout TESTNET probe is live and indexed by TonAPI with static collection avatar/cover and is ready to mint diagnostic #0000 using the original 148-frame, 4.95-second prereveal GIF."
+  "note": "Production remains HOLD. A separate four-item TESTNET rarity probe is published and verified undeployed. It uses seven standard NFT attributes with controlled 25/50/75 percent frequencies and a mathematically distinct expected rarity order #0000 > #0001 > #0002 > #0003. This diagnostic contract is isolated from the production CoolBears candidate."
 }
