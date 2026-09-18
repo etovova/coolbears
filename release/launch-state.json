@@ -430,7 +430,38 @@
       "reindexWorkflowRunId": 35335730201,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsCleanFinalVisualProbe": {
+      "status": "published-verified-undeployed",
+      "checkedAt": "2026-09-18T10:54:30Z",
+      "diagnosticOnly": true,
+      "variant": "clean-final-visual-rarity",
+      "collectionAddressTestnetBounceable": "kQAaApvx2jTuKgCevTdiFfieHctxbEyH9ntFPre6AiogpnAN",
+      "collectionCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "sameAsProductionCoolBearsCodeHash": true,
+      "exactApprovedLogo": true,
+      "exactApprovedBanner": true,
+      "approvedDescriptionExact": true,
+      "allFourUseSameFullSpeedGif": true,
+      "gifFrames": 148,
+      "gifDurationMs": 4950,
+      "allFourHaveSevenAttributes": true,
+      "controlledRarityPercentages": [
+        25,
+        50,
+        75
+      ],
+      "expectedRarityOrder": [
+        "0000",
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "publicCheckRunId": 35336914476,
+      "probeUndeployedVerified": true,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. The Getgems rarity TESTNET verification now has four live NFTs on the verified production-like CoolBears contract. TonAPI reindex returned HTTP 200 for the collection and all four NFTs; all four now expose exact CoolBears names and seven controlled attributes. Approved collection branding and description are published. Remaining verification is visual Getgems UI behavior for rarity rank and percentage rendering."
+  "note": "Production remains HOLD. A fresh clean TESTNET collection has been prepared specifically to eliminate Getgems cache contamination. It uses the exact approved CoolBears logo, banner and user-approved collection description from first indexing, the exact verified CoolBears contract code hash, and four NFTs all using the same strict-valid 148-frame/4.95-second prereveal GIF with seven controlled attributes. The fresh address is still undeployed."
 }
