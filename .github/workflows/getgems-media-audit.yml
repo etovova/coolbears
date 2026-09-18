@@ -1,0 +1,111 @@
+name: Audit Getgems media limits
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/getgems-media-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+
+      - name: Fetch exact live collection metadata/image and NFT prereveal image
+        run: |
+          set -euo pipefail
+          CURI=$(jq -r '.collectionMetadataIpfs' launch/candidate.json)
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${CURI#ipfs://}" -o /tmp/collection.json
+          CIMG=$(jq -r '.image' /tmp/collection.json)
+          CCOVER=$(jq -r '.cover_image' /tmp/collection.json)
+          NROOT=$(jq -r '.preRevealMetadataRootIpfs' launch/candidate.json)
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${NROOT#ipfs://}0000.json" -o /tmp/nft0.json
+          NIMG=$(jq -r '.image' /tmp/nft0.json)
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${CIMG#ipfs://}" -o /tmp/collection-image.bin
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${CCOVER#ipfs://}" -o /tmp/collection-cover.bin
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${NIMG#ipfs://}" -o /tmp/nft-image.bin
+
+      - name: Inspect all live and repository media
+        run: |
+          mkdir -p build/getgems-media
+          python3 - <<'PY'
+          from PIL import Image,ImageFile
+          import hashlib, json, os
+          ImageFile.LOAD_TRUNCATED_IMAGES=False
+          paths={
+            'live_collection_image':'/tmp/collection-image.bin',
+            'live_collection_cover':'/tmp/collection-cover.bin',
+            'live_nft_image':'/tmp/nft-image.bin',
+            'repo_prereveal':'assets/coolbears-prereveal.gif',
+            'repo_prereveal_opt':'assets/coolbears-prereveal-opt.gif',
+          }
+          out={}
+          for name,p in paths.items():
+              raw=open(p,'rb').read()
+              im=Image.open(p)
+              frames=getattr(im,'n_frames',1)
+              durations=[]
+              for i in range(frames):
+                  im.seek(i)
+                  durations.append(im.info.get('duration',0))
+                  im.load()
+              out[name]={
+                'format':im.format,
+                'size':list(im.size),
+                'frames':frames,
+                'loop':im.info.get('loop'),
+                'durationMs':sum(durations),
+                'bytes':len(raw),
+                'sha256':hashlib.sha256(raw).hexdigest(),
+              }
+          out['limits']={
+            'collectionImageFramesMax':100,
+            'collectionCoverFramesMax':30,
+            'nftImageFramesMax':None,
+          }
+          out['compatibility']={
+            'collectionImageFramesOk':out['live_collection_image']['frames']<=100,
+            'collectionCoverFramesOk':out['live_collection_cover']['frames']<=30,
+            'collectionImageSquare':out['live_collection_image']['size'][0]==out['live_collection_image']['size'][1],
+            'collectionCoverRecommendedAspect':abs(out['live_collection_cover']['size'][0]/out['live_collection_cover']['size'][1]-(2880/680))<0.25,
+          }
+          open('build/getgems-media/report.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Verify metadata field lengths and documented fields
+        run: |
+          python3 - <<'PY'
+          import json
+          c=json.load(open('/tmp/collection.json'))
+          n=json.load(open('/tmp/nft0.json'))
+          out={
+            'collectionNameLength':len(c.get('name','')),
+            'collectionDescriptionLength':len(c.get('description','')),
+            'nftNameLength':len(n.get('name','')),
+            'nftDescriptionLength':len(n.get('description','')),
+            'collectionFields':sorted(c.keys()),
+            'nftFields':sorted(n.keys()),
+            'collectionDescriptionUnder500':len(c.get('description',''))<=500,
+            'nftDescriptionUnder500':len(n.get('description',''))<=500,
+          }
+          open('build/getgems-media/metadata-shape.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: getgems-media-audit
+          path: build/getgems-media/
+          retention-days: 30
