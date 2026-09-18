@@ -1,0 +1,171 @@
+name: Verify all four rarity probe NFTs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rarity-all4-live-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
+
+      - name: Verify collection and all four NFT items on TESTNET
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          mkdir -p build/rarity-all4
+          cat > check-all4.mjs <<'NODE'
+          import fs from 'node:fs';
+          import {Address,Cell} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+
+          const p=JSON.parse(fs.readFileSync('testnet/getgems-finalmedia-ab/deployment.json','utf8'));
+          const collection=Address.parse(p.collectionAddressRaw);
+          const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          async function run(a,m,stack=[]){
+            let last;
+            for(let i=1;i<=12;i++){
+              try { const r=await client.runMethod(a,m,stack); await sleep(1200); return r; }
+              catch(e){ last=e; if(e?.response?.status!==429||i===12) throw e; await sleep(i*1800); }
+            }
+            throw last;
+          }
+
+          const st=await client.getContractState(collection);
+          if(st.state!=='active'||!st.code) throw Error('COLLECTION_NOT_ACTIVE');
+          const codeHash=Cell.fromBoc(st.code)[0].hash().toString('hex');
+          if(codeHash!==p.collectionCodeHash) throw Error('COLLECTION_CODE_HASH_MISMATCH');
+
+          const mint=(await run(collection,'get_mint_state')).stack;
+          const next=mint.readBigNumber();
+          const supply=mint.readBigNumber();
+          const price=mint.readBigNumber();
+          const paused=mint.readBigNumber();
+          if(next!==4n) throw Error('EXPECTED_NEXT_4_GOT_'+next);
+          if(supply!==10000n) throw Error('SUPPLY_MISMATCH');
+          if(price!==7000000000n) throw Error('PRICE_MISMATCH');
+
+          const cd=(await run(collection,'get_collection_data')).stack;
+          const cdNext=cd.readBigNumber();
+          const content=cd.readCell();
+          const owner=cd.readAddress();
+          if(cdNext!==4n) throw Error('COLLECTION_NEXT_MISMATCH');
+          if(owner.toRawString()!==p.ownerAddressRaw) throw Error('COLLECTION_OWNER_MISMATCH');
+          const cs=content.beginParse();
+          if(cs.loadUint(8)!==1) throw Error('COLLECTION_CONTENT_TAG_MISMATCH');
+          const collectionUri=cs.loadStringTail();
+          if(collectionUri!==p.collectionMetadataUrl) throw Error('COLLECTION_URI_MISMATCH');
+
+          const items=[];
+          for(let i=0;i<4;i++){
+            const ar=(await run(collection,'get_nft_address_by_index',[{type:'int',value:BigInt(i)}])).stack;
+            const a=ar.readAddress();
+            const ns=await client.getContractState(a);
+            if(ns.state!=='active'||!ns.code) throw Error('NFT_'+i+'_NOT_ACTIVE');
+            const itemHash=Cell.fromBoc(ns.code)[0].hash().toString('hex');
+            if(itemHash!==p.nftItemCodeHash) throw Error('NFT_'+i+'_CODE_HASH_MISMATCH');
+
+            const nd=(await run(a,'get_nft_data')).stack;
+            const initialized=nd.readBigNumber();
+            const index=nd.readBigNumber();
+            const coll=nd.readAddress();
+            const nftOwner=nd.readAddress();
+            const individual=nd.readCell();
+            if(initialized!==-1n||index!==BigInt(i)||coll.toRawString()!==collection.toRawString()) throw Error('NFT_'+i+'_DATA_MISMATCH');
+            if(nftOwner.toRawString()!==p.ownerAddressRaw) throw Error('NFT_'+i+'_OWNER_MISMATCH');
+
+            const suffix=individual.beginParse().loadStringTail();
+            const expectedSuffix=String(i).padStart(4,'0')+'.json';
+            if(suffix!==expectedSuffix) throw Error('NFT_'+i+'_SUFFIX_MISMATCH');
+
+            const fc=(await run(collection,'get_nft_content',[{type:'int',value:BigInt(i)},{type:'cell',cell:individual}])).stack.readCell().beginParse();
+            if(fc.loadUint(8)!==1) throw Error('NFT_'+i+'_CONTENT_TAG_MISMATCH');
+            const uri=fc.loadStringTail();
+            const expected=p.commonMetadataPrefix+expectedSuffix;
+            if(uri!==expected) throw Error('NFT_'+i+'_URI_MISMATCH');
+
+            items.push({index:i,addressTestnetBounceable:a.toString({testOnly:true,bounceable:true}),ownerRaw:nftOwner.toRawString(),metadataUri:uri,codeHash:itemHash});
+          }
+
+          const report={status:'RARITY_ALL4_ONCHAIN_VERIFIED',collection:p.collectionAddressTestnetBounceable,nextItemIndex:Number(next),supply:Number(supply),priceNanoTon:Number(price),paused:paused===1n,collectionUri,items};
+          fs.writeFileSync('build/rarity-all4/onchain.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify(report,null,2));
+          NODE
+          node check-all4.mjs
+
+      - name: Poll TonAPI until all four metadata are indexed
+        run: |
+          set -euo pipefail
+          mkdir -p build/rarity-all4/tonapi
+          COLL=$(jq -r '.collection' build/rarity-all4/onchain.json)
+          for attempt in {1..16}; do
+            cc=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o build/rarity-all4/tonapi/collection.json "https://testnet.tonapi.io/v2/nfts/collections/$COLL" || true)
+            ok=1
+            echo "attempt=$attempt collection_http=$cc"
+            if [ "$cc" != '200' ]; then ok=0; fi
+            for idx in 0 1 2 3; do
+              A=$(jq -r ".items[$idx].addressTestnetBounceable" build/rarity-all4/onchain.json)
+              nc=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o "build/rarity-all4/tonapi/nft${idx}.json" "https://testnet.tonapi.io/v2/nfts/$A" || true)
+              name=$(jq -r '.metadata.name // empty' "build/rarity-all4/tonapi/nft${idx}.json" 2>/dev/null || true)
+              attrs=$(jq '.metadata.attributes // [] | length' "build/rarity-all4/tonapi/nft${idx}.json" 2>/dev/null || echo 0)
+              printf '  nft%s http=%s name=%s attrs=%s\n' "$idx" "$nc" "$name" "$attrs"
+              expected=$(printf 'CoolBears #%04d' "$idx")
+              if [ "$nc" != '200' ] || [ "$name" != "$expected" ] || [ "$attrs" != '7' ]; then ok=0; fi
+            done
+            cname=$(jq -r '.metadata.name // empty' build/rarity-all4/tonapi/collection.json 2>/dev/null || true)
+            cimg=$(jq -r '.metadata.image // empty' build/rarity-all4/tonapi/collection.json 2>/dev/null || true)
+            ccover=$(jq -r '.metadata.cover_image // empty' build/rarity-all4/tonapi/collection.json 2>/dev/null || true)
+            if [ "$cname" != 'CoolBears' ] || [ "$cimg" != 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png' ] || [ "$ccover" != 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png' ]; then ok=0; fi
+            if [ "$ok" = '1' ]; then
+              echo TONAPI_ALL4_METADATA_COMPLETE=1
+              exit 0
+            fi
+            sleep 20
+          done
+          echo TONAPI_ALL4_METADATA_INCOMPLETE
+          exit 1
+
+      - name: Save concise TonAPI evidence
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const read=p=>{try{return JSON.parse(fs.readFileSync(p,'utf8'))}catch{return null}};
+          const out={collection:null,items:[]};
+          const c=read('build/rarity-all4/tonapi/collection.json');
+          out.collection=c?{name:c.metadata?.name||null,description:c.metadata?.description||null,image:c.metadata?.image||null,cover_image:c.metadata?.cover_image||null,next_item_index:c.next_item_index??null}:null;
+          for(let i=0;i<4;i++){const n=read('build/rarity-all4/tonapi/nft'+i+'.json');out.items.push(n?{index:i,name:n.metadata?.name||null,attributes:n.metadata?.attributes||[],previews:n.previews||[]}:null);}
+          fs.writeFileSync('build/rarity-all4/tonapi-summary.json',JSON.stringify(out,null,2)+'\n');
+          console.log(JSON.stringify(out,null,2));
+          NODE
+
+      - name: Reconfirm production HOLD
+        if: always()
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rarity-all4-testnet-evidence
+          path: build/rarity-all4/
+          retention-days: 30
