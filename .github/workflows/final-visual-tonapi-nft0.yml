@@ -1,0 +1,55 @@
+name: Check final visual NFT 0000 via TonAPI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-visual-tonapi-nft0.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read collection item 0000 from TonAPI
+        run: |
+          set -euo pipefail
+          COLL=$(jq -r '.collectionAddressTestnetBounceable' testnet/getgems-final-visual/deployment.json)
+          mkdir -p build/final-visual-tonapi
+          code=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o build/final-visual-tonapi/items.json "https://testnet.tonapi.io/v2/nfts/collections/$COLL/items?limit=10&offset=0" || true)
+          echo "HTTP=$code"
+          test "$code" = '200'
+          jq . build/final-visual-tonapi/items.json
+          addr=$(jq -r '.nft_items[] | select(.index==0) | .address' build/final-visual-tonapi/items.json)
+          test -n "$addr"
+          echo "$addr" > build/final-visual-tonapi/nft0.txt
+          rcode=$(curl -sS -X POST -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o /tmp/reindex.body "https://testnet.tonapi.io/v2/accounts/$addr/reindex" || true)
+          echo "REINDEX=$rcode"
+          test "$rcode" = '200'
+          for i in {1..12}; do
+            ncode=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o build/final-visual-tonapi/nft0.json "https://testnet.tonapi.io/v2/nfts/$addr" || true)
+            name=$(jq -r '.metadata.name // empty' build/final-visual-tonapi/nft0.json 2>/dev/null || true)
+            attrs=$(jq '.metadata.attributes // [] | length' build/final-visual-tonapi/nft0.json 2>/dev/null || echo 0)
+            img=$(jq -r '.metadata.image // empty' build/final-visual-tonapi/nft0.json 2>/dev/null || true)
+            echo "attempt=$i http=$ncode name=$name attrs=$attrs"
+            if [ "$ncode" = '200' ] && [ "$name" = 'CoolBears #0000' ] && [ "$attrs" = '7' ] && [ -n "$img" ]; then
+              echo FINAL_VISUAL_NFT0_TONAPI_OK
+              jq '{address,index,owner,collection,metadata,previews}' build/final-visual-tonapi/nft0.json
+              exit 0
+            fi
+            sleep 8
+          done
+          exit 1
+      - name: Reconfirm production HOLD
+        if: always()
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
