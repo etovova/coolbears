@@ -1,0 +1,103 @@
+name: Verify clean final visual TESTNET live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-visual-live-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
+
+      - name: Verify fresh final-visual collection on TESTNET
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          cat > check.mjs <<'NODE'
+          import fs from 'node:fs';
+          import {Address,Cell} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+
+          const p=JSON.parse(fs.readFileSync('testnet/getgems-final-visual/deployment.json','utf8'));
+          const c=Address.parse(p.collectionAddressRaw);
+          const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+          let state;
+          for(let i=1;i<=10;i++){
+            try{
+              state=await client.getContractState(c);
+              if(state.state==='active') break;
+            }catch{}
+            await sleep(i*1200);
+          }
+          if(!state||state.state!=='active'||!state.code||!state.data) throw Error('COLLECTION_NOT_ACTIVE');
+
+          const codeHash=Cell.fromBoc(state.code)[0].hash().toString('hex');
+          if(codeHash!==p.collectionCodeHash) throw Error('CODE_HASH_MISMATCH');
+          if(codeHash!=='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b') throw Error('NOT_VERIFIED_COOLBEARS_CODE');
+
+          async function run(m,stack=[]){
+            let last;
+            for(let i=1;i<=10;i++){
+              try{return await client.runMethod(c,m,stack)}
+              catch(e){last=e;await sleep(i*1500)}
+            }
+            throw last;
+          }
+
+          const mint=(await run('get_mint_state')).stack;
+          const next=mint.readBigNumber();
+          const supply=mint.readBigNumber();
+          const price=mint.readBigNumber();
+          const paused=mint.readBigNumber();
+          if(next!==0n) throw Error('NEXT_NOT_0');
+          if(supply!==10000n) throw Error('SUPPLY_MISMATCH');
+          if(price!==7000000000n) throw Error('PRICE_MISMATCH');
+          if(paused!==1n) throw Error('MINT_NOT_PAUSED');
+
+          const cd=(await run('get_collection_data')).stack;
+          const cdNext=cd.readBigNumber();
+          const content=cd.readCell();
+          const owner=cd.readAddress();
+          if(cdNext!==0n) throw Error('COLLECTION_NEXT_NOT_0');
+          if(owner.toRawString()!==p.ownerAddressRaw) throw Error('OWNER_MISMATCH');
+          const s=content.beginParse();
+          if(s.loadUint(8)!==1) throw Error('CONTENT_TAG_MISMATCH');
+          const uri=s.loadStringTail();
+          if(uri!==p.collectionMetadataUrl) throw Error('COLLECTION_URI_MISMATCH');
+
+          console.log(JSON.stringify({
+            status:'FINAL_VISUAL_LIVE_VERIFIED',
+            collection:p.collectionAddressTestnetBounceable,
+            codeHash,
+            nextItemIndex:Number(next),
+            supply:Number(supply),
+            priceNanoTon:Number(price),
+            paused:true,
+            collectionUri:uri
+          },null,2));
+          NODE
+          node check.mjs
+
+      - name: Reconfirm production HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
