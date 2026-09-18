@@ -1,11 +1,7 @@
 name: Upload CoolBears collection metadata to Pinata
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/collection-metadata-pinata.yml'
-      - 'metadata/collection.json'
+  # Automatic publication is consolidated in hidden-metadata-release.yml.
   workflow_dispatch:
 
 permissions:

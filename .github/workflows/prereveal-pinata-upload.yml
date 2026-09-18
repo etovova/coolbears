@@ -1,12 +1,7 @@
 name: Upload CoolBears prereveal metadata to Pinata
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/prereveal-pinata-upload.yml'
-      - 'metadata/prereveal.json'
-      - 'scripts/generate-prereveal-metadata.mjs'
+  # Automatic publication is consolidated in hidden-metadata-release.yml.
   workflow_dispatch:
 
 permissions:
@@ -32,8 +27,8 @@ jobs:
       - name: Pack metadata directory into an IPFS CAR
         run: |
           set -euo pipefail
-          npm install --no-save ipfs-car
-          npx ipfs-car pack build/prereveal-metadata --output coolbears-prereveal-metadata.car
+          npm install --no-save --ignore-scripts ipfs-car@3.1.0
+          npx ipfs-car pack --no-wrap build/prereveal-metadata --output coolbears-prereveal-metadata.car
           test -s coolbears-prereveal-metadata.car
           echo "CAR bytes: $(wc -c < coolbears-prereveal-metadata.car)"
 
@@ -74,7 +69,7 @@ jobs:
                 pass=0
                 break
               fi
-              if ! node -e "const j=require('./verify-${id}.json'); if(!j.image?.startsWith('ipfs://') || j.attributes?.[0]?.value!=='Unrevealed') process.exit(1)"; then
+              if ! node --input-type=module -e "import fs from 'node:fs'; import {validateHiddenMetadata} from './scripts/prereveal-policy.mjs'; validateHiddenMetadata(JSON.parse(fs.readFileSync('verify-${id}.json')),Number('${id}'));"; then
                 pass=0
                 break
               fi

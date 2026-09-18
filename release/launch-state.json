@@ -4,13 +4,13 @@
   "candidateVersion": "committed-reveal-v1",
   "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
-  "testnetVerified": true,
+  "testnetVerified": false,
   "privateStorageVerified": true,
   "mainnetVerified": false,
   "creatorNftVerified": false,
   "publicMintApproved": false,
   "automaticRevealArmed": false,
-  "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+  "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
   "evidence": {
     "privateStorage": {
       "status": "passed",
@@ -27,7 +27,8 @@
       "allPartHashesVerified": true,
       "fullReassemblyHashVerified": true,
       "network": "private",
-      "workflowRunId": 35277169547
+      "workflowRunId": 35277169547,
+      "appliesToCurrentCandidate": false
     },
     "legacyTestnet": {
       "status": "passed-for-superseded-v3-only",
@@ -56,7 +57,7 @@
       "scenariosPassed": 22,
       "realNetworkRequests": 0,
       "realTransactions": 0,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedTestnetDeployment": {
       "status": "active-paused-verified",
@@ -75,7 +76,7 @@
       "collectionGetterResponds": true,
       "creatorNftVerified": false,
       "buyerNftVerified": false,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedCreatorNft0000": {
       "status": "verified-live-testnet",
@@ -88,7 +89,7 @@
       "nftIndex": 0,
       "ownerVerified": true,
       "metadataUriVerified": true,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedTestnetMintOpen": {
       "status": "verified-live-testnet",
@@ -99,7 +100,7 @@
       "nextItemIndex": 1,
       "paused": false,
       "nft0OwnerVerified": true,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedTestnetNft0001": {
       "status": "verified-live-testnet",
@@ -112,7 +113,7 @@
       "nft1OwnerVerified": true,
       "nft0MetadataUriVerified": true,
       "nft1MetadataUriVerified": true,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedTestnetTransactionAudit": {
       "status": "passed",
@@ -129,7 +130,7 @@
         "mint"
       ],
       "transactionsSent": 0,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedPrerevealMedia": {
       "status": "passed",
@@ -139,7 +140,7 @@
       "metadata0001Available": true,
       "samePrerevealImage": true,
       "animatedGifVerified": true,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "correctedMainnetPreparation": {
       "status": "passed-offline-only",
@@ -152,7 +153,7 @@
       "deployAmountNanoTon": 300000000,
       "publicMintApproved": false,
       "transactionsSent": 0,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "getgemsTestnetCompatibility": {
       "status": "blocked-pending-indexer-metadata",
@@ -165,7 +166,7 @@
       "liveGifAnimatedVerified": true,
       "getgemsUiObservedMetadataUnavailable": true,
       "mainnetBlockedUntilResolved": true,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "getgemsMediaAudit": {
       "status": "root-cause-candidate-confirmed",
@@ -182,7 +183,7 @@
       "nftPrerevealGifFrames": 148,
       "nftPrerevealGifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
       "mediaAuditRunId": 35319717974,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "getgemsStaticHttpsAbProbe": {
       "status": "prepared-published-undeployed",
@@ -502,7 +503,7 @@
       "mainnetTouched": false
     },
     "getgemsFinalVisualUi": {
-      "status": "visual-and-metadata-verified-rarity-ui-pending",
+      "status": "visual-and-metadata-and-rarity-verified-for-diagnostic-only",
       "checkedAt": "2026-09-18T11:45:00Z",
       "collectionAddressTestnetBounceable": "kQAaApvx2jTuKgCevTdiFfieHctxbEyH9ntFPre6AiogpnAN",
       "allFourOnchainVerified": true,
@@ -513,13 +514,39 @@
       "exactApprovedBanner": true,
       "approvedDescriptionVisible": true,
       "getgemsVisualCollectionCorrect": true,
-      "rarityPercentAndRankVisible": false,
+      "rarityPercentAndRankVisible": true,
       "oldGetgemsRarityMutationStatus": "disabled_USE_TONAPI",
       "tonapiDedicatedRarityEndpointFound": false,
-      "ownerUiActionStillRequired": true,
+      "ownerUiActionStillRequired": false,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "confirmationSource": "Owner screenshots supplied 2026-09-18: ranks 1-4 and trait frequencies visible",
+      "doesNotVerifyProductionPrereveal": true
+    },
+    "prerevealRebuild": {
+      "status": "unsigned-rebuilt-pending-publication-and-testnet",
+      "sourcePackageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
+      "metadataRevision": "prereveal-no-attributes-branding-1",
+      "unchangedFinalCommitment": true,
+      "unchangedContractCode": true,
+      "privateStorageContentUnchanged": true,
+      "privateStorageEvidenceRequiresRebinding": true,
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": true
+    },
+    "prerevealMetadataPublication": {
+      "status": "pending",
+      "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
+      "appliesToCurrentCandidate": false
+    },
+    "prerevealGetgemsUi": {
+      "status": "pending",
+      "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
+      "collectionAddressRaw": "0:70a71beedf9c72a291978cd1417d217b64cf8588e7fa93996a93ef2aedfe57f8",
+      "network": "testnet",
+      "appliesToCurrentCandidate": false
     }
   },
-  "note": "Production remains HOLD. Clean Getgems TESTNET visual verification now passes for collection branding, description, four NFTs, animation and seven attributes each. Getgems rarity percentages/rank are not yet visible. Legacy Getgems GraphQL rarity enablement is disabled with USE_TONAPI, and OpenTonAPI exposes no dedicated rarity endpoint. Remaining step is collection-owner UI activation/eligibility in Getgems."
+  "note": "HOLD. Unsigned prereveal metadata rebuild: approved logo/banner, unchanged GIF, no attributes or rank fields. Final collection commitment and bytecode unchanged. Old package TESTNET/media/private-storage records remain historical and are not current-package approval. Await public metadata readback, candidate-bound evidence and fresh TESTNET/Getgems prereveal UI verification. No deployment, payment, sales or automatic reveal authorized."
 }

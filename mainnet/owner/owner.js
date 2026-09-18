@@ -1,6 +1,6 @@
 import {beginCell,Address,Cell,contractAddress,loadStateInit} from 'https://esm.sh/@ton/core@0.63.1?bundle';
 const $=id=>document.getElementById(id);
-const PACKAGE_SHA='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
+const PACKAGE_SHA='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
 const REVISION='v3-glasses-correction-1';
 let d,ui,wallet=null,state=null,busy=false,pending=null,checking=null,gate=null,releaseState=null;
 let expectedContentHash,expectedItemCodeHash,expectedRoyaltyHash;

@@ -25,7 +25,7 @@ jobs:
           const b=fs.readFileSync('launch/candidate.json');
           const p=JSON.parse(b);
           const h=crypto.createHash('sha256').update(b).digest('hex');
-          if(h!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('FROZEN_CANDIDATE_SHA_MISMATCH');
+          if(h!=='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f') throw Error('FROZEN_CANDIDATE_SHA_MISMATCH');
           if(p.version!=='committed-reveal-v1') throw Error('LEGACY_CANDIDATE_REJECTED');
           if(p.collectionCodeHash!=='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b') throw Error('FROZEN_CODE_HASH_MISMATCH');
           if(p.revealAt!==1798761600) throw Error('REVEAL_DATE_MISMATCH');
@@ -38,7 +38,7 @@ jobs:
           import fs from 'node:fs';
           import * as core from '@ton/core';
           import {verifyPackage,PACKAGE_SHA256} from './launch/package-tools.mjs';
-          const EXPECTED='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa';
+          const EXPECTED='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
           if(PACKAGE_SHA256!==EXPECTED) throw Error('PACKAGE_TOOL_HASH_MISMATCH');
           const p=JSON.parse(fs.readFileSync('launch/candidate.json'));
           const v=verifyPackage(core,p);
@@ -50,4 +50,4 @@ jobs:
 # overwrite mainnet/owner/deployment.json with the legacy creator-reservation package.
 # That write path is deliberately retired. Installation of the exact final package is
 # performed only after private storage verification and is bound byte-for-byte to
-# launch/candidate.json SHA-256 10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa.
+# launch/candidate.json SHA-256 763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f.

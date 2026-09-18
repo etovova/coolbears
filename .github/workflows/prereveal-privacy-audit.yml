@@ -9,6 +9,8 @@ on:
       - 'config.js'
       - 'scripts/generate-prereveal-metadata.mjs'
       - 'scripts/audit-prereveal-privacy.mjs'
+      - 'scripts/prereveal-policy.mjs'
+      - 'scripts/test-prereveal-policy.mjs'
       - '.github/workflows/prereveal-privacy-audit.yml'
       - 'scripts/verify-pinned-prereveal.mjs'
   workflow_dispatch:
@@ -35,9 +37,7 @@ jobs:
           test "$(find build/prereveal-metadata -maxdepth 1 -type f -name '*.json' | wc -l)" -eq 10000
           for id in 0000 0001 0042 4979 9999; do
             f="build/prereveal-metadata/${id}.json"
-            jq -e '.attributes | length == 2' "$f" >/dev/null
-            jq -e '.attributes[] | select(.trait_type=="Status" and .value=="Unrevealed")' "$f" >/dev/null
-            jq -e '([.attributes[].trait_type] | sort) == (["Reveal","Status"] | sort)' "$f" >/dev/null
+            jq -e 'has("attributes") | not' "$f" >/dev/null
             jq -e '.image == .animation_url' "$f" >/dev/null
           done
           if grep -RniE '"(rarity|rank|background|body|eyes|mouth|hat|clothes|accessory|trait_count)"[[:space:]]*:' build/prereveal-metadata; then
@@ -45,6 +45,7 @@ jobs:
             exit 1
           fi
           echo 'COOLBEARS_PREREVEAL_PRIVACY_10000_OK'
+          node scripts/test-prereveal-policy.mjs
 
       - name: Verify published IPFS metadata matches audited template
         run: node scripts/verify-pinned-prereveal.mjs

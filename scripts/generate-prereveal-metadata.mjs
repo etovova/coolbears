@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import './audit-prereveal-privacy.mjs';
+import {validateHiddenMetadata} from './prereveal-policy.mjs';
 
 const supply = Number(process.env.SUPPLY || 10000);
 const source = process.env.SOURCE || 'metadata/prereveal.json';
@@ -10,8 +11,15 @@ if (!Number.isInteger(supply) || supply < 1 || supply > 10000) throw new Error('
 const template = JSON.parse(fs.readFileSync(source, 'utf8'));
 const canonical = JSON.parse(fs.readFileSync('metadata/prereveal.json', 'utf8'));
 if (JSON.stringify(template) !== JSON.stringify(canonical)) throw new Error('Only the audited hidden template may be published');
-fs.rmSync(outDir, { recursive: true, force: true });
-fs.mkdirSync(outDir, { recursive: true });
+// Refuse arbitrary output deletion, including symlinked or user-owned folders.
+const resolved=path.resolve(outDir),build=path.resolve('build');
+if(path.dirname(resolved)!==build||path.basename(resolved)!=='prereveal-metadata')throw Error('Output must be build/prereveal-metadata');
+if(fs.existsSync(build)&&fs.realpathSync(build)!==build)throw Error('Symlinked build directory');
+if(fs.existsSync(resolved)&&fs.realpathSync(resolved)!==resolved)throw Error('Symlinked metadata directory');
+fs.mkdirSync(resolved, { recursive: true });
+for(const f of fs.readdirSync(resolved)){
+  if(!/^\d{4}\.json$/.test(f)||!fs.lstatSync(path.join(resolved,f)).isFile())throw Error('Unexpected output entry: '+f);
+}
 
 for (let i = 0; i < supply; i++) {
   const tokenId = String(i).padStart(4, '0');
@@ -19,6 +27,7 @@ for (let i = 0; i < supply; i++) {
     ...template,
     name: `CoolBears #${tokenId} — Hidden Bear`
   };
+  validateHiddenMetadata(item,i);
   fs.writeFileSync(path.join(outDir, `${tokenId}.json`), JSON.stringify(item));
 }
 

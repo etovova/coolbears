@@ -45,7 +45,7 @@ jobs:
           node - <<'NODE'
           const fs=require('fs'),crypto=require('crypto');
           const b=fs.readFileSync('launch/candidate.json'),p=JSON.parse(b),s=JSON.parse(fs.readFileSync('release/launch-state.json'));
-          const PACKAGE='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
+          const PACKAGE='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
           const MANIFEST='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96';
           const CAR='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84';
           if(crypto.createHash('sha256').update(b).digest('hex')!==PACKAGE) throw Error('CANDIDATE_SHA_MISMATCH');
@@ -92,7 +92,7 @@ jobs:
         run: |
           python3 scripts/build-exact-final-car-from-recovery.py
           test "$(jq -r '.collectionRevision' build/private-final-car/build-summary.json)" = "v3-glasses-correction-1"
-          test "$(jq -r '.packageSha256' build/private-final-car/build-summary.json)" = "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f"
+          test "$(jq -r '.packageSha256' build/private-final-car/build-summary.json)" = "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f"
           test "$(jq -r '.manifestSha256' build/private-final-car/build-summary.json)" = "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96"
           test "$(jq -r '.carSha256' build/private-final-car/build-summary.json)" = "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84"
           test "$(jq -r '.correctedNfts' build/private-final-car/build-summary.json)" = "200"

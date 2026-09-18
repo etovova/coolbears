@@ -1,7 +1,7 @@
 // One fail-closed policy for browser, CI and the release installer.
 // This module never performs network requests, signing or transactions.
 export const CANDIDATE_HASH='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
-export const PACKAGE_SHA256='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
+export const PACKAGE_SHA256='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
 export const REVISION='v3-glasses-correction-1';
 export const MANIFEST_SHA256='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96';
 export const CAR_SHA256='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84';
@@ -45,6 +45,18 @@ function correctedPrerequisites(s,p,packageHash){
   const media=s.evidence?.correctedPrerevealMedia;
   yes(media?.status==='passed'&&media.packageSha256===PACKAGE_SHA256&&media.appliesToCurrentCandidate===true,'Prereveal media evidence missing');
   yes(media.metadata0000Available===true&&media.metadata0001Available===true&&media.samePrerevealImage===true&&media.animatedGifVerified===true,'Prereveal media proof incomplete');
+
+  const branding=s.evidence?.prerevealMetadataPublication;
+  yes(branding?.status==='passed'&&branding.packageSha256===PACKAGE_SHA256&&branding.appliesToCurrentCandidate===true,'Current prereveal publication evidence missing');
+  yes(branding.collectionMetadataIpfs===p.collectionMetadataIpfs&&branding.preRevealMetadataRootIpfs===p.preRevealMetadataRootIpfs,'Published metadata is for different URIs');
+  yes(branding.metadataCount===10000&&branding.allMetadataNoAttributes===true&&branding.publicReadbackVerified===true,'Attribute-free metadata proof incomplete');
+  yes(branding.logoSha256==='5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7'&&branding.bannerSha256==='d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95','Approved artwork proof mismatch');
+  yes(branding.strictImageDecodeVerified===true&&branding.gifSha256==='b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312'&&branding.gifFrames===148&&branding.gifDurationMs===4950,'Approved animated media proof incomplete');
+
+  const ui=s.evidence?.prerevealGetgemsUi;
+  yes(ui?.status==='passed'&&ui.packageSha256===PACKAGE_SHA256&&ui.appliesToCurrentCandidate===true,'Current prereveal Getgems UI evidence missing');
+  yes(ui.collectionAddressRaw===p.collectionAddressRaw&&ui.network==='testnet','Prereveal UI proof is for a different collection');
+  yes(ui.logoVisible===true&&ui.bannerVisible===true&&ui.gifAnimated===true&&ui.attributesAbsent===true&&ui.percentagesAbsent===true&&ui.rankAbsent===true,'Prereveal marketplace UI not fully verified');
 }
 
 function mainnetProofs(s,p){
@@ -76,6 +88,7 @@ export function validateLaunch(c,p,s,packageHash){
   yes(s.candidateVersion==='committed-reveal-v1'&&s.candidateRevision===REVISION&&s.candidateCodeHash===CANDIDATE_HASH,'Unknown release candidate');
 
   if(s.phase==='hold'){
+    yes(packageHash===PACKAGE_SHA256,'Held package bytes do not match the pinned candidate');
     yes(c.demoMode===true&&!s.publicMintApproved&&!s.automaticRevealArmed,'Held release cannot sell, operate or reveal');
     yes(s.packageSha256===null||s.packageSha256===PACKAGE_SHA256,'Held state references an unknown package');
     return {phase:'hold',setup:false,sales:false,automaticReveal:false};

@@ -16,7 +16,7 @@ import {beginCell} from '@ton/core';
 import {client,requireThat} from './pinata-backup-io.mjs';
 
 const REVISION='v3-glasses-correction-1';
-const PACKAGE_SHA='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
+const PACKAGE_SHA='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
 const MANIFEST_SHA='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96';
 const CAR_SHA='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84';
 const CAR_BYTES=12779698835;

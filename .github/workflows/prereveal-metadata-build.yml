@@ -30,7 +30,7 @@ jobs:
           test -f build/prereveal-metadata/0001.json
           test -f build/prereveal-metadata/4979.json
           test -f build/prereveal-metadata/9999.json
-          node -e "const fs=require('fs'); for (const i of ['0000','4979','9999']) { const j=JSON.parse(fs.readFileSync('build/prereveal-metadata/'+i+'.json')); if (!j.image?.startsWith('ipfs://') || j.attributes?.[0]?.value !== 'Unrevealed') process.exit(1); }"
+          node scripts/test-prereveal-policy.mjs
       - name: Package metadata set
         run: tar -czf coolbears-prereveal-metadata.tar.gz -C build prereveal-metadata
       - uses: actions/upload-artifact@v4

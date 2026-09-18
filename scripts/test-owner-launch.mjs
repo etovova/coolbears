@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
+import {preparedFixture} from './release-test-fixtures.mjs';
 import {validateLaunch,canOperate,PACKAGE_SHA256,REVISION,CANDIDATE_HASH} from '../release-guard.mjs';
 
 const candidateBytes=fs.readFileSync('launch/candidate.json');
@@ -46,7 +47,7 @@ assert.ok(!source.includes('9fc5ea62b3c0ad943cec55deef509bdf9fabafa2cca0616f74f4
 assert.ok(!source.includes('UQCaIEXpRw1EJzn6juFRXsywl9MWZ7QvlmkrA6_67ta2clK-'),'Old collection address must not remain in owner client');
 
 const state=JSON.parse(fs.readFileSync('release/launch-state.json','utf8'));
-const prepared={...structuredClone(state),phase:'prepared',mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false};
+const prepared=preparedFixture(state,p);
 delete prepared.evidence.correctedMainnetDeployment;
 delete prepared.evidence.correctedMainnetCreatorNft0000;
 const gate=validateLaunch({...cfg,demoMode:true},p,prepared,PACKAGE_SHA256);

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
+import {preparedFixture} from './release-test-fixtures.mjs';
 import {
   validateLaunch,canOperate,revealDue,CANDIDATE_HASH,PACKAGE_SHA256,REVISION,
   MANIFEST_SHA256,CAR_SHA256,OWNER_RAW,REVEAL_AT
@@ -24,7 +25,7 @@ assert.equal(base.packageSha256,PACKAGE_SHA256);
 const hold={...clone(base),phase:'hold',mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false};
 delete hold.evidence.correctedMainnetDeployment;
 delete hold.evidence.correctedMainnetCreatorNft0000;
-const prepared={...clone(hold),phase:'prepared'};
+const prepared=preparedFixture(hold,p);
 const mainnetEvidence={
   status:'verified-live-mainnet',checkedAt:'2026-09-18T06:00:00Z',
   packageSha256:PACKAGE_SHA256,collectionRevision:REVISION,
@@ -77,6 +78,17 @@ test('Prereveal animated GIF proof required',()=>{
   const s=clone(prepared);s.evidence.correctedPrerevealMedia.animatedGifVerified=false;
   assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));
 });
+test('Real release cannot be prepared by changing only its phase',()=>assert.throws(()=>validateLaunch(cfg,p,{...clone(base),phase:'prepared'},PACKAGE_SHA256)));
+test('Held bytes must match package hash',()=>assert.throws(()=>validateLaunch(cfg,p,hold,'0'.repeat(64))));
+for(const name of ['prerevealMetadataPublication','prerevealGetgemsUi']){
+  test('Missing '+name+' blocks preparation',()=>{const s=clone(prepared);delete s.evidence[name];assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
+  test('Historical '+name+' cannot authorize new package',()=>{const s=clone(prepared);s.evidence[name].packageSha256='0'.repeat(64);assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
+  test('Non-applicable '+name+' rejected',()=>{const s=clone(prepared);s.evidence[name].appliesToCurrentCandidate=false;assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
+}
+for(const key of ['allMetadataNoAttributes','publicReadbackVerified','strictImageDecodeVerified'])test('Missing publication proof '+key,()=>{const s=clone(prepared);s.evidence.prerevealMetadataPublication[key]=false;assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
+for(const key of ['collectionMetadataIpfs','preRevealMetadataRootIpfs','logoSha256','bannerSha256','gifSha256','gifFrames','gifDurationMs','metadataCount'])test('Wrong publication binding '+key,()=>{const s=clone(prepared);s.evidence.prerevealMetadataPublication[key]=0;assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
+for(const key of ['logoVisible','bannerVisible','gifAnimated','attributesAbsent','percentagesAbsent','rankAbsent'])test('Incomplete marketplace proof '+key,()=>{const s=clone(prepared);s.evidence.prerevealGetgemsUi[key]=false;assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
+test('Other diagnostic collection cannot prove prereveal UI',()=>{const s=clone(prepared);s.evidence.prerevealGetgemsUi.collectionAddressRaw='0:other';assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));});
 test('Approved requires mainnet proof',()=>{
   const s=clone(approved);delete s.evidence.correctedMainnetDeployment;
   assert.throws(()=>validateLaunch(cfg,p,s,PACKAGE_SHA256));

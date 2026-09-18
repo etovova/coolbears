@@ -1,11 +1,7 @@
 name: Upload prereveal metadata to Pinata
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'metadata/prereveal.json'
-      - '.github/workflows/pinata-metadata.yml'
+  # Automatic publication is consolidated in hidden-metadata-release.yml.
   workflow_dispatch:
 
 permissions:
