@@ -1,0 +1,108 @@
+name: Final visual all4 and rarity readiness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-visual-all4-rarity-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
+
+      - name: Verify all four on-chain
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          mkdir -p build/final-visual-all4
+          cat > /tmp/check.mjs <<'NODE'
+          import fs from 'node:fs';
+          import {Address,Cell} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+          const p=JSON.parse(fs.readFileSync('testnet/getgems-final-visual/deployment.json','utf8'));
+          const c=Address.parse(p.collectionAddressRaw);
+          const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          async function run(a,m,stack=[]){let last;for(let i=1;i<=12;i++){try{const r=await client.runMethod(a,m,stack);await sleep(900);return r}catch(e){last=e;await sleep(i*1300)}}throw last}
+          const st=await client.getContractState(c);
+          if(st.state!=='active'||!st.code)throw Error('COLLECTION_NOT_ACTIVE');
+          const ch=Cell.fromBoc(st.code)[0].hash().toString('hex');
+          if(ch!==p.collectionCodeHash)throw Error('COLLECTION_CODE_HASH_MISMATCH');
+          const ms=(await run(c,'get_mint_state')).stack;
+          const next=ms.readBigNumber(); const supply=ms.readBigNumber(); const price=ms.readBigNumber(); const paused=ms.readBigNumber();
+          if(next!==4n)throw Error('EXPECTED_NEXT_4_GOT_'+next);
+          const items=[];
+          for(let i=0;i<4;i++){
+            const a=(await run(c,'get_nft_address_by_index',[{type:'int',value:BigInt(i)}])).stack.readAddress();
+            const s=await client.getContractState(a); if(s.state!=='active'||!s.code)throw Error('NFT_'+i+'_NOT_ACTIVE');
+            const ih=Cell.fromBoc(s.code)[0].hash().toString('hex'); if(ih!==p.nftItemCodeHash)throw Error('NFT_'+i+'_CODE_HASH_MISMATCH');
+            const nd=(await run(a,'get_nft_data')).stack;
+            const init=nd.readBigNumber(); const idx=nd.readBigNumber(); const coll=nd.readAddress(); const owner=nd.readAddress(); const ind=nd.readCell();
+            if(init!==-1n||idx!==BigInt(i)||coll.toRawString()!==c.toRawString())throw Error('NFT_'+i+'_DATA_MISMATCH');
+            const suffix=ind.beginParse().loadStringTail(); if(suffix!==String(i).padStart(4,'0')+'.json')throw Error('NFT_'+i+'_SUFFIX_MISMATCH');
+            const fc=(await run(c,'get_nft_content',[{type:'int',value:BigInt(i)},{type:'cell',cell:ind}])).stack.readCell().beginParse();
+            if(fc.loadUint(8)!==1)throw Error('NFT_'+i+'_TAG_MISMATCH');
+            const uri=fc.loadStringTail();
+            items.push({index:i,address:a.toString({testOnly:true,bounceable:true}),owner:owner.toRawString(),uri});
+          }
+          const out={status:'ALL4_ONCHAIN_OK',collection:p.collectionAddressTestnetBounceable,next:Number(next),supply:Number(supply),price:Number(price),paused:paused===1n,items};
+          fs.writeFileSync('build/final-visual-all4/onchain.json',JSON.stringify(out,null,2)+'\n');
+          console.log(JSON.stringify(out,null,2));
+          NODE
+          node /tmp/check.mjs
+
+      - name: Reindex TonAPI
+        run: |
+          set -euo pipefail
+          COLL=$(jq -r '.collection' build/final-visual-all4/onchain.json)
+          accounts=("$COLL")
+          for i in 0 1 2 3; do accounts+=("$(jq -r ".items[$i].address" build/final-visual-all4/onchain.json)"); done
+          n=0
+          for a in "${accounts[@]}"; do
+            code=$(curl -sS -X POST -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o "/tmp/reindex-$n" "https://testnet.tonapi.io/v2/accounts/$a/reindex" || true)
+            echo "reindex $n http=$code"
+            test "$code" = '200'
+            n=$((n+1))
+          done
+
+      - name: Verify exact TonAPI metadata
+        run: |
+          set -euo pipefail
+          COLL=$(jq -r '.collection' build/final-visual-all4/onchain.json)
+          cc=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o build/final-visual-all4/collection.json "https://testnet.tonapi.io/v2/nfts/collections/$COLL" || true)
+          test "$cc" = '200'
+          test "$(jq -r '.metadata.name // empty' build/final-visual-all4/collection.json)" = 'CoolBears'
+          test "$(jq -r '.metadata.image // empty' build/final-visual-all4/collection.json)" = 'https://coolbears-nfts.com/testnet/getgems-final-visual/assets/CoolBears_Getgems_Square_Logo_1000x1000.png'
+          test "$(jq -r '.metadata.cover_image // empty' build/final-visual-all4/collection.json)" = 'https://coolbears-nfts.com/testnet/getgems-final-visual/assets/CoolBears_Getgems_Banner_2880x680.png'
+          for i in 0 1 2 3; do
+            A=$(jq -r ".items[$i].address" build/final-visual-all4/onchain.json)
+            nc=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o "build/final-visual-all4/nft$i.json" "https://testnet.tonapi.io/v2/nfts/$A" || true)
+            test "$nc" = '200'
+            expected=$(printf 'CoolBears #%04d' "$i")
+            test "$(jq -r '.metadata.name // empty' build/final-visual-all4/nft$i.json)" = "$expected"
+            test "$(jq '.metadata.attributes // [] | length' build/final-visual-all4/nft$i.json)" = '7'
+            test "$(jq -r '.metadata.image // empty' build/final-visual-all4/nft$i.json)" = "$(jq -r '.metadata.animation_url // empty' build/final-visual-all4/nft$i.json)"
+            echo "nft$i metadata OK"
+          done
+          echo TONAPI_ALL4_EXACT_OK
+
+      - name: Reconfirm production HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
