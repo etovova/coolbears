@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "phase": "prepared",
+  "phase": "hold",
   "candidateVersion": "committed-reveal-v1",
   "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
@@ -153,7 +153,20 @@
       "publicMintApproved": false,
       "transactionsSent": 0,
       "appliesToCurrentCandidate": true
+    },
+    "getgemsTestnetCompatibility": {
+      "status": "blocked-pending-indexer-metadata",
+      "checkedAt": "2026-09-18T06:38:09Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "collectionRevision": "v3-glasses-correction-1",
+      "liveCollectionDescriptionVerified": true,
+      "liveNft0000DescriptionVerified": true,
+      "liveNft0000AnimationUrlVerified": true,
+      "liveGifAnimatedVerified": true,
+      "getgemsUiObservedMetadataUnavailable": true,
+      "mainnetBlockedUntilResolved": true,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "Corrected private storage and full TESTNET are verified. Corrected MAINNET owner package is byte-identical to launch/candidate.json and both mainnet-client-check and release-guards passed. Phase is prepared: only MAINNET deploy and creator #0000 setup are eligible; public mint remains disabled, mainnetVerified=false, creatorNftVerified=false, publicMintApproved=false, automaticRevealArmed=false."
+  "note": "Corrected private storage and full TESTNET contract verification passed, but Getgems TESTNET currently shows collection/NFT metadata unavailable. Live collection JSON, NFT #0000 JSON and animated GIF are independently reachable and valid. Release returned to HOLD; no MAINNET deployment should occur until Getgems metadata indexing compatibility is resolved."
 }
