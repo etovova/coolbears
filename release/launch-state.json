@@ -371,7 +371,33 @@
       "probeUndeployedVerified": true,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsRarityProductionCodeSetup": {
+      "status": "verified-ready-for-open-and-mint3",
+      "checkedAt": "2026-09-18T10:23:00Z",
+      "diagnosticOnly": true,
+      "collectionAddressTestnetBounceable": "kQCJMZr97lvrX__EqQSO2wuWU9bhuxfPWKKE9hWMPElWQ9ww",
+      "collectionCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "sameAsProductionCoolBearsCodeHash": true,
+      "nextItemIndex": 1,
+      "nft0000AlreadyExists": true,
+      "exactApprovedCollectionMetadata": true,
+      "exactApprovedBranding": true,
+      "controlledRarityPercentages": [
+        25,
+        50,
+        75
+      ],
+      "expectedRarityOrder": [
+        "0000",
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "workflowRunId": 35334344659,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. The undeployed four-item TESTNET rarity probe now uses the exact approved CoolBears Getgems logo and banner bytes, full collection description, seven standard attributes, controlled 25/50/75% trait frequencies and expected rarity order #0000 > #0001 > #0002 > #0003. Published bytes and dimensions were independently verified."
+  "note": "Production remains HOLD. The Getgems rarity test has been migrated away from the custom cheap diagnostic contract that triggered Telegram Wallet verification warnings. The active rarity test now uses the already verified production-like CoolBears TESTNET contract code hash, with #0000 already minted. Only open-mint and mint-three TESTNET actions remain."
 }
