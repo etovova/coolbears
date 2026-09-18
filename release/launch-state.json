@@ -4,7 +4,7 @@
   "candidateVersion": "committed-reveal-v1",
   "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
-  "testnetVerified": false,
+  "testnetVerified": true,
   "privateStorageVerified": true,
   "mainnetVerified": false,
   "creatorNftVerified": false,
@@ -100,7 +100,47 @@
       "paused": false,
       "nft0OwnerVerified": true,
       "appliesToCurrentCandidate": true
+    },
+    "correctedTestnetNft0001": {
+      "status": "verified-live-testnet",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "collectionRevision": "v3-glasses-correction-1",
+      "workflowRunId": 35309833564,
+      "nextItemIndex": 2,
+      "paused": false,
+      "nft0OwnerVerified": true,
+      "nft1OwnerVerified": true,
+      "nft0MetadataUriVerified": true,
+      "nft1MetadataUriVerified": true,
+      "appliesToCurrentCandidate": true
+    },
+    "correctedTestnetTransactionAudit": {
+      "status": "passed",
+      "checkedAt": "2026-09-18T05:13:03.111Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "workflowRunId": 35309911468,
+      "transactionHistoryVerified": true,
+      "receiptsMatchedByMessageHash": true,
+      "collectionHistoryComplete": true,
+      "operations": [
+        "deploy",
+        "claim",
+        "open",
+        "mint"
+      ],
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": true
+    },
+    "correctedPrerevealMedia": {
+      "status": "passed",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "workflowRunId": 35309977589,
+      "metadata0000Available": true,
+      "metadata0001Available": true,
+      "samePrerevealImage": true,
+      "animatedGifVerified": true,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "Corrected private CAR storage is verified. Corrected offline TESTNET checks passed 22/22. Corrected contract is active on TON TESTNET; creator NFT #0000 is verified; TESTNET mint is open with next=1. testnetVerified remains false until #0001 is minted/verified and transaction history is audited."
+  "note": "Corrected v3-glasses-correction-1 is fully verified in TON TESTNET: exact package binding, live deployment, #0000 and #0001 ownership/content, ordered transaction history and prereveal media all passed. privateStorageVerified=true and testnetVerified=true. Production remains HOLD; mainnetVerified=false, creatorNftVerified=false, publicMintApproved=false and automaticRevealArmed=false."
 }
