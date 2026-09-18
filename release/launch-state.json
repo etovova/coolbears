@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "phase": "hold",
+  "phase": "prepared",
   "candidateVersion": "committed-reveal-v1",
   "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
@@ -140,7 +140,20 @@
       "samePrerevealImage": true,
       "animatedGifVerified": true,
       "appliesToCurrentCandidate": true
+    },
+    "correctedMainnetPreparation": {
+      "status": "passed-offline-only",
+      "checkedAt": "2026-09-18T05:26:00Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "collectionRevision": "v3-glasses-correction-1",
+      "mainnetClientCheckRunId": 35310800876,
+      "releaseGuardsRunId": 35310800881,
+      "deploymentPackageByteIdenticalToCandidate": true,
+      "deployAmountNanoTon": 300000000,
+      "publicMintApproved": false,
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "Corrected v3-glasses-correction-1 is fully verified in TON TESTNET: exact package binding, live deployment, #0000 and #0001 ownership/content, ordered transaction history and prereveal media all passed. privateStorageVerified=true and testnetVerified=true. Production remains HOLD; mainnetVerified=false, creatorNftVerified=false, publicMintApproved=false and automaticRevealArmed=false."
+  "note": "Corrected private storage and full TESTNET are verified. Corrected MAINNET owner package is byte-identical to launch/candidate.json and both mainnet-client-check and release-guards passed. Phase is prepared: only MAINNET deploy and creator #0000 setup are eligible; public mint remains disabled, mainnetVerified=false, creatorNftVerified=false, publicMintApproved=false, automaticRevealArmed=false."
 }
