@@ -1,4 +1,4 @@
-name: CoolBears guarded automatic reveal Jan 1 2027
+name: CoolBears guarded corrected automatic reveal Jan 1 2027
 
 on:
   push:
@@ -7,12 +7,13 @@ on:
       - '.github/workflows/automatic-reveal-jan1.yml'
       - 'scripts/automatic-reveal.mjs'
       - 'scripts/publish-final-car-at-reveal.mjs'
-      - 'contracts/candidate/collection.fc'
+      - 'scripts/build-exact-final-car-from-recovery.py'
       - 'launch/candidate.json'
       - 'launch/package-tools.mjs'
+      - 'release/launch-state.json'
   schedule:
     # GitHub Actions cron uses UTC. Retry every 5 minutes during the first hour.
-    # Only the 2027 scheduled run is authorized by the script/state guards.
+    # Scripts are one-time/idempotent and fail closed unless all corrected gates pass.
     - cron: '*/5 0 1 1 *'
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: coolbears-automatic-reveal-jan1
+  group: coolbears-corrected-automatic-reveal-jan1
   cancel-in-progress: false
 
 jobs:
@@ -31,72 +32,105 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+
       - name: Install exact TON library
         run: npm install --no-save --ignore-scripts '@ton/core@0.63.1'
-      - name: Verify immutable public candidate before private restore
+
+      - name: Verify exact corrected candidate and schedule authorization
         run: |
           node - <<'NODE'
           const fs=require('fs'),crypto=require('crypto');
           const b=fs.readFileSync('launch/candidate.json'),p=JSON.parse(b),s=JSON.parse(fs.readFileSync('release/launch-state.json'));
-          if(crypto.createHash('sha256').update(b).digest('hex')!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('CANDIDATE_SHA_MISMATCH');
+          const PACKAGE='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
+          const MANIFEST='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96';
+          const CAR='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84';
+          if(crypto.createHash('sha256').update(b).digest('hex')!==PACKAGE) throw Error('CANDIDATE_SHA_MISMATCH');
+          if(p.collectionRevision!=='v3-glasses-correction-1') throw Error('CANDIDATE_REVISION_MISMATCH');
+          if(p.releaseManifestSha256!==MANIFEST||p.releaseCarSha256!==CAR) throw Error('CANDIDATE_RELEASE_BINDING_MISMATCH');
           if(p.revealAt!==1798761600) throw Error('REVEAL_DATE_MISMATCH');
           if(process.env.GITHUB_EVENT_NAME==='schedule'){
             const now=Math.floor(Date.now()/1000),year=new Date().getUTCFullYear();
             if(year!==2027) throw Error('SCHEDULE_NOT_2027');
             if(now<1798761600) throw Error('SCHEDULE_TOO_EARLY');
-            if(s.automaticRevealArmed!==true||s.privateStorageVerified!==true||s.mainnetVerified!==true||s.creatorNftVerified!==true) throw Error('REVEAL_NOT_FULLY_ARMED');
-            if(s.packageSha256!=='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa') throw Error('ARMED_PACKAGE_MISMATCH');
+            if(s.phase!=='hold') throw Error('PRODUCTION_NOT_HELD');
+            if(s.automaticRevealArmed!==true||s.privateStorageVerified!==true||s.testnetVerified!==true||s.mainnetVerified!==true||s.creatorNftVerified!==true) throw Error('REVEAL_NOT_FULLY_ARMED');
+            if(s.publicMintApproved!==false) throw Error('PUBLIC_MINT_MUST_REMAIN_DISABLED');
+            if(s.packageSha256!==PACKAGE) throw Error('ARMED_PACKAGE_MISMATCH');
           }
           NODE
-      - name: Free disk for final CAR transfer on the scheduled reveal run
+
+      - name: Prepare corrected publication/reveal guards on nonscheduled runs
+        if: github.event_name != 'schedule'
+        run: |
+          node scripts/publish-final-car-at-reveal.mjs --prepare-only
+          node scripts/automatic-reveal.mjs --prepare-only
+
+      - name: Free disk for scheduled corrected rebuild and private CAR transfer
         if: github.event_name == 'schedule'
         run: |
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL || true
           sudo docker system prune -af || true
           df -h /
-      - name: Restore sealed PRIVATE recovery containing committed reveal preimage
+
+      - name: Restore sealed PRIVATE source recovery
+        if: github.event_name == 'schedule'
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
           PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
         run: node scripts/restore-private-recovery.mjs
-      - name: Verify recovery inventory and exact reveal binding again
+
+      - name: Install exact image library for corrected rebuild
+        if: github.event_name == 'schedule'
+        run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+
+      - name: Rebuild exact corrected release and manifest from sealed source
+        if: github.event_name == 'schedule'
         run: |
-          python3 scripts/verify-restored-recovery.py
-          node scripts/verify-restored-reveal.mjs
-      - name: Make exact final content public and verify it before reveal
+          python3 scripts/build-exact-final-car-from-recovery.py
+          test "$(jq -r '.collectionRevision' build/private-final-car/build-summary.json)" = "v3-glasses-correction-1"
+          test "$(jq -r '.packageSha256' build/private-final-car/build-summary.json)" = "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f"
+          test "$(jq -r '.manifestSha256' build/private-final-car/build-summary.json)" = "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96"
+          test "$(jq -r '.carSha256' build/private-final-car/build-summary.json)" = "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84"
+          test "$(jq -r '.correctedNfts' build/private-final-car/build-summary.json)" = "200"
+          # Keep the corrected manifest for the publication/reveal gates, but remove the
+          # heavy locally rebuilt image archive/CAR before reconstructing the authoritative
+          # PRIVATE Pinata CAR. This avoids duplicate ~13 GB copies on the runner.
+          rm -f -- "$RUNNER_TEMP/coolbears-final-car-work/CoolBears_v3_rendered_verified.zip"
+          rm -f -- "$RUNNER_TEMP/coolbears-final-car-work/release/CoolBears_v3_final.car"
+
+      - name: Publish exact corrected PRIVATE CAR and verify public bytes
+        if: github.event_name == 'schedule'
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
           PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            node scripts/publish-final-car-at-reveal.mjs --publish
-          else
-            node scripts/publish-final-car-at-reveal.mjs --prepare-only
-          fi
-      - name: Prepare only on nonscheduled runs; broadcast only after public-content gate on scheduled Jan 1 run
+        run: node scripts/publish-final-car-at-reveal.mjs --publish
+
+      - name: Broadcast reveal only after corrected public publication receipt
+        if: github.event_name == 'schedule'
         env:
           TONCENTER_API_KEY: ${{ secrets.TONCENTER_API_KEY }}
-        run: |
-          if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
-            node scripts/automatic-reveal.mjs --broadcast
-          else
-            node scripts/automatic-reveal.mjs --prepare-only
-          fi
-      - name: Remove private reveal material and transferred CAR
+        run: node scripts/automatic-reveal.mjs --broadcast
+
+      - name: Remove private source/rebuild/public-transfer material
         if: always()
         run: |
           rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery"
-          rm -f -- "$RUNNER_TEMP/CoolBears_v3_FINAL_for_public_reveal.car"
+          rm -rf -- "$RUNNER_TEMP/coolbears-final-car-work"
+          rm -f -- "$RUNNER_TEMP/CoolBears_v3_glasses_correction_1_FINAL_for_public_reveal.car"
+          rm -f -- "$RUNNER_TEMP/CoolBears_v3_glasses_correction_1_FINAL_for_public_reveal.part"
+
       - name: Preserve nonsensitive reveal verification evidence only
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: automatic-reveal-nonsensitive-evidence
+          name: corrected-automatic-reveal-nonsensitive-evidence
           path: |
             build/automatic-reveal/summary.json
             build/automatic-reveal/publication-summary.json
+            build/private-final-car/build-summary.json
           if-no-files-found: ignore
           retention-days: 30
