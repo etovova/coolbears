@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "checkedAt": "2026-09-18T19:47:06.927Z",
+  "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
+  "appliesToCurrentCandidate": true,
+  "collectionMetadataIpfs": "ipfs://bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
+  "preRevealMetadataRootIpfs": "ipfs://bafybeiegnm5qswti42bgpdbj6omhn2ms4pju56oowok5st3pqqiuspzcgq/",
+  "metadataCount": 10000,
+  "allMetadataNoAttributes": true,
+  "publicReadbackVerified": true,
+  "publicItemSample": [
+    0,
+    1,
+    4979,
+    9999
+  ],
+  "strictImageDecodeVerified": true,
+  "gifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+  "gifFrames": 148,
+  "gifDurationMs": 4950,
+  "logoSha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+  "bannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+  "finalFilesPublished": false,
+  "transactionsSent": 0,
+  "workflowRunId": 35387709447,
+  "sourceCommit": "ff9c3b58f6d7100d85575cabc2fdf1b084f331f8"
+}

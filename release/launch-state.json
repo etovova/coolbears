@@ -593,11 +593,11 @@
     },
     "prerevealMetadataPublication": {
       "status": "passed",
-      "checkedAt": "2026-09-18T14:46:57.498Z",
-      "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
-      "appliesToCurrentCandidate": false,
+      "checkedAt": "2026-09-18T19:47:06.927Z",
+      "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
+      "appliesToCurrentCandidate": true,
       "collectionMetadataIpfs": "ipfs://bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
-      "preRevealMetadataRootIpfs": "ipfs://bafybeiacbtdtybylqbxnsfrrkdj77in24f2muraf3mejijf4rmqexqmm4q/",
+      "preRevealMetadataRootIpfs": "ipfs://bafybeiegnm5qswti42bgpdbj6omhn2ms4pju56oowok5st3pqqiuspzcgq/",
       "metadataCount": 10000,
       "allMetadataNoAttributes": true,
       "publicReadbackVerified": true,
@@ -615,24 +615,8 @@
       "bannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
       "finalFilesPublished": false,
       "transactionsSent": 0,
-      "workflowRunId": 35358215671,
-      "sourceCommit": "8a1924d4342eef269eae8058c70b20775b55418c",
-      "sourcePackageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
-      "bindingMethod": "New collection JSON published and read back exactly; all other immutable hidden NFT/media URI and bytes unchanged from the verified publication. Original media check date retained.",
-      "bindingCheckedAt": "2026-09-18T19:38:32.022327+00:00",
-      "collectionPublication": {
-        "status": "APPROVED_DESCRIPTION_PUBLIC_READBACK_VERIFIED",
-        "checkedAt": "2026-09-18T19:31:13.161Z",
-        "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
-        "collectionMetadataIpfs": "ipfs://bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
-        "collectionJsonSha256": "9c967ae68e932532a18e66fd605d170d9dae75da98d9d65dfbc8f11be84668fd",
-        "exactApprovedDescription": true,
-        "approvedLogoAndBannerUnchanged": true,
-        "finalNftFilesPublished": false,
-        "transactionsSent": 0,
-        "workflowRunId": 35386341045,
-        "sourceCommit": "48976cdccbf5bdcda3fd072d318db94e6d25d645"
-      }
+      "workflowRunId": 35387709447,
+      "sourceCommit": "ff9c3b58f6d7100d85575cabc2fdf1b084f331f8"
     },
     "prerevealGetgemsUi": {
       "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
@@ -919,7 +903,7 @@
       "appliesToCurrentCandidate": false
     },
     "descriptionCorrection": {
-      "status": "date-only-copy-installed-awaiting-publication-and-live-testnet",
+      "status": "installed-awaiting-live-testnet",
       "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
       "appliesToCurrentCandidate": true,
       "descriptionRevision": "approved-description-1",
@@ -1095,7 +1079,7 @@
       "preservationMethod": "Verified all blocks of the previously verified source CAR and changed only collection description/root; final manifest and actual reveal verified."
     },
     "dateOnlyDescription": {
-      "status": "awaiting-public-readback",
+      "status": "published-and-readback-verified-awaiting-live-testnet",
       "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
       "appliesToCurrentCandidate": true,
       "sourcePackageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
@@ -1124,9 +1108,23 @@
       },
       "offlineReleaseGuardTests": 68,
       "offlineStateInitTests": 22,
-      "allHiddenItemsChecked": 10000
+      "allHiddenItemsChecked": 10000,
+      "publicReadbackVerified": true,
+      "workflowRunId": 35387709447,
+      "publicSiteBrowserCheck": {
+        "languages": [
+          "en",
+          "ru",
+          "zh-CN"
+        ],
+        "exactTimeAbsent": true,
+        "unapprovedReservationParagraphAbsent": true,
+        "checkedAt": "2026-09-18T19:48:13.451969+00:00",
+        "testnetPageAddress": "0QDXQnCTPsnb2fI8_CEL3TC-gKsTK_bbwPkSOPoerkcAeXLs",
+        "testnetAccountDeployed": false
+      }
     }
   },
-  "note": "HOLD. Approved collection description has no creator-reservation paragraph. Hidden NFT description and website show the reveal date without a specific time. New unsigned candidate awaits public metadata readback, TESTNET deployment and marketplace verification. Final NFT assets and reveal commitment are unchanged and privately verified. MAINNET, public sales and automatic reveal remain disabled.",
+  "note": "HOLD. Approved collection description has no creator-reservation paragraph. Hidden NFT description and website show the reveal date without a specific time. New unsigned candidate has verified public metadata readback and awaits TESTNET deployment and marketplace verification. Final NFT assets and reveal commitment are unchanged and privately verified. MAINNET, public sales and automatic reveal remain disabled.",
   "metadataCorrectionPending": false
 }
