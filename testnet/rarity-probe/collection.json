@@ -1,0 +1,9 @@
+{
+  "name": "CoolBears Rarity Probe",
+  "description": "TESTNET-only 4-NFT collection with controlled trait frequencies for verifying Getgems rarity percentages and rank.",
+  "image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/image.png",
+  "cover_image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/cover.png",
+  "social_links": [
+    "https://coolbears-nfts.com/"
+  ]
+}
