@@ -1,4 +1,4 @@
-name: Inspect final visual TESTNET state
+name: Inspect final visual TESTNET state after claim
 
 on:
   push:
