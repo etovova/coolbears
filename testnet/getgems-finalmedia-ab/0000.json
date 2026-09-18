@@ -1,8 +1,35 @@
 {
-  "name": "CoolBears Final Media Probe #0000",
-  "description": "Full 148-frame prereveal GIF at the original 4.95-second loop speed.",
+  "name": "CoolBears #0000",
+  "description": "CoolBears TESTNET rarity verification item.",
   "image": "https://gateway.pinata.cloud/ipfs/bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni",
   "attributes": [
-    {"trait_type":"Status","value":"Original-speed prereveal GIF"}
+    {
+      "trait_type": "Background",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Body",
+      "value": "Gold"
+    },
+    {
+      "trait_type": "Clothes",
+      "value": "Gold Suit"
+    },
+    {
+      "trait_type": "Mouth",
+      "value": "Diamond Grill"
+    },
+    {
+      "trait_type": "Eyes",
+      "value": "Gold Glasses"
+    },
+    {
+      "trait_type": "Head",
+      "value": "Crown"
+    },
+    {
+      "trait_type": "Ears",
+      "value": "Diamonds"
+    }
   ]
 }
