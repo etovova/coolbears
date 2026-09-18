@@ -47,7 +47,17 @@
       "receiptsMatchedByMessageHash": true,
       "mediaPlayback": "User confirmed direct IPFS GIF playback; explorer preview is static",
       "appliesToCurrentCandidate": false
+    },
+    "correctedOfflineTestnet": {
+      "status": "passed-offline-only",
+      "checkedAt": "2026-09-18T04:48:38.680Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "workflowRunId": 35308362033,
+      "scenariosPassed": 22,
+      "realNetworkRequests": 0,
+      "realTransactions": 0,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "Corrected private CAR storage is verified for v3-glasses-correction-1. Production remains held. The previous successful testnet run belongs only to the superseded v3 package; current corrected candidate still requires corrected-package testnet verification before any mainnet deployment."
+  "note": "Corrected private CAR storage is verified and corrected offline TESTNET safety checks passed 22/22 for v3-glasses-correction-1. Production remains held. testnetVerified stays false until the corrected package is actually deployed and verified on TON TESTNET."
 }
