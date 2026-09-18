@@ -1,0 +1,134 @@
+[
+  {
+    "name": "asset-upload",
+    "sha": "d3e77f62d5c8c94b567f6ed4572c265662980941"
+  },
+  {
+    "name": "checkpoint/corrected-private-storage",
+    "sha": "f88a1c2c750a0a63d8b53543f19d01148fd00942"
+  },
+  {
+    "name": "codex/prereveal-no-attributes",
+    "sha": "9a5098259ba27b1b6571dd5f0502051819d20d66"
+  },
+  {
+    "name": "feat/creator-reserve",
+    "sha": "891738b82cd9a78d556a77476e8498bb571f8575"
+  },
+  {
+    "name": "feat/locked-testnet-mint",
+    "sha": "1319bb5c6308d90b9f2fc8520526bb6dcb45f235"
+  },
+  {
+    "name": "fix/prelaunch-translations",
+    "sha": "59d6e7845168f51fef7ff259e9000ca2e64b65c2"
+  },
+  {
+    "name": "fix/reveal-privacy-2027",
+    "sha": "04fdce2d744f9d1d0b44ea8efedc022dbb52760a"
+  },
+  {
+    "name": "fix/v3-glasses-order",
+    "sha": "c8be0173f3319922383275f769d7573bf07b4bdc"
+  },
+  {
+    "name": "fix/verified-prereveal-cid-2027",
+    "sha": "4069cfebdc22729efa102154fa5343042761fac4"
+  },
+  {
+    "name": "fix/wallet-disconnect",
+    "sha": "b0ed10dab7ac771bae2606f746b20e5ad9e4099b"
+  },
+  {
+    "name": "fix/wallet-modal-feedback",
+    "sha": "6949209550bf0b27cff8b88df321d21155bd9303"
+  },
+  {
+    "name": "fix/wallet-notification-timeout",
+    "sha": "db9f48299eba1978daca0b7bbb8a276dd2529733"
+  },
+  {
+    "name": "gif-audit",
+    "sha": "1101157c38b711ec4d43ec1405d8e829849c0a89"
+  },
+  {
+    "name": "hq-assets-final",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-deploy",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-deploy-final",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-final",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-final-fix",
+    "sha": "68cb061d5c95cab7d9ee48d7379fba259fe2c596"
+  },
+  {
+    "name": "hq-fix",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-fix-live",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-images-final",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-publish",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-publish-final",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "hq-ready",
+    "sha": "615ad64d98d194eeae8d9717bc570fb0f84dba51"
+  },
+  {
+    "name": "inspect-hq-assets",
+    "sha": "039431aa65b3f4a1c7ede3a0e5ae1b60a57b3905"
+  },
+  {
+    "name": "metadata/approved-description",
+    "sha": "7f30109b3b1352511df52d890538879d1ac0a4fb"
+  },
+  {
+    "name": "prepare/locked-testnet",
+    "sha": "fe0f45309cea49fc133bf3e1c82642d46ee3bb43"
+  },
+  {
+    "name": "release/verified-v3",
+    "sha": "24dd5411222b5abf7b0e960bf5ede88891739874"
+  },
+  {
+    "name": "site/prelaunch-status",
+    "sha": "39dac3061b3632885008ed030b773175f69ca201"
+  },
+  {
+    "name": "site-images-refresh",
+    "sha": "1fa16bc9ce89883c7c97b888755c6ff8403b6c44"
+  },
+  {
+    "name": "testnet/batch-check",
+    "sha": "c94082aab83e50c8c26eafc1a0d8343b6d755d5a"
+  },
+  {
+    "name": "testnet/creator-reservation",
+    "sha": "aa559110205a537bf92ba4147371833405a77b80"
+  },
+  {
+    "name": "upload-six-images-temp",
+    "sha": "944c69640bb84b9fc3b047fe7dabc822c96d4952"
+  }
+]

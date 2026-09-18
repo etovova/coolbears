@@ -24,5 +24,9 @@
   "terms.html",
   "wallet-core.mjs",
   "wallet-ui.mjs",
-  "wallet.css"
+  "wallet.css",
+  "solana-test/index.html",
+  "solana-test/controller.mjs",
+  "solana-test/sdk.js",
+  "solana-test/sdk.js.LEGAL.txt"
 ]

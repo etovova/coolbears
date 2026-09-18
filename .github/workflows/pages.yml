@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+      - run: npm run build:solana
       - run: node scripts/stage-site.mjs
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -28,3 +32,14 @@ jobs:
           path: public-site
       - uses: actions/deploy-pages@v4
         id: deployment
+  # RESET_ONLY_START
+  finish-reset:
+    needs: deploy
+    if: contains(github.event.head_commit.message, '[finish-reset]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/reset-git-history.py
+  # RESET_ONLY_END
