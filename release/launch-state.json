@@ -338,7 +338,40 @@
       "productionHold": true,
       "mainnetTouched": false,
       "transactionsSent": 0
+    },
+    "getgemsRarityProbeBranding": {
+      "status": "published-and-byte-verified",
+      "checkedAt": "2026-09-18T09:34:00Z",
+      "diagnosticOnly": true,
+      "collectionAddressTestnetBounceable": "kQDg8CvOLwaPbZraNcMi4U8BYxSAw6IYn4pHsvg6V-1mvDJI",
+      "logoSha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+      "logoDimensions": [
+        1000,
+        1000
+      ],
+      "bannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+      "bannerDimensions": [
+        2048,
+        483
+      ],
+      "exactApprovedBranding": true,
+      "fullCollectionDescriptionPublished": true,
+      "expectedPercentages": [
+        25,
+        50,
+        75
+      ],
+      "expectedRarityOrder": [
+        "0000",
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "publicCheckRunId": 35332048483,
+      "probeUndeployedVerified": true,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. A separate four-item TESTNET rarity probe is published and verified undeployed. It uses seven standard NFT attributes with controlled 25/50/75 percent frequencies and a mathematically distinct expected rarity order #0000 > #0001 > #0002 > #0003. This diagnostic contract is isolated from the production CoolBears candidate."
+  "note": "Production remains HOLD. The undeployed four-item TESTNET rarity probe now uses the exact approved CoolBears Getgems logo and banner bytes, full collection description, seven standard attributes, controlled 25/50/75% trait frequencies and expected rarity order #0000 > #0001 > #0002 > #0003. Published bytes and dimensions were independently verified."
 }
