@@ -231,7 +231,26 @@
       "conclusion": "The identical collection code path indexes correctly with strict-valid static PNG/HTTPS metadata. The current CoolBears collection metadata is not indexed by TonAPI while its #0000 item is indexed, consistent with the independently proven truncated collection image/cover media.",
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsValidGifHttpsProbe": {
+      "status": "prepared-published-undeployed",
+      "checkedAt": "2026-09-18T08:18:00Z",
+      "diagnosticOnly": true,
+      "variant": "valid-gif-https",
+      "collectionAddressRaw": "0:558514132e809d89c40f3877a1b7c219189e34a0cdcb92dde39ff0a64413cf5c",
+      "collectionAddressTestnetBounceable": "kQBVhRQTLoCdicQPOHeht8IZGJ40oM3Lkt3jn_CmRBPPXG7c",
+      "codeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "avatarGifFrames": 50,
+      "coverGifFrames": 20,
+      "nftGifFrames": 50,
+      "publishedStrictDecodeVerified": true,
+      "exactPublishedHashesVerified": true,
+      "probeUndeployedVerified": true,
+      "publicCheckRunId": 35323654912,
+      "productionHold": true,
+      "mainnetTouched": false,
+      "transactionsSent": 0
     }
   },
-  "note": "Production remains HOLD. The Getgems/TonAPI A/B test now shows the static-HTTPS/PNG probe collection and #0000 fully indexed, while the original CoolBears collection metadata and #0001 remain incomplete. Original #0000 is fully indexed. Combined with the strict decoder proof that the original collection image/cover are truncated GIF bytes, the strongest identified root cause is the collection branding media/metadata, not the collection or NFT contract interface."
+  "note": "Production remains HOLD. A second isolated TESTNET A/B probe using strict-valid animated GIF media over HTTPS has been published and verified. Avatar=50 frames, cover=20 frames, NFT=50 frames; all strict-decode and exact published hashes passed. The probe remains undeployed and is ready for a user-approved TESTNET-only deployment to test actual Getgems animation behavior."
 }
