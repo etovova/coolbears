@@ -1,0 +1,118 @@
+name: Verify live Getgems rarity probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rarity-probe-live-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install TON readers
+        run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
+      - name: Verify live rarity probe
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          mkdir -p build/rarity-probe-live
+          cat > rarity-live.mjs <<'NODE'
+          import fs from 'node:fs';
+          import {Address,Cell} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+
+          const p=JSON.parse(fs.readFileSync('testnet/rarity-probe/deployment.json','utf8'));
+          const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
+          const collection=Address.parse(p.collectionAddressRaw);
+          const state=await client.getContractState(collection);
+          if(state.state!=='active'||!state.code||!state.data) throw Error('RARITY_PROBE_NOT_ACTIVE_'+state.state);
+          const codeHash=Cell.fromBoc(state.code)[0].hash().toString('hex');
+          if(codeHash!==p.collectionCodeHash) throw Error('RARITY_CODE_HASH_MISMATCH');
+
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          async function run(a,m,stack=[]){
+            let last;
+            for(let i=1;i<=8;i++){
+              try{const r=await client.runMethod(a,m,stack);await sleep(1200);return r;}
+              catch(e){last=e;if(e?.response?.status!==429||i===8)throw e;await sleep(i*1800);}
+            }
+            throw last;
+          }
+
+          const mint=(await run(collection,'get_mint_state')).stack;
+          const next=mint.readBigNumber();
+          const supply=mint.readBigNumber();
+          const price=mint.readBigNumber();
+          const paused=mint.readBigNumber();
+          if(supply!==4n) throw Error('SUPPLY_NOT_4');
+          if(price!==50000000n) throw Error('PRICE_NOT_005_TON');
+          if(next<0n||next>4n) throw Error('BAD_NEXT');
+          if(paused!==0n&&paused!==1n) throw Error('BAD_PAUSED');
+
+          const cd=(await run(collection,'get_collection_data')).stack;
+          const cdNext=cd.readBigNumber();
+          const content=cd.readCell();
+          const owner=cd.readAddress();
+          if(cdNext!==next) throw Error('NEXT_GETTER_MISMATCH');
+          if(owner.toRawString()!==p.ownerAddressRaw) throw Error('OWNER_MISMATCH');
+          const cs=content.beginParse();
+          if(cs.loadUint(8)!==1) throw Error('BAD_COLLECTION_CONTENT_TAG');
+          const uri=cs.loadStringTail();
+          if(uri!==p.collectionMetadataUrl) throw Error('COLLECTION_URI_MISMATCH');
+
+          const items=[];
+          for(let i=0;i<4;i++){
+            const ar=(await run(collection,'get_nft_address_by_index',[{type:'int',value:BigInt(i)}])).stack;
+            const a=ar.readAddress();
+            let active=false,ownerRaw=null,metadataUri=null;
+            const s=await client.getContractState(a);
+            if(s.state==='active'){
+              active=true;
+              const nd=(await run(a,'get_nft_data')).stack;
+              const initialized=nd.readBigNumber();
+              const index=nd.readBigNumber();
+              const coll=nd.readAddress();
+              const nftOwner=nd.readAddress();
+              const individual=nd.readCell();
+              if(initialized!==-1n||index!==BigInt(i)||coll.toRawString()!==collection.toRawString()) throw Error('NFT_DATA_MISMATCH_'+i);
+              ownerRaw=nftOwner.toRawString();
+              const fc=(await run(collection,'get_nft_content',[{type:'int',value:BigInt(i)},{type:'cell',cell:individual}])).stack.readCell().beginParse();
+              if(fc.loadUint(8)!==1) throw Error('BAD_NFT_CONTENT_TAG_'+i);
+              metadataUri=fc.loadStringTail();
+            }
+            items.push({index:i,addressTestnetBounceable:a.toString({testOnly:true,bounceable:true}),active,ownerRaw,metadataUri});
+          }
+
+          const report={
+            status:'RARITY_PROBE_LIVE_VERIFIED',
+            collection:p.collectionAddressTestnetBounceable,
+            codeHash,
+            nextItemIndex:Number(next),
+            supply:Number(supply),
+            priceNanoTon:Number(price),
+            paused:paused===1n,
+            collectionUri:uri,
+            items
+          };
+          fs.writeFileSync('build/rarity-probe-live/report.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify(report,null,2));
+          NODE
+          node rarity-live.mjs
+      - name: Reconfirm production HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
