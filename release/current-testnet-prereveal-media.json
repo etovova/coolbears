@@ -1,208 +1,53 @@
 {
-  "schema": 1,
-  "status": "GETGEMS_RENDERING_VERIFIED_DESCRIPTION_REJECTED",
-  "checkedAt": "2026-09-18T19:02:41.582152+00:00",
+  "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
+  "collectionRevision": "v3-glasses-correction-1",
+  "collectionAddressRaw": "0:d74270933ec9dbd9f23cfc210bdd30be80ab132bf6dbc0f91238fa1eae470079",
   "network": "testnet",
-  "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
-  "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
-  "collectionMetadataExact": true,
-  "metadata0000Exact": true,
-  "metadata0001Exact": true,
+  "appliesToCurrentCandidate": true,
+  "checkedAt": "2026-09-18T20:18:24.292350+00:00",
+  "status": "passed",
+  "collectionDescriptionMatched": true,
+  "unapprovedReservationTextAbsent": true,
   "metadata0000Available": true,
   "metadata0001Available": true,
   "samePrerevealImage": true,
-  "noAttributeRankPercentFields": true,
-  "publicGateway": "gateway.pinata.cloud",
-  "assets": {
-    "logo": {
-      "sha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
-      "publicReadbackMatched": true
-    },
-    "banner": {
-      "sha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
-      "publicReadbackMatched": true
-    },
-    "gif": {
-      "sha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
-      "publicReadbackMatched": true
-    }
-  },
-  "decodedMedia": {
-    "logo": {
-      "size": [
-        1000,
-        1000
-      ],
-      "frames": 1,
-      "durationMs": 0,
-      "loop": null,
-      "strictDecodePassed": true
-    },
-    "banner": {
-      "size": [
-        2048,
-        483
-      ],
-      "frames": 1,
-      "durationMs": 0,
-      "loop": null,
-      "strictDecodePassed": true
-    },
-    "gif": {
-      "size": [
-        640,
-        640
-      ],
-      "frames": 148,
-      "durationMs": 4950,
-      "loop": 0,
-      "strictDecodePassed": true
-    }
-  },
-  "reindexRequests": [
-    {
-      "name": "collection",
-      "status": 200,
-      "body": "",
-      "requestedAt": "2026-09-18T16:27:11.177Z"
-    },
-    {
-      "name": "nft0",
-      "status": 200,
-      "body": "",
-      "requestedAt": "2026-09-18T16:27:21.116Z"
-    },
-    {
-      "name": "nft1",
-      "status": 200,
-      "body": "",
-      "requestedAt": "2026-09-18T16:27:29.559Z"
-    }
-  ],
-  "independentGatewayCheck": [
-    {
-      "name": "collection",
-      "gateway": "ipfs.io",
-      "error": "HTTP 403"
-    },
-    {
-      "name": "nft0",
-      "gateway": "ipfs.io",
-      "error": "HTTP 403"
-    }
-  ],
-  "getgemsCollectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
-  "getgemsCollectionError": null,
-  "tonapiMetadataComplete": false,
-  "getgemsUiVerified": true,
-  "mainnetReady": false,
+  "hiddenDescriptionsDateOnly": true,
+  "metadataAttributesAbsent": true,
+  "metadataRankAbsent": true,
+  "animatedGifVerified": true,
+  "strictImageDecodeVerified": true,
+  "gifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+  "gifFrames": 148,
+  "gifDurationMs": 4950,
+  "doesNotVerifyMarketplaceRendering": true,
+  "report": "release/current-testnet-prereveal-media.json",
+  "source": "Fresh HTTPS retrieval of current collection JSON, both minted item JSON files and the approved GIF; compared to approved local metadata and GIF hash",
   "transactionsSent": 0,
-  "finalFilesPublished": false,
-  "publicBytesCheckedAt": "2026-09-18T16:29:55.232558+00:00",
-  "getgemsItemErrors": {},
-  "getgemsItems": {
-    "0": {
-      "metadataLoaded": true,
-      "name": "CoolBears #0000 — Hidden Bear",
-      "descriptionMatched": true,
-      "ownerMatched": true,
-      "gifAnimated": true,
-      "animationVerification": "Browser screenshots showed different intended GIF frames: hidden bear with flower and eyes on black background.",
-      "attributesAbsent": true,
-      "percentagesAbsent": true,
-      "rankAbsent": true,
-      "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQC2oPd4XeV-Rf5GqPAc-VVnGj5NGINtD9QKwU18pka38EUK",
-      "checkedAt": "2026-09-18T18:05:15.193663+00:00"
-    },
-    "1": {
-      "metadataLoaded": true,
-      "name": "CoolBears #0001 — Hidden Bear",
-      "descriptionMatched": true,
-      "ownerMatched": true,
-      "gifAnimated": true,
-      "animationVerification": "Two browser screenshots showed different intended GIF frames: colored CoolBears text and hidden bear with flower.",
-      "attributesAbsent": true,
-      "percentagesAbsent": true,
-      "rankAbsent": true,
-      "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQAf5JDAb6daOfAurvk_tS1Xwc8DSC6n9Y_nchavnbmpxaxd"
-    }
-  },
-  "independentIpfsRetrieval": {
-    "collection": {
-      "checkedAt": "2026-09-18T16:59:42.412Z",
-      "cid": "bafkreiadquagxfzdz7ruj3kpdzixiphmsfjwcnxzfumrckb6eo7hcfjsjm",
-      "httpStatus": 200,
-      "providers": [
-        {
-          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
-          "source": "Amino DHT",
-          "bitswapFound": true,
-          "error": ""
-        },
-        {
-          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
-          "source": "IPNI",
-          "bitswapFound": true,
-          "error": ""
-        }
-      ]
-    },
-    "nft0": {
-      "checkedAt": "2026-09-18T17:14:47.189Z",
-      "cid": "bafkreigw6mz3ijryxnhlrpsbq32rjreanxmvkeptlmlwh7rcfdqwmbnsf4",
-      "httpStatus": 200,
-      "providers": [
-        {
-          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
-          "source": "Amino DHT",
-          "bitswapFound": true,
-          "error": ""
-        },
-        {
-          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
-          "source": "IPNI",
-          "bitswapFound": true,
-          "error": ""
-        }
-      ]
-    },
-    "nft1": {
-      "checkedAt": "2026-09-18T17:14:48.781Z",
-      "cid": "bafkreihalk4qj2w2e4onqqq6dgykopydc6qfsxumcmogwrgpm6objxlp44",
-      "httpStatus": 200,
-      "providers": [
-        {
-          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
-          "source": "Amino DHT",
-          "bitswapFound": true,
-          "error": ""
-        },
-        {
-          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
-          "source": "IPNI",
-          "bitswapFound": true,
-          "error": ""
-        }
-      ]
-    }
-  },
-  "indexerNote": "Getgems NFT0001 loaded while TonAPI still returned empty metadata. Treat them as separate observations; do not infer Getgems state only from TonAPI.",
-  "remainingUiChecks": [],
-  "httpsAlternativePublished": false,
-  "newDeploymentRequested": false,
-  "collectionRefreshRequestedAt": "2026-09-18T18:59:57.452856+00:00",
-  "getgemsCollection": {
-    "checkedAt": "2026-09-18T19:02:41.582152+00:00",
-    "name": "CoolBears",
-    "nameMatched": true,
-    "descriptionMatched": false,
-    "websiteMatched": true,
-    "creatorMatched": true,
-    "logoVisible": true,
-    "bannerVisible": true,
-    "metadataErrorVisible": false,
-    "refreshResponse": "Refreshing Metadata / It may take a few minutes",
-    "descriptionMatchesDeployedSource": true
-  },
-  "approvedDescriptionMatched": false
+  "getgemsUi": {
+    "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
+    "checkedAt": "2026-09-18T20:12:53.928Z",
+    "collectionAddressRaw": "0:d74270933ec9dbd9f23cfc210bdd30be80ab132bf6dbc0f91238fa1eae470079",
+    "network": "testnet",
+    "collectionRevision": "v3-glasses-correction-1",
+    "appliesToCurrentCandidate": true,
+    "status": "pending-metadata-indexing",
+    "collectionUrl": "https://testnet.getgems.io/collection/EQDXQnCTPsnb2fI8_CEL3TC-gKsTK_bbwPkSOPoerkcAeZSj",
+    "metadataUnavailable": true,
+    "collectionRefreshRequested": true,
+    "collectionRefreshAccepted": true,
+    "itemRefreshRequested": false,
+    "itemRefreshBlockedByAutomaticApproval": true,
+    "approvalBlockReason": "Explicit permission required for Getgems item Refresh requests",
+    "logoVisible": false,
+    "bannerVisible": false,
+    "gifAnimated": false,
+    "collectionDescriptionMatched": false,
+    "absenceCannotBeConfirmedUntilMetadataLoads": true,
+    "allMintedItemsVerified": false,
+    "remainingUiChecks": [
+      "collection branding and approved description",
+      "both hidden NFT GIFs and date-only descriptions",
+      "no traits, rarity percentages or ranks"
+    ]
+  }
 }
