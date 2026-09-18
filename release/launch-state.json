@@ -213,7 +213,25 @@
       "collectionUriVerified": true,
       "workflowRunId": 35321930655,
       "appliesToProductionCandidate": false
+    },
+    "getgemsOriginalVsStaticProbeTonapi": {
+      "status": "comparison-passed",
+      "checkedAt": "2026-09-18T08:07:52Z",
+      "workflowRunId": 35322801679,
+      "original": {
+        "collectionMetadataComplete": false,
+        "nft0000MetadataComplete": true,
+        "nft0001MetadataComplete": false
+      },
+      "staticHttpsPngProbe": {
+        "collectionMetadataComplete": true,
+        "nft0000MetadataComplete": true
+      },
+      "getgemsGraphqlStatus": "USE_TONAPI",
+      "conclusion": "The identical collection code path indexes correctly with strict-valid static PNG/HTTPS metadata. The current CoolBears collection metadata is not indexed by TonAPI while its #0000 item is indexed, consistent with the independently proven truncated collection image/cover media.",
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. A separate diagnostic static-HTTPS/PNG A/B collection is now live on TON TESTNET with next=0 and paused=true, using the same collection code hash as the corrected candidate. This probe is isolated from production and is being used to test Getgems metadata compatibility."
+  "note": "Production remains HOLD. The Getgems/TonAPI A/B test now shows the static-HTTPS/PNG probe collection and #0000 fully indexed, while the original CoolBears collection metadata and #0001 remain incomplete. Original #0000 is fully indexed. Combined with the strict decoder proof that the original collection image/cover are truncated GIF bytes, the strongest identified root cause is the collection branding media/metadata, not the collection or NFT contract interface."
 }
