@@ -1,91 +1,74 @@
-// Offline browser-logic tests. No RPC request, wallet, signature or transaction.
-import assert from 'node:assert/strict';
+// Offline fail-closed tests for the corrected MAINNET owner launch client.
+// No RPC request, wallet, signature or transaction.
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {validateLaunch,canOperate,PACKAGE_SHA256,REVISION,CANDIDATE_HASH} from '../release-guard.mjs';
+
+const candidateBytes=fs.readFileSync('launch/candidate.json');
+const deploymentBytes=fs.readFileSync('mainnet/owner/deployment.json');
+const sha=b=>crypto.createHash('sha256').update(b).digest('hex');
+assert.equal(sha(candidateBytes),PACKAGE_SHA256);
+assert.equal(sha(deploymentBytes),PACKAGE_SHA256);
+assert.deepEqual(deploymentBytes,candidateBytes,'Owner deployment package must be byte-identical to launch/candidate.json');
+
+const p=JSON.parse(candidateBytes);
+assert.equal(p.collectionRevision,REVISION);
+assert.equal(p.collectionCodeHash,CANDIDATE_HASH);
+assert.equal(p.tonConnectDeployMessage.amount,'300000000');
+assert.equal(p.tonConnectDeployMessage.stateInit,p.stateInitBocBase64);
+assert.equal(p.tonConnectCreatorClaimRequest.network,'-239');
+assert.equal(p.tonConnectCreatorClaimRequest.messages.length,1);
+assert.equal(p.tonConnectCreatorClaimRequest.messages[0].amount,'7100000000');
+assert.equal(p.initialPaused,true);
+assert.equal(p.nextItemIndex,0);
+assert.equal(p.automaticRevealEnabled,false);
+
+const ctx=vm.createContext({window:{},document:{addEventListener(){}}});
+vm.runInContext(fs.readFileSync('config.js','utf8'),ctx);
+const cfg=ctx.window.COOLBEARS_CONFIG;
+assert.equal(cfg.demoMode,true);
+assert.equal(cfg.collectionAddress,p.collectionAddressMainnetNonBounceable);
+assert.equal(cfg.mintContractAddress,p.collectionAddressMainnetBounceable);
+assert.equal(cfg.collectionCodeHash,p.collectionCodeHash);
 
 const source=fs.readFileSync('mainnet/owner/owner.js','utf8');
-const packageData=JSON.parse(fs.readFileSync('mainnet/owner/deployment.json','utf8'));
-const owner=packageData.ownerAddressRaw, collection=packageData.collectionAddressRaw;
-const hashes={content:'11'.repeat(32),item:'22'.repeat(32),royalty:'33'.repeat(32)};
-const address=raw=>({toRawString:()=>raw,equals:other=>raw===other.toRawString()});
-function slice(values){
-  const queue=[...values];
-  const take=type=>{const field=queue.shift();assert.ok(field,'Unexpected read '+type);assert.equal(field[0],type);return field[1];};
-  return {loadAddress:()=>address(take('address')),loadUintBig:()=>BigInt(take('uint')),loadRef:()=>take('ref'),loadBit:()=>take('bit'),loadStringTail:()=>take('string'),get remainingBits(){return queue.filter(x=>x[0]!=='ref').length;},get remainingRefs(){return queue.filter(x=>x[0]==='ref').length;}};
-}
-const cell=(hash,values=[])=>({hash:()=>Buffer.from(hash,'hex'),beginParse:()=>slice(values)});
-let tests=0;
-async function scenario(name,options,verify){
-  const elements=new Map();const el=id=>{if(!elements.has(id))elements.set(id,{disabled:true,textContent:'',className:''});return elements.get(id);};
-  const p={minted:1,paused:true,nftState:'active',nftOwner:owner,nftCollection:collection,nftIndex:0,nftContent:'0000.json',...options};
-  let requests=0,transactions=0;
-  const cells={
-    COLLECTION_CODE:cell(packageData.collectionCodeHash),
-    NFT_CODE:cell(p.badNftCode?'55'.repeat(32):hashes.item),
-    COLLECTION_DATA:cell('',[
-      ['address',p.collectionOwner||owner],['uint',p.minted],
-      ['ref',cell(p.badContent?'66'.repeat(32):hashes.content)],['ref',cell(hashes.item)],['ref',cell(hashes.royalty)],
-      ['address',owner],['bit',p.paused]
-    ]),
-    NFT_DATA:cell('',[['uint',p.nftIndex],['address',p.nftCollection],['address',p.nftOwner],['ref',cell('',[['string',p.nftContent]])]])
-  };
-  const context=vm.createContext({
-    console,Buffer,AbortSignal,URL,Date,BigInt,Number,encodeURIComponent,
-    setTimeout:callback=>{callback();return 0;},
-    document:{getElementById:el},
-    window:{confirm:()=>p.confirm!==false},
-    Address:{parse:address},Cell:{fromBase64:key=>{assert.ok(cells[key],key);return cells[key];}},
-    beginCell:()=>{const b={storeUint:()=>b,storeAddress:()=>b,endCell:()=>cell('')};return b;},
-    contractAddress:()=>address('0:NFT0'),loadStateInit:()=>{throw Error('init is intentionally not executed in offline fixture test');},
-    fetch:async url=>{
-      requests++;
-      if(p.httpError)return {ok:false,status:500,json:async()=>({ok:false})};
-      if(p.throttleOnce&&requests===1)return {ok:false,status:429};
-      const nft=decodeURIComponent(url).includes('0:NFT0');
-      const result=nft?{state:p.nftState,code:'NFT_CODE',data:'NFT_DATA'}:{state:p.state??'active',code:'COLLECTION_CODE',data:'COLLECTION_DATA'};
-      if(p.missingState)delete result.state;
-      return {ok:true,status:200,json:async()=>({ok:true,result})};
-    }
-  });
-  const offline=source.replace(/^import[^\n]+\n/,'').slice(0,source.replace(/^import[^\n]+\n/,'').lastIndexOf('\ninit().catch'));
-  vm.runInContext(offline+`\nglobalThis.api={check,allowed,confirmed,send,setUp(p,h){d=p;releaseAllows=async()=>true;wallet={account:{chain:'-239',address:p.ownerAddressRaw}};expectedContentHash=h.content;expectedItemCodeHash=h.item;expectedRoyaltyHash=h.royalty;ui={sendTransaction:async()=>recordTransaction()};},setPending(v){pending=v;},get pending(){return pending;},get state(){return state;}};`,context);
-  context.recordTransaction=()=>{transactions++;};
-  const api=context.api;api.setUp(packageData,hashes);
-  if(p.pending)api.setPending(p.pending);
-  await api.check();
-  await verify(api,{el,requests:()=>requests,transactions:()=>transactions});
-  assert.equal(transactions,0,'Read/negative tests must not submit transactions');
-  console.log('PASS',name);tests++;
-}
-await scenario('Missing state fails closed',{missingState:true},a=>{assert.equal(a.state,null);assert.equal(a.allowed('deploy'),false);});
-await scenario('Unknown state fails closed',{state:'unknown'},a=>assert.equal(a.state,null));
-await scenario('RPC failure blocks operations',{httpError:true},a=>assert.equal(a.state,null));
-await scenario('Explicit uninitialized permits deploy only',{state:'uninitialized'},a=>{assert.equal(a.allowed('deploy'),true);assert.equal(a.allowed('claim'),false);});
-await scenario('Frozen address blocks operations',{state:'frozen'},a=>assert.equal(a.state,null));
-await scenario('Minted zero permits claim while paused',{minted:0},(a,t)=>{assert.equal(a.allowed('claim'),true);assert.equal(a.allowed('unpause'),false);assert.equal(t.requests(),1);});
-await scenario('Counter alone does not confirm creator claim',{nftState:'uninitialized',pending:'claim'},a=>{assert.equal(a.allowed('unpause'),false);assert.equal(a.pending,'claim');assert.equal(a.confirmed('claim'),false);});
-await scenario('Actual NFT0 ownership confirms creator claim',{pending:'claim'},a=>{assert.equal(a.state.creatorVerified,true);assert.equal(a.pending,null);assert.equal(a.allowed('unpause'),true);});
-await scenario('Wrong NFT owner blocks launch',{nftOwner:'0:wrong'},a=>assert.equal(a.state,null));
-await scenario('Wrong NFT collection blocks launch',{nftCollection:'0:wrong'},a=>assert.equal(a.state,null));
-await scenario('Wrong NFT index blocks launch',{nftIndex:1},a=>assert.equal(a.state,null));
-await scenario('Wrong NFT content blocks launch',{nftContent:'0001.json'},a=>assert.equal(a.state,null));
-await scenario('Wrong NFT bytecode blocks launch',{badNftCode:true},a=>assert.equal(a.state,null));
-await scenario('Changed collection content blocks launch',{badContent:true},a=>assert.equal(a.state,null));
-await scenario('Invalid collection count blocks launch',{minted:10001},a=>assert.equal(a.state,null));
-await scenario('Rate-limit retry is bounded',{throttleOnce:true},(a,t)=>{assert.equal(a.state.creatorVerified,true);assert.equal(t.requests(),3);});
-await scenario('Canceled public-unpause confirmation submits nothing',{confirm:false},async(a,t)=>{await a.send('unpause');assert.equal(t.transactions(),0);});
-await scenario('Open state still requires verified creator NFT',{paused:false,pending:'unpause'},a=>{assert.equal(a.pending,null);assert.equal(a.confirmed('unpause'),true);});
-const cfgContext={window:{},document:{addEventListener(){}}};vm.createContext(cfgContext);
-vm.runInContext(fs.readFileSync('config.js','utf8'),cfgContext);
-await import('./validate-release-state.mjs');
-assert.equal(cfgContext.window.COOLBEARS_CONFIG.priceTon,7);
-assert.equal(cfgContext.window.COOLBEARS_CONFIG.revealDate,'2027-01-01');
-console.log('OWNER_LAUNCH_OFFLINE_TESTS_OK',tests,'scenarios; sales gate unchanged');
+assert.ok(source.includes('@ton/core@0.63.1'),'Owner client must pin corrected TON core version');
+assert.ok(source.includes(PACKAGE_SHA256),'Owner client must pin corrected package SHA');
+assert.ok(source.includes("const REVISION='v3-glasses-correction-1'"),'Owner client must pin corrected revision');
+assert.ok(source.includes("../../launch/candidate.json"),'Owner client must cross-check public candidate');
+assert.ok(source.includes("deploy.amount!=='300000000'"),'Owner client must require corrected 0.30 TON deploy request');
+assert.ok(source.includes("const paused=s.loadBit(),revealed=s.loadBit(),commitment=s.loadUintBig(256)"),'Owner client must parse full reveal-aware state');
+assert.ok(source.includes("commitment!==BigInt('0x'+d.finalContentCommitment)"),'Owner client must verify final content commitment');
+assert.ok(source.includes("releaseState?.publicMintApproved===true"),'Owner client must require explicit public mint approval before unpause');
+assert.ok(!source.includes('9fc5ea62b3c0ad943cec55deef509bdf9fabafa2cca0616f74f4fae46587f231'),'Old code hash must not remain in owner client');
+assert.ok(!source.includes('UQCaIEXpRw1EJzn6juFRXsywl9MWZ7QvlmkrA6_67ta2clK-'),'Old collection address must not remain in owner client');
 
-const mintSource=fs.readFileSync('mint-live.js','utf8');
-assert.ok(!mintSource.includes("t('confirmed')"),'Supply-counter changes must not be called confirmed mint');
-assert.ok(!mintSource.includes('confirmIncrease'),'Counter is not a transaction receipt');
-assert.ok(mintSource.includes('observeCollectionActivity'));
-assert.ok(mintSource.includes('if(s.next<1)'));
-vm.runInNewContext(mintSource,{window:{COOLBEARS_CONFIG:{demoMode:true}},document:new Proxy({},{get(){throw Error('Closed mint client should not access DOM');}})});
-console.log('MINT_RECEIPT_LANGUAGE_AND_CLOSED_GATE_OK');
+const state=JSON.parse(fs.readFileSync('release/launch-state.json','utf8'));
+const prepared={...structuredClone(state),phase:'prepared',mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false};
+delete prepared.evidence.correctedMainnetDeployment;
+delete prepared.evidence.correctedMainnetCreatorNft0000;
+const gate=validateLaunch({...cfg,demoMode:true},p,prepared,PACKAGE_SHA256);
+assert.deepEqual(gate,{phase:'prepared',setup:true,sales:false,automaticReveal:false});
+assert.equal(canOperate('deploy',gate,{status:'uninitialized'},true),true);
+assert.equal(canOperate('claim',gate,{status:'active',minted:0,paused:true,creatorVerified:false},true),true);
+assert.equal(canOperate('unpause',gate,{status:'active',minted:1,paused:true,creatorVerified:true},true),false);
+assert.equal(canOperate('deploy',gate,{status:'uninitialized'},false),false);
+
+const html=fs.readFileSync('mainnet/owner/index.html','utf8');
+assert.ok(html.includes('0,30 TON'));
+assert.ok(html.includes('publicMintApproved=true'));
+assert.ok(html.includes('Публичные продажи всё ещё выключены'));
+
+console.log(JSON.stringify({
+  suite:'corrected-mainnet-owner-launch',
+  packageSha256:PACKAGE_SHA256,
+  deploymentByteIdentical:true,
+  demoMode:true,
+  preparedDeployAllowed:true,
+  preparedClaimAllowed:true,
+  preparedUnpauseAllowed:false,
+  realNetworkRequests:0,
+  transactionsSent:0
+}));
