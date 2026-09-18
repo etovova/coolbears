@@ -1,0 +1,212 @@
+name: Build final-media Getgems TESTNET probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-getgems-finalmedia-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verify exact source media before building probe
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+          mkdir -p /tmp/finalmedia
+          test -s testnet/getgems-ab/assets/image.png
+          test -s testnet/getgems-ab/assets/cover.png
+          python3 - <<'PY'
+          from PIL import Image
+          for p,sz in [
+            ('testnet/getgems-ab/assets/image.png',(1000,1000)),
+            ('testnet/getgems-ab/assets/cover.png',(2880,680)),
+          ]:
+              im=Image.open(p); im.load()
+              assert im.format=='PNG'
+              assert im.size==sz
+          PY
+          curl -fsSL --retry 5 --retry-delay 2             'https://gateway.pinata.cloud/ipfs/bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni'             -o /tmp/finalmedia/prereveal.gif
+          test "$(sha256sum /tmp/finalmedia/prereveal.gif | awk '{print $1}')" = "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312"
+          python3 - <<'PY'
+          from PIL import Image,ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=False
+          p='/tmp/finalmedia/prereveal.gif'
+          im=Image.open(p)
+          n=getattr(im,'n_frames',1)
+          ds=[]
+          for i in range(n):
+              im.seek(i); ds.append(im.info.get('duration',0)); im.load()
+          assert n==148
+          assert sum(ds)==4950
+          assert im.size==(640,640)
+          assert im.info.get('loop')==0
+          print('SOURCE_PREREVEAL_GIF_OK frames=148 duration_ms=4950')
+          PY
+
+      - name: Write final-layout metadata
+        run: |
+          mkdir -p testnet/getgems-finalmedia-ab
+          cat > testnet/getgems-finalmedia-ab/collection.json <<'JSON'
+          {
+            "name": "CoolBears Final Media Probe",
+            "description": "TESTNET probe: static collection avatar and cover with the full original-speed CoolBears prereveal GIF on the NFT.",
+            "image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/image.png",
+            "cover_image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/cover.png",
+            "social_links": ["https://coolbears-nfts.com/"]
+          }
+          JSON
+          cat > testnet/getgems-finalmedia-ab/0000.json <<'JSON'
+          {
+            "name": "CoolBears Final Media Probe #0000",
+            "description": "Full 148-frame prereveal GIF at the original 4.95-second loop speed.",
+            "image": "https://gateway.pinata.cloud/ipfs/bafybeibyftszumcapsb5hf3fv7i2y46wj4ti6and7qv5mkigb6prx33bni",
+            "attributes": [
+              {"trait_type":"Status","value":"Original-speed prereveal GIF"}
+            ]
+          }
+          JSON
+          jq -e '.name and .description and .image and .cover_image' testnet/getgems-finalmedia-ab/collection.json >/dev/null
+          jq -e '.name and .description and .image and (.attributes|length==1)' testnet/getgems-finalmedia-ab/0000.json >/dev/null
+
+      - name: Build isolated TESTNET StateInit from corrected bytecode
+        run: |
+          npm install --no-save --ignore-scripts '@ton/core@0.63.1'
+          cat > build-finalmedia-probe.mjs <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          import {Cell,beginCell,loadStateInit,contractAddress,storeStateInit} from '@ton/core';
+
+          const p=JSON.parse(fs.readFileSync('launch/candidate.json','utf8'));
+          const init=loadStateInit(Cell.fromBase64(p.stateInitBocBase64).beginParse());
+          const ds=init.data.beginParse();
+          const owner=ds.loadAddress();
+          ds.loadUintBig(64);
+          ds.loadRef();
+          const item=ds.loadRef();
+          const royalty=ds.loadRef();
+          const treasury=ds.loadAddress();
+          ds.loadBit();
+          ds.loadBit();
+          const commitment=ds.loadUintBig(256);
+          if(ds.remainingBits||ds.remainingRefs) throw Error('BASE_DATA_EXTRA');
+
+          const collectionUrl='https://coolbears-nfts.com/testnet/getgems-finalmedia-ab/collection.json';
+          const commonPrefix='https://coolbears-nfts.com/testnet/getgems-finalmedia-ab/';
+          const content=beginCell()
+            .storeRef(beginCell().storeUint(1,8).storeStringTail(collectionUrl).endCell())
+            .storeRef(beginCell().storeStringTail(commonPrefix).endCell())
+            .endCell();
+          const data=beginCell()
+            .storeAddress(owner).storeUint(0,64)
+            .storeRef(content).storeRef(item).storeRef(royalty)
+            .storeAddress(treasury).storeBit(true).storeBit(false).storeUint(commitment,256)
+            .endCell();
+          const diagnostic={code:init.code,data};
+          const address=contractAddress(0,diagnostic);
+          const stateInitCell=beginCell().store(storeStateInit(diagnostic)).endCell();
+          const deployPayload=beginCell().endCell().toBoc().toString('base64');
+          const claimPayload=beginCell().storeUint(0x52535630,32).storeUint(0,64).endCell().toBoc().toString('base64');
+          const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+
+          const out={
+            schema:1,
+            diagnosticOnly:true,
+            variant:'static-branding-full-original-gif',
+            network:'testnet',
+            collectionRevision:'getgems-finalmedia-ab',
+            sourceCandidateRevision:p.collectionRevision,
+            sourceCandidateCodeHash:p.collectionCodeHash,
+            collectionAddressRaw:address.toRawString(),
+            collectionAddressTestnetBounceable:address.toString({testOnly:true,bounceable:true}),
+            collectionAddressTestnetNonBounceable:address.toString({testOnly:true,bounceable:false}),
+            ownerAddressRaw:owner.toRawString(),
+            treasuryAddressRaw:treasury.toRawString(),
+            collectionCodeHash:init.code.hash().toString('hex'),
+            nftItemCodeHash:item.hash().toString('hex'),
+            collectionMetadataUrl:collectionUrl,
+            commonMetadataPrefix:commonPrefix,
+            initialPaused:true,
+            nextItemIndex:0,
+            supply:10000,
+            priceNanoTon:7000000000,
+            prerevealGifSha256:'b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312',
+            prerevealGifFrames:148,
+            prerevealGifDurationMs:4950,
+            stateInitBocBase64:stateInitCell.toBoc().toString('base64'),
+            tonConnectDeployMessage:{
+              address:address.toString({testOnly:true,bounceable:false}),
+              amount:'300000000',
+              stateInit:stateInitCell.toBoc().toString('base64'),
+              payload:deployPayload
+            },
+            tonConnectCreatorClaimRequest:{
+              network:'-3',
+              from:owner.toRawString(),
+              messages:[{
+                address:address.toString({testOnly:true,bounceable:true}),
+                amount:'7100000000',
+                payload:claimPayload
+              }]
+            },
+            sha256:{
+              collectionJson:hash('testnet/getgems-finalmedia-ab/collection.json'),
+              nft0000Json:hash('testnet/getgems-finalmedia-ab/0000.json'),
+              staticAvatar:hash('testnet/getgems-ab/assets/image.png'),
+              staticCover:hash('testnet/getgems-ab/assets/cover.png')
+            }
+          };
+          fs.writeFileSync('testnet/getgems-finalmedia-ab/deployment.json',JSON.stringify(out,null,2)+'\n');
+          console.log(JSON.stringify({address:out.collectionAddressTestnetBounceable,variant:out.variant,codeHash:out.collectionCodeHash}));
+          NODE
+          node build-finalmedia-probe.mjs
+
+      - name: Add final-media probe to public allow-list
+        run: |
+          python3 - <<'PY'
+          import json
+          p='scripts/public-files.json'
+          a=json.load(open(p))
+          for x in [
+            'testnet/getgems-finalmedia-ab/index.html',
+            'testnet/getgems-finalmedia-ab/probe.js',
+            'testnet/getgems-finalmedia-ab/deployment.json',
+            'testnet/getgems-finalmedia-ab/collection.json',
+            'testnet/getgems-finalmedia-ab/0000.json'
+          ]:
+              if x not in a: a.append(x)
+          open(p,'w').write(json.dumps(sorted(a),indent=2)+'\n')
+          PY
+
+      - name: Verify production remains HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = "hold"
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = "false"
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = "false"
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = "false"
+          test "$(jq -r '.diagnosticOnly' testnet/getgems-finalmedia-ab/deployment.json)" = "true"
+          test "$(jq -r '.network' testnet/getgems-finalmedia-ab/deployment.json)" = "testnet"
+
+      - name: Commit final-media probe
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add testnet/getgems-finalmedia-ab scripts/public-files.json
+          if git diff --cached --quiet; then echo NO_CHANGES; exit 0; fi
+          git commit -m 'Build final-media Getgems TESTNET probe'
+          git push origin HEAD:main
