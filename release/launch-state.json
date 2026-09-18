@@ -57,7 +57,26 @@
       "realNetworkRequests": 0,
       "realTransactions": 0,
       "appliesToCurrentCandidate": true
+    },
+    "correctedTestnetDeployment": {
+      "status": "active-paused-verified",
+      "checkedAt": "2026-09-18T05:03:41Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "collectionRevision": "v3-glasses-correction-1",
+      "collectionAddressRaw": "0:387b2d3f22a8f3a560e64ee285c956092bfd9ddc7b5292c956d21c1436cfd5dd",
+      "workflowRunId": 35309319089,
+      "accountActive": true,
+      "nextItemIndex": 0,
+      "supply": 10000,
+      "priceNanoTon": 7000000000,
+      "paused": true,
+      "royaltyNumerator": 7,
+      "royaltyDenominator": 100,
+      "collectionGetterResponds": true,
+      "creatorNftVerified": false,
+      "buyerNftVerified": false,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "Corrected private CAR storage is verified and corrected offline TESTNET safety checks passed 22/22 for v3-glasses-correction-1. Production remains held. testnetVerified stays false until the corrected package is actually deployed and verified on TON TESTNET."
+  "note": "Corrected private CAR storage is verified. Corrected offline TESTNET checks passed 22/22, and the corrected contract is now active on TON TESTNET with next=0, supply=10000, price=7 TON, paused=true and royalty=7/100. testnetVerified stays false until #0000 and #0001 are created and verified plus transaction history is audited."
 }
