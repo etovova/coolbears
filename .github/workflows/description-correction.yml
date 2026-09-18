@@ -1,0 +1,78 @@
+name: Publish approved description and verify PRIVATE final revision
+on:
+  push:
+    branches: [main]
+    paths: ['release/description-correction/publication-request.json']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: coolbears-description-correction
+  cancel-in-progress: false
+jobs:
+  request:
+    runs-on: ubuntu-24.04
+    outputs:
+      authorized: ${{ steps.request.outputs.authorized }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - id: request
+        run: |
+          node - <<'NODE'
+          const fs=require('fs'),crypto=require('crypto');
+          const r=JSON.parse(fs.readFileSync('release/description-correction/publication-request.json'));
+          const b=fs.readFileSync('release/description-correction/unsigned-candidate.json'),p=JSON.parse(b);
+          if(r.packageSha256!==crypto.createHash('sha256').update(b).digest('hex')||r.carSha256!==p.releaseCarSha256||r.manifestSha256!==p.releaseManifestSha256)throw Error('REVISION_MISMATCH');
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,`authorized=${r.authorized===true}\n`);
+          NODE
+  public-description:
+    needs: request
+    if: needs.request.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save --ignore-scripts ipfs-car@3.1.0
+      - name: Publish exact approved description only and read it back
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+        run: node scripts/publish-description-correction.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: approved-description-public-proof
+          path: build/description-correction/publication-proof.json
+  private-final-revision:
+    needs: request
+    if: needs.request.outputs.authorized == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Require held production
+        run: node scripts/validate-release-state.mjs
+      - name: Free temporary disk space for one verified CAR
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h /
+      - run: python3 -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Verify original 48 private parts, correct description and verify new private parts
+        env:
+          PINATA_JWT: ${{ secrets.PINATA_JWT }}
+          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
+        run: node scripts/migrate-private-description.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: approved-description-private-proof
+          path: build/description-correction/storage-summary.json
