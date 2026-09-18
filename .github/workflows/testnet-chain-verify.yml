@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/testnet-chain-verify.yml'
-      - 'testnet/deployment.json'
+      - 'launch/candidate.json'
 
 permissions:
   contents: read
@@ -16,11 +16,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify exact corrected candidate binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f"
+          test "$(jq -r '.collectionRevision' launch/candidate.json)" = "v3-glasses-correction-1"
+          echo "CORRECTED_CANDIDATE_BINDING_OK"
+
       - name: Verify account is active on TON testnet
         shell: bash
         run: |
           set -euo pipefail
-          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          ADDRESS=$(jq -r '.collectionAddressRaw' launch/candidate.json)
           echo "EXPECTED_ADDRESS=$ADDRESS"
           for i in {1..12}; do
             RESP=$(curl -fsS --retry 2 --retry-delay 2 "https://testnet.toncenter.com/api/v2/getAddressInformation?address=${ADDRESS}") || true
@@ -42,7 +50,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          ADDRESS=$(jq -r '.collectionAddressRaw' launch/candidate.json)
           curl -fsS --retry 3 --retry-delay 2 -X POST \
             -H 'Content-Type: application/json' \
             -d "{\"address\":\"${ADDRESS}\",\"method\":\"get_mint_state\",\"stack\":[]}" \
@@ -55,7 +63,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          ADDRESS=$(jq -r '.collectionAddressRaw' launch/candidate.json)
           curl -fsS --retry 3 --retry-delay 2 -X POST \
             -H 'Content-Type: application/json' \
             -d "{\"address\":\"${ADDRESS}\",\"method\":\"royalty_params\",\"stack\":[]}" \
@@ -68,7 +76,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ADDRESS=$(jq -r '.collectionAddressTestnetNonBounceable' testnet/deployment.json)
+          ADDRESS=$(jq -r '.collectionAddressRaw' launch/candidate.json)
           curl -fsS --retry 3 --retry-delay 2 -X POST \
             -H 'Content-Type: application/json' \
             -d "{\"address\":\"${ADDRESS}\",\"method\":\"get_collection_data\",\"stack\":[]}" \
@@ -76,3 +84,5 @@ jobs:
           jq -e '.ok == true and .result.exit_code == 0' /tmp/collection.json >/dev/null
           echo "COLLECTION_GETTER_OK"
           jq -c '.result.stack' /tmp/collection.json
+
+# corrected live-chain verification trigger: v3-glasses-correction-1
