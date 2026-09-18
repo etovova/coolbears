@@ -1,0 +1,209 @@
+name: Build valid GIF Getgems A/B probe
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-getgems-gif-ab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build strict-valid GIF media from known-good prereveal GIF
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+          mkdir -p testnet/getgems-gif-ab/assets
+          ROOT=$(jq -r '.preRevealMetadataRootIpfs' launch/candidate.json)
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${ROOT#ipfs://}0000.json" -o /tmp/nft0.json
+          IMG=$(jq -r '.image' /tmp/nft0.json)
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${IMG#ipfs://}" -o /tmp/source.gif
+          python3 - <<'PY'
+          from PIL import Image, ImageFile
+          ImageFile.LOAD_TRUNCATED_IMAGES=False
+          src=Image.open('/tmp/source.gif')
+          total=getattr(src,'n_frames',1)
+          assert total>=100
+          def collect(indices, size=None, cover=False):
+              frames=[]; durations=[]
+              for i in indices:
+                  src.seek(i)
+                  im=src.convert('RGBA')
+                  dur=src.info.get('duration',40)
+                  if cover:
+                      canvas=Image.new('RGBA',(2048,483),(16,16,18,255))
+                      target=im.copy()
+                      target.thumbnail((483,483),Image.Resampling.LANCZOS)
+                      x=(2048-target.width)//2
+                      y=(483-target.height)//2
+                      canvas.alpha_composite(target,(x,y))
+                      im=canvas
+                  elif size:
+                      im=im.resize(size,Image.Resampling.LANCZOS)
+                  frames.append(im.convert('P',palette=Image.Palette.ADAPTIVE,colors=256))
+                  durations.append(max(20,dur))
+              return frames,durations
+          avatar_idx=[round(i*(total-1)/49) for i in range(50)]
+          cover_idx=[round(i*(total-1)/19) for i in range(20)]
+          nft_idx=[round(i*(total-1)/49) for i in range(50)]
+          af,ad=collect(avatar_idx,(640,640))
+          cf,cd=collect(cover_idx,cover=True)
+          nf,nd=collect(nft_idx,(640,640))
+          af[0].save('testnet/getgems-gif-ab/assets/avatar.gif',save_all=True,append_images=af[1:],duration=ad,loop=0,optimize=False,disposal=2)
+          cf[0].save('testnet/getgems-gif-ab/assets/cover.gif',save_all=True,append_images=cf[1:],duration=cd,loop=0,optimize=False,disposal=2)
+          nf[0].save('testnet/getgems-gif-ab/assets/nft.gif',save_all=True,append_images=nf[1:],duration=nd,loop=0,optimize=False,disposal=2)
+          for p,limit,expected in [
+              ('testnet/getgems-gif-ab/assets/avatar.gif',100,50),
+              ('testnet/getgems-gif-ab/assets/cover.gif',30,20),
+              ('testnet/getgems-gif-ab/assets/nft.gif',100,50),
+          ]:
+              ImageFile.LOAD_TRUNCATED_IMAGES=False
+              im=Image.open(p)
+              n=getattr(im,'n_frames',1)
+              assert n==expected and n<=limit
+              for i in range(n):
+                  im.seek(i); im.load()
+              assert im.info.get('loop')==0
+              print(p,'frames',n,'size',im.size)
+          PY
+
+      - name: Write GIF-specific HTTPS metadata
+        run: |
+          cat > testnet/getgems-gif-ab/collection.json <<'JSON'
+          {
+            "name": "CoolBears GIF Probe",
+            "description": "Getgems TESTNET compatibility probe using strict-valid animated GIF media and HTTPS metadata.",
+            "image": "https://coolbears-nfts.com/testnet/getgems-gif-ab/assets/avatar.gif",
+            "cover_image": "https://coolbears-nfts.com/testnet/getgems-gif-ab/assets/cover.gif",
+            "social_links": ["https://coolbears-nfts.com/"]
+          }
+          JSON
+          cat > testnet/getgems-gif-ab/0000.json <<'JSON'
+          {
+            "name": "CoolBears GIF Probe #0000",
+            "description": "Strict-valid animated GIF metadata compatibility probe.",
+            "image": "https://coolbears-nfts.com/testnet/getgems-gif-ab/assets/nft.gif",
+            "attributes": [
+              {"trait_type":"Status","value":"Animated GIF Probe"}
+            ]
+          }
+          JSON
+          jq -e '.name and .description and .image and .cover_image' testnet/getgems-gif-ab/collection.json >/dev/null
+          jq -e '.name and .description and .image and (.attributes|length==1)' testnet/getgems-gif-ab/0000.json >/dev/null
+
+      - name: Build diagnostic TESTNET StateInit from corrected bytecode
+        run: |
+          npm install --no-save --ignore-scripts '@ton/core@0.63.1'
+          cat > build-getgems-gif-probe.mjs <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          import {Cell,beginCell,loadStateInit,contractAddress,storeStateInit} from '@ton/core';
+          const p=JSON.parse(fs.readFileSync('launch/candidate.json','utf8'));
+          const init=loadStateInit(Cell.fromBase64(p.stateInitBocBase64).beginParse());
+          const ds=init.data.beginParse();
+          const owner=ds.loadAddress();
+          ds.loadUintBig(64);
+          ds.loadRef();
+          const item=ds.loadRef();
+          const royalty=ds.loadRef();
+          const treasury=ds.loadAddress();
+          ds.loadBit();
+          ds.loadBit();
+          const commitment=ds.loadUintBig(256);
+          if(ds.remainingBits||ds.remainingRefs)throw Error('BASE_DATA_EXTRA');
+          const collectionUrl='https://coolbears-nfts.com/testnet/getgems-gif-ab/collection.json';
+          const commonPrefix='https://coolbears-nfts.com/testnet/getgems-gif-ab/';
+          const content=beginCell()
+            .storeRef(beginCell().storeUint(1,8).storeStringTail(collectionUrl).endCell())
+            .storeRef(beginCell().storeStringTail(commonPrefix).endCell())
+            .endCell();
+          const data=beginCell().storeAddress(owner).storeUint(0,64).storeRef(content).storeRef(item).storeRef(royalty).storeAddress(treasury).storeBit(true).storeBit(false).storeUint(commitment,256).endCell();
+          const diagnostic={code:init.code,data};
+          const address=contractAddress(0,diagnostic);
+          const stateInitCell=beginCell().store(storeStateInit(diagnostic)).endCell();
+          const deployPayload=beginCell().endCell().toBoc().toString('base64');
+          const claimPayload=beginCell().storeUint(0x52535630,32).storeUint(0,64).endCell().toBoc().toString('base64');
+          const hash=f=>crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+          const out={
+            schema:1,
+            diagnosticOnly:true,
+            variant:'valid-gif-https',
+            network:'testnet',
+            collectionRevision:'getgems-ab-valid-gif-https',
+            sourceCandidateRevision:p.collectionRevision,
+            sourceCandidateCodeHash:p.collectionCodeHash,
+            collectionAddressRaw:address.toRawString(),
+            collectionAddressTestnetBounceable:address.toString({testOnly:true,bounceable:true}),
+            collectionAddressTestnetNonBounceable:address.toString({testOnly:true,bounceable:false}),
+            ownerAddressRaw:owner.toRawString(),
+            treasuryAddressRaw:treasury.toRawString(),
+            collectionCodeHash:init.code.hash().toString('hex'),
+            nftItemCodeHash:item.hash().toString('hex'),
+            collectionMetadataUrl:collectionUrl,
+            commonMetadataPrefix:commonPrefix,
+            initialPaused:true,
+            nextItemIndex:0,
+            supply:10000,
+            priceNanoTon:7000000000,
+            stateInitBocBase64:stateInitCell.toBoc().toString('base64'),
+            tonConnectDeployMessage:{address:address.toString({testOnly:true,bounceable:false}),amount:'300000000',stateInit:stateInitCell.toBoc().toString('base64'),payload:deployPayload},
+            tonConnectCreatorClaimRequest:{network:'-3',from:owner.toRawString(),messages:[{address:address.toString({testOnly:true,bounceable:true}),amount:'7100000000',payload:claimPayload}]},
+            sha256:{avatar:hash('testnet/getgems-gif-ab/assets/avatar.gif'),cover:hash('testnet/getgems-gif-ab/assets/cover.gif'),nft:hash('testnet/getgems-gif-ab/assets/nft.gif'),collectionJson:hash('testnet/getgems-gif-ab/collection.json'),nft0000Json:hash('testnet/getgems-gif-ab/0000.json')}
+          };
+          fs.writeFileSync('testnet/getgems-gif-ab/deployment.json',JSON.stringify(out,null,2)+'\n');
+          console.log(JSON.stringify({address:out.collectionAddressTestnetBounceable,variant:out.variant,codeHash:out.collectionCodeHash}));
+          NODE
+          node build-getgems-gif-probe.mjs
+
+      - name: Add GIF probe files to public allow-list
+        run: |
+          python3 - <<'PY'
+          import json
+          p='scripts/public-files.json'
+          a=json.load(open(p))
+          for x in [
+            'testnet/getgems-gif-ab/index.html',
+            'testnet/getgems-gif-ab/probe.js',
+            'testnet/getgems-gif-ab/deployment.json',
+            'testnet/getgems-gif-ab/collection.json',
+            'testnet/getgems-gif-ab/0000.json',
+            'testnet/getgems-gif-ab/assets/avatar.gif',
+            'testnet/getgems-gif-ab/assets/cover.gif',
+            'testnet/getgems-gif-ab/assets/nft.gif'
+          ]:
+              if x not in a:a.append(x)
+          open(p,'w').write(json.dumps(sorted(a),indent=2)+'\n')
+          PY
+
+      - name: Verify production remains HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = "hold"
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = "false"
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = "false"
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = "false"
+          test "$(jq -r '.diagnosticOnly' testnet/getgems-gif-ab/deployment.json)" = "true"
+          test "$(jq -r '.network' testnet/getgems-gif-ab/deployment.json)" = "testnet"
+
+      - name: Commit generated GIF probe package
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add testnet/getgems-gif-ab scripts/public-files.json
+          if git diff --cached --quiet; then echo NO_CHANGES; exit 0; fi
+          git commit -m 'Build valid GIF Getgems TESTNET A/B probe'
+          git push origin HEAD:main
