@@ -166,7 +166,40 @@
       "getgemsUiObservedMetadataUnavailable": true,
       "mainnetBlockedUntilResolved": true,
       "appliesToCurrentCandidate": true
+    },
+    "getgemsMediaAudit": {
+      "status": "root-cause-candidate-confirmed",
+      "checkedAt": "2026-09-18T07:30:42Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "collectionRevision": "v3-glasses-correction-1",
+      "liveCollectionImageSha256": "c9a19eddc20a9adacccc5b1b277139bbefeba80cf4323b51dd422f85fe0527ee",
+      "liveCollectionImageBytes": 9977,
+      "liveCollectionImageStrictlyValid": false,
+      "liveCollectionCoverStrictlyValid": false,
+      "strictDecodeError": "image file is truncated",
+      "collectionImageAndCoverSameBytes": true,
+      "nftPrerevealGifStrictlyValid": true,
+      "nftPrerevealGifFrames": 148,
+      "nftPrerevealGifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+      "mediaAuditRunId": 35319717974,
+      "appliesToCurrentCandidate": true
+    },
+    "getgemsStaticHttpsAbProbe": {
+      "status": "prepared-published-undeployed",
+      "checkedAt": "2026-09-18T07:41:00Z",
+      "variant": "static-https",
+      "diagnosticOnly": true,
+      "collectionAddressRaw": "0:1a7c938503454b24ae471422251f771614e612f7f11bdb927985d72f4e748685",
+      "collectionAddressTestnetBounceable": "kQAafJOFA0VLJK5HFCIlH3cWFOYS9_Eb25J5hdcvTnSGhRSc",
+      "sourceCandidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "metadataTransport": "https",
+      "mediaFormat": "png",
+      "publishedBytesVerified": true,
+      "probeUndeployedVerified": true,
+      "publicCheckRunId": 35320613929,
+      "transactionsSent": 0,
+      "mainnetTouched": false
     }
   },
-  "note": "Corrected private storage and full TESTNET contract verification passed, but Getgems TESTNET currently shows collection/NFT metadata unavailable. Live collection JSON, NFT #0000 JSON and animated GIF are independently reachable and valid. Release returned to HOLD; no MAINNET deployment should occur until Getgems metadata indexing compatibility is resolved."
+  "note": "Corrected private storage and full TESTNET contract verification passed. Getgems TESTNET metadata sync mutations now return USE_TONAPI and cannot be used for refresh. Independent media audit found the live collection image and cover are byte-identical truncated GIFs, while the NFT prereveal GIF is strictly valid. Production remains HOLD. A separate static-HTTPS/PNG TESTNET A/B probe is published and verified undeployed to isolate Getgems content compatibility before any final package rebuild."
 }
