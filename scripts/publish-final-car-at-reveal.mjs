@@ -96,6 +96,14 @@ async function publicRootVisible(){
 }
 async function verifyPublicSample(){
   try{
+    const collectionBytes=await fetchBounded(publicUrl(manifest.collectionMetadataIpfs),2_000_000);
+    if(sha(collectionBytes)!=='d6d7408dc9a0b1c4166f16802e68d1a494274818c01fefdda07624e20b9e8b60')return false;
+    const collection=JSON.parse(collectionBytes.toString('utf8'));
+    const approved=JSON.parse(fs.readFileSync('release/prereveal-assets.json','utf8'));
+    if(collection.image!=='ipfs://'+approved.logo.cid||collection.cover_image!=='ipfs://'+approved.banner.cid)return false;
+    for(const asset of [approved.logo,approved.banner]){
+      if(sha(await fetchBounded(publicUrl('ipfs://'+asset.cid),5_000_000))!==asset.sha256)return false;
+    }
     for(const id of SAMPLE){
       const rec=manifest.records[id];
       const murl=publicUrl(manifest.metadataRootIpfs)+(manifest.metadataRootIpfs.endsWith('/')?'':'/')+String(id).padStart(4,'0')+'.json';
@@ -136,7 +144,7 @@ async function signedDownload(api,gateway,row,target){
   await runCurl(['--fail','--silent','--show-error','--location','--retry','8','--retry-all-errors','--retry-delay','5','--output',target,u.href],{capture:false});
 }
 async function writeSuccess(status,uploadedNow,pages){
-  const result={schema:4,status,collectionRevision:REVISION,packageSha256:PACKAGE_SHA,manifestSha256:MANIFEST_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,privatePartsReconstructed:PARTS,privateListPagesScanned:pages,privateCarFullHashVerified:true,publicTusUploadVerified:uploadedNow,publicBundleRootReachable:true,sampleMetadataAndImagesVerified:SAMPLE.length,publicReady:true,uploadedNow,onChainRevealAllowed:true,privateIdentifiersExposed:false,privateCidsExposed:false};
+  const result={schema:4,status,collectionRevision:REVISION,packageSha256:PACKAGE_SHA,manifestSha256:MANIFEST_SHA,carSha256:CAR_SHA,carBytes:CAR_BYTES,privatePartsReconstructed:pages>0?PARTS:0,privateListPagesScanned:pages,privateCarFullHashVerified:pages>0,publicTusUploadVerified:uploadedNow,publicBundleRootReachable:true,finalCollectionMetadataAndBrandingVerified:true,sampleMetadataAndImagesVerified:SAMPLE.length,publicReady:true,uploadedNow,onChainRevealAllowed:true,privateIdentifiersExposed:false,privateCidsExposed:false};
   fs.writeFileSync(outDir+'/publication-summary.json',JSON.stringify(result,null,2)+'\n');
   console.log(JSON.stringify(result));
 }

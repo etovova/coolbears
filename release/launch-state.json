@@ -5,7 +5,7 @@
   "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
   "testnetVerified": false,
-  "privateStorageVerified": false,
+  "privateStorageVerified": true,
   "mainnetVerified": false,
   "creatorNftVerified": false,
   "publicMintApproved": false,
@@ -13,22 +13,38 @@
   "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
   "evidence": {
     "privateStorage": {
+      "schema": 6,
       "status": "passed",
-      "checkedAt": "2026-09-17T22:24:15.098Z",
+      "checkedAt": "2026-09-18T15:51:18.154Z",
       "collectionRevision": "v3-glasses-correction-1",
-      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
-      "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
-      "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+      "finalBrandingRevision": "final-collection-branding-1",
+      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "manifestSha256": "208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488",
+      "carSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
       "carBytes": 12779698835,
+      "finalContentCommitment": "f848be80d03a80e90682782c8859fc71475544bf75c136b3d76cabe6b73df068",
+      "sourceCarSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+      "sourcePartsDownloaded": 48,
       "partsExpected": 48,
       "partsVerified": 48,
-      "newPartsUploaded": 47,
-      "reusedExistingParts": 1,
+      "newPartsUploaded": 2,
+      "reusedExistingParts": 46,
+      "changedPartNumbers": [
+        1,
+        48
+      ],
       "allPartHashesVerified": true,
       "fullReassemblyHashVerified": true,
+      "readbackMethod": "46 unchanged middle parts freshly restored and source-hash verified; 2 branded endpoint parts freshly downloaded and compared; full target CAR SHA verified",
       "network": "private",
-      "workflowRunId": 35277169547,
-      "appliesToCurrentCandidate": false
+      "privateIdentifiersExposed": false,
+      "publicIpfsPublication": false,
+      "transactionsSent": 0,
+      "walletOperations": false,
+      "salesChanged": false,
+      "verificationStatus": "PRIVATE_BRANDED_FINAL_CAR_CHUNKED_READBACK_VERIFIED",
+      "workflowRunId": 35363998313,
+      "appliesToCurrentCandidate": true
     },
     "legacyTestnet": {
       "status": "passed-for-superseded-v3-only",
@@ -568,8 +584,8 @@
     },
     "prerevealGetgemsUi": {
       "status": "pending",
-      "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
-      "collectionAddressRaw": "0:70a71beedf9c72a291978cd1417d217b64cf8588e7fa93996a93ef2aedfe57f8",
+      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
       "appliesToCurrentCandidate": false
     },
@@ -641,17 +657,52 @@
       "appliesToCurrentCandidate": true
     },
     "finalBrandingRebuild": {
-      "status": "unsigned-offline-verified-private-storage-pending",
+      "status": "unsigned-offline-and-private-storage-verified-awaiting-current-testnet",
       "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
       "sourcePackageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
       "finalBrandingRevision": "final-collection-branding-1",
       "unchangedPrereveal": true,
       "unchangedIndividualNfts": 10000,
       "currentTestnetRequired": true,
-      "privateStorageReverificationRequired": true,
+      "privateStorageReverificationRequired": false,
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": true
+    },
+    "previousPrivateStorage": {
+      "status": "passed",
+      "checkedAt": "2026-09-17T22:24:15.098Z",
+      "collectionRevision": "v3-glasses-correction-1",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
+      "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+      "carBytes": 12779698835,
+      "partsExpected": 48,
+      "partsVerified": 48,
+      "newPartsUploaded": 47,
+      "reusedExistingParts": 1,
+      "allPartHashesVerified": true,
+      "fullReassemblyHashVerified": true,
+      "network": "private",
+      "workflowRunId": 35277169547,
+      "appliesToCurrentCandidate": false
+    },
+    "finalBrandingOfflineTests": {
+      "status": "passed-offline-only",
+      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "releaseGuardTests": 66,
+      "currentStateInitTests": 22,
+      "transactionAuditTests": 14,
+      "actualFinalRevealTests": 13,
+      "prerevealSchemaCases": 18,
+      "allPrerevealFilesChecked": 10000,
+      "workflowRunIds": [
+        35363998324,
+        35363998307,
+        35363998412
+      ],
       "transactionsSent": 0,
       "appliesToCurrentCandidate": true
     }
   },
-  "note": "HOLD. Approved logo/banner now bound into final collection metadata. All 10000 PNG and individual JSON bytes unchanged; complete previous CAR reproduced, new CAR fully hash-verified locally. Actual final reveal passed 13 offline TVM tests. New commitment/address requires fresh TESTNET/Getgems UI and private CAR storage readback. Previous TESTNET/storage evidence is historical. Public prereveal content/GIF unchanged. No deployment, payment, public final publication, sales or automatic reveal."
+  "note": "HOLD. Final collection logo/banner corrected; all 10000 PNG and individual JSON bytes unchanged. Full new CAR freshly verified in PRIVATE Pinata: 48/48 parts, two new endpoint parts and 46 preserved middle parts, complete reassembly SHA matched. Actual final reveal passed 13 offline TVM checks; 66 gate tests and 22 current StateInit checks passed. New address still needs authorized live TESTNET and Getgems no-rank/no-attributes/no-percent UI verification. MAINNET/creator/mint/automatic reveal remain disabled; no chain transactions or public final publication."
 }

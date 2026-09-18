@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "action": "store-exact-final-car-private-pinata",
-  "authorized": true,
+  "authorized": false,
   "collectionRevision": "v3-glasses-correction-1",
   "finalBrandingRevision": "final-collection-branding-1",
   "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
@@ -9,5 +9,7 @@
   "carSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
   "carBytes": 12779698835,
   "attempt": 3,
-  "reason": "Owner explicitly authorized private final-branding rebuild without deployment, payment, reveal or sales. Preserve all old private objects; reuse 46 unchanged middle parts, upload only two changed endpoint parts and verify all 48 readbacks."
+  "reason": "Completed: exact branded CAR fully verified in PRIVATE Pinata. Two new parts uploaded and 46 historical parts preserved. Request disarmed; any future migration requires a new explicit request.",
+  "completedWorkflowRunId": 35363998313,
+  "completedAt": "2026-09-18T15:51:18.154Z"
 }

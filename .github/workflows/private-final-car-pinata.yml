@@ -1,9 +1,8 @@
 name: Store branded final CoolBears CAR in PRIVATE Pinata
 on:
-  push:
-    branches: [main]
-    paths: ['release/private-final-car-upload-request.json']
   workflow_dispatch:
+  # The authorized branding migration completed. Future private migrations
+  # require both a fresh authorized request and an explicit manual run.
 permissions:
   contents: read
 concurrency:

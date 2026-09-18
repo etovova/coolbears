@@ -78,6 +78,7 @@ check(publication.manifestSha256===MANIFEST_SHA,'PUBLICATION_MANIFEST_MISMATCH')
 check(publication.carSha256===CAR_SHA,'PUBLICATION_CAR_MISMATCH');
 check(publication.publicReady===true,'PUBLIC_CONTENT_NOT_READY');
 check(publication.publicBundleRootReachable===true,'PUBLIC_ROOT_NOT_VERIFIED');
+check(publication.finalCollectionMetadataAndBrandingVerified===true,'PUBLIC_FINAL_BRANDING_NOT_VERIFIED');
 check(publication.sampleMetadataAndImagesVerified===SAMPLE_COUNT,'PUBLIC_SAMPLE_NOT_FULLY_VERIFIED');
 check(publication.privateCarFullHashVerified===true || publication.status==='CORRECTED_FINAL_PUBLIC_CONTENT_ALREADY_VERIFIED','PRIVATE_CAR_GATE_NOT_VERIFIED');
 check(publication.onChainRevealAllowed===true,'PUBLICATION_DID_NOT_AUTHORIZE_REVEAL');
