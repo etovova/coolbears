@@ -1,4 +1,4 @@
-name: Verify corrected TESTNET mint open state
+name: Verify corrected TESTNET NFT #0001
 
 on:
   push:
@@ -28,7 +28,7 @@ jobs:
           echo CORRECTED_CANDIDATE_BINDING_OK
       - name: Install pinned TON client
         run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
-      - name: Verify live TESTNET mint is open and NFT #0000 remains correct
+      - name: Verify live TESTNET NFTs #0000 and #0001
         env:
           TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
         run: |
@@ -55,31 +55,44 @@ jobs:
           const supply=mint.stack.readBigNumber();
           const price=mint.stack.readBigNumber();
           const paused=mint.stack.readBigNumber();
-
-          if(next!==1n) throw new Error('EXPECTED_NEXT_1_GOT_'+next);
+          if(next!==2n) throw new Error('EXPECTED_NEXT_2_GOT_'+next);
           if(supply!==10000n) throw new Error('BAD_SUPPLY');
           if(price!==7000000000n) throw new Error('BAD_PRICE');
           if(paused!==0n) throw new Error('EXPECTED_MINT_OPEN');
 
-          const ar=await run(collection,'get_nft_address_by_index',[{type:'int',value:0n}]);
-          const nft=ar.stack.readAddress();
-          const nr=await run(nft,'get_nft_data');
-          const initialized=nr.stack.readBigNumber();
-          const index=nr.stack.readBigNumber();
-          const coll=nr.stack.readAddress();
-          const owner=nr.stack.readAddress();
-          if(initialized!==-1n) throw new Error('NFT0_NOT_INITIALIZED');
-          if(index!==0n) throw new Error('NFT0_INDEX_MISMATCH');
-          if(coll.toRawString()!==collection.toRawString()) throw new Error('NFT0_COLLECTION_MISMATCH');
-          if(owner.toRawString()!==p.ownerAddressRaw) throw new Error('NFT0_OWNER_MISMATCH');
+          const results=[];
+          for(const i of [0,1]){
+            const ar=await run(collection,'get_nft_address_by_index',[{type:'int',value:BigInt(i)}]);
+            const nft=ar.stack.readAddress();
+            const nr=await run(nft,'get_nft_data');
+            const initialized=nr.stack.readBigNumber();
+            const index=nr.stack.readBigNumber();
+            const coll=nr.stack.readAddress();
+            const owner=nr.stack.readAddress();
+            const individual=nr.stack.readCell();
+            if(initialized!==-1n) throw new Error('NFT'+i+'_NOT_INITIALIZED');
+            if(index!==BigInt(i)) throw new Error('NFT'+i+'_INDEX_MISMATCH');
+            if(coll.toRawString()!==collection.toRawString()) throw new Error('NFT'+i+'_COLLECTION_MISMATCH');
+            if(owner.toRawString()!==p.ownerAddressRaw) throw new Error('NFT'+i+'_OWNER_MISMATCH');
+            const suffix=individual.beginParse().loadStringTail();
+            const expectedSuffix=String(i).padStart(4,'0')+'.json';
+            if(suffix!==expectedSuffix) throw new Error('NFT'+i+'_SUFFIX_MISMATCH_'+suffix);
+
+            const cr=await run(collection,'get_nft_content',[{type:'int',value:BigInt(i)},{type:'cell',cell:individual}]);
+            const full=cr.stack.readCell().beginParse();
+            if(full.loadUint(8)!==1) throw new Error('NFT'+i+'_BAD_OFFCHAIN_TAG');
+            const uri=full.loadStringTail();
+            if(uri!==p.preRevealMetadataRootIpfs+expectedSuffix) throw new Error('NFT'+i+'_URI_MISMATCH');
+            results.push({index:i,ownerVerified:true,metadataUriVerified:true});
+          }
 
           console.log(JSON.stringify({
-            status:'CORRECTED_TESTNET_MINT_OPEN_VERIFIED',
+            status:'CORRECTED_TESTNET_NFT_0001_VERIFIED',
             collectionRevision:p.collectionRevision,
             packageSha256:'241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f',
             nextItemIndex:Number(next),
             paused:false,
-            nft0OwnerVerified:true
+            nfts:results
           }));
           NODE
           node verify-live.mjs
