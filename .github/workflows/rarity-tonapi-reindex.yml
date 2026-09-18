@@ -1,0 +1,88 @@
+name: Reindex rarity probe in TonAPI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rarity-tonapi-reindex.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reindex:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Request TonAPI reindex for collection and all four NFTs
+        run: |
+          set -euo pipefail
+          mkdir -p build/rarity-reindex
+          accounts=(
+            'kQCJMZr97lvrX__EqQSO2wuWU9bhuxfPWKKE9hWMPElWQ9ww'
+            'kQCtc4C9OSRvruX0xxI8vG9O5r01J5wXXjd45KrkFv3pC0OX'
+            'kQD7XQNRvE-E5HqRpLOTn4MFPFh1f8zFFwGE06IXeLuUZjGX'
+            'kQBB_MxZlragf6EIwRB47WLTIINbOp40ywnjSbLDk5SfngCK'
+            'kQAOTK5cCx6VtY__3w05jm1pQnMHVrZ3yDZYPZCNh-YCT8VG'
+          )
+          i=0
+          for a in "${accounts[@]}"; do
+            code=$(curl -sS -X POST -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o "build/rarity-reindex/reindex-$i.body" "https://testnet.tonapi.io/v2/accounts/$a/reindex" || true)
+            echo "$a HTTP $code" | tee "build/rarity-reindex/reindex-$i.status"
+            i=$((i+1))
+          done
+
+      - name: Poll until exact metadata is refreshed
+        run: |
+          set -euo pipefail
+          COLL='kQCJMZr97lvrX__EqQSO2wuWU9bhuxfPWKKE9hWMPElWQ9ww'
+          NFT0='kQCtc4C9OSRvruX0xxI8vG9O5r01J5wXXjd45KrkFv3pC0OX'
+          NFT1='kQD7XQNRvE-E5HqRpLOTn4MFPFh1f8zFFwGE06IXeLuUZjGX'
+          NFT2='kQBB_MxZlragf6EIwRB47WLTIINbOp40ywnjSbLDk5SfngCK'
+          NFT3='kQAOTK5cCx6VtY__3w05jm1pQnMHVrZ3yDZYPZCNh-YCT8VG'
+          for attempt in {1..20}; do
+            cc=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o build/rarity-reindex/collection.json "https://testnet.tonapi.io/v2/nfts/collections/$COLL" || true)
+            ok=1
+            for spec in "0|$NFT0" "1|$NFT1" "2|$NFT2" "3|$NFT3"; do
+              idx=${spec%%|*}; a=${spec#*|}
+              nc=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o "build/rarity-reindex/nft${idx}.json" "https://testnet.tonapi.io/v2/nfts/$a" || true)
+              name=$(jq -r '.metadata.name // empty' "build/rarity-reindex/nft${idx}.json" 2>/dev/null || true)
+              attrs=$(jq '.metadata.attributes // [] | length' "build/rarity-reindex/nft${idx}.json" 2>/dev/null || echo 0)
+              expected=$(printf 'CoolBears #%04d' "$idx")
+              echo "attempt=$attempt nft$idx http=$nc name=$name attrs=$attrs"
+              if [ "$nc" != '200' ] || [ "$name" != "$expected" ] || [ "$attrs" != '7' ]; then ok=0; fi
+            done
+            cname=$(jq -r '.metadata.name // empty' build/rarity-reindex/collection.json 2>/dev/null || true)
+            cimg=$(jq -r '.metadata.image // empty' build/rarity-reindex/collection.json 2>/dev/null || true)
+            ccover=$(jq -r '.metadata.cover_image // empty' build/rarity-reindex/collection.json 2>/dev/null || true)
+            cdesc=$(jq -r '.metadata.description // empty' build/rarity-reindex/collection.json 2>/dev/null || true)
+            if [ "$cc" != '200' ] || [ "$cname" != 'CoolBears' ] || [ -z "$cdesc" ] || [ "$cimg" != 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png' ] || [ "$ccover" != 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png' ]; then ok=0; fi
+            if [ "$ok" = '1' ]; then
+              echo RARITY_TONAPI_REINDEX_COMPLETE=1
+              exit 0
+            fi
+            sleep 15
+          done
+          echo RARITY_TONAPI_REINDEX_INCOMPLETE
+          exit 1
+
+      - name: Reconfirm production HOLD
+        if: always()
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rarity-tonapi-reindex-evidence
+          path: build/rarity-reindex/
+          retention-days: 30
