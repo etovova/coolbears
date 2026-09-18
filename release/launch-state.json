@@ -500,7 +500,26 @@
       "workflowRunId": 35338487030,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsFinalVisualUi": {
+      "status": "visual-and-metadata-verified-rarity-ui-pending",
+      "checkedAt": "2026-09-18T11:45:00Z",
+      "collectionAddressTestnetBounceable": "kQAaApvx2jTuKgCevTdiFfieHctxbEyH9ntFPre6AiogpnAN",
+      "allFourOnchainVerified": true,
+      "allFourTonapiExact": true,
+      "allFourAnimatedGif": true,
+      "allFourSevenAttributes": true,
+      "exactApprovedLogo": true,
+      "exactApprovedBanner": true,
+      "approvedDescriptionVisible": true,
+      "getgemsVisualCollectionCorrect": true,
+      "rarityPercentAndRankVisible": false,
+      "oldGetgemsRarityMutationStatus": "disabled_USE_TONAPI",
+      "tonapiDedicatedRarityEndpointFound": false,
+      "ownerUiActionStillRequired": true,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. The fresh clean Getgems TESTNET collection is complete: four NFTs are live on-chain using the exact verified CoolBears contract code hash, all four use the same strict-valid 148-frame/4.95-second prereveal GIF, all four expose seven controlled attributes, approved logo/banner/description are published, and TonAPI reindex returned HTTP 200 for the collection and all four NFTs. Remaining check is visual Getgems UI rendering of branding, description, animation, rarity percentages and rank."
+  "note": "Production remains HOLD. Clean Getgems TESTNET visual verification now passes for collection branding, description, four NFTs, animation and seven attributes each. Getgems rarity percentages/rank are not yet visible. Legacy Getgems GraphQL rarity enablement is disabled with USE_TONAPI, and OpenTonAPI exposes no dedicated rarity endpoint. Remaining step is collection-owner UI activation/eligibility in Getgems."
 }
