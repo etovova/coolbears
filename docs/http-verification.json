@@ -1,0 +1,44 @@
+[
+  {
+    "path": "/solana-test/",
+    "http": 200,
+    "bytes": 3596,
+    "mime": "text/html; charset=utf-8"
+  },
+  {
+    "path": "/solana-test/controller.mjs",
+    "http": 200,
+    "bytes": 4805,
+    "mime": "text/javascript; charset=utf-8"
+  },
+  {
+    "path": "/solana-test/sdk.js?v=solana-20260918",
+    "http": 200,
+    "bytes": 1320951,
+    "mime": "application/javascript; charset=utf-8"
+  },
+  {
+    "path": "/metadata/collection.json",
+    "http": 200,
+    "bytes": 777,
+    "mime": "application/json; charset=utf-8"
+  },
+  {
+    "path": "/metadata/hidden/0000.json",
+    "http": 200,
+    "bytes": 532,
+    "mime": "application/json; charset=utf-8"
+  },
+  {
+    "path": "/metadata/hidden/9999.json",
+    "http": 200,
+    "bytes": 532,
+    "mime": "application/json; charset=utf-8"
+  },
+  {
+    "path": "/assets/collection/gif.gif",
+    "http": 200,
+    "bytes": 1319230,
+    "mime": "image/gif"
+  }
+]
