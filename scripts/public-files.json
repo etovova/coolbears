@@ -72,6 +72,8 @@
   "testnet/rarity-probe/assets/0001.png",
   "testnet/rarity-probe/assets/0002.png",
   "testnet/rarity-probe/assets/0003.png",
+  "testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png",
+  "testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png",
   "testnet/rarity-probe/collection.json",
   "testnet/rarity-probe/deployment.json",
   "testnet/rarity-probe/expected-rarity.json",

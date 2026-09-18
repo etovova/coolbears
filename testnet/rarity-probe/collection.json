@@ -1,9 +1,11 @@
 {
   "name": "CoolBears Rarity Probe",
-  "description": "TESTNET-only 4-NFT collection with controlled trait frequencies for verifying Getgems rarity percentages and rank.",
-  "image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/image.png",
-  "cover_image": "https://coolbears-nfts.com/testnet/getgems-ab/assets/cover.png",
+  "description": "10,000 unique CoolBears on TON. Everyone gets a bear. Not everyone gets a legend.\n\nNo real value. No financial returns. No celebrity backing. Don’t buy expecting profit. CoolBears is just for fun.\n\nMint will be available at https://coolbears-nfts.com\n\nThe highest-ranked CoolBear by the collection’s rarity score is reserved for the creator and excluded from public mint. Its artwork and traits remain hidden until reveal.\n\nTESTNET rarity probe: this temporary 4-NFT collection is used only to verify Getgems attribute percentages and rarity rank.",
+  "image": "https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png",
+  "cover_image": "https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png",
+  "external_url": "https://coolbears-nfts.com/",
   "social_links": [
     "https://coolbears-nfts.com/"
-  ]
+  ],
+  "marketplace": "getgems.io"
 }
