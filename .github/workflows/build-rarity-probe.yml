@@ -218,7 +218,7 @@ jobs:
           test "$(jq -r '.expectedRarityOrder|join(",")' testnet/rarity-probe/expected-rarity.json)" = "0000,0001,0002,0003"
           for i in 0000 0001 0002 0003; do
             test "$(jq '.attributes|length' testnet/rarity-probe/$i.json)" = "7"
-            test "$(jq -r '.attributes[].trait_type' testnet/rarity-probe/$i.json | sort | uniq | wc -l)" = "7"
+            test "$(jq -r '.attributes[].trait_type' testnet/rarity-probe/$i.json | sort | uniq | wc -l | tr -d ' ')" = "7"
           done
           python3 - <<'PY'
           from PIL import Image
