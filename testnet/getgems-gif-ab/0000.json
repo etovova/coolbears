@@ -1,0 +1,8 @@
+{
+  "name": "CoolBears GIF Probe #0000",
+  "description": "Strict-valid animated GIF metadata compatibility probe.",
+  "image": "https://coolbears-nfts.com/testnet/getgems-gif-ab/assets/nft.gif",
+  "attributes": [
+    {"trait_type":"Status","value":"Animated GIF Probe"}
+  ]
+}
