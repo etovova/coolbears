@@ -5,13 +5,30 @@
   "candidateRevision": "v3-glasses-correction-1",
   "candidateCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
   "testnetVerified": false,
-  "privateStorageVerified": false,
+  "privateStorageVerified": true,
   "mainnetVerified": false,
   "creatorNftVerified": false,
   "publicMintApproved": false,
   "automaticRevealArmed": false,
-  "packageSha256": null,
+  "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
   "evidence": {
+    "privateStorage": {
+      "status": "passed",
+      "checkedAt": "2026-09-17T22:24:15.098Z",
+      "collectionRevision": "v3-glasses-correction-1",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
+      "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+      "carBytes": 12779698835,
+      "partsExpected": 48,
+      "partsVerified": 48,
+      "newPartsUploaded": 47,
+      "reusedExistingParts": 1,
+      "allPartHashesVerified": true,
+      "fullReassemblyHashVerified": true,
+      "network": "private",
+      "workflowRunId": 35277169547
+    },
     "legacyTestnet": {
       "status": "passed-for-superseded-v3-only",
       "network": "testnet",
@@ -32,5 +49,5 @@
       "appliesToCurrentCandidate": false
     }
   },
-  "note": "Current candidate is v3-glasses-correction-1. The previous successful testnet run belongs only to the superseded v3 package and must not be used to authorize current mainnet deployment. Production remains held until corrected private storage, corrected-package testnet verification, mainnet verification and creator NFT verification are complete."
+  "note": "Corrected private CAR storage is verified for v3-glasses-correction-1. Production remains held. The previous successful testnet run belongs only to the superseded v3 package; current corrected candidate still requires corrected-package testnet verification before any mainnet deployment."
 }
