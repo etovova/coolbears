@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {Address,Cell,beginCell,loadStateInit,contractAddress,loadTransaction,storeMessage} from '@ton/core';
-export const PACKAGE_HASH='10aff272f0be8b315f7c280539ed49483c7bdf2f7a545863064d29fffcb008fa';
+export const PACKAGE_HASH='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f';
 export const CODE_HASH='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
 export const OWNER='0:6ea2cc995c7d4f236441c6c520b236c3e919ec54e331b4269528428c651a5717';
 const OPCODE={claim:0x52535630,open:0x554e5053,mint:0x4d494e54};
