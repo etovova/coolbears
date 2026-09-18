@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "status": "TESTNET_TRANSACTION_AUDIT_PASSED",
+  "network": "testnet",
+  "checkedAt": "2026-09-18T16:25:08.733Z",
+  "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+  "codeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+  "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
+  "finalContentCommitment": "f848be80d03a80e90682782c8859fc71475544bf75c136b3d76cabe6b73df068",
+  "transactionHashes": [
+    "efbdda04edb46e302da2d5682b0b69b2311e7ff173867e68fcf009512a482f17",
+    "d09400e309401bad9ac34ced23fe7f00bf5a4493809bce21aba5f772183d4db4",
+    "8fb5e6756e6ac4ba8be21c9b9c8575ed4b993789695d3218ed644b7b90a9f9c0",
+    "da16dca7ee7454a676b29613b99b839db13263c748b4c8f2ffb736b67e82b5fb"
+  ],
+  "transactionHistoryVerified": true,
+  "receiptsMatchedByMessageHash": true,
+  "collectionHistoryComplete": true,
+  "operations": [
+    {
+      "kind": "deploy",
+      "transactionHash": "efbdda04edb46e302da2d5682b0b69b2311e7ff173867e68fcf009512a482f17",
+      "lt": "97422044000003",
+      "timeUtc": "2026-09-18T16:16:59.000Z",
+      "incomingNano": "300000000",
+      "computeExitCode": 0,
+      "actionResultCode": 0
+    },
+    {
+      "kind": "claim",
+      "transactionHash": "d09400e309401bad9ac34ced23fe7f00bf5a4493809bce21aba5f772183d4db4",
+      "lt": "97422467000003",
+      "timeUtc": "2026-09-18T16:19:48.000Z",
+      "incomingNano": "7100000000",
+      "computeExitCode": 0,
+      "actionResultCode": 0,
+      "tokenIndex": 0,
+      "nftAddress": "kQC2oPd4XeV-Rf5GqPAc-VVnGj5NGINtD9QKwU18pka38P6A",
+      "nftDeploymentHash": "f2c7524b20aabaad4d119528defd40d9c411ba5d082817ffa38a3078a33d51fe",
+      "priceNano": "7000000000",
+      "nftCreationNano": "50000000",
+      "refundNano": "48458197",
+      "executionAndForwardingNano": "1541803",
+      "priceReceiptHash": "64f83fc7f8028f9fc6e4195eff1b13df9181e4b0d5b45035c2b696de07809628",
+      "refundReceiptHash": "b7d0c50aa528c84715b7a653246f0e0cf60c7f5634b6482325c9aa365358b410"
+    },
+    {
+      "kind": "open",
+      "transactionHash": "8fb5e6756e6ac4ba8be21c9b9c8575ed4b993789695d3218ed644b7b90a9f9c0",
+      "lt": "97422906000003",
+      "timeUtc": "2026-09-18T16:22:43.000Z",
+      "incomingNano": "50000000",
+      "computeExitCode": 0,
+      "actionResultCode": 0
+    },
+    {
+      "kind": "mint",
+      "transactionHash": "da16dca7ee7454a676b29613b99b839db13263c748b4c8f2ffb736b67e82b5fb",
+      "lt": "97422978000003",
+      "timeUtc": "2026-09-18T16:23:12.000Z",
+      "incomingNano": "7100000000",
+      "computeExitCode": 0,
+      "actionResultCode": 0,
+      "tokenIndex": 1,
+      "nftAddress": "kQAf5JDAb6daOfAurvk_tS1Xwc8DSC6n9Y_nchavnbmpxRfX",
+      "nftDeploymentHash": "8b9943f57158cc4824051095611adaa58cc94fea06ffd6351378ea2efd9081b2",
+      "priceNano": "7000000000",
+      "nftCreationNano": "50000000",
+      "refundNano": "48451664",
+      "executionAndForwardingNano": "1548336",
+      "priceReceiptHash": "9295df098dea980f4837fff1a342a0ded5f6c9a9ddc8efcf2b524b178ed9af2c",
+      "refundReceiptHash": "976503628b326ff3f0b9d33623c285ae797e35ccce2de6e875319230ad078c27"
+    }
+  ],
+  "rpcRequests": 9,
+  "transactionsSent": 0,
+  "source": "Toncenter TESTNET RPC; transaction BOCs decoded locally and chained; not a lite-client proof",
+  "mainnetReady": false,
+  "mediaAvailabilityVerified": false
+}

@@ -1,0 +1,102 @@
+{
+  "schema": 1,
+  "status": "PUBLIC_PREREVEAL_BYTES_VERIFIED_GETGEMS_INDEX_PENDING",
+  "checkedAt": "2026-09-18T16:29:55.232558+00:00",
+  "network": "testnet",
+  "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+  "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
+  "collectionMetadataExact": true,
+  "metadata0000Exact": true,
+  "metadata0001Exact": true,
+  "metadata0000Available": true,
+  "metadata0001Available": true,
+  "samePrerevealImage": true,
+  "noAttributeRankPercentFields": true,
+  "publicGateway": "gateway.pinata.cloud",
+  "assets": {
+    "logo": {
+      "sha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+      "publicReadbackMatched": true
+    },
+    "banner": {
+      "sha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+      "publicReadbackMatched": true
+    },
+    "gif": {
+      "sha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+      "publicReadbackMatched": true
+    }
+  },
+  "decodedMedia": {
+    "logo": {
+      "size": [
+        1000,
+        1000
+      ],
+      "frames": 1,
+      "durationMs": 0,
+      "loop": null,
+      "strictDecodePassed": true
+    },
+    "banner": {
+      "size": [
+        2048,
+        483
+      ],
+      "frames": 1,
+      "durationMs": 0,
+      "loop": null,
+      "strictDecodePassed": true
+    },
+    "gif": {
+      "size": [
+        640,
+        640
+      ],
+      "frames": 148,
+      "durationMs": 4950,
+      "loop": 0,
+      "strictDecodePassed": true
+    }
+  },
+  "reindexRequests": [
+    {
+      "name": "collection",
+      "status": 200,
+      "body": "",
+      "requestedAt": "2026-09-18T16:27:11.177Z"
+    },
+    {
+      "name": "nft0",
+      "status": 200,
+      "body": "",
+      "requestedAt": "2026-09-18T16:27:21.116Z"
+    },
+    {
+      "name": "nft1",
+      "status": 200,
+      "body": "",
+      "requestedAt": "2026-09-18T16:27:29.559Z"
+    }
+  ],
+  "independentGatewayCheck": [
+    {
+      "name": "collection",
+      "gateway": "ipfs.io",
+      "error": "HTTP 403"
+    },
+    {
+      "name": "nft0",
+      "gateway": "ipfs.io",
+      "error": "HTTP 403"
+    }
+  ],
+  "getgemsCollectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
+  "getgemsCollectionError": "Failed to Load Metadata",
+  "getgemsItemError": "Metadata Unavailable",
+  "tonapiMetadataComplete": false,
+  "getgemsUiVerified": false,
+  "mainnetReady": false,
+  "transactionsSent": 0,
+  "finalFilesPublished": false
+}
