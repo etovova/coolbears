@@ -1,10 +1,10 @@
 // One fail-closed policy for browser, CI and the release installer.
 // This module never performs network requests, signing or transactions.
 export const CANDIDATE_HASH='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
-export const PACKAGE_SHA256='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
+export const PACKAGE_SHA256='385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c';
 export const REVISION='v3-glasses-correction-1';
-export const MANIFEST_SHA256='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96';
-export const CAR_SHA256='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84';
+export const MANIFEST_SHA256='208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488';
+export const CAR_SHA256='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161';
 export const OWNER_RAW='0:6ea2cc995c7d4f236441c6c520b236c3e919ec54e331b4269528428c651a5717';
 export const OWNER_FRIENDLY='UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7';
 export const REVEAL_AT=1798761600;
@@ -32,6 +32,13 @@ function correctedPrerequisites(s,p,packageHash){
   yes(ps?.status==='passed'&&ps.packageSha256===PACKAGE_SHA256,'Corrected private storage evidence missing');
   yes(ps.collectionRevision===REVISION&&ps.manifestSha256===MANIFEST_SHA256&&ps.carSha256===CAR_SHA256,'Private storage release binding mismatch');
   yes(ps.partsExpected===48&&ps.partsVerified===48&&ps.allPartHashesVerified===true&&ps.fullReassemblyHashVerified===true,'Private CAR readback incomplete');
+  yes(ps.appliesToCurrentCandidate===true,'Historical private storage cannot authorize a new CAR');
+
+  const final=s.evidence?.finalCollectionBranding;
+  yes(final?.status==='passed'&&final.packageSha256===PACKAGE_SHA256&&final.appliesToCurrentCandidate===true,'Final collection branding proof missing');
+  yes(final.manifestSha256===MANIFEST_SHA256&&final.carSha256===CAR_SHA256&&final.finalContentCommitment===p.finalContentCommitment,'Final branding binding mismatch');
+  yes(final.approvedLogoSha256==='5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7'&&final.approvedBannerSha256==='d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95','Final branding artwork mismatch');
+  yes(final.unchangedPngFiles===10000&&final.unchangedMetadataFiles===10000&&final.previousCarExactlyReproduced===true&&final.actualRevealTvmVerified===true,'Final branding preservation/reveal proof incomplete');
 
   const td=s.evidence?.correctedTestnetTransactionAudit;
   yes(td?.status==='passed'&&td.packageSha256===PACKAGE_SHA256&&td.appliesToCurrentCandidate===true,'Corrected TESTNET transaction audit missing');

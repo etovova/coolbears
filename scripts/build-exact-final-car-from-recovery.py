@@ -8,12 +8,14 @@ and refuse success unless the corrected candidate/manifest/CAR hashes match exac
 No network upload or wallet operation is performed here.
 """
 from pathlib import Path
-import collections, hashlib, io, json, os, shutil, subprocess, sys, zipfile
+import collections, hashlib, io, json, os, runpy, shutil, subprocess, sys, zipfile
 
-EXPECTED_PACKAGE_SHA='763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f'
-EXPECTED_MANIFEST_SHA='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96'
-EXPECTED_CAR_SHA='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84'
+EXPECTED_PACKAGE_SHA='385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c'
+EXPECTED_MANIFEST_SHA='208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488'
+EXPECTED_CAR_SHA='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161'
 EXPECTED_CAR_BYTES=12779698835
+SOURCE_MANIFEST_SHA='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96'
+SOURCE_CAR_SHA='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84'
 REVISION='v3-glasses-correction-1'
 EYES_MAP={'Crystal Glasses':'Gold Glasses','Gold Glasses':'Cyber Goggles','Cyber Goggles':'Crystal Glasses'}
 
@@ -99,15 +101,21 @@ def main():
     rendered=work/'CoolBears_v3_rendered_verified.zip'; env=dict(os.environ); env['PYTHONHASHSEED']='0'
     subprocess.run([sys.executable,str(root/'build_collection_v3.py'),'--source',str(source),'--data',str(root),'--output',str(rendered),'--workers','4'],check=True,env=env)
     release=work/'release'; release.mkdir()
-    subprocess.run(packer_command(packer,rendered,release),check=True,env=env)
+    # The historical packer prints the private bundle CID in its final JSON.
+    # Never forward it into public CI logs.
+    packed=subprocess.run(packer_command(packer,rendered,release),env=env,capture_output=True)
+    if packed.returncode!=0: raise ValueError('PRIVATE_IPFS_PACKER_FAILED_OUTPUT_WITHHELD')
     car=release/'CoolBears_v3_final.car'
     if not car.exists(): raise FileNotFoundError(car)
     car_sha=sha256_file(car)
-    if car.stat().st_size!=EXPECTED_CAR_BYTES or car_sha!=EXPECTED_CAR_SHA: raise ValueError('CORRECTED_FINAL_CAR_MISMATCH')
+    if car.stat().st_size!=EXPECTED_CAR_BYTES or car_sha!=SOURCE_CAR_SHA: raise ValueError('SOURCE_CORRECTED_FINAL_CAR_MISMATCH')
     manifest=release/'manifest.PRIVATE.json'; mo=json.loads(manifest.read_text()); mo['revision']=REVISION; manifest.write_bytes(jbytes(mo))
     msha=hashlib.sha256(manifest.read_bytes()).hexdigest()
-    if msha!=EXPECTED_MANIFEST_SHA: raise ValueError('CORRECTED_FINAL_MANIFEST_SHA_MISMATCH')
-    summary={'schema':2,'status':'EXACT_CORRECTED_FINAL_CAR_REBUILT_AND_HASH_VERIFIED','collectionRevision':REVISION,'correctedNfts':len(changed),'packageSha256':EXPECTED_PACKAGE_SHA,'carSha256':car_sha,'carBytes':car.stat().st_size,'manifestSha256':msha,'uploadsPerformed':False,'walletOperations':False,'salesChanged':False}
+    if msha!=SOURCE_MANIFEST_SHA: raise ValueError('SOURCE_CORRECTED_FINAL_MANIFEST_SHA_MISMATCH')
+    branding=runpy.run_path(str(Path(__file__).with_name('rebrand-final-car.py')))['patch'](release)
+    car_sha=branding['carSha256'];msha=branding['manifestSha256']
+    if car_sha!=EXPECTED_CAR_SHA or msha!=EXPECTED_MANIFEST_SHA: raise ValueError('FINAL_BRANDING_RELEASE_MISMATCH')
+    summary={'schema':3,'status':'EXACT_BRANDED_FINAL_CAR_REBUILT_AND_HASH_VERIFIED','collectionRevision':REVISION,'finalBrandingRevision':'final-collection-branding-1','correctedNfts':len(changed),'unchangedNftsAfterBranding':10000,'packageSha256':EXPECTED_PACKAGE_SHA,'carSha256':car_sha,'carBytes':car.stat().st_size,'manifestSha256':msha,'uploadsPerformed':False,'walletOperations':False,'salesChanged':False}
     out=Path('build/private-final-car'); out.mkdir(parents=True,exist_ok=True)
     (out/'build-summary.json').write_text(json.dumps(summary,indent=2)+'\n'); (out/'car-path.txt').write_text(str(car)+'\n')
     print(json.dumps(summary))

@@ -3,7 +3,7 @@
 export const EXPECTED_CODE = '4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
 export const EXPECTED_ITEM = 'ba4d975d2b66231c1f0a0ccca6e8ff8f7ba0610c4b7639584b8e98303dc3128c';
 export const EXPECTED_OWNER = '0:6ea2cc995c7d4f236441c6c520b236c3e919ec54e331b4269528428c651a5717';
-export const PACKAGE_SHA256 = '763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f';
+export const PACKAGE_SHA256 = '385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c';
 export const REVEAL_AT = 1798761600;
 export const requireThat=(ok,message)=>{if(!ok)throw Error(message);};
 const hash=c=>c.hash().toString('hex');

@@ -11,12 +11,15 @@ import {pipeline} from 'node:stream/promises';
 import {client,requireThat} from './pinata-backup-io.mjs';
 
 const REVISION='v3-glasses-correction-1';
-const EXPECTED='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84';
+const EXPECTED='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161';
 const EXPECTED_BYTES=12779698835;
 const PART_BYTES=256*1024*1024;
 const PARTS=Math.ceil(EXPECTED_BYTES/PART_BYTES);
-const PREFIX='CoolBears v3 glasses-correction-1 FINAL CAR 28740649 part';
-const partName=i=>`${PREFIX} ${String(i+1).padStart(3,'0')} of ${String(PARTS).padStart(3,'0')}`;
+// Branding changes only the header and the final two blocks. The 46 middle
+// chunks are reused, then all 48 chunks are freshly downloaded and verified.
+const OLD_PREFIX='CoolBears v3 glasses-correction-1 FINAL CAR 28740649 part';
+const PREFIX='CoolBears final-collection-branding-1 FINAL CAR '+EXPECTED.slice(0,8)+' part';
+const partName=i=>`${i===0||i===PARTS-1?PREFIX:OLD_PREFIX} ${String(i+1).padStart(3,'0')} of ${String(PARTS).padStart(3,'0')}`;
 const expectedPartBytes=i=>Math.min(PART_BYTES,EXPECTED_BYTES-i*PART_BYTES);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 
@@ -68,6 +71,8 @@ async function listAllPrivate(api){
 }
 
 const carPath=fs.readFileSync('build/private-final-car/car-path.txt','utf8').trim();
+const candidateBytes=fs.readFileSync('launch/candidate.json'),candidate=JSON.parse(candidateBytes);
+requireThat(candidate.releaseCarSha256===EXPECTED&&candidate.finalBrandingRevision==='final-collection-branding-1','BRANDED_CANDIDATE_REQUIRED');
 requireThat(fs.existsSync(carPath),'CAR_NOT_FOUND');
 requireThat(fs.statSync(carPath).size===EXPECTED_BYTES,'PREUPLOAD_CAR_SIZE_MISMATCH');
 requireThat((await hashFile(carPath))===EXPECTED,'PREUPLOAD_CAR_HASH_MISMATCH');
@@ -103,6 +108,6 @@ try{
   const reassembledHash=reassembly.digest('hex');
   requireThat(totalReadback===EXPECTED_BYTES,'FULL_PRIVATE_READBACK_SIZE_MISMATCH');
   requireThat(reassembledHash===EXPECTED,'FULL_PRIVATE_READBACK_HASH_MISMATCH');
-  const summary={schema:5,status:'PRIVATE_CORRECTED_FINAL_CAR_CHUNKED_READBACK_VERIFIED',collectionRevision:REVISION,checkedAt:new Date().toISOString(),carSha256:EXPECTED,carBytes:EXPECTED_BYTES,partBytes:PART_BYTES,partsExpected:PARTS,partsVerified:verified,newPartsUploaded:uploaded,reusedExistingParts:reused,lastPartBytes:expectedPartBytes(PARTS-1),privateListPagesScanned:listing.pages,network:'private',privateMetadataMatched:true,pinataSizeMetadataTrusted:false,allPartHashesVerified:true,fullReassemblyHashVerified:true,walletOperations:false,salesChanged:false,publicIpfsPublication:false,privateIdentifiersExposed:false};
+  const summary={schema:6,status:'PRIVATE_BRANDED_FINAL_CAR_CHUNKED_READBACK_VERIFIED',collectionRevision:REVISION,finalBrandingRevision:candidate.finalBrandingRevision,packageSha256:crypto.createHash('sha256').update(candidateBytes).digest('hex'),manifestSha256:candidate.releaseManifestSha256,finalContentCommitment:candidate.finalContentCommitment,checkedAt:new Date().toISOString(),carSha256:EXPECTED,carBytes:EXPECTED_BYTES,partBytes:PART_BYTES,partsExpected:PARTS,partsVerified:verified,newPartsUploaded:uploaded,reusedExistingParts:reused,lastPartBytes:expectedPartBytes(PARTS-1),privateListPagesScanned:listing.pages,network:'private',privateMetadataMatched:true,pinataSizeMetadataTrusted:false,allPartHashesVerified:true,fullReassemblyHashVerified:true,walletOperations:false,salesChanged:false,publicIpfsPublication:false,privateIdentifiersExposed:false};
   fs.mkdirSync('build/private-final-car',{recursive:true});fs.writeFileSync('build/private-final-car/storage-summary.json',JSON.stringify(summary,null,2)+'\n');console.log(JSON.stringify(summary));
 } finally { fs.rmSync(tmp,{recursive:true,force:true}); }

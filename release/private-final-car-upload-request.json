@@ -1,12 +1,13 @@
 {
   "schema": 1,
   "action": "store-exact-final-car-private-pinata",
-  "authorized": false,
+  "authorized": true,
   "collectionRevision": "v3-glasses-correction-1",
-  "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
-  "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
-  "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+  "finalBrandingRevision": "final-collection-branding-1",
+  "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+  "manifestSha256": "208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488",
+  "carSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
   "carBytes": 12779698835,
-  "attempt": 2,
-  "reason": "Completed successfully. All 48 corrected private CAR parts were read back and verified, including full CAR reassembly SHA-256. Do not rerun unless the final candidate changes."
+  "attempt": 3,
+  "reason": "Owner explicitly authorized private final-branding rebuild without deployment, payment, reveal or sales. Preserve all old private objects; reuse 46 unchanged middle parts, upload only two changed endpoint parts and verify all 48 readbacks."
 }

@@ -5,6 +5,7 @@ export function preparedFixture(base,p){
   return {...structuredClone(base),phase:'prepared',testnetVerified:true,privateStorageVerified:true,mainnetVerified:false,creatorNftVerified:false,publicMintApproved:false,automaticRevealArmed:false,
     evidence:{
       privateStorage:{...binding,status:'passed',collectionRevision:REVISION,manifestSha256:MANIFEST_SHA256,carSha256:CAR_SHA256,partsExpected:48,partsVerified:48,allPartHashesVerified:true,fullReassemblyHashVerified:true},
+      finalCollectionBranding:{...binding,status:'passed',manifestSha256:MANIFEST_SHA256,carSha256:CAR_SHA256,finalContentCommitment:p.finalContentCommitment,approvedLogoSha256:'5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7',approvedBannerSha256:'d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95',unchangedPngFiles:10000,unchangedMetadataFiles:10000,previousCarExactlyReproduced:true,actualRevealTvmVerified:true},
       correctedTestnetTransactionAudit:{...binding,status:'passed',transactionHistoryVerified:true,receiptsMatchedByMessageHash:true,collectionHistoryComplete:true,operations:['deploy','claim','open','mint']},
       correctedTestnetNft0001:{...binding,status:'verified-live-testnet',nextItemIndex:2,paused:false,nft0OwnerVerified:true,nft1OwnerVerified:true,nft0MetadataUriVerified:true,nft1MetadataUriVerified:true},
       correctedPrerevealMedia:{...binding,status:'passed',metadata0000Available:true,metadata0001Available:true,samePrerevealImage:true,animatedGifVerified:true},

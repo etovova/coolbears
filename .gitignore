@@ -12,6 +12,7 @@ collection/top50.json
 .DS_Store
 Thumbs.db
 node_modules/
+__pycache__/
 
 # Generated packages are never site source
 build/

@@ -1,14 +1,18 @@
-name: Store corrected final CoolBears CAR in PRIVATE Pinata
+name: Store branded final CoolBears CAR in PRIVATE Pinata
 on:
   push:
     branches: [main]
     paths: ['release/private-final-car-upload-request.json']
+  workflow_dispatch:
 permissions:
   contents: read
+concurrency:
+  group: coolbears-private-final-branding
+  cancel-in-progress: false
 jobs:
-  build-upload-readback:
+  migrate-upload-readback:
     runs-on: ubuntu-24.04
-    timeout-minutes: 240
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,51 +20,36 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify one-time corrected request and exact release binding
+      - name: Require exact authorized private-only request and HOLD
         run: |
-          node - <<'NODE'
-          const fs=require('fs'),crypto=require('crypto');
+          node scripts/validate-release-state.mjs
+          node --input-type=module - <<'NODE'
+          import fs from 'node:fs';import crypto from 'node:crypto';
+          import {PACKAGE_SHA256} from './launch/package-tools.mjs';
           const r=JSON.parse(fs.readFileSync('release/private-final-car-upload-request.json'));
-          const p=fs.readFileSync('launch/candidate.json'),c=JSON.parse(p);
-          if(r.schema!==1||r.action!=='store-exact-final-car-private-pinata'||r.authorized!==true) throw Error('REQUEST_NOT_AUTHORIZED');
-          if(r.collectionRevision!=='v3-glasses-correction-1'||c.collectionRevision!=='v3-glasses-correction-1') throw Error('WRONG_COLLECTION_REVISION');
-          if(r.packageSha256!=='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f') throw Error('WRONG_PACKAGE_REQUEST');
-          if(r.carSha256!=='287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84') throw Error('WRONG_CAR_REQUEST');
-          if(r.manifestSha256!=='4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96') throw Error('WRONG_MANIFEST_REQUEST');
-          if(crypto.createHash('sha256').update(p).digest('hex')!==r.packageSha256) throw Error('CURRENT_CANDIDATE_CHANGED');
+          const b=fs.readFileSync('launch/candidate.json'),p=JSON.parse(b);
+          if(r.authorized!==true||r.action!=='store-exact-final-car-private-pinata')throw Error('NOT_AUTHORIZED');
+          if(crypto.createHash('sha256').update(b).digest('hex')!==PACKAGE_SHA256||r.packageSha256!==PACKAGE_SHA256)throw Error('PACKAGE_MISMATCH');
+          if(r.carSha256!==p.releaseCarSha256||r.manifestSha256!==p.releaseManifestSha256||p.finalBrandingRevision!=='final-collection-branding-1')throw Error('BINDING_MISMATCH');
           NODE
-      - name: Free runner disk while keeping system Python and Node
+      - name: Free ephemeral runner disk for one private CAR
         run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL
           df -h /
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
-          sudo rm -rf /opt/hostedtoolcache/CodeQL || true
-          df -h /
-      - name: Restore sealed PRIVATE source recovery already stored in Pinata
+      - name: Install pinned verifier dependency
+        run: python3 -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Restore old private CAR, patch branding, upload two parts and verify all 48
         env:
           PINATA_JWT: ${{ secrets.PINATA_JWT }}
           PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
-        run: node scripts/restore-private-recovery.mjs
-      - name: Install exact image library used by verifier
-        run: python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
-      - name: Apply frozen glasses correction and rebuild exact 10000-image CAR
-        run: python3 scripts/build-exact-final-car-from-recovery.py
-      - name: Upload corrected CAR to PRIVATE Pinata and read all 48 parts back
-        env:
-          PINATA_JWT: ${{ secrets.PINATA_JWT }}
-          PINATA_GATEWAY: ${{ vars.PINATA_GATEWAY }}
-        run: node scripts/upload-private-final-car.mjs
+        run: node scripts/migrate-private-final-branding.mjs
       - name: Confirm production remains held
         run: node scripts/validate-release-state.mjs
-      - name: Remove decrypted recovery, rendered collection, CAR and readback
-        if: always()
-        run: |
-          rm -rf -- "$RUNNER_TEMP/coolbears-verified-recovery" "$RUNNER_TEMP/coolbears-final-car-work" "$RUNNER_TEMP/CoolBears_v3_final.readback.car"
       - name: Preserve nonsensitive verification evidence only
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: corrected-private-final-car-pinata-evidence
-          path: |
-            build/private-final-car/build-summary.json
-            build/private-final-car/storage-summary.json
+          name: branded-private-final-car-pinata-evidence
+          path: build/private-final-car/storage-summary.json
+          if-no-files-found: ignore
           retention-days: 30

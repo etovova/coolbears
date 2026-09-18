@@ -4,6 +4,12 @@ on:
     branches: [main]
     paths: ['scripts/audit-final-testnet.mjs', 'scripts/test-final-testnet-audit.mjs', '.github/workflows/final-testnet-transaction-audit.yml']
   workflow_dispatch:
+    inputs:
+      audit_live:
+        description: Read existing transactions only after authorized TESTNET deployment
+        type: boolean
+        required: true
+        default: false
 permissions:
   contents: read
 jobs:
@@ -22,6 +28,7 @@ jobs:
       - name: Negative tests against in-memory TVM receipts
         run: node scripts/test-final-testnet-audit.mjs
       - name: Audit existing testnet transactions without signing or sending
+        if: github.event_name == 'workflow_dispatch' && inputs.audit_live == true
         run: node scripts/audit-final-testnet.mjs --read-testnet
       - name: Preserve scoped audit results, not wallet history
         if: always()
