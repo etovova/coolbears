@@ -1,6 +1,6 @@
-import {verifyPackage,verifyLive,itemAddress,verifyItem,testnetRequest,PACKAGE_SHA256,EXPECTED_OWNER} from '../../launch/package-tools.mjs';
+import {verifyPackage,verifyLive,itemAddress,verifyItem,testnetRequest,PACKAGE_SHA256,EXPECTED_OWNER} from '../../launch/package-tools.mjs?v=approved-description-1';
 const $=id=>document.getElementById(id),actions=['deploy','claim','open','mint'];
-const root=new URL('../../',import.meta.url),pendingKey='coolbears-v3-final-testnet-pending';
+const root=new URL('../../',import.meta.url),pendingKey='coolbears-v3-final-testnet-pending-'+PACKAGE_SHA256;
 let core,p,wallet,ui,state,busy=false,checking=null,pending=null,lastReport=null;
 try{pending=JSON.parse(localStorage.getItem(pendingKey)||'null');}catch{}
 const owner=()=>{try{return wallet?.account?.chain==='-3'&&core.Address.parse(wallet.account.address).toRawString()===EXPECTED_OWNER;}catch{return false;}};
@@ -21,7 +21,7 @@ async function check(){
   const info=await addressInfo(p.collectionAddressRaw);let creatorVerified=false,buyerVerified=false;
   const nft0=itemAddress(core,p,0),nft1=itemAddress(core,p,1);
   if(['nonexist','uninitialized'].includes(info.state)){
-   state={status:'uninitialized',creatorVerified:false};$('chain').textContent='Финальный кандидат ещё не развёрнут в TESTNET.';
+   state={status:'uninitialized',creatorVerified:false};$('chain').textContent='Коллекция с исправленным описанием ещё не развёрнута в TESTNET.';
   }else{
    const d=verifyLive(core,p,info);const next=Number(d.next);
    if(next>0){await new Promise(r=>setTimeout(r,1400));const ni=await addressInfo(nft0.toRawString());if(ni.state==='active')creatorVerified=verifyItem(core,p,ni,0,EXPECTED_OWNER);}

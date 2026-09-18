@@ -1,10 +1,10 @@
 // One fail-closed policy for browser, CI and the release installer.
 // This module never performs network requests, signing or transactions.
 export const CANDIDATE_HASH='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
-export const PACKAGE_SHA256='385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c';
+export const PACKAGE_SHA256='f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05';
 export const REVISION='v3-glasses-correction-1';
-export const MANIFEST_SHA256='208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488';
-export const CAR_SHA256='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161';
+export const MANIFEST_SHA256='4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001';
+export const CAR_SHA256='7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853';
 export const OWNER_RAW='0:6ea2cc995c7d4f236441c6c520b236c3e919ec54e331b4269528428c651a5717';
 export const OWNER_FRIENDLY='UQBuosyZXH1PI2RBxsUgsjbD6RnsVOMxtCaVKEKMZRpXF9m7';
 export const REVEAL_AT=1798761600;
@@ -14,6 +14,7 @@ const flags=['testnetVerified','privateStorageVerified','mainnetVerified','creat
 function exactCandidate(p){
   yes(p?.version==='committed-reveal-v1','Wrong candidate version');
   yes(p.collectionRevision===REVISION,'Wrong collection revision');
+  yes(p.descriptionRevision==='approved-description-1','Wrong description revision');
   yes(p.network==='mainnet','Wrong candidate network');
   yes(p.collectionCodeHash===CANDIDATE_HASH,'Wrong collection code hash');
   yes(p.ownerAddressRaw===OWNER_RAW&&p.treasuryAddressRaw===OWNER_RAW,'Wrong owner or treasury');
@@ -39,7 +40,7 @@ function correctedPrerequisites(s,p,packageHash){
   yes(final?.status==='passed'&&final.packageSha256===PACKAGE_SHA256&&final.appliesToCurrentCandidate===true,'Final collection branding proof missing');
   yes(final.manifestSha256===MANIFEST_SHA256&&final.carSha256===CAR_SHA256&&final.finalContentCommitment===p.finalContentCommitment,'Final branding binding mismatch');
   yes(final.approvedLogoSha256==='5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7'&&final.approvedBannerSha256==='d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95','Final branding artwork mismatch');
-  yes(final.unchangedPngFiles===10000&&final.unchangedMetadataFiles===10000&&final.previousCarExactlyReproduced===true&&final.actualRevealTvmVerified===true,'Final branding preservation/reveal proof incomplete');
+  yes(final.unchangedPngFiles===10000&&final.unchangedMetadataFiles===10000&&final.sourceCarExactlyVerified===true&&final.actualRevealTvmVerified===true,'Final branding preservation/reveal proof incomplete');
 
   const td=s.evidence?.correctedTestnetTransactionAudit;
   yes(td?.status==='passed'&&td.packageSha256===PACKAGE_SHA256&&td.appliesToCurrentCandidate===true,'Corrected TESTNET transaction audit missing');
@@ -64,7 +65,7 @@ function correctedPrerequisites(s,p,packageHash){
   const ui=s.evidence?.prerevealGetgemsUi;
   yes(ui?.status==='passed'&&ui.packageSha256===PACKAGE_SHA256&&ui.appliesToCurrentCandidate===true,'Current prereveal Getgems UI evidence missing');
   yes(ui.collectionAddressRaw===p.collectionAddressRaw&&ui.network==='testnet','Prereveal UI proof is for a different collection');
-  yes(ui.logoVisible===true&&ui.bannerVisible===true&&ui.gifAnimated===true&&ui.attributesAbsent===true&&ui.percentagesAbsent===true&&ui.rankAbsent===true,'Prereveal marketplace UI not fully verified');
+  yes(ui.logoVisible===true&&ui.bannerVisible===true&&ui.gifAnimated===true&&ui.attributesAbsent===true&&ui.percentagesAbsent===true&&ui.rankAbsent===true&&ui.collectionDescriptionMatched===true,'Prereveal marketplace UI not fully verified');
 }
 
 function mainnetProofs(s,p){

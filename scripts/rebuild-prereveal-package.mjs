@@ -17,7 +17,7 @@ const d=v.data;
 const data=core.beginCell().storeAddress(d.owner).storeUint(0,64).storeRef(content).storeRef(d.item).storeRef(d.royalty).storeAddress(d.treasury).storeBit(true).storeBit(false).storeUint(d.commitment,256).endCell();
 const init={code:v.init.code,data},address=core.contractAddress(0,init);
 const stateInitBocBase64=core.beginCell().store(core.storeStateInit(init)).endCell().toBoc().toString('base64');
-const out={...p,status:'UNSIGNED_METADATA_REBUILT_AWAITING_CURRENT_TESTNET',collectionAddressRaw:address.toRawString(),collectionAddressMainnetBounceable:address.toString({bounceable:true,testOnly:false}),collectionAddressMainnetNonBounceable:address.toString({bounceable:false,testOnly:false}),collectionMetadataIpfs,preRevealMetadataRootIpfs,stateInitBocBase64,
+const out={...p,collectionAddressRaw:address.toRawString(),collectionAddressMainnetBounceable:address.toString({bounceable:true,testOnly:false}),collectionAddressMainnetNonBounceable:address.toString({bounceable:false,testOnly:false}),collectionMetadataIpfs,preRevealMetadataRootIpfs,stateInitBocBase64,
   tonConnectDeployMessage:{...p.tonConnectDeployMessage,address:address.toString({bounceable:false,testOnly:false}),stateInit:stateInitBocBase64},
   tonConnectCreatorClaimRequest:{...p.tonConnectCreatorClaimRequest,messages:[{...p.tonConnectCreatorClaimRequest.messages[0],address:address.toString({bounceable:true,testOnly:false})}]},
   metadataRevision:a.metadataRevision

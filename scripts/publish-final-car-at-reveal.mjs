@@ -16,15 +16,15 @@ import {beginCell} from '@ton/core';
 import {client,requireThat} from './pinata-backup-io.mjs';
 
 const REVISION='v3-glasses-correction-1';
-const PACKAGE_SHA='385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c';
-const MANIFEST_SHA='208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488';
-const CAR_SHA='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161';
-const CAR_BYTES=12779698835;
+const PACKAGE_SHA='f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05';
+const MANIFEST_SHA='4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001';
+const CAR_SHA='7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853';
+const CAR_BYTES=12779698722;
 const PART_BYTES=256*1024*1024;
 const PARTS=48;
 const OLD_PREFIX='CoolBears v3 glasses-correction-1 FINAL CAR 28740649 part';
-const PREFIX='CoolBears final-collection-branding-1 FINAL CAR '+CAR_SHA.slice(0,8)+' part';
-const PUBLIC_NAME='CoolBears final-collection-branding-1 FINAL reveal bundle';
+const PREFIX='CoolBears approved-description-1 FINAL CAR '+CAR_SHA.slice(0,8)+' part';
+const PUBLIC_NAME='CoolBears approved-description-1 FINAL reveal bundle';
 const REVEAL_AT=1798761600;
 const SAMPLE=[0,1,4979,9999];
 const partName=i=>`${i===0||i===PARTS-1?PREFIX:OLD_PREFIX} ${String(i+1).padStart(3,'0')} of ${String(PARTS).padStart(3,'0')}`;
@@ -42,7 +42,7 @@ requireThat(candidate.collectionRevision===REVISION,'CANDIDATE_REVISION_MISMATCH
 requireThat(candidate.releaseManifestSha256===MANIFEST_SHA,'CANDIDATE_MANIFEST_SHA_MISMATCH');
 requireThat(candidate.releaseCarSha256===CAR_SHA,'CANDIDATE_CAR_SHA_MISMATCH');
 requireThat(candidate.revealAt===REVEAL_AT,'REVEAL_DATE_MISMATCH');
-requireThat(PARTS===Math.ceil(CAR_BYTES/PART_BYTES)&&expectedPartBytes(PARTS-1)===163232403,'PRIVATE_PARTITION_POLICY_MISMATCH');
+requireThat(PARTS===Math.ceil(CAR_BYTES/PART_BYTES)&&expectedPartBytes(PARTS-1)===163232290,'PRIVATE_PARTITION_POLICY_MISMATCH');
 
 const outDir='build/automatic-reveal';fs.mkdirSync(outDir,{recursive:true});
 if(mode==='prepare-only'){
@@ -97,7 +97,7 @@ async function publicRootVisible(){
 async function verifyPublicSample(){
   try{
     const collectionBytes=await fetchBounded(publicUrl(manifest.collectionMetadataIpfs),2_000_000);
-    if(sha(collectionBytes)!=='d6d7408dc9a0b1c4166f16802e68d1a494274818c01fefdda07624e20b9e8b60')return false;
+    if(sha(collectionBytes)!=='9c967ae68e932532a18e66fd605d170d9dae75da98d9d65dfbc8f11be84668fd')return false;
     const collection=JSON.parse(collectionBytes.toString('utf8'));
     const approved=JSON.parse(fs.readFileSync('release/prereveal-assets.json','utf8'));
     if(collection.image!=='ipfs://'+approved.logo.cid||collection.cover_image!=='ipfs://'+approved.banner.cid)return false;

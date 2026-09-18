@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "metadataRevision": "prereveal-no-attributes-branding-1",
+  "metadataRevision": "approved-description-1",
   "ipfsCarVersion": "3.1.0",
   "logo": {
     "source": "testnet/getgems-final-visual/assets/CoolBears_Getgems_Square_Logo_1000x1000.png",
@@ -18,7 +18,7 @@
     "frames": 148,
     "durationMs": 4950
   },
-  "collectionCid": "bafkreiadquagxfzdz7ruj3kpdzixiphmsfjwcnxzfumrckb6eo7hcfjsjm",
+  "collectionCid": "bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
   "templateCid": "bafkreicl6n4cf7h3n245ncjyyfnqpdrrtevbpm4rw3jks576jh5ldpm4ca",
   "itemsCid": "bafybeiacbtdtybylqbxnsfrrkdj77in24f2muraf3mejijf4rmqexqmm4q"
 }

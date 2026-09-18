@@ -10,20 +10,21 @@
   "creatorNftVerified": false,
   "publicMintApproved": false,
   "automaticRevealArmed": false,
-  "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+  "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
   "evidence": {
     "privateStorage": {
       "schema": 6,
       "status": "passed",
-      "checkedAt": "2026-09-18T15:51:18.154Z",
+      "checkedAt": "2026-09-18T19:36:50.573Z",
       "collectionRevision": "v3-glasses-correction-1",
       "finalBrandingRevision": "final-collection-branding-1",
-      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
-      "manifestSha256": "208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488",
-      "carSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
-      "carBytes": 12779698835,
-      "finalContentCommitment": "f848be80d03a80e90682782c8859fc71475544bf75c136b3d76cabe6b73df068",
-      "sourceCarSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+      "descriptionRevision": "approved-description-1",
+      "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+      "manifestSha256": "4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001",
+      "carSha256": "7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853",
+      "carBytes": 12779698722,
+      "finalContentCommitment": "bf19099f286e315a7ee8a84fca6f80f665da1f81fba455479ceaf154b321c067",
+      "sourceCarSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
       "sourcePartsDownloaded": 48,
       "partsExpected": 48,
       "partsVerified": 48,
@@ -35,15 +36,16 @@
       ],
       "allPartHashesVerified": true,
       "fullReassemblyHashVerified": true,
-      "readbackMethod": "46 unchanged middle parts freshly restored and source-hash verified; 2 branded endpoint parts freshly downloaded and compared; full target CAR SHA verified",
+      "readbackMethod": "46 unchanged middle parts freshly restored and source-hash verified; 2 corrected endpoint parts freshly downloaded and compared; full target CAR SHA verified",
       "network": "private",
       "privateIdentifiersExposed": false,
       "publicIpfsPublication": false,
       "transactionsSent": 0,
       "walletOperations": false,
       "salesChanged": false,
-      "verificationStatus": "PRIVATE_BRANDED_FINAL_CAR_CHUNKED_READBACK_VERIFIED",
-      "workflowRunId": 35363998313,
+      "workflowRunId": 35386341045,
+      "sourceCommit": "48976cdccbf5bdcda3fd072d318db94e6d25d645",
+      "verificationStatus": "PRIVATE_DESCRIPTION_FINAL_CAR_CHUNKED_READBACK_VERIFIED",
       "appliesToCurrentCandidate": true
     },
     "legacyTestnet": {
@@ -80,7 +82,7 @@
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T16:25:08.733Z",
       "status": "active-paused-verified",
       "deploymentTransactionHash": "efbdda04edb46e302da2d5682b0b69b2311e7ff173867e68fcf009512a482f17",
@@ -95,7 +97,7 @@
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T16:25:08.733Z",
       "status": "verified-live-testnet",
       "tokenIndex": 0,
@@ -108,7 +110,7 @@
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T16:25:08.733Z",
       "status": "verified-live-testnet",
       "paused": false,
@@ -119,7 +121,7 @@
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T16:25:08.733Z",
       "status": "verified-live-testnet",
       "nextItemIndex": 2,
@@ -136,7 +138,7 @@
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T16:25:08.733Z",
       "status": "passed",
       "transactionHistoryVerified": true,
@@ -162,7 +164,7 @@
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T16:29:55.232558+00:00",
       "status": "passed",
       "metadata0000Available": true,
@@ -235,7 +237,8 @@
       "probeUndeployedVerified": true,
       "publicCheckRunId": 35320613929,
       "transactionsSent": 0,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsStaticHttpsAbProbeLive": {
       "status": "verified-live-testnet",
@@ -249,7 +252,8 @@
       "paused": true,
       "collectionUriVerified": true,
       "workflowRunId": 35321930655,
-      "appliesToProductionCandidate": false
+      "appliesToProductionCandidate": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsOriginalVsStaticProbeTonapi": {
       "status": "comparison-passed",
@@ -267,7 +271,8 @@
       "getgemsGraphqlStatus": "USE_TONAPI",
       "conclusion": "The identical collection code path indexes correctly with strict-valid static PNG/HTTPS metadata. The current CoolBears collection metadata is not indexed by TonAPI while its #0000 item is indexed, consistent with the independently proven truncated collection image/cover media.",
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsValidGifHttpsProbe": {
       "status": "prepared-published-undeployed",
@@ -286,7 +291,8 @@
       "publicCheckRunId": 35323654912,
       "productionHold": true,
       "mainnetTouched": false,
-      "transactionsSent": 0
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": false
     },
     "getgemsValidGifProbeNft0000": {
       "status": "verified-live-testnet-and-tonapi",
@@ -310,7 +316,8 @@
       "gifSha256": "550c9cd5498461d086fca9a69b9ead8053056c9f0009ea58f00b85f05e0899b8",
       "workflowRunId": 35324278068,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsFinalMediaProbe": {
       "status": "prepared-published-undeployed",
@@ -329,7 +336,8 @@
       "publicCheckRunId": 35325797098,
       "productionHold": true,
       "mainnetTouched": false,
-      "transactionsSent": 0
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": false
     },
     "getgemsFinalMediaProbeLive": {
       "status": "verified-live-testnet",
@@ -344,7 +352,8 @@
       "tonapiCollectionMetadataComplete": true,
       "workflowRunId": 35327051734,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsRarityProbe": {
       "status": "prepared-published-undeployed",
@@ -374,7 +383,8 @@
       "publicCheckRunId": 35329538703,
       "productionHold": true,
       "mainnetTouched": false,
-      "transactionsSent": 0
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": false
     },
     "getgemsRarityProbeBranding": {
       "status": "published-and-byte-verified",
@@ -407,7 +417,8 @@
       "publicCheckRunId": 35332048483,
       "probeUndeployedVerified": true,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsRarityProductionCodeSetup": {
       "status": "verified-ready-for-open-and-mint3",
@@ -433,7 +444,8 @@
       ],
       "workflowRunId": 35334344659,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsRarityAllFour": {
       "status": "onchain-and-tonapi-complete",
@@ -466,7 +478,8 @@
       "onchainWorkflowRunId": 35334997037,
       "reindexWorkflowRunId": 35335730201,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsCleanFinalVisualProbe": {
       "status": "published-verified-undeployed",
@@ -497,7 +510,8 @@
       "publicCheckRunId": 35336914476,
       "probeUndeployedVerified": true,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsCleanFinalVisualAllFour": {
       "status": "onchain-and-tonapi-complete",
@@ -536,7 +550,8 @@
       ],
       "workflowRunId": 35338487030,
       "productionHold": true,
-      "mainnetTouched": false
+      "mainnetTouched": false,
+      "appliesToCurrentCandidate": false
     },
     "getgemsFinalVisualUi": {
       "status": "visual-and-metadata-and-rarity-verified-for-diagnostic-only",
@@ -557,7 +572,8 @@
       "productionHold": true,
       "mainnetTouched": false,
       "confirmationSource": "Owner screenshots supplied 2026-09-18: ranks 1-4 and trait frequencies visible",
-      "doesNotVerifyProductionPrereveal": true
+      "doesNotVerifyProductionPrereveal": true,
+      "appliesToCurrentCandidate": false
     },
     "prerevealRebuild": {
       "status": "unsigned-published-verified-awaiting-current-testnet",
@@ -575,9 +591,9 @@
     "prerevealMetadataPublication": {
       "status": "passed",
       "checkedAt": "2026-09-18T14:46:57.498Z",
-      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
       "appliesToCurrentCandidate": true,
-      "collectionMetadataIpfs": "ipfs://bafkreiadquagxfzdz7ruj3kpdzixiphmsfjwcnxzfumrckb6eo7hcfjsjm",
+      "collectionMetadataIpfs": "ipfs://bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
       "preRevealMetadataRootIpfs": "ipfs://bafybeiacbtdtybylqbxnsfrrkdj77in24f2muraf3mejijf4rmqexqmm4q/",
       "metadataCount": 10000,
       "allMetadataNoAttributes": true,
@@ -598,16 +614,29 @@
       "transactionsSent": 0,
       "workflowRunId": 35358215671,
       "sourceCommit": "8a1924d4342eef269eae8058c70b20775b55418c",
-      "sourcePackageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
-      "bindingMethod": "Derived from unchanged public URI/content bytes; original publication check date retained",
-      "bindingCheckedAt": "2026-09-18T15:34:10.690Z"
+      "sourcePackageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "bindingMethod": "New collection JSON published and read back exactly; all other immutable hidden NFT/media URI and bytes unchanged from the verified publication. Original media check date retained.",
+      "bindingCheckedAt": "2026-09-18T19:38:32.022327+00:00",
+      "collectionPublication": {
+        "status": "APPROVED_DESCRIPTION_PUBLIC_READBACK_VERIFIED",
+        "checkedAt": "2026-09-18T19:31:13.161Z",
+        "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+        "collectionMetadataIpfs": "ipfs://bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
+        "collectionJsonSha256": "9c967ae68e932532a18e66fd605d170d9dae75da98d9d65dfbc8f11be84668fd",
+        "exactApprovedDescription": true,
+        "approvedLogoAndBannerUnchanged": true,
+        "finalNftFilesPublished": false,
+        "transactionsSent": 0,
+        "workflowRunId": 35386341045,
+        "sourceCommit": "48976cdccbf5bdcda3fd072d318db94e6d25d645"
+      }
     },
     "prerevealGetgemsUi": {
       "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
       "collectionRevision": "v3-glasses-correction-1",
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
-      "appliesToCurrentCandidate": true,
+      "appliesToCurrentCandidate": false,
       "checkedAt": "2026-09-18T19:02:41.582152+00:00",
       "status": "rendering-passed-description-rejected",
       "collectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
@@ -702,32 +731,57 @@
       "sourceCommit": "8a1924d4342eef269eae8058c70b20775b55418c"
     },
     "finalCollectionBranding": {
-      "schema": 1,
       "status": "passed",
-      "brandingRevision": "final-collection-branding-1",
-      "sourceRecoverySha256": "f4379bad3240e4f7778585be13c075ab537b117119c4866b414912532a388dd7",
-      "sourceManifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
-      "sourceCarSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
-      "previousCarExactlyReproduced": true,
-      "manifestSha256": "208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488",
-      "carSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
-      "carBytes": 12779698835,
-      "collectionJsonSha256": "d6d7408dc9a0b1c4166f16802e68d1a494274818c01fefdda07624e20b9e8b60",
+      "descriptionRevision": "approved-description-1",
+      "sourceCarSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
+      "sourceManifestSha256": "208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488",
+      "sourceRecoverySha256": "51ea08da63ea9a2da09751285c13f2cc503ee38cc5d567c92d215596c67623ed",
+      "sourceCarExactlyVerified": true,
+      "manifestSha256": "4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001",
+      "carSha256": "7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853",
+      "carBytes": 12779698722,
+      "collectionJsonSha256": "9c967ae68e932532a18e66fd605d170d9dae75da98d9d65dfbc8f11be84668fd",
       "unchangedPngFiles": 10000,
       "unchangedMetadataFiles": 10000,
-      "allPngDecoded": true,
-      "allCarBlocksVerified": 73617,
+      "sourceCarBlocksVerified": 73617,
+      "changedBlocks": 2,
+      "finalFilesPublished": false,
+      "transactionsSent": 0,
+      "sourcePackageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+      "collectionAddressMainnetNonBounceable": "UQBu2Uf_s6BNdIKhkXZLAkRyQpXGl7iOY99Akj4fr95PsuQO",
+      "collectionAddressTestnetNonBounceable": "0QBu2Uf_s6BNdIKhkXZLAkRyQpXGl7iOY99Akj4fr95Psl-E",
+      "collectionMetadataIpfs": "ipfs://bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
+      "finalContentCommitment": "bf19099f286e315a7ee8a84fca6f80f665da1f81fba455479ceaf154b321c067",
+      "unchangedCode": true,
+      "unchangedHiddenNftMetadata": true,
+      "activated": false,
+      "publicMetadataPinned": false,
+      "privateStorageMigrationVerified": false,
+      "liveTestnetVerified": false,
+      "offlineRevealVerification": {
+        "status": "ACTUAL_FINAL_BRANDING_REVEAL_VERIFIED_OFFLINE",
+        "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+        "finalContentCommitment": "bf19099f286e315a7ee8a84fca6f80f665da1f81fba455479ceaf154b321c067",
+        "testsPassed": 13,
+        "earlyRevealRejected": true,
+        "wrongContentRejected": true,
+        "revealReplayRejected": true,
+        "exactFinalCollectionUriVerified": true,
+        "exactFinalItemUriVerified": true,
+        "approvedLogoAndBannerVerified": true,
+        "nftIndexOwnerAddressPreserved": true,
+        "mintRemainsPaused": true,
+        "realNetworkRequests": 0,
+        "transactionsSent": 0
+      },
+      "checkedAt": "2026-09-18T19:38:32.022327+00:00",
+      "appliesToCurrentCandidate": true,
       "approvedLogoSha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
       "approvedBannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
-      "transactionsSent": 0,
-      "uploadsPerformed": false,
-      "elapsedSeconds": 545.66,
-      "checkedAt": "2026-09-18T15:34:10.690Z",
-      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
-      "finalContentCommitment": "f848be80d03a80e90682782c8859fc71475544bf75c136b3d76cabe6b73df068",
       "actualRevealTvmVerified": true,
       "revealTvmTestsPassed": 13,
-      "appliesToCurrentCandidate": true
+      "preservationMethod": "Verified all blocks of the previously verified source CAR and changed only collection description/root; final manifest and actual reveal verified."
     },
     "finalBrandingRebuild": {
       "status": "unsigned-offline-and-private-storage-verified-awaiting-current-testnet",
@@ -739,7 +793,7 @@
       "currentTestnetRequired": true,
       "privateStorageReverificationRequired": false,
       "transactionsSent": 0,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "previousPrivateStorage": {
       "status": "passed",
@@ -774,7 +828,7 @@
         35363998412
       ],
       "transactionsSent": 0,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": false
     },
     "previousCorrectedTestnetDeployment": {
       "status": "active-paused-verified",
@@ -860,17 +914,93 @@
       "appliesToCurrentCandidate": false
     },
     "descriptionCorrection": {
-      "status": "prepared-offline-not-activated",
-      "requestedAt": "2026-09-18T19:05:00Z",
+      "status": "installed-awaiting-live-testnet",
+      "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+      "appliesToCurrentCandidate": true,
+      "descriptionRevision": "approved-description-1",
       "approvedDescriptionPath": "metadata/collection.json",
-      "existingTestnetMetadataImmutable": true,
-      "finalDescriptionAlsoNeedsCorrection": true,
+      "publicSiteSourceCorrected": true,
+      "publicMetadataPinned": true,
+      "privateStorageMigrationVerified": true,
       "newContractDeployed": false,
-      "preparationReport": "release/description-correction/preparation.json",
-      "draftPackageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
-      "publicSiteSourceCorrected": true
+      "liveTestnetVerified": false,
+      "existingTestnetMetadataImmutable": true,
+      "workflowRunId": 35386341045,
+      "checkedAt": "2026-09-18T19:38:32.022327+00:00"
+    },
+    "previousBrandedCollectionProof": {
+      "schema": 1,
+      "status": "passed",
+      "brandingRevision": "final-collection-branding-1",
+      "sourceRecoverySha256": "f4379bad3240e4f7778585be13c075ab537b117119c4866b414912532a388dd7",
+      "sourceManifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
+      "sourceCarSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
+      "previousCarExactlyReproduced": true,
+      "manifestSha256": "208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488",
+      "carSha256": "9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161",
+      "carBytes": 12779698835,
+      "collectionJsonSha256": "d6d7408dc9a0b1c4166f16802e68d1a494274818c01fefdda07624e20b9e8b60",
+      "unchangedPngFiles": 10000,
+      "unchangedMetadataFiles": 10000,
+      "allPngDecoded": true,
+      "allCarBlocksVerified": 73617,
+      "approvedLogoSha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+      "approvedBannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+      "transactionsSent": 0,
+      "uploadsPerformed": false,
+      "elapsedSeconds": 545.66,
+      "checkedAt": "2026-09-18T15:34:10.690Z",
+      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "finalContentCommitment": "f848be80d03a80e90682782c8859fc71475544bf75c136b3d76cabe6b73df068",
+      "actualRevealTvmVerified": true,
+      "revealTvmTestsPassed": 13,
+      "appliesToCurrentCandidate": false
+    },
+    "previousBrandedPrerevealPublication": {
+      "status": "passed",
+      "checkedAt": "2026-09-18T14:46:57.498Z",
+      "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
+      "appliesToCurrentCandidate": false,
+      "collectionMetadataIpfs": "ipfs://bafkreiadquagxfzdz7ruj3kpdzixiphmsfjwcnxzfumrckb6eo7hcfjsjm",
+      "preRevealMetadataRootIpfs": "ipfs://bafybeiacbtdtybylqbxnsfrrkdj77in24f2muraf3mejijf4rmqexqmm4q/",
+      "metadataCount": 10000,
+      "allMetadataNoAttributes": true,
+      "publicReadbackVerified": true,
+      "publicItemSample": [
+        0,
+        1,
+        4979,
+        9999
+      ],
+      "strictImageDecodeVerified": true,
+      "gifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+      "gifFrames": 148,
+      "gifDurationMs": 4950,
+      "logoSha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+      "bannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+      "finalFilesPublished": false,
+      "transactionsSent": 0,
+      "workflowRunId": 35358215671,
+      "sourceCommit": "8a1924d4342eef269eae8058c70b20775b55418c",
+      "sourcePackageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
+      "bindingMethod": "Derived from unchanged public URI/content bytes; original publication check date retained",
+      "bindingCheckedAt": "2026-09-18T15:34:10.690Z"
+    },
+    "descriptionCorrectionOfflineTests": {
+      "status": "passed-offline-only",
+      "packageSha256": "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05",
+      "appliesToCurrentCandidate": true,
+      "checkedAt": "2026-09-18T19:40:24.383920+00:00",
+      "releaseGuardTests": 68,
+      "currentStateInitTests": 22,
+      "transactionAuditTests": 14,
+      "actualFinalRevealTests": 13,
+      "descriptionManifestRebuiltExactly": true,
+      "prerevealPackageRebuiltExactly": true,
+      "automaticRevealPrepareOnlyPassed": true,
+      "transactionsSent": 0
     }
   },
-  "note": "HOLD. Current candidate TESTNET deployment, reserved #0000, unpause and #0001 mint passed the full transaction BOC audit; both NFTs belong to the approved owner. Public prereveal metadata and all three media files match approved bytes; GIF 148 frames/4950ms. Getgems still shows metadata unavailable and TonAPI metadata is empty after accepted reindex requests. Marketplace prereveal UI remains unverified, so aggregate testnetVerified is false. MAINNET, real sales and automatic reveal remain disabled. No new chain transactions were sent by the auditor and no final files were published.",
-  "metadataCorrectionPending": true
+  "note": "HOLD. Approved description installed before and after reveal; no creator-reservation paragraph. All final NFT image/item metadata bytes are unchanged. New unsigned candidate awaits TESTNET deployment and marketplace verification. Previous TESTNET evidence is historical and cannot authorize this candidate. MAINNET, public sales and automatic reveal remain disabled.",
+  "metadataCorrectionPending": false
 }

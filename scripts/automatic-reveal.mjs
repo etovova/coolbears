@@ -10,8 +10,8 @@ import {verifyPackage,verifyLive,PACKAGE_SHA256,REVEAL_AT} from '../launch/packa
 import * as core from '@ton/core';
 
 const REVISION='v3-glasses-correction-1';
-const MANIFEST_SHA='208cdabdfa3ed6f4b01d23fbcec076b22cd6da5c582c6bef9d3b7c43f9b04488';
-const CAR_SHA='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161';
+const MANIFEST_SHA='4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001';
+const CAR_SHA='7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853';
 const REVEAL_OP=0x5245564c;
 const EXPECTED_YEAR=2027;
 const SAMPLE_COUNT=4;

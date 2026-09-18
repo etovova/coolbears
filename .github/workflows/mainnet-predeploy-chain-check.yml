@@ -21,7 +21,7 @@ jobs:
       - name: Bind exact corrected package
         run: |
           set -euo pipefail
-          PACKAGE='385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c'
+          PACKAGE='f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05'
           test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "$PACKAGE"
           test "$(sha256sum mainnet/owner/deployment.json | awk '{print $1}')" = "$PACKAGE"
           test "$(jq -r '.collectionRevision' launch/candidate.json)" = "v3-glasses-correction-1"

@@ -23,9 +23,9 @@
   "finalContentCommitment": "bf19099f286e315a7ee8a84fca6f80f665da1f81fba455479ceaf154b321c067",
   "unchangedCode": true,
   "unchangedHiddenNftMetadata": true,
-  "activated": false,
-  "publicMetadataPinned": false,
-  "privateStorageMigrationVerified": false,
+  "activated": true,
+  "publicMetadataPinned": true,
+  "privateStorageMigrationVerified": true,
   "liveTestnetVerified": false,
   "offlineRevealVerification": {
     "status": "ACTUAL_FINAL_BRANDING_REVEAL_VERIFIED_OFFLINE",
@@ -42,5 +42,7 @@
     "mintRemainsPaused": true,
     "realNetworkRequests": 0,
     "transactionsSent": 0
-  }
+  },
+  "activationMeaning": "Installed as unsigned TESTNET candidate only; no on-chain deployment or MAINNET permission",
+  "installedAt": "2026-09-18T19:38:32.022327+00:00"
 }

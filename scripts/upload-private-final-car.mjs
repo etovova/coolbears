@@ -11,14 +11,14 @@ import {pipeline} from 'node:stream/promises';
 import {client,requireThat} from './pinata-backup-io.mjs';
 
 const REVISION='v3-glasses-correction-1';
-const EXPECTED='9b419a1d4642fd3e3b7d7ddcb1f27db6e25532b756634165a269ae0b76b02161';
-const EXPECTED_BYTES=12779698835;
+const EXPECTED='7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853';
+const EXPECTED_BYTES=12779698722;
 const PART_BYTES=256*1024*1024;
 const PARTS=Math.ceil(EXPECTED_BYTES/PART_BYTES);
 // Branding changes only the header and the final two blocks. The 46 middle
 // chunks are reused, then all 48 chunks are freshly downloaded and verified.
 const OLD_PREFIX='CoolBears v3 glasses-correction-1 FINAL CAR 28740649 part';
-const PREFIX='CoolBears final-collection-branding-1 FINAL CAR '+EXPECTED.slice(0,8)+' part';
+const PREFIX='CoolBears approved-description-1 FINAL CAR '+EXPECTED.slice(0,8)+' part';
 const partName=i=>`${i===0||i===PARTS-1?PREFIX:OLD_PREFIX} ${String(i+1).padStart(3,'0')} of ${String(PARTS).padStart(3,'0')}`;
 const expectedPartBytes=i=>Math.min(PART_BYTES,EXPECTED_BYTES-i*PART_BYTES);
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
@@ -76,7 +76,7 @@ requireThat(candidate.releaseCarSha256===EXPECTED&&candidate.finalBrandingRevisi
 requireThat(fs.existsSync(carPath),'CAR_NOT_FOUND');
 requireThat(fs.statSync(carPath).size===EXPECTED_BYTES,'PREUPLOAD_CAR_SIZE_MISMATCH');
 requireThat((await hashFile(carPath))===EXPECTED,'PREUPLOAD_CAR_HASH_MISMATCH');
-requireThat(PARTS===48&&expectedPartBytes(PARTS-1)===163232403,'PARTITION_POLICY_MISMATCH');
+requireThat(PARTS===48&&expectedPartBytes(PARTS-1)===163232290,'PARTITION_POLICY_MISMATCH');
 const jwt=process.env.PINATA_JWT;requireThat(jwt&&jwt.length>=32,'PINATA_SECRET_MISSING');
 const api=client(jwt),gateway=await api.gateway(process.env.PINATA_GATEWAY);
 const listing=await listAllPrivate(api),rows=listing.rows;
