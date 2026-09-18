@@ -1,0 +1,46 @@
+name: Enable Getgems rarity on clean TESTNET
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/getgems-enable-rarity-testnet.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  enable:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Request Getgems rarity enablement
+        run: |
+          set -euo pipefail
+          mkdir -p build/getgems-rarity-enable
+          cat > /tmp/body.json <<'JSON'
+          {
+            "query":"mutation($payload:UpdateCollectionInput!){nftUpdateCollection(payload:$payload){collection{address name hasRarityAttributes isRarityEnabled isRarityValid} tx{uuid to from deadlineTimestamp list{to amount payloadBoc stateInit}}}}",
+            "variables":{"payload":{"address":"kQAaApvx2jTuKgCevTdiFfieHctxbEyH9ntFPre6AiogpnAN","isRarityEnabled":true}}
+          }
+          JSON
+          code=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -H 'content-type: application/json' -H 'accept: application/json' --data-binary @/tmp/body.json -o build/getgems-rarity-enable/response.json 'https://api.testnet.getgems.io/graphql/' || true)
+          echo "$code" > build/getgems-rarity-enable/http.txt
+          echo "HTTP=$code"
+          jq . build/getgems-rarity-enable/response.json || true
+      - name: Reconfirm production HOLD
+        if: always()
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: getgems-enable-rarity-testnet-evidence
+          path: build/getgems-rarity-enable/
+          retention-days: 30
