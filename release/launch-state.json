@@ -524,7 +524,7 @@
       "doesNotVerifyProductionPrereveal": true
     },
     "prerevealRebuild": {
-      "status": "unsigned-rebuilt-pending-publication-and-testnet",
+      "status": "unsigned-published-verified-awaiting-current-testnet",
       "sourcePackageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
       "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
       "metadataRevision": "prereveal-no-attributes-branding-1",
@@ -533,12 +533,35 @@
       "privateStorageContentUnchanged": true,
       "privateStorageEvidenceRequiresRebinding": true,
       "transactionsSent": 0,
-      "appliesToCurrentCandidate": true
+      "appliesToCurrentCandidate": true,
+      "workflowRunId": 35358215671
     },
     "prerevealMetadataPublication": {
-      "status": "pending",
+      "status": "passed",
+      "checkedAt": "2026-09-18T14:46:57.498Z",
       "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
-      "appliesToCurrentCandidate": false
+      "appliesToCurrentCandidate": true,
+      "collectionMetadataIpfs": "ipfs://bafkreiadquagxfzdz7ruj3kpdzixiphmsfjwcnxzfumrckb6eo7hcfjsjm",
+      "preRevealMetadataRootIpfs": "ipfs://bafybeiacbtdtybylqbxnsfrrkdj77in24f2muraf3mejijf4rmqexqmm4q/",
+      "metadataCount": 10000,
+      "allMetadataNoAttributes": true,
+      "publicReadbackVerified": true,
+      "publicItemSample": [
+        0,
+        1,
+        4979,
+        9999
+      ],
+      "strictImageDecodeVerified": true,
+      "gifSha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312",
+      "gifFrames": 148,
+      "gifDurationMs": 4950,
+      "logoSha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
+      "bannerSha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95",
+      "finalFilesPublished": false,
+      "transactionsSent": 0,
+      "workflowRunId": 35358215671,
+      "sourceCommit": "8a1924d4342eef269eae8058c70b20775b55418c"
     },
     "prerevealGetgemsUi": {
       "status": "pending",
@@ -546,7 +569,19 @@
       "collectionAddressRaw": "0:70a71beedf9c72a291978cd1417d217b64cf8588e7fa93996a93ef2aedfe57f8",
       "network": "testnet",
       "appliesToCurrentCandidate": false
+    },
+    "prerevealOfflineTests": {
+      "status": "passed-offline-only",
+      "packageSha256": "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f",
+      "workflowRunId": 35358215671,
+      "releaseGuardTests": 52,
+      "tvmScenarios": 22,
+      "mintPolicyNegativeCases": 10,
+      "prerevealSchemaCases": 18,
+      "allPrerevealFilesChecked": 10000,
+      "transactionsSent": 0,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "HOLD. Unsigned prereveal metadata rebuild: approved logo/banner, unchanged GIF, no attributes or rank fields. Final collection commitment and bytecode unchanged. Old package TESTNET/media/private-storage records remain historical and are not current-package approval. Await public metadata readback, candidate-bound evidence and fresh TESTNET/Getgems prereveal UI verification. No deployment, payment, sales or automatic reveal authorized."
+  "note": "HOLD. Approved prereveal branding and all 10000 attribute-free JSON files published to public IPFS. Exact public readback passed for logo, banner, collection JSON, template, GIF and items 0000/0001/4979/9999; all 10000 generated items checked locally and in CI. Original GIF unchanged (148 frames, 4950 ms). New unsigned package passed 52 gate tests and 22 offline TVM scenarios. Final collection commitment/bytecode unchanged. Old TESTNET/storage records are historical, not new-package approval. Fresh candidate-bound TESTNET/Getgems UI and private-storage evidence rebinding remain required. No deployment, payment, sales or automatic reveal."
 }
