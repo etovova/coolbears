@@ -461,7 +461,46 @@
       "probeUndeployedVerified": true,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsCleanFinalVisualAllFour": {
+      "status": "onchain-and-tonapi-complete",
+      "checkedAt": "2026-09-18T11:13:30Z",
+      "diagnosticOnly": true,
+      "collectionAddressTestnetBounceable": "kQAaApvx2jTuKgCevTdiFfieHctxbEyH9ntFPre6AiogpnAN",
+      "collectionCodeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "sameAsProductionCoolBearsCodeHash": true,
+      "nftAddresses": [
+        "kQAPSqe-_JNnkBPJL89eaWBAXiftFcqIUEbdONdSZSe8Ah5U",
+        "kQDgsWwcUE5W8Cma3_2h-JNnDBHlOQEwgGagWvw62PkykNx3",
+        "kQCKMVLzMdc9mmx4zy9nAktsaJAp_ASNnpu3M7P5grSYoIgh",
+        "kQB-I9PypJMuuI2_CWE37CbYD7Td8lBVJpSHKQMNicbgtEkA"
+      ],
+      "nextItemIndex": 4,
+      "allFourOnchainVerified": true,
+      "allFourTonapiMetadataComplete": true,
+      "allFourHaveSevenAttributes": true,
+      "allFourUseSameFullSpeedGif": true,
+      "gifFrames": 148,
+      "gifDurationMs": 4950,
+      "exactApprovedLogo": true,
+      "exactApprovedBanner": true,
+      "approvedDescriptionExact": true,
+      "tonapiReindexHttp200ForAllFiveAccounts": true,
+      "expectedRarityPercentages": [
+        25,
+        50,
+        75
+      ],
+      "expectedRarityOrder": [
+        "0000",
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "workflowRunId": 35338487030,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. A fresh clean TESTNET collection has been prepared specifically to eliminate Getgems cache contamination. It uses the exact approved CoolBears logo, banner and user-approved collection description from first indexing, the exact verified CoolBears contract code hash, and four NFTs all using the same strict-valid 148-frame/4.95-second prereveal GIF with seven controlled attributes. The fresh address is still undeployed."
+  "note": "Production remains HOLD. The fresh clean Getgems TESTNET collection is complete: four NFTs are live on-chain using the exact verified CoolBears contract code hash, all four use the same strict-valid 148-frame/4.95-second prereveal GIF, all four expose seven controlled attributes, approved logo/banner/description are published, and TonAPI reindex returned HTTP 200 for the collection and all four NFTs. Remaining check is visual Getgems UI rendering of branding, description, animation, rarity percentages and rank."
 }
