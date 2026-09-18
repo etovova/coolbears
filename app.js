@@ -160,7 +160,7 @@
     walletBtn?.setAttribute('aria-busy', 'true');
     try {
       if (!wallet) {
-        const { createWalletUI } = await import('./wallet-ui.mjs?v=solana-20260918');
+        const { createWalletUI } = await import('./wallet-ui.mjs?v=wallets-20260919');
         wallet = createWalletUI({
           language: () => lang,
           onChange: address => {

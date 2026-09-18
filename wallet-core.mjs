@@ -13,6 +13,25 @@ export function phantomBrowseUrl(url) {
   return `https://phantom.app/ul/browse/${encodeURIComponent(page.href)}?ref=${encodeURIComponent(page.origin)}`;
 }
 
+export function solflareBrowseUrl(url) {
+  const page = new URL(url);
+  if (page.protocol !== 'https:') throw new Error('HTTPS required');
+  page.hash = '';
+  return `https://solflare.com/ul/v1/browse/${encodeURIComponent(page.href)}?ref=${encodeURIComponent(page.origin)}`;
+}
+
+// Keep both supported wallets visible, including outside their mobile browsers.
+export function getWalletOptions(scope, pageUrl, mobile) {
+  const detected = detectWallets(scope);
+  return [
+    { name: 'Phantom', browse: phantomBrowseUrl, install: 'https://phantom.com/download' },
+    { name: 'Solflare', browse: solflareBrowseUrl, install: 'https://www.solflare.com/download/' }
+  ].map(wallet => {
+    const available = detected.find(item => item.name === wallet.name);
+    return available || { name: wallet.name, href: mobile ? wallet.browse(pageUrl) : wallet.install };
+  });
+}
+
 // This controller requests only a public address. Signing is a separate action.
 export function createWalletSession(onChange = () => {}) {
   let provider = null;

@@ -1,4 +1,4 @@
-import { createWalletUI } from '../wallet-ui.mjs';
+import { createWalletUI } from '../wallet-ui.mjs?v=wallets-20260919';
 const $ = id => document.getElementById(id);
 const KEY = 'coolbears-solana-devnet-20260918';
 let state, client, current, busy = false;

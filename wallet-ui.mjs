@@ -1,9 +1,9 @@
-import { detectWallets, createWalletSession, phantomBrowseUrl } from './wallet-core.mjs';
+import { getWalletOptions, createWalletSession } from './wallet-core.mjs?v=wallets-20260919';
 
 const text = {
-  en: { title: 'Connect wallet', open: 'Open in Phantom', install: 'Install Phantom', close: 'Close' },
-  ru: { title: 'Подключить кошелёк', open: 'Открыть в Phantom', install: 'Установить Phantom', close: 'Закрыть' },
-  zh: { title: '连接钱包', open: '在 Phantom 中打开', install: '安装 Phantom', close: '关闭' }
+  en: { title: 'Connect wallet', open: 'Open in {wallet}', install: 'Install {wallet}', close: 'Close' },
+  ru: { title: 'Подключить кошелёк', open: 'Открыть в {wallet}', install: 'Установить {wallet}', close: 'Закрыть' },
+  zh: { title: '连接钱包', open: '在 {wallet} 中打开', install: '安装 {wallet}', close: '关闭' }
 };
 
 export function createWalletUI({ language = () => 'en', onChange = () => {} } = {}) {
@@ -15,7 +15,7 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
     style.dataset.walletCss = '';
     document.head.append(style);
   }
-  function choose(wallets) {
+  function choose(wallets, mobile) {
     return new Promise((resolve, reject) => {
       const t = text[language()] || text.en;
       const dialog = document.createElement('dialog');
@@ -27,19 +27,19 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
       dialog.append(heading);
       let selected = false;
       for (const wallet of wallets) {
+        if (!wallet.provider) {
+          const link = document.createElement('a');
+          link.textContent = (mobile ? t.open : t.install).replace('{wallet}', wallet.name);
+          link.href = wallet.href;
+          if (!mobile) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+          dialog.append(link);
+          continue;
+        }
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = wallet.name;
         button.onclick = () => { selected = true; dialog.close(); resolve(wallet.provider); };
         dialog.append(button);
-      }
-      if (!wallets.some(wallet => wallet.name === 'Phantom')) {
-        const link = document.createElement('a');
-        const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        link.textContent = mobile ? t.open : t.install;
-        link.href = mobile ? phantomBrowseUrl(location.href) : 'https://phantom.com/download';
-        if (!mobile) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
-        dialog.append(link);
       }
       const close = document.createElement('button');
       close.type = 'button';
@@ -60,8 +60,9 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
     get address() { return session.address; },
     get provider() { return session.provider; },
     async connect() {
-      const wallets = detectWallets(window);
-      const provider = wallets.length === 1 ? wallets[0].provider : await choose(wallets);
+      const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const wallets = getWalletOptions(window, location.href, mobile);
+      const provider = await choose(wallets, mobile);
       return session.connect(provider);
     },
     disconnect: () => session.disconnect()
