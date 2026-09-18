@@ -27,14 +27,22 @@ jobs:
           set -euo pipefail
           BASE='https://coolbears-nfts.com/testnet/rarity-probe'
           mkdir -p /tmp/rarity
-          for path in index.html deployment.json collection.json expected-rarity.json 0000.json 0001.json 0002.json 0003.json assets/0000.png assets/0001.png assets/0002.png assets/0003.png; do
+          for path in index.html deployment.json collection.json expected-rarity.json 0000.json 0001.json 0002.json 0003.json assets/0000.png assets/0001.png assets/0002.png assets/0003.png assets/CoolBears_Getgems_Square_Logo_1000x1000.png assets/CoolBears_Getgems_Banner_2880x680.png; do
             safe=$(printf '%s' "$path" | tr '/' '_')
             code=$(curl -fsSL --retry 5 --retry-delay 2 -D "/tmp/rarity/${safe}.headers" -w '%{http_code}' -o "/tmp/rarity/${safe}" "$BASE/$path")
             test "$code" = '200'
             test -s "/tmp/rarity/${safe}"
           done
           cmp --silent testnet/rarity-probe/deployment.json /tmp/rarity/deployment.json
+          cmp --silent testnet/rarity-probe/collection.json /tmp/rarity/collection.json
           cmp --silent testnet/rarity-probe/expected-rarity.json /tmp/rarity/expected-rarity.json
+          test "$(sha256sum /tmp/rarity/assets_CoolBears_Getgems_Square_Logo_1000x1000.png | awk '{print $1}')" = "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7"
+          test "$(sha256sum /tmp/rarity/assets_CoolBears_Getgems_Banner_2880x680.png | awk '{print $1}')" = "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95"
+          grep -qi '^content-type: image/png' /tmp/rarity/assets_CoolBears_Getgems_Square_Logo_1000x1000.png.headers
+          grep -qi '^content-type: image/png' /tmp/rarity/assets_CoolBears_Getgems_Banner_2880x680.png.headers
+          test "$(jq -r '.image' /tmp/rarity/collection.json)" = "https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png"
+          test "$(jq -r '.cover_image' /tmp/rarity/collection.json)" = "https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png"
+          test "$(jq -r '.description|length' /tmp/rarity/collection.json)" -gt 200
           for i in 0000 0001 0002 0003; do
             cmp --silent "testnet/rarity-probe/$i.json" "/tmp/rarity/$i.json"
             grep -qi '^content-type: image/png' "/tmp/rarity/assets_${i}.png.headers"
@@ -72,7 +80,11 @@ jobs:
               p=f'/tmp/rarity/assets_{i:04d}.png'
               im=Image.open(p); im.load()
               assert im.format=='PNG' and im.size==(1000,1000)
-          print('RARITY_IMAGES_OK')
+          logo=Image.open('/tmp/rarity/assets_CoolBears_Getgems_Square_Logo_1000x1000.png'); logo.load()
+          banner=Image.open('/tmp/rarity/assets_CoolBears_Getgems_Banner_2880x680.png'); banner.load()
+          assert logo.format=='PNG' and logo.size==(1000,1000)
+          assert banner.format=='PNG' and banner.size==(2048,483)
+          print('RARITY_IMAGES_AND_EXACT_BRANDING_OK')
           PY
 
       - name: Verify rarity probe remains undeployed
