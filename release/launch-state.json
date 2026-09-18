@@ -89,7 +89,18 @@
       "ownerVerified": true,
       "metadataUriVerified": true,
       "appliesToCurrentCandidate": true
+    },
+    "correctedTestnetMintOpen": {
+      "status": "verified-live-testnet",
+      "checkedAt": "2026-09-18T05:09:36.740Z",
+      "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
+      "collectionRevision": "v3-glasses-correction-1",
+      "workflowRunId": 35309697473,
+      "nextItemIndex": 1,
+      "paused": false,
+      "nft0OwnerVerified": true,
+      "appliesToCurrentCandidate": true
     }
   },
-  "note": "Corrected private CAR storage is verified. Corrected offline TESTNET checks passed 22/22. Corrected contract is active on TON TESTNET and creator NFT #0000 is live, owned by the pinned wallet, with prereveal metadata URI verified. testnetVerified remains false until test mint is opened, #0001 is minted/verified, and transaction history is audited."
+  "note": "Corrected private CAR storage is verified. Corrected offline TESTNET checks passed 22/22. Corrected contract is active on TON TESTNET; creator NFT #0000 is verified; TESTNET mint is open with next=1. testnetVerified remains false until #0001 is minted/verified and transaction history is audited."
 }
