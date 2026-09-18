@@ -1,4 +1,4 @@
-name: Diagnose CoolBears testnet NFT metadata
+name: Diagnose corrected TESTNET metadata rendering
 
 on:
   push:
@@ -12,145 +12,103 @@ permissions:
 
 jobs:
   diagnose:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Verify configured prereveal metadata root directly
+
+      - name: Bind exact corrected candidate
         run: |
           set -euo pipefail
-          ROOT=$(jq -r '.preRevealMetadataRootIpfs' contracts/mint-policy.json)
-          PATH_PART=${ROOT#ipfs://}
-          URL="https://gateway.pinata.cloud/ipfs/${PATH_PART}0000.json"
-          echo "EXPECTED_METADATA_URL=$URL"
-          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$URL" -o /tmp/configured-0000.json
-          jq -e 'type=="object" and (.name|type=="string") and (.image|type=="string")' /tmp/configured-0000.json >/dev/null
-          jq '{name,description,image,animation_url,attributes}' /tmp/configured-0000.json
-          IMG=$(jq -r '.image' /tmp/configured-0000.json)
-          case "$IMG" in
-            ipfs://*) IMG_URL="https://gateway.pinata.cloud/ipfs/${IMG#ipfs://}" ;;
-            https://*) IMG_URL="$IMG" ;;
-            *) echo "Unsupported image URI: $IMG"; exit 1 ;;
+          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f"
+          test "$(jq -r '.collectionRevision' launch/candidate.json)" = "v3-glasses-correction-1"
+
+      - name: Fetch collection metadata actually referenced by corrected contract
+        run: |
+          set -euo pipefail
+          URI=$(jq -r '.collectionMetadataIpfs' launch/candidate.json)
+          case "$URI" in
+            ipfs://*) URL="https://gateway.pinata.cloud/ipfs/${URI#ipfs://}" ;;
+            *) echo "Unexpected collection metadata URI"; exit 1 ;;
           esac
-          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$IMG_URL" -o /tmp/configured-image.bin
-          test -s /tmp/configured-image.bin
-          file /tmp/configured-image.bin
-          echo "CONFIGURED_PREREVEAL_REACHABLE=1"
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$URL" -o /tmp/collection.json
+          jq -e '.name=="CoolBears" and (.description|type=="string" and length>20) and (.image|type=="string") and (.external_url|type=="string")' /tmp/collection.json >/dev/null
+          jq '{name,description,image,cover_image,external_url,social_links}' /tmp/collection.json
+          echo COLLECTION_DESCRIPTION_LIVE_OK
+
       - name: Install TON client
-        run: npm install --no-save @ton/ton @ton/core
-      - name: Read live NFT #0000 and resolve metadata URI
+        run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
+
+      - name: Resolve live corrected TESTNET NFT 0000 metadata URI from chain
         env:
           TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
         run: |
-          cat > diagnose-testnet-metadata.mjs <<'NODE'
+          cat > /tmp/resolve.mjs <<'NODE'
           import fs from 'node:fs';
-          import { Address } from '@ton/core';
-          import { TonClient } from '@ton/ton';
-
-          const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-          const d = JSON.parse(fs.readFileSync('testnet/deployment.json','utf8'));
-          const client = new TonClient({ endpoint: process.env.TONCENTER_ENDPOINT });
-          async function run(address, method, stack=[]) {
-            let last;
-            for (let i=1;i<=6;i++) {
-              try {
-                const r = await client.runMethod(address, method, stack);
-                await sleep(1400);
-                return r;
-              } catch (e) {
-                last=e;
-                const status=e?.response?.status;
-                if (status!==429 || i===6) throw e;
-                console.log(`TONCenter 429 on ${method}; retry ${i}/6`);
-                await sleep(i*2500);
-              }
+          import {Address} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+          const p=JSON.parse(fs.readFileSync('launch/candidate.json','utf8'));
+          const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          async function run(a,m,stack=[]){
+            for(let i=1;i<=8;i++){
+              try{const r=await client.runMethod(a,m,stack);await sleep(1500);return r;}
+              catch(e){if(e?.response?.status!==429||i===8)throw e;await sleep(i*2500);}
             }
-            throw last;
           }
-
-          const collection = Address.parse(d.collectionAddressTestnetNonBounceable);
-          const mint = await run(collection, 'get_mint_state');
-          const next = mint.stack.readBigNumber();
-          const supply = mint.stack.readBigNumber();
-          const price = mint.stack.readBigNumber();
-          const paused = mint.stack.readBigNumber();
-          console.log(`MINT_STATE next=${next} supply=${supply} price=${price} paused=${paused}`);
-          if (next < 1n) throw new Error('Collection has no minted NFT #0000');
-
-          const addrRes = await run(collection, 'get_nft_address_by_index', [{ type:'int', value:0n }]);
-          const nftAddress = addrRes.stack.readAddress();
-          console.log(`NFT0_ADDRESS=${nftAddress.toString({testOnly:true,bounceable:true})}`);
-
-          const nft = await run(nftAddress, 'get_nft_data');
-          const initialized = nft.stack.readBigNumber();
-          const index = nft.stack.readBigNumber();
-          const nftCollection = nft.stack.readAddress();
-          const owner = nft.stack.readAddress();
-          const individual = nft.stack.readCell();
-          console.log(`NFT0 initialized=${initialized} index=${index}`);
-          console.log(`NFT0_COLLECTION=${nftCollection.toString({testOnly:true,bounceable:true})}`);
-          console.log(`NFT0_OWNER=${owner.toString({testOnly:true,bounceable:false})}`);
-          console.log(`NFT0_INDIVIDUAL=${individual.beginParse().loadStringTail()}`);
-
-          const full = await run(collection, 'get_nft_content', [
-            { type:'int', value:index },
-            { type:'cell', cell:individual },
-          ]);
-          const content = full.stack.readCell();
-          const s = content.beginParse();
-          const tag = s.loadUint(8);
-          if (tag !== 1) throw new Error(`Unexpected offchain tag ${tag}`);
-          if (s.remainingBits % 8 !== 0) throw new Error('URI prefix is not byte-aligned');
-          const prefix = s.loadBuffer(s.remainingBits / 8).toString('utf8');
-          if (s.remainingRefs !== 1) throw new Error(`Expected one suffix ref, got ${s.remainingRefs}`);
-          const suffix = s.loadRef().beginParse().loadStringTail();
-          const uri = prefix + suffix;
-          console.log(`NFT0_PREFIX=${prefix}`);
-          console.log(`NFT0_SUFFIX=${suffix}`);
-          console.log(`NFT0_URI=${uri}`);
-          fs.writeFileSync('/tmp/nft0-uri.txt', uri);
+          const collection=Address.parse(p.collectionAddressRaw);
+          const ar=await run(collection,'get_nft_address_by_index',[{type:'int',value:0n}]);
+          const nftAddr=ar.stack.readAddress();
+          const nr=await run(nftAddr,'get_nft_data');
+          if(nr.stack.readBigNumber()!==-1n)throw Error('NFT0_NOT_INITIALIZED');
+          const index=nr.stack.readBigNumber();
+          nr.stack.readAddress();nr.stack.readAddress();
+          const individual=nr.stack.readCell();
+          const cr=await run(collection,'get_nft_content',[{type:'int',value:index},{type:'cell',cell:individual}]);
+          const s=cr.stack.readCell().beginParse();
+          if(s.loadUint(8)!==1)throw Error('BAD_OFFCHAIN_TAG');
+          const uri=s.loadStringTail();
+          if(uri!==p.preRevealMetadataRootIpfs+'0000.json')throw Error('NFT0_URI_MISMATCH');
+          fs.writeFileSync('/tmp/nft0-uri.txt',uri);
+          console.log('NFT0_CHAIN_METADATA_URI_OK');
           NODE
-          node diagnose-testnet-metadata.mjs
+          node /tmp/resolve.mjs
 
-      - name: Fetch resolved IPFS or HTTPS metadata
+      - name: Fetch live NFT 0000 metadata and verify description plus animation_url
         run: |
           set -euo pipefail
           URI=$(cat /tmp/nft0-uri.txt)
-          case "$URI" in
-            ipfs://*)
-              PATH_PART=${URI#ipfs://}
-              URLS=("https://gateway.pinata.cloud/ipfs/${PATH_PART}" "https://ipfs.io/ipfs/${PATH_PART}")
-              ;;
-            https://*) URLS=("$URI") ;;
-            *) echo "Unsupported metadata URI: $URI"; exit 1 ;;
-          esac
-          ok=0
-          for URL in "${URLS[@]}"; do
-            echo "Trying $URL"
-            if curl --fail --silent --show-error --location --retry 4 --retry-delay 2 \
-              "$URL" -o /tmp/nft0.json; then
-              if jq -e 'type=="object" and (.name|type=="string") and (.image|type=="string")' /tmp/nft0.json >/dev/null; then
-                echo "METADATA_URL_OK=$URL"
-                jq '{name,description,image,animation_url,attributes}' /tmp/nft0.json
-                ok=1
-                break
-              fi
-            fi
-          done
-          test "$ok" = "1"
+          URL="https://gateway.pinata.cloud/ipfs/${URI#ipfs://}"
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$URL" -o /tmp/nft0.json
+          jq -e '(.description|type=="string" and length>20) and (.image|type=="string") and (.animation_url|type=="string") and (.image==.animation_url)' /tmp/nft0.json >/dev/null
+          jq '{name,description,image,animation_url,external_url,attributes}' /tmp/nft0.json
+          echo NFT0_DESCRIPTION_AND_ANIMATION_URL_LIVE_OK
 
-      - name: Verify resolved NFT image URI is reachable
+      - name: Fetch and inspect exact public GIF
         run: |
           set -euo pipefail
-          IMG=$(jq -r '.image' /tmp/nft0.json)
-          case "$IMG" in
-            ipfs://*) PATH_PART=${IMG#ipfs://}; URL="https://gateway.pinata.cloud/ipfs/${PATH_PART}" ;;
-            https://*) URL="$IMG" ;;
-            *) echo "Unsupported image URI: $IMG"; exit 1 ;;
-          esac
-          curl --fail --silent --show-error --location --retry 4 --retry-delay 2 "$URL" -o /tmp/prereveal.bin
-          test -s /tmp/prereveal.bin
-          file /tmp/prereveal.bin
-          echo "NFT0_METADATA_AND_IMAGE_REACHABLE=1"
+          URI=$(jq -r '.animation_url' /tmp/nft0.json)
+          URL="https://gateway.pinata.cloud/ipfs/${URI#ipfs://}"
+          curl --fail --silent --show-error --location --retry 5 --retry-delay 2 "$URL" -o /tmp/prereveal.gif
+          python3 - <<'PY'
+          from PIL import Image
+          import hashlib, os
+          p='/tmp/prereveal.gif'
+          im=Image.open(p)
+          frames=getattr(im,'n_frames',1)
+          durations=[]
+          for i in range(frames):
+              im.seek(i)
+              durations.append(im.info.get('duration',0))
+          assert frames>1
+          assert im.info.get('loop')==0
+          print('GIF_ANIMATED_LIVE_OK')
+          print('frames=',frames)
+          print('duration_ms=',sum(durations))
+          print('bytes=',os.path.getsize(p))
+          print('sha256=',hashlib.sha256(open(p,'rb').read()).hexdigest())
+          PY
