@@ -608,14 +608,14 @@
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
       "appliesToCurrentCandidate": true,
-      "checkedAt": "2026-09-18T18:05:15.193663+00:00",
-      "status": "partial-both-nfts-loaded",
+      "checkedAt": "2026-09-18T18:59:57.452856+00:00",
+      "status": "partial-banner-pending",
       "collectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
-      "metadataUnavailable": true,
+      "metadataUnavailable": false,
       "tonapiMetadataComplete": false,
       "refreshRequested": true,
       "reindexHttp200ForAllThreeAccounts": true,
-      "logoVisible": false,
+      "logoVisible": true,
       "bannerVisible": false,
       "gifAnimated": true,
       "attributesAbsent": true,
@@ -654,7 +654,15 @@
       "refreshRequestedForRemaining": [
         "collection"
       ],
-      "independentIpfsRetrievalVerified": true
+      "independentIpfsRetrievalVerified": true,
+      "collectionNameMatched": true,
+      "collectionDescriptionMatched": true,
+      "collectionWebsiteMatched": true,
+      "collectionCreatorMatched": true,
+      "remainingUiChecks": [
+        "collection banner"
+      ],
+      "collectionRefreshRequestedAt": "2026-09-18T18:59:57.452856+00:00"
     },
     "prerevealOfflineTests": {
       "status": "passed-offline-only",
