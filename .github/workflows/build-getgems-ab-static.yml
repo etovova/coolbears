@@ -75,7 +75,7 @@ jobs:
       - name: Build diagnostic TESTNET StateInit from exact corrected bytecode
         run: |
           npm install --no-save --ignore-scripts '@ton/core@0.63.1'
-          cat > /tmp/build-probe.mjs <<'NODE'
+          cat > build-getgems-probe.mjs <<'NODE'
           import fs from 'node:fs';
           import crypto from 'node:crypto';
           import {Cell,beginCell,loadStateInit,contractAddress,storeStateInit} from '@ton/core';
@@ -163,7 +163,7 @@ jobs:
           fs.writeFileSync('testnet/getgems-ab/deployment.json',JSON.stringify(out,null,2)+'\n');
           console.log(JSON.stringify({address:out.collectionAddressTestnetBounceable,codeHash:out.collectionCodeHash,variant:out.variant}));
           NODE
-          node /tmp/build-probe.mjs
+          node build-getgems-probe.mjs
 
       - name: Add exact probe files to public allow-list
         run: |
