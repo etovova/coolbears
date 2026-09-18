@@ -1,4 +1,4 @@
-name: Verify clean final visual NFT 0000
+name: Verify clean final visual NFT 0000 confirmed
 
 on:
   push:
