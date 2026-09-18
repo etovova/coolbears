@@ -74,13 +74,15 @@ export function validateLaunch(c,p,s,packageHash){
   })) yes(c[key]===value,`Site/package mismatch: ${key}`);
 
   yes(s.candidateVersion==='committed-reveal-v1'&&s.candidateRevision===REVISION&&s.candidateCodeHash===CANDIDATE_HASH,'Unknown release candidate');
-  yes(s.packageSha256===PACKAGE_SHA256,'Launch state package binding mismatch');
-  correctedPrerequisites(s,p,packageHash);
 
   if(s.phase==='hold'){
-    yes(c.demoMode===true&&!s.publicMintApproved,'Held release cannot sell');
-    return {phase:'hold',setup:false,sales:false,automaticReveal:s.automaticRevealArmed===true};
+    yes(c.demoMode===true&&!s.publicMintApproved&&!s.automaticRevealArmed,'Held release cannot sell, operate or reveal');
+    yes(s.packageSha256===null||s.packageSha256===PACKAGE_SHA256,'Held state references an unknown package');
+    return {phase:'hold',setup:false,sales:false,automaticReveal:false};
   }
+
+  yes(s.packageSha256===PACKAGE_SHA256,'Launch state package binding mismatch');
+  correctedPrerequisites(s,p,packageHash);
 
   if(s.phase==='prepared'){
     yes(c.demoMode===true&&!s.publicMintApproved&&!s.automaticRevealArmed,'Preparation cannot open sales or arm reveal');
