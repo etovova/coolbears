@@ -17,7 +17,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05"
+          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147"
           test "$(jq -r '.collectionRevision' launch/candidate.json)" = "v3-glasses-correction-1"
           echo "CORRECTED_CANDIDATE_BINDING_OK"
 

@@ -1,7 +1,7 @@
 // One fail-closed policy for browser, CI and the release installer.
 // This module never performs network requests, signing or transactions.
 export const CANDIDATE_HASH='4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b';
-export const PACKAGE_SHA256='f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05';
+export const PACKAGE_SHA256='fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147';
 export const REVISION='v3-glasses-correction-1';
 export const MANIFEST_SHA256='4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001';
 export const CAR_SHA256='7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853';

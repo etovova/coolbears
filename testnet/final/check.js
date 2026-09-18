@@ -1,4 +1,4 @@
-import {verifyPackage,verifyLive,itemAddress,verifyItem,testnetRequest,PACKAGE_SHA256,EXPECTED_OWNER} from '../../launch/package-tools.mjs?v=approved-description-1';
+import {verifyPackage,verifyLive,itemAddress,verifyItem,testnetRequest,PACKAGE_SHA256,EXPECTED_OWNER} from '../../launch/package-tools.mjs?v=date-only-1';
 const $=id=>document.getElementById(id),actions=['deploy','claim','open','mint'];
 const root=new URL('../../',import.meta.url),pendingKey='coolbears-v3-final-testnet-pending-'+PACKAGE_SHA256;
 let core,p,wallet,ui,state,busy=false,checking=null,pending=null,lastReport=null;

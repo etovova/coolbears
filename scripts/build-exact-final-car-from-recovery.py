@@ -10,7 +10,7 @@ No network upload or wallet operation is performed here.
 from pathlib import Path
 import collections, hashlib, io, json, os, runpy, shutil, subprocess, sys, zipfile
 
-EXPECTED_PACKAGE_SHA='f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05'
+EXPECTED_PACKAGE_SHA='fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147'
 EXPECTED_MANIFEST_SHA='4c7af198c464356fa25c1f9598d33fa3f08ed60e0bd5c95068c0972483369001'
 EXPECTED_CAR_SHA='7fd7eae76d315db216e0dbfb08bec036b1d0d80c4aa8d84a7472110de0efa853'
 EXPECTED_CAR_BYTES=12779698722

@@ -1,6 +1,6 @@
 import {beginCell,Address,Cell,contractAddress,loadStateInit} from 'https://esm.sh/@ton/core@0.63.1?bundle';
 const $=id=>document.getElementById(id);
-const PACKAGE_SHA='f4fb17938415afa7541e69463337565a0e3a0e7c73a1eb71d3b87582c8becd05';
+const PACKAGE_SHA='fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147';
 const REVISION='v3-glasses-correction-1';
 let d,ui,wallet=null,state=null,busy=false,pending=null,checking=null,gate=null,releaseState=null;
 let expectedContentHash,expectedItemCodeHash,expectedRoyaltyHash;
@@ -57,7 +57,7 @@ async function refreshGate(){
   if(!sr.ok)throw Error('Release state недоступен');
   releaseState=await sr.json();
 
-  const {validateLaunch,OWNER_FRIENDLY}=await import('../../release-guard.mjs?v=approved-description-1');
+  const {validateLaunch,OWNER_FRIENDLY}=await import('../../release-guard.mjs?v=date-only-1');
   const c={
     network:'mainnet',priceTon:7,supply:10000,royaltyPercent:7,maxPerTransaction:50,
     revealDate:'2027-01-01',mintPaymentPerNftTon:7.1,mintPaymentPerNftNano:7100000000,
@@ -156,7 +156,7 @@ async function check(){
 
 async function releaseAllows(action){
   await refreshGate();
-  const {canOperate}=await import('../../release-guard.mjs?v=approved-description-1');
+  const {canOperate}=await import('../../release-guard.mjs?v=date-only-1');
   return canOperate(action,gate,state,isOwner());
 }
 async function send(action){
