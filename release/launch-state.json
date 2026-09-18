@@ -397,7 +397,40 @@
       "workflowRunId": 35334344659,
       "productionHold": true,
       "mainnetTouched": false
+    },
+    "getgemsRarityAllFour": {
+      "status": "onchain-and-tonapi-complete",
+      "checkedAt": "2026-09-18T10:40:30Z",
+      "collectionAddressTestnetBounceable": "kQCJMZr97lvrX__EqQSO2wuWU9bhuxfPWKKE9hWMPElWQ9ww",
+      "nftAddresses": [
+        "kQCtc4C9OSRvruX0xxI8vG9O5r01J5wXXjd45KrkFv3pC0OX",
+        "kQD7XQNRvE-E5HqRpLOTn4MFPFh1f8zFFwGE06IXeLuUZjGX",
+        "kQBB_MxZlragf6EIwRB47WLTIINbOp40ywnjSbLDk5SfngCK",
+        "kQAOTK5cCx6VtY__3w05jm1pQnMHVrZ3yDZYPZCNh-YCT8VG"
+      ],
+      "nextItemIndex": 4,
+      "allFourOnchainVerified": true,
+      "allFourTonapiMetadataComplete": true,
+      "allFourHaveSevenAttributes": true,
+      "exactApprovedCollectionMetadata": true,
+      "exactApprovedBranding": true,
+      "tonapiReindexHttp200ForAllFiveAccounts": true,
+      "expectedRarityPercentages": [
+        25,
+        50,
+        75
+      ],
+      "expectedRarityOrder": [
+        "0000",
+        "0001",
+        "0002",
+        "0003"
+      ],
+      "onchainWorkflowRunId": 35334997037,
+      "reindexWorkflowRunId": 35335730201,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. The Getgems rarity test has been migrated away from the custom cheap diagnostic contract that triggered Telegram Wallet verification warnings. The active rarity test now uses the already verified production-like CoolBears TESTNET contract code hash, with #0000 already minted. Only open-mint and mint-three TESTNET actions remain."
+  "note": "Production remains HOLD. The Getgems rarity TESTNET verification now has four live NFTs on the verified production-like CoolBears contract. TonAPI reindex returned HTTP 200 for the collection and all four NFTs; all four now expose exact CoolBears names and seven controlled attributes. Approved collection branding and description are published. Remaining verification is visual Getgems UI behavior for rarity rank and percentage rendering."
 }
