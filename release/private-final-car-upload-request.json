@@ -1,12 +1,12 @@
 {
   "schema": 1,
   "action": "store-exact-final-car-private-pinata",
-  "authorized": true,
+  "authorized": false,
   "collectionRevision": "v3-glasses-correction-1",
   "packageSha256": "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f",
   "manifestSha256": "4d6dd18bf5050a9244862997e4a51ae9ba2026e656279745e7d4fee05213ce96",
   "carSha256": "287406498c91a1791880bef7919a58c61e55a7dfd884aeb57c22a8ab49115b84",
   "carBytes": 12779698835,
   "attempt": 2,
-  "reason": "Retry corrected v3-glasses-correction-1 private storage after removing reliance on Pinata size metadata. Rebuild exact corrected CAR, upload or reuse 48 private parts, require real downloaded byte counts and SHA-256 for every part, and verify full CAR reassembly hash. Do not change sales, wallet, mainnet or public reveal state."
+  "reason": "Completed successfully. All 48 corrected private CAR parts were read back and verified, including full CAR reassembly SHA-256. Do not rerun unless the final candidate changes."
 }
