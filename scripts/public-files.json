@@ -37,6 +37,7 @@
   "testnet/deployment.json",
   "testnet/final/check.js",
   "testnet/final/index.html",
+  "testnet/getgems-debug/index.html",
   "testnet/index.html",
   "testnet/locked/deploy.js",
   "testnet/locked/deployment.json",
