@@ -42,7 +42,6 @@ jobs:
           python3 - <<'PY'
           from PIL import Image,ImageFile
           import hashlib, json, os
-          ImageFile.LOAD_TRUNCATED_IMAGES=False
           paths={
             'live_collection_image':'/tmp/collection-image.bin',
             'live_collection_cover':'/tmp/collection-cover.bin',
@@ -53,30 +52,38 @@ jobs:
           out={}
           for name,p in paths.items():
               raw=open(p,'rb').read()
-              im=Image.open(p)
-              frames=getattr(im,'n_frames',1)
-              durations=[]
-              for i in range(frames):
-                  im.seek(i)
-                  durations.append(im.info.get('duration',0))
-                  im.load()
-              out[name]={
-                'format':im.format,
-                'size':list(im.size),
-                'frames':frames,
-                'loop':im.info.get('loop'),
-                'durationMs':sum(durations),
-                'bytes':len(raw),
-                'sha256':hashlib.sha256(raw).hexdigest(),
-              }
+              base={'bytes':len(raw),'sha256':hashlib.sha256(raw).hexdigest(),'strictValid':True,'strictError':None}
+              try:
+                  ImageFile.LOAD_TRUNCATED_IMAGES=False
+                  im=Image.open(p)
+                  frames=getattr(im,'n_frames',1)
+                  durations=[]
+                  for i in range(frames):
+                      im.seek(i); durations.append(im.info.get('duration',0)); im.load()
+              except Exception as e:
+                  base['strictValid']=False;base['strictError']=repr(e)
+                  ImageFile.LOAD_TRUNCATED_IMAGES=True
+                  im=Image.open(p)
+                  frames=getattr(im,'n_frames',1)
+                  durations=[]
+                  for i in range(frames):
+                      try:
+                          im.seek(i); durations.append(im.info.get('duration',0)); im.load()
+                      except Exception:
+                          break
+              base.update({'format':im.format,'size':list(im.size),'framesReported':frames,'framesDecoded':len(durations),'loop':im.info.get('loop'),'durationMsDecoded':sum(durations)})
+              out[name]=base
           out['limits']={
             'collectionImageFramesMax':100,
             'collectionCoverFramesMax':30,
             'nftImageFramesMax':None,
           }
           out['compatibility']={
-            'collectionImageFramesOk':out['live_collection_image']['frames']<=100,
-            'collectionCoverFramesOk':out['live_collection_cover']['frames']<=30,
+            'collectionImageFramesOk':out['live_collection_image']['framesDecoded']<=100,
+            'collectionCoverFramesOk':out['live_collection_cover']['framesDecoded']<=30,
+            'collectionImageStrictlyValid':out['live_collection_image']['strictValid'],
+            'collectionCoverStrictlyValid':out['live_collection_cover']['strictValid'],
+            'nftImageStrictlyValid':out['live_nft_image']['strictValid'],
             'collectionImageSquare':out['live_collection_image']['size'][0]==out['live_collection_image']['size'][1],
             'collectionCoverRecommendedAspect':abs(out['live_collection_cover']['size'][0]/out['live_collection_cover']['size'][1]-(2880/680))<0.25,
           }
