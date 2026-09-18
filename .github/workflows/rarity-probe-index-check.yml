@@ -1,0 +1,51 @@
+name: Check rarity probe in TonAPI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/rarity-probe-index-check.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check TonAPI collection metadata used by Getgems
+        run: |
+          set -euo pipefail
+          A=$(jq -r '.collectionAddressTestnetBounceable' testnet/rarity-probe/deployment.json)
+          mkdir -p build/rarity-index
+          for i in {1..12}; do
+            code=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o build/rarity-index/collection.json "https://testnet.tonapi.io/v2/nfts/collections/$A" || true)
+            echo "attempt=$i http=$code"
+            if [ "$code" = '200' ]; then
+              name=$(jq -r '.metadata.name // empty' build/rarity-index/collection.json)
+              image=$(jq -r '.metadata.image // empty' build/rarity-index/collection.json)
+              cover=$(jq -r '.metadata.cover_image // empty' build/rarity-index/collection.json)
+              desc=$(jq -r '.metadata.description // empty' build/rarity-index/collection.json)
+              echo "name=$name"
+              echo "next=$(jq -r '.next_item_index // empty' build/rarity-index/collection.json)"
+              if [ "$name" = 'CoolBears' ] && [ "$image" = 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png' ] && [ "$cover" = 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png' ] && [ -n "$desc" ]; then
+                echo TONAPI_EXACT_COLLECTION_METADATA_OK
+                break
+              fi
+            fi
+            sleep 15
+          done
+          test "$(jq -r '.metadata.name // empty' build/rarity-index/collection.json)" = 'CoolBears'
+          test "$(jq -r '.metadata.image // empty' build/rarity-index/collection.json)" = 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Square_Logo_1000x1000.png'
+          test "$(jq -r '.metadata.cover_image // empty' build/rarity-index/collection.json)" = 'https://coolbears-nfts.com/testnet/rarity-probe/assets/CoolBears_Getgems_Banner_2880x680.png'
+          jq '{address,next_item_index,metadata,previews}' build/rarity-index/collection.json
+      - name: Reconfirm production HOLD
+        run: |
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          echo PRODUCTION_HOLD_OK
