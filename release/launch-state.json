@@ -608,8 +608,8 @@
       "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
       "network": "testnet",
       "appliesToCurrentCandidate": true,
-      "checkedAt": "2026-09-18T16:29:55.232558+00:00",
-      "status": "blocked-metadata-unavailable",
+      "checkedAt": "2026-09-18T17:16:36.686854+00:00",
+      "status": "partial-nft0001-loaded",
       "collectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
       "metadataUnavailable": true,
       "tonapiMetadataComplete": false,
@@ -622,7 +622,34 @@
       "percentagesAbsent": null,
       "rankAbsent": null,
       "absenceCannotBeConfirmedUntilMetadataLoads": true,
-      "report": "release/current-testnet-prereveal-media.json"
+      "report": "release/current-testnet-prereveal-media.json",
+      "items": {
+        "0": {
+          "metadataLoaded": false,
+          "gifAnimated": null,
+          "attributesAbsent": null,
+          "percentagesAbsent": null,
+          "rankAbsent": null
+        },
+        "1": {
+          "metadataLoaded": true,
+          "name": "CoolBears #0001 — Hidden Bear",
+          "descriptionMatched": true,
+          "ownerMatched": true,
+          "gifAnimated": true,
+          "animationVerification": "Two browser screenshots showed different intended GIF frames: colored CoolBears text and hidden bear with flower.",
+          "attributesAbsent": true,
+          "percentagesAbsent": true,
+          "rankAbsent": true,
+          "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQAf5JDAb6daOfAurvk_tS1Xwc8DSC6n9Y_nchavnbmpxaxd"
+        }
+      },
+      "allMintedItemsVerified": false,
+      "refreshRequestedForRemaining": [
+        "collection",
+        "NFT0000"
+      ],
+      "independentIpfsRetrievalVerified": true
     },
     "prerevealOfflineTests": {
       "status": "passed-offline-only",

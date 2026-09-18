@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "status": "PUBLIC_PREREVEAL_BYTES_VERIFIED_GETGEMS_INDEX_PENDING",
-  "checkedAt": "2026-09-18T16:29:55.232558+00:00",
+  "status": "PUBLIC_PREREVEAL_BYTES_VERIFIED_GETGEMS_PARTIALLY_LOADED",
+  "checkedAt": "2026-09-18T17:16:36.686854+00:00",
   "network": "testnet",
   "packageSha256": "385d5550ff4cb83422e2ff052e958225aa859729f9ba7adfb0a7a04825977e2c",
   "collectionAddressRaw": "0:f75ec02469c90d66e05b1e3623d142898d5cfe68cc7318703bd1be0cc58ee2f6",
@@ -93,10 +93,101 @@
   ],
   "getgemsCollectionUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO",
   "getgemsCollectionError": "Failed to Load Metadata",
-  "getgemsItemError": "Metadata Unavailable",
   "tonapiMetadataComplete": false,
   "getgemsUiVerified": false,
   "mainnetReady": false,
   "transactionsSent": 0,
-  "finalFilesPublished": false
+  "finalFilesPublished": false,
+  "publicBytesCheckedAt": "2026-09-18T16:29:55.232558+00:00",
+  "getgemsItemErrors": {
+    "0": "Metadata Unavailable"
+  },
+  "getgemsItems": {
+    "0": {
+      "metadataLoaded": false,
+      "gifAnimated": null,
+      "attributesAbsent": null,
+      "percentagesAbsent": null,
+      "rankAbsent": null
+    },
+    "1": {
+      "metadataLoaded": true,
+      "name": "CoolBears #0001 — Hidden Bear",
+      "descriptionMatched": true,
+      "ownerMatched": true,
+      "gifAnimated": true,
+      "animationVerification": "Two browser screenshots showed different intended GIF frames: colored CoolBears text and hidden bear with flower.",
+      "attributesAbsent": true,
+      "percentagesAbsent": true,
+      "rankAbsent": true,
+      "detailsPageUrl": "https://testnet.getgems.io/collection/EQD3XsAkackNZuBbHjYj0UKJjVz-aMxzGHA70b4MxY7i9qvO/EQAf5JDAb6daOfAurvk_tS1Xwc8DSC6n9Y_nchavnbmpxaxd"
+    }
+  },
+  "independentIpfsRetrieval": {
+    "collection": {
+      "checkedAt": "2026-09-18T16:59:42.412Z",
+      "cid": "bafkreiadquagxfzdz7ruj3kpdzixiphmsfjwcnxzfumrckb6eo7hcfjsjm",
+      "httpStatus": 200,
+      "providers": [
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswapFound": true,
+          "error": ""
+        },
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswapFound": true,
+          "error": ""
+        }
+      ]
+    },
+    "nft0": {
+      "checkedAt": "2026-09-18T17:14:47.189Z",
+      "cid": "bafkreigw6mz3ijryxnhlrpsbq32rjreanxmvkeptlmlwh7rcfdqwmbnsf4",
+      "httpStatus": 200,
+      "providers": [
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswapFound": true,
+          "error": ""
+        },
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswapFound": true,
+          "error": ""
+        }
+      ]
+    },
+    "nft1": {
+      "checkedAt": "2026-09-18T17:14:48.781Z",
+      "cid": "bafkreihalk4qj2w2e4onqqq6dgykopydc6qfsxumcmogwrgpm6objxlp44",
+      "httpStatus": 200,
+      "providers": [
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswapFound": true,
+          "error": ""
+        },
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswapFound": true,
+          "error": ""
+        }
+      ]
+    }
+  },
+  "indexerNote": "Getgems NFT0001 loaded while TonAPI still returned empty metadata. Treat them as separate observations; do not infer Getgems state only from TonAPI.",
+  "remainingUiChecks": [
+    "collection name/description/logo/banner",
+    "NFT0000 image/name/description",
+    "absence of rank/attributes/percentages on NFT0000"
+  ],
+  "httpsAlternativePublished": false,
+  "newDeploymentRequested": false
 }
