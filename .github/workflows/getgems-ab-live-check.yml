@@ -1,4 +1,4 @@
-name: Verify Getgems A/B probe live TESTNET
+name: Verify Getgems A/B probe NFT 0000 on TESTNET
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
           node-version: '22'
       - name: Install TON readers
         run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
-      - name: Verify live A/B probe
+      - name: Verify live A/B probe and NFT 0000
         env:
           TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
         run: |
@@ -34,48 +34,74 @@ jobs:
           const p=JSON.parse(fs.readFileSync('testnet/getgems-ab/deployment.json','utf8'));
           if(!p.diagnosticOnly||p.variant!=='static-https'||p.network!=='testnet') throw Error('BAD_PROBE_PACKAGE');
           const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
-          const a=Address.parse(p.collectionAddressRaw);
-          const st=await client.getContractState(a);
-          if(st.state!=='active') throw Error('PROBE_NOT_ACTIVE_'+st.state);
-          if(!st.code||!st.data) throw Error('PROBE_MISSING_CODE_OR_DATA');
+          const collection=Address.parse(p.collectionAddressRaw);
+          const st=await client.getContractState(collection);
+          if(st.state!=='active'||!st.code||!st.data) throw Error('PROBE_NOT_ACTIVE');
           const codeHash=Cell.fromBoc(st.code)[0].hash().toString('hex');
           if(codeHash!==p.collectionCodeHash) throw Error('PROBE_CODE_HASH_MISMATCH');
 
           const sleep=ms=>new Promise(r=>setTimeout(r,ms));
-          async function run(method,stack=[]){
+          async function run(a,m,stack=[]){
             let last;
             for(let i=1;i<=8;i++){
-              try { const r=await client.runMethod(a,method,stack); await sleep(1200); return r; }
+              try { const r=await client.runMethod(a,m,stack); await sleep(1200); return r; }
               catch(e){ last=e; if(e?.response?.status!==429||i===8) throw e; await sleep(i*2000); }
             }
             throw last;
           }
 
-          const cd=(await run('get_collection_data')).stack;
+          const cd=(await run(collection,'get_collection_data')).stack;
           const next=cd.readBigNumber();
           const content=cd.readCell();
           const owner=cd.readAddress();
-          if(next!==0n) throw Error('EXPECTED_NEXT_0_GOT_'+next);
+          if(next!==1n) throw Error('EXPECTED_NEXT_1_GOT_'+next);
           if(owner.toRawString()!==p.ownerAddressRaw) throw Error('OWNER_MISMATCH');
           const cs=content.beginParse();
           if(cs.loadUint(8)!==1) throw Error('COLLECTION_TAG_MISMATCH');
-          const uri=cs.loadStringTail();
-          if(uri!==p.collectionMetadataUrl) throw Error('COLLECTION_URI_MISMATCH');
+          const collectionUri=cs.loadStringTail();
+          if(collectionUri!==p.collectionMetadataUrl) throw Error('COLLECTION_URI_MISMATCH');
 
-          const mint=(await run('get_mint_state')).stack;
+          const mint=(await run(collection,'get_mint_state')).stack;
           const mintNext=mint.readBigNumber();
           const supply=mint.readBigNumber();
           const price=mint.readBigNumber();
           const paused=mint.readBigNumber();
-          if(mintNext!==0n||supply!==10000n||price!==7000000000n||paused!==1n) throw Error('PROBE_MINT_STATE_MISMATCH');
+          if(mintNext!==1n||supply!==10000n||price!==7000000000n||paused!==1n) throw Error('PROBE_MINT_STATE_MISMATCH');
+
+          const ar=(await run(collection,'get_nft_address_by_index',[{type:'int',value:0n}])).stack;
+          const nft=ar.readAddress();
+          const ns=await client.getContractState(nft);
+          if(ns.state!=='active'||!ns.code) throw Error('NFT0_NOT_ACTIVE');
+          const nftCodeHash=Cell.fromBoc(ns.code)[0].hash().toString('hex');
+          if(nftCodeHash!==p.nftItemCodeHash) throw Error('NFT0_CODE_HASH_MISMATCH');
+
+          const nd=(await run(nft,'get_nft_data')).stack;
+          const initialized=nd.readBigNumber();
+          const index=nd.readBigNumber();
+          const coll=nd.readAddress();
+          const nftOwner=nd.readAddress();
+          const individual=nd.readCell();
+          if(initialized!==-1n||index!==0n||coll.toRawString()!==collection.toRawString()||nftOwner.toRawString()!==p.ownerAddressRaw) throw Error('NFT0_DATA_MISMATCH');
+          const suffix=individual.beginParse().loadStringTail();
+          if(suffix!=='0000.json') throw Error('NFT0_SUFFIX_MISMATCH');
+
+          const fc=(await run(collection,'get_nft_content',[{type:'int',value:0n},{type:'cell',cell:individual}])).stack.readCell();
+          const fslice=fc.beginParse();
+          if(fslice.loadUint(8)!==1) throw Error('NFT0_CONTENT_TAG_MISMATCH');
+          const nftUri=fslice.loadStringTail();
+          const expected=p.commonMetadataPrefix+'0000.json';
+          if(nftUri!==expected) throw Error('NFT0_URI_MISMATCH');
 
           console.log(JSON.stringify({
-            status:'GETGEMS_AB_PROBE_LIVE_VERIFIED',
-            address:p.collectionAddressTestnetBounceable,
-            codeHash,
+            status:'GETGEMS_AB_PROBE_NFT0_VERIFIED',
+            collection:p.collectionAddressTestnetBounceable,
+            nft0:nft.toString({testOnly:true,bounceable:true}),
             nextItemIndex:Number(next),
             paused:true,
-            collectionUriVerified:true
+            ownerVerified:true,
+            collectionUriVerified:true,
+            nftMetadataUri:nftUri,
+            nftCodeHash
           }));
           NODE
           node verify-ab-live.mjs
@@ -85,4 +111,5 @@ jobs:
           test "$(jq -r '.phase' release/launch-state.json)" = "hold"
           test "$(jq -r '.mainnetVerified' release/launch-state.json)" = "false"
           test "$(jq -r '.publicMintApproved' release/launch-state.json)" = "false"
+          test "$(jq -r '.automaticRevealArmed' release/launch-state.json)" = "false"
           echo PRODUCTION_HOLD_OK
