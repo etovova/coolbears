@@ -1,14 +1,7 @@
-name: CoolBears testnet deployment package
+name: Legacy reference package (not the current release)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'contracts/src/**'
-      - 'contracts/mint-policy.json'
-      - 'contracts/TON_REFERENCE.lock'
-      - 'scripts/build-testnet-deployment.mjs'
-      - '.github/workflows/testnet-deployment-package.yml'
+  # Legacy source reproduction only. Current release uses testnet-deployment-build.yml.
   workflow_dispatch:
 
 permissions:

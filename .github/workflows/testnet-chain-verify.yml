@@ -2,11 +2,8 @@ name: Verify CoolBears TON testnet deployment
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/testnet-chain-verify.yml'
-      - 'launch/candidate.json'
+  # Run explicitly AFTER an authorized TESTNET deployment. Building a new
+  # unsigned candidate does not imply that its testnet account is active.
 
 permissions:
   contents: read
@@ -20,7 +17,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f"
+          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "763ad4e4c4e7c230652a5b44d18ef175d1abed4d989cef7b0d0116fb3e7a684f"
           test "$(jq -r '.collectionRevision' launch/candidate.json)" = "v3-glasses-correction-1"
           echo "CORRECTED_CANDIDATE_BINDING_OK"
 

@@ -1,57 +1,30 @@
-name: Build CoolBears testnet deployment package
-
+name: Build exact current unsigned TESTNET package
 on:
   push:
     branches: [main]
-    paths:
-      - 'scripts/build-testnet-deployment.mjs'
-      - '.github/workflows/testnet-deployment-build.yml'
-      - 'contracts/src/**'
-      - 'contracts/mint-policy.json'
-      - 'contracts/TON_REFERENCE.lock'
+    paths: ['launch/**', 'scripts/build-current-testnet-package.mjs', '.github/workflows/testnet-deployment-build.yml']
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Checkout pinned official TON NFT reference
+      - name: Install pinned offline validators
+        run: npm install --no-save --ignore-scripts @ton/core@0.63.1 @ton/sandbox@0.44.0
+      - name: Validate exact package and network boundaries offline
         run: |
-          source contracts/TON_REFERENCE.lock
-          git clone --filter=blob:none https://github.com/${source_repository}.git /tmp/token-contract
-          git -C /tmp/token-contract checkout --detach "$source_commit"
-      - name: Install deterministic build dependencies
-        run: npm install --no-save @ton-community/func-js @ton/core
-      - name: Build deterministic paused testnet StateInit
-        run: node scripts/build-testnet-deployment.mjs
-      - name: Validate deployment package safety gates
-        run: |
-          set -euo pipefail
-          jq -e '.network == "testnet"' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.initialPaused == true' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.nextItemIndex == 0' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.priceNanoTon == 7000000000' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.maxPerTransaction == 50' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.supply == 10000' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.royaltyBps == 700' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.collectionMetadataIpfs == "ipfs://bafkreidhyuzo4lkhtsy2uipzfucvz6hiyeu5zo2zvxtficrlo7wzlyv3ui"' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.preRevealMetadataRootIpfs == "ipfs://bafybeibx4t7s52qghnosicl3fd2t2pjdxs2oij5sez3mri3k5q5y7wdtsm/"' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.stateInitBocBase64 | length > 100' build/testnet-deployment/deployment.json >/dev/null
-          jq -e '.collectionAddressTestnetNonBounceable | length > 40' build/testnet-deployment/deployment.json >/dev/null
-          echo 'CoolBears testnet deployment safety gates: OK'
-          jq -r '"ADDRESS_BOUNCEABLE=" + .collectionAddressTestnetBounceable, "ADDRESS_NON_BOUNCEABLE=" + .collectionAddressTestnetNonBounceable, "ADDRESS_RAW=" + .collectionAddressRaw' build/testnet-deployment/deployment.json
-      - name: Upload unsigned deployment package
-        uses: actions/upload-artifact@v4
+          node scripts/validate-release-state.mjs
+          node scripts/test-final-package.mjs
+          node scripts/build-current-testnet-package.mjs
+      - uses: actions/upload-artifact@v4
         with:
-          name: coolbears-testnet-deployment-unsigned
-          path: build/testnet-deployment/
-          retention-days: 90
-
-# rebuild trigger: 2026-09-14 current verified prereveal root
+          name: current-testnet-unsigned-not-deployed
+          path: build/current-testnet/deployment.json
+          retention-days: 30
