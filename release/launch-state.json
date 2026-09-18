@@ -293,7 +293,22 @@
       "productionHold": true,
       "mainnetTouched": false,
       "transactionsSent": 0
+    },
+    "getgemsFinalMediaProbeLive": {
+      "status": "verified-live-testnet",
+      "checkedAt": "2026-09-18T08:58:05Z",
+      "diagnosticOnly": true,
+      "variant": "static-branding-full-original-gif",
+      "collectionAddressTestnetBounceable": "kQCJMZr97lvrX__EqQSO2wuWU9bhuxfPWKKE9hWMPElWQ9ww",
+      "codeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "nextItemIndex": 0,
+      "paused": true,
+      "collectionUriVerified": true,
+      "tonapiCollectionMetadataComplete": true,
+      "workflowRunId": 35327051734,
+      "productionHold": true,
+      "mainnetTouched": false
     }
   },
-  "note": "Production remains HOLD. A final-layout diagnostic TESTNET probe is published and verified: separate static collection avatar/cover and the original strict-valid 148-frame, 4.95-second prereveal GIF on NFT #0000. Exact Getgems marketplace logo/banner remain separate approved branding assets and are not replaced by these technical probe PNGs."
+  "note": "Production remains HOLD. The final-layout TESTNET probe is live and indexed by TonAPI with static collection avatar/cover and is ready to mint diagnostic #0000 using the original 148-frame, 4.95-second prereveal GIF."
 }
