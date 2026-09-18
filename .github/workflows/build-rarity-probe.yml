@@ -208,26 +208,43 @@ jobs:
 
       - name: Verify generated package and metadata invariants
         run: |
-          set -euo pipefail
-          test "$(jq -r '.diagnosticOnly' testnet/rarity-probe/deployment.json)" = "true"
-          test "$(jq -r '.network' testnet/rarity-probe/deployment.json)" = "testnet"
-          test "$(jq -r '.supply' testnet/rarity-probe/deployment.json)" = "4"
-          test "$(jq -r '.priceNanoTon' testnet/rarity-probe/deployment.json)" = "50000000"
-          test "$(jq -r '.paymentNanoTon' testnet/rarity-probe/deployment.json)" = "100000000"
-          test "$(jq -r '.expectedPercentages|join(",")' testnet/rarity-probe/expected-rarity.json)" = "25,50,75"
-          test "$(jq -r '.expectedRarityOrder|join(",")' testnet/rarity-probe/expected-rarity.json)" = "0000,0001,0002,0003"
-          for i in 0000 0001 0002 0003; do
-            test "$(jq '.attributes|length' testnet/rarity-probe/$i.json)" = "7"
-            test "$(jq -r '.attributes[].trait_type' testnet/rarity-probe/$i.json | sort | uniq | wc -l | tr -d ' ')" = "7"
-          done
           python3 - <<'PY'
+          import json
           from PIL import Image
+
+          dep=json.load(open('testnet/rarity-probe/deployment.json'))
+          exp=json.load(open('testnet/rarity-probe/expected-rarity.json'))
+
+          assert dep['diagnosticOnly'] is True
+          assert dep['network']=='testnet'
+          assert dep['supply']==4
+          assert dep['priceNanoTon']==50_000_000
+          assert dep['paymentNanoTon']==100_000_000
+          assert exp['expectedPercentages']==[25.0,50.0,75.0]
+          assert exp['expectedRarityOrder']==['0000','0001','0002','0003']
+
+          expected_cats={'Background','Body','Clothes','Mouth','Eyes','Head','Ears'}
           for i in range(4):
-              p=f'testnet/rarity-probe/assets/{i:04d}.png'
-              im=Image.open(p); im.load()
-              assert im.format=='PNG' and im.size==(1000,1000)
+              k=f'{i:04d}'
+              meta=json.load(open(f'testnet/rarity-probe/{k}.json'))
+              attrs=meta['attributes']
+              assert len(attrs)==7, (k,len(attrs))
+              cats={a['trait_type'] for a in attrs}
+              assert cats==expected_cats, (k,cats)
+              assert all(isinstance(a['value'],str) and a['value'] for a in attrs)
+              im=Image.open(f'testnet/rarity-probe/assets/{k}.png')
+              im.load()
+              assert im.format=='PNG', (k,im.format)
+              assert im.size==(1000,1000), (k,im.size)
+
+          print('RARITY_METADATA_INVARIANTS_OK')
+          print(json.dumps({
+              'supply':dep['supply'],
+              'priceNanoTon':dep['priceNanoTon'],
+              'percentages':exp['expectedPercentages'],
+              'order':exp['expectedRarityOrder']
+          }))
           PY
-          echo RARITY_METADATA_INVARIANTS_OK
 
       - name: Add rarity probe files to public allow-list
         run: |
