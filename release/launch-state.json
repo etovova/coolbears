@@ -199,7 +199,21 @@
       "publicCheckRunId": 35320613929,
       "transactionsSent": 0,
       "mainnetTouched": false
+    },
+    "getgemsStaticHttpsAbProbeLive": {
+      "status": "verified-live-testnet",
+      "checkedAt": "2026-09-18T07:57:35.375Z",
+      "diagnosticOnly": true,
+      "variant": "static-https",
+      "collectionAddressRaw": "0:1a7c938503454b24ae471422251f771614e612f7f11bdb927985d72f4e748685",
+      "collectionAddressTestnetBounceable": "kQAafJOFA0VLJK5HFCIlH3cWFOYS9_Eb25J5hdcvTnSGhRSc",
+      "codeHash": "4a5dcc56c96ab4bfb1815242b3e696ee1a1663c9f1254c893455d47bb746dc2b",
+      "nextItemIndex": 0,
+      "paused": true,
+      "collectionUriVerified": true,
+      "workflowRunId": 35321930655,
+      "appliesToProductionCandidate": false
     }
   },
-  "note": "Corrected private storage and full TESTNET contract verification passed. Getgems TESTNET metadata sync mutations now return USE_TONAPI and cannot be used for refresh. Independent media audit found the live collection image and cover are byte-identical truncated GIFs, while the NFT prereveal GIF is strictly valid. Production remains HOLD. A separate static-HTTPS/PNG TESTNET A/B probe is published and verified undeployed to isolate Getgems content compatibility before any final package rebuild."
+  "note": "Production remains HOLD. A separate diagnostic static-HTTPS/PNG A/B collection is now live on TON TESTNET with next=0 and paused=true, using the same collection code hash as the corrected candidate. This probe is isolated from production and is being used to test Getgems metadata compatibility."
 }
