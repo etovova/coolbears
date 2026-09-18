@@ -1,0 +1,308 @@
+name: Deep diagnose Getgems TESTNET metadata compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/getgems-deep-diagnostic.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Bind corrected package and require MAINNET HOLD
+        run: |
+          set -euo pipefail
+          mkdir -p build/getgems-deep
+          PACKAGE='241bd1d8331f91361504474d87e745104eee75b99423cca472628d993bc1760f'
+          test "$(sha256sum launch/candidate.json | awk '{print $1}')" = "$PACKAGE"
+          test "$(jq -r '.collectionRevision' launch/candidate.json)" = 'v3-glasses-correction-1'
+          test "$(jq -r '.phase' release/launch-state.json)" = 'hold'
+          test "$(jq -r '.publicMintApproved' release/launch-state.json)" = 'false'
+          test "$(jq -r '.mainnetVerified' release/launch-state.json)" = 'false'
+          echo CORRECTED_HOLD_BINDING_OK
+
+      - name: Verify pinned official TON NFT reference sources
+        run: |
+          set -euo pipefail
+          source contracts/TON_REFERENCE.lock
+          base="https://raw.githubusercontent.com/${source_repository}/${source_commit}/nft"
+          curl -fsSL --retry 5 "$base/nft-collection-editable.fc" -o /tmp/official-collection.fc
+          curl -fsSL --retry 5 "$base/nft-item.fc" -o /tmp/official-item.fc
+          test "$(git hash-object /tmp/official-collection.fc)" = "$nft_collection_editable_sha"
+          test "$(git hash-object /tmp/official-item.fc)" = "$nft_item_sha"
+          grep -Fq 'cell get_nft_content(int index, cell individual_nft_content)' /tmp/official-collection.fc
+          grep -Fq '(int, int, slice, slice, cell) get_nft_data() method_id' /tmp/official-item.fc
+          grep -Fq '.store_uint(1, 8)' /tmp/official-collection.fc
+          echo OFFICIAL_TON_REFERENCE_EXACT_OK
+
+      - name: Install pinned TON readers
+        run: npm install --no-save @ton/ton@16.0.0 @ton/core@0.63.1
+
+      - name: Read and validate every relevant live TESTNET getter
+        env:
+          TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
+        run: |
+          cat > getgems-chain-diagnostic.mjs <<'NODE'
+          import fs from 'node:fs';
+          import {Address,Cell} from '@ton/core';
+          import {TonClient} from '@ton/ton';
+          const p=JSON.parse(fs.readFileSync('launch/candidate.json','utf8'));
+          const client=new TonClient({endpoint:process.env.TONCENTER_ENDPOINT});
+          const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+          async function run(a,m,stack=[]){
+            let last;
+            for(let i=1;i<=10;i++){
+              try{const r=await client.runMethod(a,m,stack);await sleep(1200);return r;}
+              catch(e){last=e;if(e?.response?.status!==429||i===10)throw e;await sleep(i*2000);}
+            }
+            throw last;
+          }
+          const collection=Address.parse(p.collectionAddressRaw);
+          const account=await client.getContractState(collection);
+          if(account.state!=='active'||!account.code)throw Error('COLLECTION_NOT_ACTIVE');
+          const codeHash=Cell.fromBoc(account.code)[0].hash().toString('hex');
+          if(codeHash!==p.collectionCodeHash)throw Error('COLLECTION_CODE_HASH_MISMATCH');
+          await sleep(1200);
+          const cd=(await run(collection,'get_collection_data')).stack;
+          const next=cd.readBigNumber();
+          const collectionCell=cd.readCell();
+          const owner=cd.readAddress();
+          const cs=collectionCell.beginParse();
+          if(cs.loadUint(8)!==1)throw Error('COLLECTION_CONTENT_TAG_NOT_1');
+          const collectionUri=cs.loadStringTail();
+          if(collectionUri!==p.collectionMetadataIpfs)throw Error('COLLECTION_URI_MISMATCH');
+          if(owner.toRawString()!==p.ownerAddressRaw)throw Error('COLLECTION_OWNER_MISMATCH');
+
+          const mint=(await run(collection,'get_mint_state')).stack;
+          const mintNext=mint.readBigNumber(),supply=mint.readBigNumber(),price=mint.readBigNumber(),paused=mint.readBigNumber();
+          if(mintNext!==2n||supply!==10000n||price!==7000000000n||paused!==0n)throw Error('MINT_STATE_UNEXPECTED');
+          const royalty=(await run(collection,'royalty_params')).stack;
+          const rn=royalty.readBigNumber(),rd=royalty.readBigNumber(),ra=royalty.readAddress();
+          if(rn!==7n||rd!==100n||ra.toRawString()!==p.treasuryAddressRaw)throw Error('ROYALTY_MISMATCH');
+
+          const items=[];
+          for(const i of [0,1]){
+            const ar=(await run(collection,'get_nft_address_by_index',[{type:'int',value:BigInt(i)}])).stack;
+            const address=ar.readAddress();
+            const state=await client.getContractState(address);
+            if(state.state!=='active'||!state.code)throw Error('NFT_'+i+'_NOT_ACTIVE');
+            const itemHash=Cell.fromBoc(state.code)[0].hash().toString('hex');
+            if(itemHash!==p.nftItemCodeHash)throw Error('NFT_'+i+'_CODE_HASH_MISMATCH');
+            await sleep(1200);
+            const nd=(await run(address,'get_nft_data')).stack;
+            const initialized=nd.readBigNumber(),index=nd.readBigNumber(),coll=nd.readAddress(),nftOwner=nd.readAddress(),individual=nd.readCell();
+            if(initialized!==-1n||index!==BigInt(i)||coll.toRawString()!==collection.toRawString()||nftOwner.toRawString()!==p.ownerAddressRaw)throw Error('NFT_'+i+'_DATA_MISMATCH');
+            const suffix=individual.beginParse().loadStringTail();
+            if(suffix!==String(i).padStart(4,'0')+'.json')throw Error('NFT_'+i+'_SUFFIX_MISMATCH');
+            const fc=(await run(collection,'get_nft_content',[{type:'int',value:BigInt(i)},{type:'cell',cell:individual}])).stack.readCell();
+            const fslice=fc.beginParse();
+            if(fslice.loadUint(8)!==1)throw Error('NFT_'+i+'_CONTENT_TAG_NOT_1');
+            const uri=fslice.loadStringTail();
+            const expected=p.preRevealMetadataRootIpfs+String(i).padStart(4,'0')+'.json';
+            if(uri!==expected)throw Error('NFT_'+i+'_FULL_URI_MISMATCH');
+            items.push({index:i,addressRaw:address.toRawString(),addressTestnetBounceable:address.toString({testOnly:true,bounceable:true}),addressTestnetNonBounceable:address.toString({testOnly:true,bounceable:false}),ownerRaw:nftOwner.toRawString(),individualSuffix:suffix,fullMetadataUri:uri,itemCodeHash:itemHash});
+          }
+          const report={status:'LIVE_TESTNET_TON_NFT_STANDARD_PATH_OK',collection:{addressRaw:collection.toRawString(),addressTestnetBounceable:collection.toString({testOnly:true,bounceable:true}),addressTestnetNonBounceable:collection.toString({testOnly:true,bounceable:false}),codeHash,collectionUri,ownerRaw:owner.toRawString(),next:Number(next)},mintState:{next:Number(mintNext),supply:Number(supply),priceNanoTon:Number(price),paused:Number(paused)},royalty:{numerator:Number(rn),denominator:Number(rd),addressRaw:ra.toRawString()},items};
+          fs.writeFileSync('build/getgems-deep/chain.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify(report,null,2));
+          NODE
+          node getgems-chain-diagnostic.mjs
+
+      - name: Validate live JSON bytes schema UTF-8 and HTTP behavior through Pinata
+        run: |
+          set -euo pipefail
+          cat > getgems-http-diagnostic.mjs <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('launch/candidate.json','utf8'));
+          const chain=JSON.parse(fs.readFileSync('build/getgems-deep/chain.json','utf8'));
+          const gateways=[
+            ['pinata','https://gateway.pinata.cloud/ipfs/'],
+            ['ipfsio','https://ipfs.io/ipfs/'],
+            ['dweblink','https://dweb.link/ipfs/'],
+            ['w3s','https://w3s.link/ipfs/']
+          ];
+          const toPath=u=>{if(!u.startsWith('ipfs://'))throw Error('NOT_IPFS_URI');return u.slice(7)};
+          const resources={collection:p.collectionMetadataIpfs,nft0000:chain.items[0].fullMetadataUri,nft0001:chain.items[1].fullMetadataUri};
+          const uas=['Mozilla/5.0','curl/8.0','Go-http-client/1.1'];
+          const rows=[];
+          async function get(url,ua){
+            const started=Date.now();
+            try{
+              const r=await fetch(url,{headers:{'User-Agent':ua,'Accept':'application/json,image/*,*/*'},redirect:'follow',signal:AbortSignal.timeout(45000)});
+              const b=Buffer.from(await r.arrayBuffer());
+              return {ok:r.ok,status:r.status,finalUrl:r.url,contentType:r.headers.get('content-type'),contentLength:r.headers.get('content-length'),cacheControl:r.headers.get('cache-control'),etag:r.headers.get('etag'),age:r.headers.get('age'),cors:r.headers.get('access-control-allow-origin'),bytes:b.length,body:b,ms:Date.now()-started};
+            }catch(e){return {ok:false,status:0,error:String(e?.message||e),bytes:0,body:Buffer.alloc(0),ms:Date.now()-started};}
+          }
+          function validateJson(name,b){
+            if(b.length<2)throw Error(name+'_EMPTY');
+            if(b[0]===0xef&&b[1]===0xbb&&b[2]===0xbf)throw Error(name+'_HAS_UTF8_BOM');
+            const s=new TextDecoder('utf-8',{fatal:true}).decode(b);
+            const j=JSON.parse(s);
+            if(typeof j.name!=='string'||!j.name)throw Error(name+'_NAME');
+            if(typeof j.description!=='string'||j.description.length<20)throw Error(name+'_DESCRIPTION');
+            if(typeof j.image!=='string'||!j.image.startsWith('ipfs://'))throw Error(name+'_IMAGE');
+            if(name.startsWith('nft')){
+              if(typeof j.animation_url!=='string'||j.animation_url!==j.image)throw Error(name+'_ANIMATION_URL');
+              if(!Array.isArray(j.attributes)||j.attributes.length<1)throw Error(name+'_ATTRIBUTES');
+            }
+            return j;
+          }
+          let canonical={};
+          for(const [name,uri] of Object.entries(resources)){
+            const path=toPath(uri);
+            for(const [g,base] of gateways){
+              for(const ua of uas){
+                const r=await get(base+path,ua);
+                let jsonValid=false;
+                if(r.ok){try{validateJson(name,r.body);jsonValid=true}catch{}}
+                rows.push({resource:name,gateway:g,userAgent:ua,status:r.status,ok:r.ok,jsonValid,contentType:r.contentType||null,bytes:r.bytes,cacheControl:r.cacheControl||null,etag:r.etag||null,age:r.age||null,cors:r.cors||null,ms:r.ms,error:r.error||null});
+                if(g==='pinata'&&ua==='Mozilla/5.0'){
+                  if(!r.ok)throw Error('PINATA_'+name+'_HTTP_'+r.status);
+                  canonical[name]=validateJson(name,r.body);
+                }
+              }
+            }
+          }
+          if(canonical.nft0000.image!==canonical.nft0001.image)throw Error('PREREVEAL_IMAGE_NOT_SHARED');
+          const mediaUri=canonical.nft0000.animation_url;
+          const media=await get('https://gateway.pinata.cloud/ipfs/'+toPath(mediaUri),'Mozilla/5.0');
+          if(!media.ok)throw Error('PINATA_GIF_HTTP_'+media.status);
+          const sig=media.body.subarray(0,6).toString('ascii');
+          if(!['GIF87a','GIF89a'].includes(sig))throw Error('PREREVEAL_NOT_GIF');
+          const collectionImage=await get('https://gateway.pinata.cloud/ipfs/'+toPath(canonical.collection.image),'Mozilla/5.0');
+          if(!collectionImage.ok||collectionImage.body.length===0)throw Error('COLLECTION_IMAGE_UNAVAILABLE');
+          const report={status:'HTTP_IPFS_SCHEMA_OK',resources:{collection:canonical.collection,nft0000:canonical.nft0000,nft0001:canonical.nft0001},pinataGif:{status:media.status,contentType:media.contentType,bytes:media.bytes,signature:sig,cacheControl:media.cacheControl,cors:media.cors},pinataCollectionImage:{status:collectionImage.status,contentType:collectionImage.contentType,bytes:collectionImage.bytes},gatewayMatrix:rows};
+          fs.writeFileSync('build/getgems-deep/http-ipfs.json',JSON.stringify(report,null,2)+'\n');
+          console.log(JSON.stringify(report,null,2));
+          NODE
+          node getgems-http-diagnostic.mjs
+
+      - name: Inspect exact GIF animation structure
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check 'Pillow==11.3.0'
+          URI=$(jq -r '.resources.nft0000.animation_url' build/getgems-deep/http-ipfs.json)
+          curl -fsSL --retry 5 "https://gateway.pinata.cloud/ipfs/${URI#ipfs://}" -o /tmp/prereveal.gif
+          python3 - <<'PY'
+          from PIL import Image
+          import hashlib,json,os
+          p='/tmp/prereveal.gif'; im=Image.open(p)
+          frames=getattr(im,'n_frames',1); ds=[]
+          for i in range(frames):
+              im.seek(i); ds.append(im.info.get('duration',0))
+          assert frames>1 and im.info.get('loop')==0
+          out={'status':'ANIMATED_GIF_OK','format':im.format,'size':list(im.size),'frames':frames,'loop':im.info.get('loop'),'durationMs':sum(ds),'durations':sorted(set(ds)),'bytes':os.path.getsize(p),'sha256':hashlib.sha256(open(p,'rb').read()).hexdigest()}
+          open('build/getgems-deep/gif.json','w').write(json.dumps(out,indent=2)+'\n')
+          print(json.dumps(out,indent=2))
+          PY
+
+      - name: Ask TonAPI TESTNET how it indexes the same collection and NFTs
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p build/getgems-deep/tonapi
+          COLL=$(jq -r '.collection.addressTestnetBounceable' build/getgems-deep/chain.json)
+          NFT0=$(jq -r '.items[0].addressTestnetBounceable' build/getgems-deep/chain.json)
+          NFT1=$(jq -r '.items[1].addressTestnetBounceable' build/getgems-deep/chain.json)
+          for spec in "collection|https://testnet.tonapi.io/v2/nfts/collections/$COLL" "nft0000|https://testnet.tonapi.io/v2/nfts/$NFT0" "nft0001|https://testnet.tonapi.io/v2/nfts/$NFT1"; do
+            name=${spec%%|*}; url=${spec#*|}
+            code=$(curl -sS -L --connect-timeout 15 --max-time 45 -w '%{http_code}' -o "build/getgems-deep/tonapi/${name}.json" "$url" || true)
+            printf '%s\n' "$code" > "build/getgems-deep/tonapi/${name}.status"
+            echo "TONAPI $name HTTP $code"
+            if [ "$code" = "200" ]; then jq '{address,collection,index,owner,metadata,previews,next_item_index}' "build/getgems-deep/tonapi/${name}.json" || true; fi
+          done
+
+      - name: Inspect Getgems TESTNET page, headers and shipped frontend endpoints
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p build/getgems-deep/getgems/assets
+          COLL=$(jq -r '.collection.addressTestnetBounceable' build/getgems-deep/chain.json)
+          URL="https://testnet.getgems.io/collection/$COLL"
+          echo "$URL" > build/getgems-deep/getgems/collection-url.txt
+          code=$(curl -sS -L --connect-timeout 15 --max-time 60 -D build/getgems-deep/getgems/headers.txt -w '%{http_code}' -o build/getgems-deep/getgems/page.html "$URL" || true)
+          echo "$code" > build/getgems-deep/getgems/status.txt
+          echo "GETGEMS_COLLECTION_HTTP=$code"
+          node - <<'NODE'
+          const fs=require('fs');
+          const html=fs.existsSync('build/getgems-deep/getgems/page.html')?fs.readFileSync('build/getgems-deep/getgems/page.html','utf8'):'';
+          const src=[...html.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(m=>m[1]);
+          fs.writeFileSync('build/getgems-deep/getgems/script-src.json',JSON.stringify(src,null,2));
+          console.log('GETGEMS_SCRIPT_COUNT',src.length);
+          NODE
+          node - <<'NODE'
+          const fs=require('fs');
+          const {execFileSync}=require('child_process');
+          const src=JSON.parse(fs.readFileSync('build/getgems-deep/getgems/script-src.json'));
+          let n=0;
+          for(const s of src.slice(0,40)){
+            try{
+              const u=new URL(s,'https://testnet.getgems.io');
+              if(u.origin!=='https://testnet.getgems.io')continue;
+              const out=`build/getgems-deep/getgems/assets/${String(n++).padStart(2,'0')}.js`;
+              execFileSync('curl',['-fsSL','--connect-timeout','10','--max-time','45',u.href,'-o',out],{stdio:'ignore'});
+            }catch{}
+          }
+          console.log('GETGEMS_ASSETS_DOWNLOADED',n);
+          NODE
+          (grep -RhoE 'https://[^"'"'"' )]+' build/getgems-deep/getgems/page.html build/getgems-deep/getgems/assets 2>/dev/null || true) | sed 's/["'"'"'<>]//g' | sort -u | head -300 > build/getgems-deep/getgems/discovered-urls.txt
+          (grep -RniE 'metadata|refresh|graphql|api\.|tonapi|indexer|ipfs|gateway|collection' build/getgems-deep/getgems/assets 2>/dev/null || true) | head -1000 > build/getgems-deep/getgems/keyword-hits.txt
+          echo '--- discovered hosts ---'
+          cat build/getgems-deep/getgems/discovered-urls.txt || true
+
+      - name: Probe common Getgems read-only API surfaces
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p build/getgems-deep/getgems/probes
+          urls=(
+            'https://api.getgems.io/graphql'
+            'https://testnet.getgems.io/robots.txt'
+            'https://testnet.getgems.io/sitemap.xml'
+          )
+          i=0
+          for url in "${urls[@]}"; do
+            code=$(curl -sS -L --connect-timeout 10 --max-time 30 -w '%{http_code}' -D "build/getgems-deep/getgems/probes/${i}.headers" -o "build/getgems-deep/getgems/probes/${i}.body" "$url" || true)
+            echo "$url HTTP $code" | tee "build/getgems-deep/getgems/probes/${i}.status"
+            i=$((i+1))
+          done
+
+      - name: Summarize diagnosis without changing chain or metadata
+        if: always()
+        run: |
+          node - <<'NODE'
+          const fs=require('fs');
+          const read=p=>{try{return JSON.parse(fs.readFileSync(p,'utf8'))}catch{return null}};
+          const chain=read('build/getgems-deep/chain.json');
+          const http=read('build/getgems-deep/http-ipfs.json');
+          const gif=read('build/getgems-deep/gif.json');
+          const status=p=>{try{return fs.readFileSync(p,'utf8').trim()}catch{return null}};
+          const tonapi={collection:status('build/getgems-deep/tonapi/collection.status'),nft0000:status('build/getgems-deep/tonapi/nft0000.status'),nft0001:status('build/getgems-deep/tonapi/nft0001.status')};
+          const getgems=status('build/getgems-deep/getgems/status.txt');
+          const summary={schema:1,status:'DIAGNOSTIC_COMPLETE',chainStandardPathOk:chain?.status==='LIVE_TESTNET_TON_NFT_STANDARD_PATH_OK',pinataJsonAndSchemaOk:http?.status==='HTTP_IPFS_SCHEMA_OK',gifAnimatedOk:gif?.status==='ANIMATED_GIF_OK',tonapiHttp:tonapi,getgemsPageHttp:getgems,mainnetTouched:false,transactionsSent:0,metadataChanged:false};
+          fs.writeFileSync('build/getgems-deep/summary.json',JSON.stringify(summary,null,2)+'\n');
+          console.log(JSON.stringify(summary,null,2));
+          NODE
+
+      - name: Upload nonsensitive diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: getgems-testnet-deep-diagnostic
+          path: build/getgems-deep/
+          retention-days: 30
+          if-no-files-found: warn
