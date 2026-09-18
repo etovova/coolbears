@@ -4,5 +4,3 @@ private/
 build/
 *.PRIVATE.*
 __pycache__/
-solana-test/sdk.js
-solana-test/sdk.js.LEGAL.txt
