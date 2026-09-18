@@ -19,7 +19,7 @@ body.wallet-open .back-top{display:none!important}
 .hero-visual{padding:18px 14px 38px!important;overflow:hidden!important}
 .hero-card{transform:none!important;width:100%!important;max-width:100%!important;box-shadow:8px 8px 0 #ffd51f!important}
 .burst{right:4px!important;top:-2px!important;transform:rotate(6deg)!important}
-.ton-sticker{left:4px!important;bottom:48px!important}
+.sol-sticker{left:4px!important;bottom:48px!important}
 .speech{right:4px!important;bottom:4px!important;max-width:88%!important}
 .hero h1,.section-copy h2,.reveal h2,.section-heading h2,.faq h2{overflow-wrap:anywhere}
 .stats{grid-template-columns:repeat(2,minmax(0,1fr))!important}

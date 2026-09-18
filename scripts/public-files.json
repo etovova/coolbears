@@ -4,8 +4,6 @@
   "assets/collection/banner.png",
   "assets/collection/gif.gif",
   "assets/collection/logo.png",
-  "assets/coolbears-prereveal-opt.gif",
-  "assets/coolbears-prereveal.gif",
   "assets/nft/hero-main.webp",
   "assets/nft/promo-02.webp",
   "assets/nft/promo-03.webp",
@@ -24,5 +22,7 @@
   "sitemap.xml",
   "style.css",
   "terms.html",
-  "tonconnect-manifest.json"
+  "wallet-core.mjs",
+  "wallet-ui.mjs",
+  "wallet.css"
 ]

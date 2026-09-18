@@ -14,7 +14,7 @@ for (const kind of ['logo', 'banner', 'gif']) {
   if (createHash('sha256').update(data).digest('hex') !== policy.publicAssets[kind].sha256) throw Error(`Changed original ${kind}`);
 }
 const config = await readFile('config.js', 'utf8');
-if (!config.includes('demoMode: true') || !config.includes("mintContractAddress: ''")) throw Error('Sales must remain closed during fresh build');
+if (!config.includes('demoMode: true') || !config.includes("candyMachineAddress: ''")) throw Error('Sales must remain closed during fresh build');
 await rm('public-site', { recursive: true, force: true });
 for (const file of files) {
   if (file.startsWith('/') || file.split('/').includes('..')) throw Error('Invalid public path');

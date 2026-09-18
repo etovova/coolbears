@@ -2,7 +2,15 @@
   "name": "CoolBears #0000 — Hidden Bear",
   "description": "Your CoolBear is hiding. Final artwork, traits and rarity remain hidden until reveal, no earlier than January 1, 2027. Everyone gets a bear. Not everyone gets a legend.",
   "image": "https://coolbears-nfts.com/assets/collection/gif.gif",
-  "content_url": "https://coolbears-nfts.com/assets/collection/gif.gif",
-  "content_type": "image/gif",
-  "external_url": "https://coolbears-nfts.com"
+  "external_url": "https://coolbears-nfts.com",
+  "properties": {
+    "files": [
+      {
+        "uri": "https://coolbears-nfts.com/assets/collection/gif.gif",
+        "type": "image/gif"
+      }
+    ],
+    "category": "image"
+  },
+  "animation_url": "https://coolbears-nfts.com/assets/collection/gif.gif"
 }
