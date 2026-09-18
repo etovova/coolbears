@@ -1,5 +1,10 @@
 # CoolBears Getgems branding checkpoint
 
+Historical checkpoint. For the current approved IPFS branding and verified
+rendering procedure, use `GETGEMS_RENDERING_RUNBOOK.md` and the latest entry
+in `LAUNCH_CHECKPOINT.md`. Later owner-approved package corrections supersede
+the original preparation boundary below.
+
 These are the user-approved marketplace branding assets. They are **not** part of the frozen final NFT CAR/reveal commitment and must not be regenerated, substituted, or used to modify the committed release bundle.
 
 ## Approved banner

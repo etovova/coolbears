@@ -5,11 +5,13 @@ on:
     branches: [main]
     paths:
       - 'metadata/prereveal.json'
+      - 'metadata/collection.json'
       - 'contracts/mint-policy.json'
       - 'config.js'
       - 'scripts/generate-prereveal-metadata.mjs'
       - 'scripts/audit-prereveal-privacy.mjs'
       - 'scripts/prereveal-policy.mjs'
+      - 'scripts/collection-policy.mjs'
       - 'scripts/test-prereveal-policy.mjs'
       - '.github/workflows/prereveal-privacy-audit.yml'
       - 'scripts/verify-pinned-prereveal.mjs'

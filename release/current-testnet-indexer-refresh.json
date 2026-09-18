@@ -1,0 +1,180 @@
+{
+  "packageSha256": "fb79d4914cf058be5f846dde840d9e8fc0f23cf1d603a913fc0ffd2f27375147",
+  "network": "testnet",
+  "checkedAt": "2026-09-18T20:36:54.300546+00:00",
+  "status": "public-files-retrievable-marketplace-rendering-pending",
+  "independentPublicIpfs": [
+    {
+      "name": "collection",
+      "cid": "bafkreie4sz5onduteuzkddtg7vqf2fyntwxhlwuy3hlf366i6en6qrti7u",
+      "http": 200,
+      "checkedAt": "2026-09-18T20:31:37.872852+00:00",
+      "providers": [
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 528572103,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        },
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 324541011,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "items-root",
+      "cid": "bafybeiegnm5qswti42bgpdbj6omhn2ms4pju56oowok5st3pqqiuspzcgq",
+      "http": 200,
+      "checkedAt": "2026-09-18T20:31:38.409602+00:00",
+      "providers": [
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 529710127,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        },
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 320854250,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "0000",
+      "cid": "bafkreigxgn7sgaqaa4tpqxnx5juawvdlpp5ca2p4mofjzjso3i3steuopy",
+      "http": 200,
+      "checkedAt": "2026-09-18T20:31:46.800881+00:00",
+      "providers": [
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 501001618,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        },
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 162861853,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        }
+      ]
+    },
+    {
+      "name": "0001",
+      "cid": "bafkreialosyolv2dwd7wjh3a4de37pkxgekq3d4wmz7xli662k4vkdu77y",
+      "http": 200,
+      "checkedAt": "2026-09-18T20:31:46.893410+00:00",
+      "providers": [
+        {
+          "id": "Qmdv6yNikmUWUWXufLJLRNkv6Y9sY5cmgeX5RVWA4WNMz4",
+          "source": "IPNI",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 490951704,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        },
+        {
+          "id": "12D3KooWEfi62nWC6YSqh8U2PEr7p9PvjDG7QUnAYSRE33s6KLSn",
+          "source": "Amino DHT",
+          "bitswap": {
+            "Enabled": true,
+            "Duration": 329760159,
+            "Found": true,
+            "Responded": true,
+            "Error": ""
+          }
+        }
+      ]
+    }
+  ],
+  "tonapiReindexRequests": [
+    {
+      "name": "collection",
+      "address": "0:d74270933ec9dbd9f23cfc210bdd30be80ab132bf6dbc0f91238fa1eae470079",
+      "http": "000",
+      "curlExit": 28,
+      "response": "",
+      "requestedAt": "2026-09-18T20:31:36.442164+00:00"
+    },
+    {
+      "name": "0000",
+      "address": "EQD-5of7TvHZBEwf1pgxuD7GZABb7WR2hetMc2Bko6Ad8Zt3",
+      "http": "200",
+      "curlExit": 0,
+      "response": "",
+      "requestedAt": "2026-09-18T20:31:39.451056+00:00"
+    },
+    {
+      "name": "0001",
+      "address": "EQDDary7PODFhVXV0xmHdR4XNzwlfwm4OMsEy8RS0l-ZV9IO",
+      "http": "200",
+      "curlExit": 0,
+      "response": "",
+      "requestedAt": "2026-09-18T20:31:49.466688+00:00"
+    },
+    {
+      "name": "collection",
+      "address": "0:d74270933ec9dbd9f23cfc210bdd30be80ab132bf6dbc0f91238fa1eae470079",
+      "http": "200",
+      "curlExit": 0,
+      "response": "",
+      "requestedAt": "2026-09-18T20:33:02.136402+00:00",
+      "retryReason": "Initial request timed out without response"
+    }
+  ],
+  "getgemsRefresh": {
+    "collectionAccepted": true,
+    "itemsAccepted": [
+      0,
+      1
+    ],
+    "response": "Refreshing Metadata / It may take a few minutes",
+    "requestedAt": "2026-09-18T20:33:00Z",
+    "requestedAtApproximate": true
+  },
+  "allThreeReindexRequestsEventuallyAccepted": true,
+  "getgemsUiVerified": false,
+  "internalIndexerCauseEstablished": false,
+  "transactionsSent": 0,
+  "filesRepublished": false,
+  "metadataChanged": false,
+  "currentCandidateChanged": false
+}

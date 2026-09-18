@@ -678,7 +678,13 @@
           "checkedAt": "2026-09-18T20:22:57.179198+00:00",
           "detailsPageUrl": "https://testnet.getgems.io/collection/EQDXQnCTPsnb2fI8_CEL3TC-gKsTK_bbwPkSOPoerkcAeZSj/EQDDary7PODFhVXV0xmHdR4XNzwlfwm4OMsEy8RS0l-ZV9IO"
         }
-      }
+      },
+      "lastReadOnlyCheckedAt": "2026-09-18T20:36:54.300546+00:00",
+      "indexerRefreshReport": "release/current-testnet-indexer-refresh.json",
+      "independentIpfsRetrievalVerified": true,
+      "tonapiCollectionAndBothNftsReindexAccepted": true,
+      "lastRefreshAcceptedAtApproximate": "2026-09-18T20:33:00Z",
+      "latestReadOnlyResult": "Both individual NFT pages still show Metadata Unavailable; GIF rendering not yet confirmed."
     },
     "prerevealOfflineTests": {
       "status": "passed-offline-only",

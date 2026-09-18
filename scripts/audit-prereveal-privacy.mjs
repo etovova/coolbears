@@ -1,11 +1,13 @@
 import fs from 'node:fs';
 import {validateHiddenMetadata} from './prereveal-policy.mjs';
+import {validateCollectionMetadata} from './collection-policy.mjs';
 
 const policy = JSON.parse(fs.readFileSync('contracts/mint-policy.json','utf8'));
 const meta = JSON.parse(fs.readFileSync('metadata/prereveal.json','utf8'));
 const configText = fs.readFileSync('config.js','utf8');
 
 validateHiddenMetadata(meta);
+validateCollectionMetadata(JSON.parse(fs.readFileSync('metadata/collection.json','utf8')));
 if (policy.revealDate !== '2027-01-01') throw new Error('Unexpected reveal date');
 const expectedImage = `ipfs://${policy.preRevealImageCid}`;
 if (meta.image !== expectedImage) throw new Error(`Prereveal image mismatch: ${meta.image}`);
