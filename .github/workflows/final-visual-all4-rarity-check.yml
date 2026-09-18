@@ -28,7 +28,7 @@ jobs:
           TONCENTER_ENDPOINT: https://testnet.toncenter.com/api/v2/jsonRPC
         run: |
           mkdir -p build/final-visual-all4
-          cat > /tmp/check.mjs <<'NODE'
+          cat > check.mjs <<'NODE'
           import fs from 'node:fs';
           import {Address,Cell} from '@ton/core';
           import {TonClient} from '@ton/ton';
@@ -62,7 +62,7 @@ jobs:
           fs.writeFileSync('build/final-visual-all4/onchain.json',JSON.stringify(out,null,2)+'\n');
           console.log(JSON.stringify(out,null,2));
           NODE
-          node /tmp/check.mjs
+          node check.mjs
 
       - name: Reindex TonAPI
         run: |
