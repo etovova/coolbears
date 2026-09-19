@@ -10,6 +10,14 @@ test('Approved price updates quantities and languages while mint stays closed', 
     addEventListener(name, fn) { this.events[name] = fn; }, ...extra
   });
   const elements = Object.fromEntries(['qty', 'total', 'unitPrice', 'mintBtn', 'minted', 'minus', 'plus'].map(id => [id, element()]));
+  const walletWrites = [];
+  elements.walletBtn = new Proxy(element(), {
+    set(target, property, value) {
+      walletWrites.push(property);
+      target[property] = value;
+      return true;
+    }
+  });
   const languages = ['en', 'ru', 'zh'].map(lang => element({ dataset: { lang } }));
   const scope = {
     window: {},
@@ -32,6 +40,18 @@ test('Approved price updates quantities and languages while mint stays closed', 
   assert.equal(elements.unitPrice.textContent, '0.5 SOL');
   assert.equal(elements.total.textContent, '0.5');
   assert.equal(elements.mintBtn.disabled, true);
+
+  // Updating quantity must not rewrite the sticky header's wallet control.
+  walletWrites.length = 0;
+  for (let i = 0; i < 9; i++) elements.plus.events.click();
+  assert.equal(Number(elements.qty.value), 10);
+  assert.equal(elements.total.textContent, '5');
+  elements.minus.events.click();
+  assert.equal(Number(elements.qty.value), 9);
+  assert.equal(elements.total.textContent, '4.5');
+  elements.qty.value = '1';
+  elements.qty.events.input();
+  assert.deepEqual(walletWrites, [], 'plus, minus and typed quantities must not redraw the wallet');
 
   languages[1].events.click();
   assert.equal(elements.unitPrice.textContent, '0,5 SOL');

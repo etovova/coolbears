@@ -130,7 +130,6 @@
     value = Math.max(1, Math.min(max, value));
     qty.value = value;
     total.textContent = formatSol(value * Number(cfg.priceSol));
-    renderConnectionState();
   }
 
   $('#minus')?.addEventListener('click', () => { qty.value = Number(qty.value) - 1; clamp(); });
