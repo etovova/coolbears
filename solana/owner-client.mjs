@@ -1,5 +1,5 @@
 import { generateSigner, publicKey } from '@metaplex-foundation/umi';
-import { base58 } from '@metaplex-foundation/umi/serializers';
+import { sendTracked, canDiscardPending } from './transactions.mjs';
 import { fetchCollection, fetchAsset } from '@metaplex-foundation/mpl-core';
 import { fetchCandyMachine, fetchCandyGuard } from '@metaplex-foundation/mpl-core-candy-machine';
 import { devnetUmi, assertDevnet, collectionBuilder, testMachineBuilder, testItemsBuilder, testMintBuilder, SITE } from './builders.mjs';
@@ -13,28 +13,7 @@ export function ownerClient(provider, state, persist) {
   state.assets ||= [];
   state.transactions ||= [];
   persist(state);
-  async function send(builder, pending, commit) {
-    assertDevnet(umi);
-    if (umi.identity.publicKey !== state.owner) throw new Error('Кошелёк сменился. Подключись заново.');
-    if (!builder.fitsInOneTransaction(umi)) throw new Error('Транзакция превышает размер Solana. Ничего не отправлено.');
-    let signed, blockhash;
-    try { blockhash = await umi.rpc.getLatestBlockhash(); signed = await builder.setBlockhash(blockhash).buildAndSign(umi); }
-    catch (error) { throw error; }
-    commit?.();
-    // Keep the operation and address before broadcasting. A timeout must not
-    // cause a second mint; the Refresh action reads these accounts from chain.
-    state.pending = { ...pending, lastValidBlockHeight: Number(blockhash.lastValidBlockHeight) };
-    persist(state);
-    const signature = await umi.rpc.sendTransaction(signed);
-    state.transactions.push(base58.deserialize(signature)[0]);
-    persist(state);
-    const confirmation = await umi.rpc.confirmTransaction(signature, {
-      strategy: { type: 'blockhash', ...blockhash }, commitment: 'confirmed'
-    });
-    if (confirmation.value.err) throw new Error(`Транзакция отклонена сетью: ${JSON.stringify(confirmation.value.err)}`);
-    delete state.pending;
-    persist(state);
-  }
+  const send = (builder, pending, commit) => sendTracked(umi, builder, state, persist, pending, commit);
   async function read() {
     assertDevnet(umi);
     const balance = await umi.rpc.getBalance(owner);
@@ -62,7 +41,7 @@ export function ownerClient(provider, state, persist) {
       out.assets.push(asset);
     }
     if (state.pending && ((state.pending.kind === 'collection' && out.collection) || (state.pending.kind === 'machine' && out.machine) || (state.pending.kind === 'items' && out.machine?.itemsLoaded === 2) || (state.pending.kind === 'mint' && out.assets.some(a => a.publicKey === state.pending.address)))) { delete state.pending; persist(state); }
-    if (state.pending && await umi.rpc.call('getBlockHeight', [{ commitment: 'confirmed' }]) > state.pending.lastValidBlockHeight) {
+    if (state.pending && await canDiscardPending(umi.rpc, state.pending)) {
       const pending = state.pending;
       if (pending.kind === 'collection' && !out.collection) delete state.collection;
       if (pending.kind === 'machine' && !out.machine) delete state.machine;

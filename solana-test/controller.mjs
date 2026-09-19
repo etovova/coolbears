@@ -24,7 +24,7 @@ function render() {
 async function connectClient() {
   if (!wallet.provider || !wallet.address) throw new Error('Подключи кошелёк.');
   if (!client) {
-    const { ownerClient } = await import('./sdk.js?v=solana-20260918');
+    const { ownerClient } = await import('./sdk.js?v=recovery-20260919');
     client = ownerClient(wallet.provider, state, persist);
   }
 }
