@@ -21,5 +21,5 @@ export function testRevealBuilder(umi, asset, collection) {
   if (umi.identity.publicKey !== TEST_OWNER) throw Error('Подключи владельца тестовой коллекции.');
   const target = testRevealState(asset, collection);
   if (target.revealed) throw Error('Этот тестовый NFT уже раскрыт.');
-  return updateV1(umi, { asset: publicKey(asset.publicKey), collection: publicKey(TEST_COLLECTION), authority: umi.identity, name: target.name, uri: target.uri });
+  return updateV1(umi, { asset: publicKey(asset.publicKey), collection: publicKey(TEST_COLLECTION), authority: umi.identity, newName: target.name, newUri: target.uri });
 }

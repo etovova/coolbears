@@ -1,3 +1,4 @@
+import { getUpdateV1InstructionDataSerializer } from '@metaplex-foundation/mpl-core';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createNoopSigner, publicKey } from '@metaplex-foundation/umi';
@@ -10,6 +11,10 @@ test('Rehearsal only updates name/URI of allowlisted Devnet assets with original
  const builder = testRevealBuilder(umi, asset, collection);
  assert.equal(builder.fitsInOneTransaction(umi), true);
  assert.equal(builder.items.length, 1);
+ const [data] = getUpdateV1InstructionDataSerializer().deserialize(builder.items[0].instruction.data);
+ assert.deepEqual(data.newName, { __option: 'Some', value: 'CoolBears #0000' });
+ assert.deepEqual(data.newUri, { __option: 'Some', value: `${SITE}/metadata/devnet-reveal/0000.json` });
+ assert.deepEqual(data.newUpdateAuthority, { __option: 'None' });
  const target = testRevealState(asset, collection);
  assert.equal(target.revealed, false);
  assert.match(target.uri, /\/devnet-reveal\/0000.json$/);

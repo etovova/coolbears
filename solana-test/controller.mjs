@@ -25,12 +25,12 @@ function render() {
   $('mint').disabled = !ready || current?.machine?.itemsLoaded !== 2 || current.machine.itemsRedeemed >= 2n;
   $('testReveal').disabled = !ready || current?.assets?.length !== 2 || !current.assets.some(a => a.testRevealed === false);
   $('testReveal').textContent = current?.assets?.length === 2 && current.assets.every(a => a.testRevealed) ? 'Тестовое раскрытие завершено' : '5. Раскрыть следующий тестовый NFT';
-  $('mint').textContent = `4. Получить тестовый #${String(current?.machine?.itemsRedeemed || 0).padStart(4, '0')}`;
+  $('mint').textContent = current?.machine?.itemsRedeemed >= 2n ? '4. Оба тестовых NFT выпущены' : `4. Получить тестовый #${String(current?.machine?.itemsRedeemed || 0).padStart(4, '0')}`;
 }
 async function connectClient() {
   if (!wallet.provider || !wallet.address) throw new Error('Подключи кошелёк.');
   if (!client) {
-    const { ownerClient } = await import('./sdk.js?v=test-reveal-20260919');
+    const { ownerClient } = await import('./sdk.js?v=reveal-fields-20260919');
     client = ownerClient(wallet.provider, state, persist);
   }
 }

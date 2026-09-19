@@ -63,6 +63,8 @@ export function ownerClient(provider, state, persist) {
       const asset = current.assets.find(a => !a.testRevealed);
       if (!asset) throw Error('Оба тестовых NFT уже раскрыты.');
       await send(testRevealBuilder(umi, asset, current.collection), { kind: 'testReveal', address: asset.publicKey });
+      const updated = await fetchAsset(umi, asset.publicKey);
+      if (!testRevealState(updated, current.collection).revealed) throw Error('Обновление NFT пока не подтверждено чтением сети. Нажми «Проверить состояние».');
     },
     async createCollection() {
       if (state.collection) throw new Error('Адрес уже сохранён. Нажми «Проверить состояние».');
