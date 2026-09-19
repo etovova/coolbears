@@ -30,5 +30,7 @@
   "solana-test/sdk.js",
   "solana-test/sdk.js.LEGAL.txt",
   "metadata/devnet-reveal/0000.json",
-  "metadata/devnet-reveal/0001.json"
+  "metadata/devnet-reveal/0001.json",
+  "wallet-standard.js",
+  "wallet-standard.js.LEGAL.txt"
 ]

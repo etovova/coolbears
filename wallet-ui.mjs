@@ -1,4 +1,4 @@
-import { getWalletOptions, createWalletSession } from './wallet-core.mjs?v=wallets-20260919';
+import { getWalletOptions, createWalletSession } from './wallet-core.mjs?v=wallet-standard-20260920';
 
 const text = {
   en: { title: 'Connect wallet', open: 'Open in {wallet}', install: 'Install {wallet}', close: 'Close' },
@@ -6,7 +6,7 @@ const text = {
   zh: { title: '连接钱包', open: '在 {wallet} 中打开', install: '安装 {wallet}', close: '关闭' }
 };
 
-export function createWalletUI({ language = () => 'en', onChange = () => {} } = {}) {
+export function createWalletUI({ language = () => 'en', onChange = () => {}, discover = () => import('./wallet-standard.js?v=wallet-standard-20260920') } = {}) {
   const session = createWalletSession(onChange);
   if (!document.querySelector('link[data-wallet-css]')) {
     const style = document.createElement('link');
@@ -15,6 +15,8 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
     style.dataset.walletCss = '';
     document.head.append(style);
   }
+  let standard;
+  const discovery = discover().then(module => { standard = module; return module; }).catch(() => null);
   function choose(wallets, mobile) {
     return new Promise((resolve, reject) => {
       const t = text[language()] || text.en;
@@ -26,21 +28,28 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
       heading.textContent = t.title;
       dialog.append(heading);
       let selected = false;
-      for (const wallet of wallets) {
+      const list = document.createElement('div'); dialog.append(list);
+      function populate(options) {
+      list.replaceChildren();
+      for (const wallet of options) {
         if (!wallet.provider) {
           const link = document.createElement('a');
-          link.textContent = (mobile ? t.open : t.install).replace('{wallet}', wallet.name);
-          link.href = wallet.href;
-          if (!mobile) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
-          dialog.append(link);
+          link.textContent = (wallet.opensApp ? t.open : t.install).replace('{wallet}', wallet.name);
+          const destination = new URL(location.href); destination.searchParams.set('connectWallet', wallet.name);
+          link.href = wallet.opensApp ? getWalletOptions(window, destination.href, true).find(item => item.name === wallet.name).href : wallet.href;
+          if (!wallet.opensApp) { link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+          list.append(link);
           continue;
         }
         const button = document.createElement('button');
         button.type = 'button';
         button.textContent = wallet.name;
         button.onclick = () => { selected = true; dialog.close(); resolve(wallet.provider); };
-        dialog.append(button);
+        list.append(button);
       }
+      }
+      populate(wallets);
+      const stop = standard?.watchStandard(() => populate(getWalletOptions(window, location.href, mobile, standard.standardOptions())));
       const close = document.createElement('button');
       close.type = 'button';
       close.className = 'wallet-close';
@@ -48,6 +57,7 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
       close.onclick = () => dialog.close();
       dialog.append(close);
       dialog.addEventListener('close', () => {
+        stop?.();
         dialog.remove();
         if (!selected) reject(new DOMException('Wallet selection cancelled', 'AbortError'));
       }, { once: true });
@@ -61,7 +71,15 @@ export function createWalletUI({ language = () => 'en', onChange = () => {} } = 
     get provider() { return session.provider; },
     async connect() {
       const mobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      const wallets = getWalletOptions(window, location.href, mobile);
+      await discovery;
+      const wallets = getWalletOptions(window, location.href, mobile, standard?.standardOptions() || []);
+      const page = new URL(location.href);
+      const requested = page.searchParams.get('connectWallet');
+      if (requested) {
+        page.searchParams.delete('connectWallet'); history.replaceState(null, '', page.href);
+        const selected = wallets.find(wallet => wallet.name === requested && wallet.provider);
+        if (selected) return session.connect(selected.provider);
+      }
       const provider = await choose(wallets, mobile);
       return session.connect(provider);
     },

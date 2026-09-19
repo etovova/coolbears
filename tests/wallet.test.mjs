@@ -58,9 +58,9 @@ test('Mobile link opens this exact HTTPS page in Phantom without sharing secrets
 test('Mobile browser offers both wallets and keeps the requested page in each app link', () => {
   const page = 'https://coolbears-nfts.com/solana-test/?lang=ru#section';
   const wallets = getWalletOptions({}, page, true);
-  assert.deepEqual(wallets.map(wallet => wallet.name), ['Phantom', 'Solflare']);
+  assert.deepEqual(wallets.map(wallet => wallet.name), ['Phantom', 'Solflare', 'Backpack']);
   const prefixes = ['https://phantom.app/ul/browse/', 'https://solflare.com/ul/v1/browse/'];
-  for (const [i, wallet] of wallets.entries()) {
+  for (const [i, wallet] of wallets.slice(0, 2).entries()) {
     assert.equal(wallet.provider, undefined);
     assert.ok(wallet.href.startsWith(prefixes[i]));
     assert.equal(decodeURIComponent(wallet.href.slice(prefixes[i].length).split('?')[0]), page.split('#')[0]);
@@ -78,9 +78,9 @@ test('Detecting one wallet preserves the other choice without substituting provi
   assert.ok(solflareOnly[0].href.startsWith('https://phantom.app/ul/browse/'));
   assert.equal(solflareOnly[1].provider, solflare);
   const both = getWalletOptions({ phantom: { solana: phantom }, solflare }, page, false);
-  assert.deepEqual(both.map(wallet => wallet.provider), [phantom, solflare]);
+  assert.deepEqual(both.map(wallet => wallet.provider), [phantom, solflare, undefined]);
 });
 test('Desktop browser without extensions offers the official downloads for both wallets', () => {
   const wallets = getWalletOptions({}, 'https://coolbears-nfts.com/', false);
-  assert.deepEqual(wallets.map(wallet => wallet.href), ['https://phantom.com/download', 'https://www.solflare.com/download/']);
+  assert.deepEqual(wallets.map(wallet => wallet.href), ['https://phantom.com/download', 'https://www.solflare.com/download/', 'https://backpack.app/']);
 });

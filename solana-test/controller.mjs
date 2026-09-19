@@ -1,4 +1,4 @@
-import { createWalletUI } from '../wallet-ui.mjs?v=wallets-20260919';
+import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
 const $ = id => document.getElementById(id);
 const KEY = 'coolbears-solana-devnet-20260918';
 let state, client, current, busy = false;
@@ -121,3 +121,5 @@ $('restore').onchange = () => run(async () => {
 });
 $('restoreTextButton').onclick = () => run(() => restoreText($('restoreText').value));
 render();
+
+if (globalThis.location?.href && new URL(location.href).searchParams.has('connectWallet')) $('connect').onclick();

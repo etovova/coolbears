@@ -168,7 +168,7 @@
     walletBtn?.setAttribute('aria-busy', 'true');
     try {
       if (!wallet) {
-        const { createWalletUI } = await import('./wallet-ui.mjs?v=wallets-20260919');
+        const { createWalletUI } = await import('./wallet-ui.mjs?v=wallet-standard-20260920');
         wallet = createWalletUI({
           language: () => lang,
           onChange: address => {
@@ -202,4 +202,5 @@
   }
 
   apply(lang);
+  if (globalThis.location?.href && new URL(location.href).searchParams.has('connectWallet')) connect();
 })();
