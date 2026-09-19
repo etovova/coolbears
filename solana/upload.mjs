@@ -21,7 +21,7 @@ export function loadedItems(machine, target) {
   if (loaded.size !== machine.itemsLoaded) throw Error('Loaded count mismatch.');
   return loaded;
 }
-function nextBatch(loaded) {
+export function nextBatch(loaded) {
   let start = 0;
   while (loaded.has(start) && start < SUPPLY) start++;
   if (start === SUPPLY) return null;
@@ -29,7 +29,7 @@ function nextBatch(loaded) {
   while (count < 25 && start + count < SUPPLY && !loaded.has(start + count)) count++;
   return {start,count};
 }
-function validatePending(p) {
+export function validatePending(p) {
   if (!Number.isInteger(p.start) || !Number.isInteger(p.count) || p.start < 0 || p.count < 1 || p.count > 25 || p.start+p.count > SUPPLY || !Number.isSafeInteger(p.lastValidBlockHeight) || p.lastValidBlockHeight < 0 || typeof p.signature !== 'string' || base58.serialize(p.signature).length !== 64) throw Error('Invalid pending upload journal.');
 }
 // Store must implement durable read/write and a cross-tab/process exclusive
@@ -46,6 +46,7 @@ export function createUploader(transport, store, target) {
     const saved = await store.read(key);
     let journal = saved ?? {...binding,pending:null,history:[]};
     if (Object.entries(binding).some(([k,v])=>journal[k]!==v) || !Array.isArray(journal.history)) throw Error('Upload journal belongs to another launch.');
+    if (journal.pendingGroup?.length) throw Error('Продолжи групповую загрузку для проверки сохранённых транзакций.');
     if (journal.pending) validatePending(journal.pending);
     const snapshot = await transport.snapshot(journal.pending);
     if (!Number.isSafeInteger(snapshot.slot) || snapshot.slot < 0 || !Number.isSafeInteger(snapshot.height) || snapshot.height < 0) throw Error('Invalid finalized snapshot.');
@@ -87,6 +88,7 @@ export function umiUploadTransport(umi,plan,target) {
   return {
     assertNetwork,
     async snapshot(pending) {
+      const group = Array.isArray(pending) ? pending : pending ? [pending] : [];
       const slot = await umi.rpc.call('getSlot',[{commitment:'finalized'}]);
       if (!Number.isSafeInteger(slot) || slot < 0) throw Error('Invalid finalized slot.');
       // Tie expiry height to this exact finalized slot, even behind a load
@@ -95,10 +97,10 @@ export function umiUploadTransport(umi,plan,target) {
       const height = block?.blockHeight;
       if (!Number.isSafeInteger(height) || height < 0) throw Error('Cannot establish finalized expiry height.');
       let signatureStatus;
-      if (pending) {
-        const r = await umi.rpc.call('getSignatureStatuses',[[pending.signature],{searchTransactionHistory:true}]);
-        if (!Number.isSafeInteger(r?.context?.slot) || r.context.slot < slot || !Array.isArray(r.value) || r.value.length!==1) throw Error('Stale signature status.');
-        signatureStatus=r.value[0];
+      if (group.length) {
+        const r = await umi.rpc.call('getSignatureStatuses',[group.map(p=>p.signature),{searchTransactionHistory:true}]);
+        if (!Number.isSafeInteger(r?.context?.slot) || r.context.slot < slot || !Array.isArray(r.value) || r.value.length!==group.length) throw Error('Stale signature status.');
+        signatureStatus=Array.isArray(pending)?r.value:r.value[0];
       }
       // Read after status so finalized success has a chance to be reflected.
       const machine=await fetchCandyMachine(umi,publicKey(target.machine),{commitment:'finalized',minContextSlot:slot});
@@ -115,6 +117,26 @@ export function umiUploadTransport(umi,plan,target) {
       const height=await umi.rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:latest.context.slot}]);
       if (!Number.isSafeInteger(height) || height<0 || height>latest.value.lastValidBlockHeight) throw Error('Signature expired before upload.');
       return {tx,signature:base58.deserialize(sig)[0],lastValidBlockHeight:latest.value.lastValidBlockHeight,minContextSlot:latest.context.slot};
+    },
+    async prepareGroup(batches,cluster) {
+      if (!Array.isArray(batches) || batches.length<1 || batches.length>10) throw Error('Invalid signing group.');
+      await assertNetwork(cluster);
+      const latest=await umi.rpc.call('getLatestBlockhash',[{commitment:'confirmed'}]);
+      if (!Number.isSafeInteger(latest?.context?.slot) || !latest?.value?.blockhash || !Number.isSafeInteger(latest.value.lastValidBlockHeight)) throw Error('Invalid recent blockhash.');
+      const unsigned=batches.map(b=>launchItemsBuilder(umi,plan,target.machine,b.start,b.count).setBlockhash(latest.value).build(umi));
+      const messages=unsigned.map(tx=>Uint8Array.from(tx.serializedMessage));
+      const signed=batches.length===1?[await umi.identity.signTransaction(unsigned[0])]:await umi.identity.signAllTransactions(unsigned);
+      if (!Array.isArray(signed) || signed.length!==batches.length) throw Error('Кошелёк вернул неполную группу. Ничего не отправлено.');
+      const result=signed.map((tx,i)=>{
+        if (!tx.serializedMessage || tx.serializedMessage.length!==messages[i].length || !messages[i].every((b,j)=>b===tx.serializedMessage[j])) throw Error('Кошелёк изменил транзакцию. Отправка остановлена.');
+        const sig=tx.signatures[0];
+        if (!sig || sig.length!==64 || !sig.some(x=>x!==0)) throw Error('Missing wallet signature.');
+        return {tx,signature:base58.deserialize(sig)[0],lastValidBlockHeight:latest.value.lastValidBlockHeight,minContextSlot:latest.context.slot};
+      });
+      await assertNetwork(cluster);
+      const height=await umi.rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:latest.context.slot}]);
+      if (!Number.isSafeInteger(height) || height<0 || height>latest.value.lastValidBlockHeight) throw Error('Срок подписи истёк до отправки. Прогресс сохранён. Нажми «Продолжить загрузку» для новой подписи.');
+      return result;
     },
     async broadcast(prepared,cluster) {
       await assertNetwork(cluster);

@@ -4,7 +4,9 @@ import { fetchCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
 import { devnetUmi, SITE } from './builders.mjs';
 import { launchPlan, LAUNCH_OWNER, launchCollectionBuilder, launchMachineBuilder } from './launch-plan.mjs';
 import { createUploader, umiUploadTransport, loadedItems } from './upload.mjs';
+import { createGroupUploader } from './upload-group.mjs';
 import { sendTracked, canDiscardPending } from './transactions.mjs';
+export { runUpload } from './upload-runner.mjs';
 export { browserUploadStore } from './browser-upload-store.mjs';
 export const SETUP_KEY='devnet-upload-setup-v1';
 export function uploadClient(provider,store) {
@@ -52,6 +54,13 @@ export function uploadClient(provider,store) {
    const s=load(),current=await read(s);
    if(s.pending||!current.machine)throw Error('Сначала дождись создания машины.');
    return createUploader(transport(s),store,target(s)).step();
+  }),
+  groupSupported:()=>typeof provider.signAllTransactions==='function',
+  groupStep:options=>store.withLock(SETUP_KEY,async()=>{
+   const s=load();
+   if(s.pending||!s.machine||!s.collection)throw Error('Сначала дождись создания машины.');
+   const size=typeof provider.signAllTransactions==='function'?options?.size??10:1;
+   return createGroupUploader(transport(s),store,target(s)).step({...options,size});
   }),
   backup:()=>{const s=load();const key=s.machine?`coolbears-upload-v1:devnet:${s.machine}`:null;return JSON.stringify({setup:s,upload:key?store.read(key):null},null,2);}
  };
