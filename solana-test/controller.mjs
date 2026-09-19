@@ -24,11 +24,12 @@ function render() {
 async function connectClient() {
   if (!wallet.provider || !wallet.address) throw new Error('Подключи кошелёк.');
   if (!client) {
-    const { ownerClient } = await import('./sdk.js?v=recovery-20260919');
+    const { ownerClient } = await import('./sdk.js?v=blockhash-20260919');
     client = ownerClient(wallet.provider, state, persist);
   }
 }
 async function refresh() {
+  current = null;
   await connectClient();
   current = await client.read();
   const lines = [`DEVNET · Баланс: ${current.balance.toLocaleString('ru-RU', { maximumFractionDigits: 9 })} тестовых SOL`];
@@ -45,11 +46,20 @@ async function refresh() {
     a.target = '_blank'; a.rel = 'noopener noreferrer'; li.append(a); $('assets').append(li);
   }
 }
+function transactionMessage(error, pending) {
+  if (error.code === 4001 || error.name === 'AbortError') return 'Действие отменено в кошельке.';
+  if (/blockhash not found|block height exceeded|blockhash.*expired/i.test(error.message || '')) {
+    return pending
+      ? 'Сеть не приняла или не подтвердила транзакцию вовремя. Нажми «Проверить состояние». Если срок ещё не истёк, повтори проверку через минуту. Новая попытка станет доступна после проверки.'
+      : 'Кошелёк не смог проверить свежесть транзакции. Убедись, что в кошельке выбрана Solana Devnet, затем повтори действие и подтверди новую транзакцию.';
+  }
+  return error.message || 'Не удалось выполнить операцию. Нажми «Проверить состояние».';
+}
 async function run(action) {
   if (busy) return;
   busy = true; render(); $('status').textContent = 'Выполняется…';
   try { await action(); $('status').textContent = ''; }
-  catch (error) { $('status').textContent = error.code === 4001 || error.name === 'AbortError' ? 'Действие отменено в кошельке.' : error.message; }
+  catch (error) { $('status').textContent = transactionMessage(error, state.pending); }
   finally { busy = false; render(); }
 }
 $('connect').onclick = () => run(async () => {

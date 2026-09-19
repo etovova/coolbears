@@ -6,10 +6,17 @@ export async function sendTracked(umi, builder, state, persist, pending, commit)
   if (state.pending) throw new Error('Предыдущая операция ещё проверяется. Нажми «Проверить состояние».');
   if (umi.identity.publicKey !== state.owner) throw new Error('Кошелёк сменился. Подключись заново.');
   if (!builder.fitsInOneTransaction(umi)) throw new Error('Транзакция превышает размер Solana. Ничего не отправлено.');
-  const blockhash = await umi.rpc.getLatestBlockhash();
+  const latest = await umi.rpc.call('getLatestBlockhash', [{ commitment: 'confirmed' }]);
+  if (!Number.isSafeInteger(latest?.context?.slot) || !latest?.value?.blockhash || !Number.isSafeInteger(latest.value.lastValidBlockHeight)) throw new Error('Не удалось получить свежие данные Devnet. Попробуй позже.');
+  const blockhash = latest.value;
+  const minContextSlot = latest.context.slot;
   const signed = await builder.setBlockhash(blockhash).buildAndSign(umi);
   const signature = signed.signatures[0];
   if (!signature || signature.length !== 64 || !signature.some(byte => byte !== 0)) throw new Error('Кошелёк не подписал транзакцию.');
+  // A mobile wallet may remain open longer than the transaction lifetime.
+  // Do not save a new account or broadcast an already expired transaction.
+  const height = await umi.rpc.getBlockHeight({ commitment: 'confirmed', minContextSlot });
+  if (BigInt(height) > BigInt(blockhash.lastValidBlockHeight)) throw new Error('Срок транзакции истёк во время подписи. Ничего не отправлено. Нажми эту кнопку ещё раз и подтверди новую транзакцию.');
   const signatureText = base58.deserialize(signature)[0];
   commit?.();
   state.pending = { ...pending, signature: signatureText, lastValidBlockHeight: Number(blockhash.lastValidBlockHeight) };
@@ -18,7 +25,7 @@ export async function sendTracked(umi, builder, state, persist, pending, commit)
   // Persist the signed transaction's identity BEFORE broadcasting. A lost RPC
   // response must not lose the only way to distinguish success from expiry.
   persist(state);
-  await umi.rpc.sendTransaction(signed);
+  await umi.rpc.sendTransaction(signed, { preflightCommitment: 'confirmed', minContextSlot, skipPreflight: false, maxRetries: 3 });
   const confirmation = await umi.rpc.confirmTransaction(signature, {
     strategy: { type: 'blockhash', ...blockhash }, commitment: 'confirmed'
   });

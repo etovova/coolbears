@@ -10,7 +10,15 @@ function fixture() {
   const collection = generateSigner(umi);
   const state = { owner: umi.identity.publicKey, transactions: [] };
   const saved = [];
-  umi.rpc.getLatestBlockhash = async () => ({ blockhash: collection.publicKey, lastValidBlockHeight: 100n });
+  umi.rpc.call = async (method, params) => {
+    assert.equal(method, 'getLatestBlockhash');
+    assert.deepEqual(params, [{ commitment: 'confirmed' }]);
+    return { context: { slot: 200 }, value: { blockhash: collection.publicKey, lastValidBlockHeight: 100 } };
+  };
+  umi.rpc.getBlockHeight = async options => {
+    assert.deepEqual(options, { commitment: 'confirmed', minContextSlot: 200 });
+    return 90n;
+  };
   const submit = () => sendTracked(umi, collectionBuilder(umi, collection), state, s => saved.push(structuredClone(s)),
     { kind: 'collection', address: collection.publicKey }, () => { state.collection = collection.publicKey; });
   return { umi, state, saved, submit };
@@ -18,7 +26,8 @@ function fixture() {
 
 test('A lost broadcast response retains the real signed transaction and blocks another send', async () => {
   const { umi, state, saved, submit } = fixture(); let sends = 0;
-  umi.rpc.sendTransaction = async tx => {
+  umi.rpc.sendTransaction = async (tx, options) => {
+    assert.deepEqual(options, { preflightCommitment: 'confirmed', minContextSlot: 200, skipPreflight: false, maxRetries: 3 });
     sends++;
     assert.equal(saved.at(-1).pending.signature, base58.deserialize(tx.signatures[0])[0]);
     assert.equal(saved.at(-1).collection, state.collection);
@@ -87,4 +96,33 @@ test('Stale, unavailable, malformed or legacy evidence never enables a retry', a
   assert.equal(await canDiscardPending(statusRpc(null), { lastValidBlockHeight: 100 }), false);
   assert.equal(await canDiscardPending(statusRpc(null), { ...pending, lastValidBlockHeight: NaN }), false);
   await assert.rejects(canDiscardPending({ call: async () => { throw Error('RPC unavailable'); } }, pending), /RPC unavailable/);
+});
+
+
+test('Slow mobile signature expires without broadcast or saved account; next attempt signs fresh data', async () => {
+  const { umi, state, saved, submit } = fixture();
+  umi.rpc.getBlockHeight = async () => 101n;
+  let sends = 0;
+  umi.rpc.sendTransaction = async tx => { sends++; return tx.signatures[0]; };
+  await assert.rejects(submit(), /Срок транзакции истёк/);
+  assert.equal(sends, 0); assert.equal(saved.length, 0); assert.equal(state.collection, undefined);
+  umi.rpc.getBlockHeight = async () => 90n;
+  umi.rpc.confirmTransaction = async () => ({ value: { err: null } });
+  await submit(); assert.equal(sends, 1);
+});
+
+test('Blockhash preflight failure preserves signature and blocks immediate duplicate creation', async () => {
+  const { umi, state, submit } = fixture(); let sends = 0;
+  umi.rpc.sendTransaction = async () => { sends++; throw Error('Simulation failed: Blockhash not found'); };
+  await assert.rejects(submit(), /Blockhash not found/);
+  assert.ok(state.pending.signature);
+  await assert.rejects(submit(), /Предыдущая операция/);
+  assert.equal(sends, 1);
+});
+
+test('Malformed blockhash context fails before requesting a wallet signature', async () => {
+  const { umi, submit } = fixture();
+  umi.rpc.call = async () => undefined;
+  umi.identity.signTransaction = async () => { assert.fail('Must not sign'); };
+  await assert.rejects(submit(), /свежие данные/);
 });
