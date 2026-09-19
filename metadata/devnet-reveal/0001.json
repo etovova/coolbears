@@ -1,0 +1,15 @@
+{
+  "name": "CoolBears #0001",
+  "description": "Everyone gets a bear. Not everyone gets a legend.",
+  "image": "https://coolbears-nfts.com/assets/nft/promo-03.webp",
+  "external_url": "https://coolbears-nfts.com",
+  "properties": {
+    "category": "image",
+    "files": [
+      {
+        "uri": "https://coolbears-nfts.com/assets/nft/promo-03.webp",
+        "type": "image/webp"
+      }
+    ]
+  }
+}

@@ -28,5 +28,7 @@
   "solana-test/index.html",
   "solana-test/controller.mjs",
   "solana-test/sdk.js",
-  "solana-test/sdk.js.LEGAL.txt"
+  "solana-test/sdk.js.LEGAL.txt",
+  "metadata/devnet-reveal/0000.json",
+  "metadata/devnet-reveal/0001.json"
 ]

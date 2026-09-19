@@ -1,3 +1,4 @@
+import { TEST_COLLECTION, testRevealState, testRevealBuilder } from './test-reveal.mjs';
 import { generateSigner, publicKey } from '@metaplex-foundation/umi';
 import { sendTracked, canDiscardPending } from './transactions.mjs';
 import { fetchCollection, fetchAsset } from '@metaplex-foundation/mpl-core';
@@ -37,10 +38,13 @@ export function ownerClient(provider, state, persist) {
       const account = await umi.rpc.getAccount(publicKey(address));
       if (!account.exists) continue;
       const asset = await fetchAsset(umi, address);
+      if (state.collection === TEST_COLLECTION) asset.testRevealed = testRevealState(asset, out.collection).revealed;
+      else {
       if (asset.owner !== owner || asset.updateAuthority.type !== 'Collection' || asset.updateAuthority.address !== state.collection || !/^CoolBears #000[01] — Hidden Bear$/.test(asset.name) || asset.uri !== `${SITE}/metadata/hidden/${asset.name.slice(11, 15)}.json`) throw new Error('Параметры NFT не совпадают.');
+      }
       out.assets.push(asset);
     }
-    if (state.pending && ((state.pending.kind === 'collection' && out.collection) || (state.pending.kind === 'machine' && out.machine) || (state.pending.kind === 'items' && out.machine?.itemsLoaded === 2) || (state.pending.kind === 'mint' && out.assets.some(a => a.publicKey === state.pending.address)))) { delete state.pending; persist(state); }
+    if (state.pending && ((state.pending.kind === 'collection' && out.collection) || (state.pending.kind === 'machine' && out.machine) || (state.pending.kind === 'items' && out.machine?.itemsLoaded === 2) || (state.pending.kind === 'mint' && out.assets.some(a => a.publicKey === state.pending.address)) || (state.pending.kind === 'testReveal' && out.assets.some(a => a.publicKey === state.pending.address && a.testRevealed)))) { delete state.pending; persist(state); }
     if (state.pending && await canDiscardPending(umi.rpc, state.pending)) {
       const pending = state.pending;
       if (pending.kind === 'collection' && !out.collection) delete state.collection;
@@ -53,6 +57,13 @@ export function ownerClient(provider, state, persist) {
   }
   return {
     read,
+    async testReveal() {
+      const current = await read();
+      if (state.pending || current.machine?.itemsRedeemed !== 2n || current.assets.length !== 2 || new Set(current.assets.map(a => a.publicKey)).size !== 2) throw Error('Сначала проверь оба выпущенных тестовых NFT.');
+      const asset = current.assets.find(a => !a.testRevealed);
+      if (!asset) throw Error('Оба тестовых NFT уже раскрыты.');
+      await send(testRevealBuilder(umi, asset, current.collection), { kind: 'testReveal', address: asset.publicKey });
+    },
     async createCollection() {
       if (state.collection) throw new Error('Адрес уже сохранён. Нажми «Проверить состояние».');
       const collection = generateSigner(umi);

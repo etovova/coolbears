@@ -23,12 +23,14 @@ function render() {
   $('createMachine').disabled = !ready || !current?.collection || Boolean(state.machine);
   $('loadItems').disabled = !ready || !current?.machine || current.machine.itemsLoaded === 2;
   $('mint').disabled = !ready || current?.machine?.itemsLoaded !== 2 || current.machine.itemsRedeemed >= 2n;
+  $('testReveal').disabled = !ready || current?.assets?.length !== 2 || !current.assets.some(a => a.testRevealed === false);
+  $('testReveal').textContent = current?.assets?.length === 2 && current.assets.every(a => a.testRevealed) ? 'Тестовое раскрытие завершено' : '5. Раскрыть следующий тестовый NFT';
   $('mint').textContent = `4. Получить тестовый #${String(current?.machine?.itemsRedeemed || 0).padStart(4, '0')}`;
 }
 async function connectClient() {
   if (!wallet.provider || !wallet.address) throw new Error('Подключи кошелёк.');
   if (!client) {
-    const { ownerClient } = await import('./sdk.js?v=rpc-height-20260919');
+    const { ownerClient } = await import('./sdk.js?v=test-reveal-20260919');
     client = ownerClient(wallet.provider, state, persist);
   }
 }
@@ -47,7 +49,13 @@ async function refresh() {
     const li = document.createElement('li'), a = document.createElement('a');
     a.textContent = `${asset.name} · владение подтверждено`;
     a.href = `https://explorer.solana.com/address/${asset.publicKey}?cluster=devnet`;
-    a.target = '_blank'; a.rel = 'noopener noreferrer'; li.append(a); $('assets').append(li);
+    a.target = '_blank'; a.rel = 'noopener noreferrer'; li.append(a);
+    if (asset.testRevealed) {
+      const img = document.createElement('img'); img.className = 'gif'; img.alt = `${asset.name} · тестовое изображение`;
+      img.src = asset.name.endsWith('0000') ? '../assets/nft/promo-02.webp' : '../assets/nft/promo-03.webp';
+      const label = document.createElement('p'); label.textContent = 'Тестовое раскрытие подтверждено · используется публичное изображение с сайта'; li.append(label, img);
+    }
+    $('assets').append(li);
   }
 }
 function transactionMessage(error, pending) {
@@ -71,7 +79,7 @@ $('connect').onclick = () => run(async () => {
   else { await wallet.connect(); await refresh(); }
 });
 $('refresh').onclick = () => run(refresh);
-for (const name of ['createCollection', 'createMachine', 'loadItems', 'mint']) {
+for (const name of ['createCollection', 'createMachine', 'loadItems', 'mint', 'testReveal']) {
   $(name).onclick = () => run(async () => { await connectClient(); await client[name](); await refresh(); });
 }
 function showBackup() {

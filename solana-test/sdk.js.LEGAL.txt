@@ -1,5 +1,9 @@
 Bundled license information:
 
+@noble/hashes/utils.js:
+@noble/hashes/esm/utils.js:
+  /*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
+
 ieee754/index.js:
   /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 
@@ -123,10 +127,6 @@ safe-buffer/index.js:
    * @author Peter A. Bigot
    * @see {@link https://github.com/pabigot/buffer-layout|buffer-layout on GitHub}
    */
-
-@noble/hashes/utils.js:
-@noble/hashes/esm/utils.js:
-  /*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) */
 
 crypto-js/ripemd160.js:
   /** @preserve

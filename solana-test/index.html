@@ -7,7 +7,8 @@
 <img class="banner" src="../assets/collection/banner.png" alt="CoolBears" width="2048" height="483"><img class="logo" src="../assets/collection/logo.png" alt="CoolBears" width="1000" height="1000">
 <section class="card"><p class="subtle">В выбранном кошельке включи тестовую сеть Solana Devnet.</p><button id="connect">Подключить кошелёк</button><output id="account">Кошелёк не подключён.</output><p><a href="https://faucet.solana.com/" target="_blank" rel="noopener noreferrer">Получить тестовые SOL</a></p><button id="refresh" disabled>Проверить состояние</button><output id="chain">Коллекция ещё не создана.</output><p id="status" role="status" aria-live="polite"></p></section>
 <section class="card actions"><button id="createCollection" disabled>1. Создать тестовую коллекцию</button><button id="createMachine" disabled>2. Создать тестовый минт</button><button id="loadItems" disabled>3. Подготовить #0000 и #0001</button><button id="mint" disabled>4. Получить тестовый NFT</button></section>
-<section class="card"><h2>CoolBears #0000 — Hidden Bear</h2><img class="gif" src="../assets/collection/gif.gif" width="640" height="640" alt="CoolBears #0000 — Hidden Bear"><p>Your CoolBear is hiding. Final artwork, traits and rarity remain hidden until reveal, no earlier than January 1, 2027. Everyone gets a bear. Not everyone gets a legend.</p><ul id="assets"></ul></section>
+<section class="card"><h2>Тестовое раскрытие</h2><p>Раскрывай по одному: сначала #0000, затем #0001. Для репетиции используются уже опубликованные изображения с сайта. Это не финальные изображения этих номеров.</p><button id="testReveal" disabled>5. Раскрыть следующий тестовый NFT</button></section>
+<section class="card"><h2>Тестовые NFT</h2><img class="gif" src="../assets/collection/gif.gif" width="640" height="640" alt="CoolBears #0000 — Hidden Bear"><p>Your CoolBear is hiding. Final artwork, traits and rarity remain hidden until reveal, no earlier than January 1, 2027. Everyone gets a bear. Not everyone gets a legend.</p><ul id="assets"></ul></section>
 <section class="card">
 <h2>Сохранить адреса и результат</h2>
 <p class="subtle">В браузере кошелька используй копирование текста. Сохрани результат в заметках, чтобы восстановить его позже.</p>
@@ -19,4 +20,4 @@
 <label for="restoreText">Вставь сохранённый текст целиком</label><textarea id="restoreText" rows="8" spellcheck="false"></textarea><button id="restoreTextButton">Восстановить из текста</button>
 <label for="restore">Или выбери файл</label><input type="file" id="restore" accept="application/json,.json"></details>
 <p class="subtle">Сохраняются публичные адреса и номера транзакций. После восстановления состояние проверяется в сети.</p></section>
-<script type="module" src="./controller.mjs?v=backup-text-20260919"></script></main></body></html>
+<script type="module" src="./controller.mjs?v=test-reveal-20260919"></script></main></body></html>
