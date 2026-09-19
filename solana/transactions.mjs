@@ -15,7 +15,8 @@ export async function sendTracked(umi, builder, state, persist, pending, commit)
   if (!signature || signature.length !== 64 || !signature.some(byte => byte !== 0)) throw new Error('Кошелёк не подписал транзакцию.');
   // A mobile wallet may remain open longer than the transaction lifetime.
   // Do not save a new account or broadcast an already expired transaction.
-  const height = await umi.rpc.getBlockHeight({ commitment: 'confirmed', minContextSlot });
+  const height = await umi.rpc.call('getBlockHeight', [{ commitment: 'confirmed', minContextSlot }]);
+  if (!Number.isSafeInteger(height) || height < 0) throw new Error('Не удалось проверить срок транзакции. Ничего не отправлено. Попробуй ещё раз.');
   if (BigInt(height) > BigInt(blockhash.lastValidBlockHeight)) throw new Error('Срок транзакции истёк во время подписи. Ничего не отправлено. Нажми эту кнопку ещё раз и подтверди новую транзакцию.');
   const signatureText = base58.deserialize(signature)[0];
   commit?.();
