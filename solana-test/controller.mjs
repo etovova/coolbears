@@ -14,7 +14,7 @@ function render() {
   $('connect').disabled = busy;
   $('restore').disabled = busy;
   $('refresh').disabled = busy || !wallet.address;
-  const ready = !busy && Boolean(client) && Boolean(current) && !state.pending;
+  const ready = !busy && Boolean(client) && Number.isFinite(current?.balance) && current.balance > 0 && !state.pending;
   $('createCollection').disabled = !ready || Boolean(state.collection);
   $('createMachine').disabled = !ready || !current?.collection || Boolean(state.machine);
   $('loadItems').disabled = !ready || !current?.machine || current.machine.itemsLoaded === 2;
@@ -32,6 +32,7 @@ async function refresh() {
   await connectClient();
   current = await client.read();
   const lines = [`DEVNET · Баланс: ${current.balance.toLocaleString('ru-RU', { maximumFractionDigits: 9 })} тестовых SOL`];
+  if (current.balance === 0) lines.push('Сначала получи тестовые SOL по ссылке выше, затем нажми «Проверить состояние».');
   if (state.collection) lines.push(`Коллекция: ${state.collection}`, current.collection ? 'Коллекция подтверждена · роялти 7%' : 'Создание коллекции не подтверждено.');
   if (state.machine) lines.push(`Минт: ${state.machine}`, `Подготовлено: ${current.machine?.itemsLoaded || 0}/2 · Выпущено: ${current.machine?.itemsRedeemed || 0}/2`);
   if (state.pending) lines.push('Операция ожидает подтверждения. Нажми «Проверить состояние» позже.');
