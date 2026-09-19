@@ -88,7 +88,7 @@
   const backTop = $('#backTop');
 
   function renderConnectionState() {
-    if (walletBtn) { walletBtn.textContent = connected ? walletAddress.slice(0, 4) + '…' + walletAddress.slice(-4) + ' · ' + t('disconnectWallet') : t('connectWallet'); walletBtn.title = walletAddress; }
+    if (walletBtn) { walletBtn.textContent = connected ? walletAddress.slice(0, 4) + '…' + walletAddress.slice(-4) + '\n' + t('disconnectWallet') : t('connectWallet'); walletBtn.title = walletAddress; }
     if (mintBtn) { mintBtn.textContent = t('prelaunchButton'); mintBtn.disabled = true; }
     if ($('#minted')) $('#minted').textContent = t('prelaunchStatus');
   }

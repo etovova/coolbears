@@ -1,3 +1,5 @@
+/* Keep the address above the wallet action, with room for both states. */
+#walletBtn{min-height:54px;white-space:pre-line;overflow-wrap:anywhere;line-height:1.3;text-align:center;text-transform:none}
 @media (max-width:850px){
 html,body{width:100%!important;max-width:100%!important;overflow-x:clip!important;overscroll-behavior-x:none}
 body{position:relative!important}
@@ -9,7 +11,7 @@ img,svg,video,canvas{max-width:100%;height:auto}
 .nav-actions{width:100%!important;max-width:none!important;flex:0 0 100%!important;overflow:visible!important;display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important}
 .lang-switch{display:flex!important;gap:7px!important;align-items:center!important;justify-content:flex-start!important;width:auto!important;flex:0 0 auto!important}
 .bear-lang{width:36px!important;height:36px!important;font-size:18px!important;flex:0 0 36px!important;padding:0!important}
-.nav-actions .btn{flex:0 0 auto!important;min-width:148px!important;max-width:190px!important;white-space:nowrap!important;font-size:12px!important;line-height:1!important;padding:12px 12px!important;text-align:center!important;margin:0!important}
+.nav-actions .btn{flex:0 1 190px!important;min-width:0!important;max-width:190px!important;white-space:pre-line!important;font-size:12px!important;line-height:1.3!important;padding:8px 12px!important;text-align:center!important;margin:0!important}
 body.wallet-open .nav{z-index:1!important}
 body.wallet-open .back-top{display:none!important}
 [data-tc-modal],.tc-modal,.ton-connect-ui__modal{z-index:2147483647!important}
@@ -32,7 +34,7 @@ body.wallet-open .back-top{display:none!important}
 .nav{padding-left:10px!important;padding-right:10px!important}
 .nav-actions{gap:8px!important}
 .bear-lang{width:32px!important;height:32px!important;font-size:16px!important;flex-basis:32px!important}
-.nav-actions .btn{min-width:132px!important;max-width:150px!important;font-size:11px!important;padding:11px 8px!important}
+.nav-actions .btn{flex-basis:176px!important;max-width:176px!important;font-size:11px!important;padding:8px!important}
 }
 .back-top{position:fixed;right:18px;bottom:18px;width:48px;height:48px;border:2px solid #f4f0e5;background:#111;color:#fff;font-size:24px;font-weight:900;display:flex;align-items:center;justify-content:center;z-index:30;opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .2s,transform .2s,visibility .2s;cursor:pointer;box-shadow:4px 4px 0 #ffd51f}
 .back-top.show{opacity:1;visibility:visible;transform:none}
