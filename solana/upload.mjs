@@ -5,7 +5,7 @@ import { LAUNCH_OWNER, SUPPLY, launchItemsBuilder } from './launch-plan.mjs';
 import { configLineSettings, SITE } from './builders.mjs';
 
 export const GENESIS = Object.freeze({
-  devnet: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1',
+  devnet: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
   'mainnet-beta': '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d'
 });
 export function loadedItems(machine, target) {
@@ -81,7 +81,7 @@ export function createUploader(transport, store, target) {
 
 export function umiUploadTransport(umi,plan,target) {
   const assertNetwork = async cluster => {
-    if (!GENESIS[cluster] || await umi.rpc.call('getGenesisHash',[]) !== GENESIS[cluster]) throw Error('Wrong upload network.');
+    if (!GENESIS[cluster] || await umi.rpc.call('getGenesisHash',[]) !== GENESIS[cluster]) throw Error('Сеть RPC не совпадает с выбранной сетью загрузки.');
     if (plan.owner !== LAUNCH_OWNER || umi.identity.publicKey !== LAUNCH_OWNER || umi.payer.publicKey !== LAUNCH_OWNER) throw Error('Upload wallet changed.');
   };
   return {

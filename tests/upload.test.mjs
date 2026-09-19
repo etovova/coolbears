@@ -62,7 +62,8 @@ test('Umi transport checks genesis, wallet changes, expiry and preflight options
  const {launchPlan}=await import('../solana/launch-plan.mjs');
  const {umiUploadTransport,GENESIS}=await import('../solana/upload.mjs');
  const {signerIdentity,publicKey}=await import('@metaplex-foundation/umi');
- let signed=0,expired=false,network=GENESIS.devnet;
+ // Independent value recorded from the Devnet RPC, not the constant under test.
+ let signed=0,expired=false,network='EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
  const signTransaction=async tx=>{signed++;return {...tx,signatures:[new Uint8Array(64).fill(7)]};};
  const signer={publicKey:publicKey(LAUNCH_OWNER),signTransaction,signAllTransactions:async txs=>Promise.all(txs.map(signTransaction)),signMessage:async()=>new Uint8Array(64)};
  const umi=devnetUmi().use(signerIdentity(signer));let sent=0;
@@ -76,6 +77,6 @@ test('Umi transport checks genesis, wallet changes, expiry and preflight options
  const t=umiUploadTransport(umi,launchPlan({treasury:LAUNCH_OWNER,royaltyRecipient:LAUNCH_OWNER}),target);
  const p=await t.prepare({start:0,count:25},'devnet');await t.broadcast(p,'devnet');assert.equal(sent,1);
  expired=true;await assert.rejects(t.prepare({start:25,count:25},'devnet'),/expired/);assert.equal(sent,1);
- network=GENESIS['mainnet-beta'];await assert.rejects(t.prepare({start:25,count:25},'devnet'),/network/);assert.equal(signed,2);
+ network=GENESIS['mainnet-beta'];await assert.rejects(t.prepare({start:25,count:25},'devnet'),/Сеть RPC/);assert.equal(signed,2);
  network=GENESIS.devnet;umi.identity={...signer,publicKey:publicKey(target.collection)};await assert.rejects(t.broadcast(p,'devnet'),/wallet/);assert.equal(sent,1);
 });

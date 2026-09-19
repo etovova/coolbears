@@ -1,5 +1,5 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore } from './sdk.js?v=upload-1';
+import { uploadClient, browserUploadStore } from './sdk.js?v=upload-network-2';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 let client,current,busy=false;
 const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{client=null;current=null;$('account').textContent=address||'Кошелёк не подключён.';render();}});
