@@ -9,7 +9,7 @@
   "royaltyPercent": 7,
   "earliestRevealDate": "2027-01-01",
   "website": "https://coolbears-nfts.com",
-  "owner": null,
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
   "publicAssets": {
     "logo": {
       "sha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
@@ -41,6 +41,6 @@
   },
   "chain": "Solana",
   "standard": "Metaplex Core",
-  "priceSol": null,
+  "priceSol": 0.5,
   "maxPerOrder": 50
 }

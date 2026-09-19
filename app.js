@@ -80,6 +80,7 @@
   const t = k => tr[lang][k] ?? tr.en[k] ?? k;
   const qty = $('#qty');
   const total = $('#total');
+  const unitPrice = $('#unitPrice');
   const walletBtn = $('#walletBtn');
   const mintBtn = $('#mintBtn');
   const note = $('#mintNote');
@@ -106,12 +107,20 @@
     const desc = $('meta[name="description"]');
     if (desc) desc.content = t('pageDescription');
     if (backTop) backTop.setAttribute('aria-label', t('backTop'));
+    if (unitPrice) unitPrice.textContent = formatSol(cfg.priceSol) + ' SOL';
+    clamp();
     renderConnectionState();
   }
 
   $$('.bear-lang').forEach(btn => {
     btn.addEventListener('click', () => apply(btn.dataset.lang));
   });
+
+  function formatSol(value) {
+    return Number(value) > 0
+      ? Number(value).toLocaleString(lang === 'ru' ? 'ru-RU' : lang === 'zh' ? 'zh-CN' : 'en-US', { maximumFractionDigits: 9 })
+      : '—';
+  }
 
   function clamp() {
     if (!qty || !total) return;
@@ -120,7 +129,7 @@
     if (!Number.isFinite(value)) value = 1;
     value = Math.max(1, Math.min(max, value));
     qty.value = value;
-    total.textContent = (Number(cfg.priceSol) > 0 ? (value * Number(cfg.priceSol)).toLocaleString('en-US', { maximumFractionDigits: 9 }) : '—');
+    total.textContent = formatSol(value * Number(cfg.priceSol));
     renderConnectionState();
   }
 
@@ -193,6 +202,5 @@
     updateBackTop();
   }
 
-  clamp();
   apply(lang);
 })();

@@ -1,6 +1,8 @@
 import { readFile, writeFile, mkdir, rm, copyFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { runInNewContext } from 'node:vm';
+import { PublicKey } from '@solana/web3.js';
 
 const files = JSON.parse(await readFile('scripts/public-files.json', 'utf8'));
 const policy = JSON.parse(await readFile('metadata/policy.json', 'utf8'));
@@ -13,8 +15,13 @@ for (const kind of ['logo', 'banner', 'gif']) {
   const data = await readFile(file);
   if (createHash('sha256').update(data).digest('hex') !== policy.publicAssets[kind].sha256) throw Error(`Changed original ${kind}`);
 }
-const config = await readFile('config.js', 'utf8');
-if (!config.includes('demoMode: true') || !config.includes("candyMachineAddress: ''")) throw Error('Sales must remain closed during fresh build');
+const scope = { window: {}, document: { addEventListener() {} } };
+runInNewContext(await readFile('config.js', 'utf8'), scope);
+const config = scope.window.COOLBEARS_CONFIG;
+if (config.demoMode !== true || config.candyMachineAddress !== '' || config.collectionAddress !== '' || config.cluster !== 'devnet') throw Error('Sales must remain closed during fresh build');
+if (config.priceSol !== policy.priceSol || config.ownerAddress !== policy.owner || config.supply !== policy.supply || config.royaltyPercent !== policy.royaltyPercent || config.maxPerOrder !== policy.maxPerOrder) throw Error('Site settings do not match approved policy');
+if (!(config.priceSol > 0) || !Number.isSafeInteger(config.priceSol * 1e9)) throw Error('Invalid price in lamports');
+if (new PublicKey(config.ownerAddress).toBase58() !== config.ownerAddress) throw Error('Invalid owner address');
 await rm('public-site', { recursive: true, force: true });
 for (const file of files) {
   if (file.startsWith('/') || file.split('/').includes('..')) throw Error('Invalid public path');
