@@ -6,13 +6,17 @@ import { launchPlan, LAUNCH_OWNER, launchCollectionBuilder, launchMachineBuilder
 import { createUploader, umiUploadTransport, loadedItems } from './upload.mjs';
 import { createGroupUploader } from './upload-group.mjs';
 import { sendTracked, canDiscardPending } from './transactions.mjs';
+import { pacedRpcFetch } from './rpc-pacing.mjs';
+const paced= pacedRpcFetch();
+export { isRateLimit } from './rpc-pacing.mjs';
 export { runUpload } from './upload-runner.mjs';
 export { browserUploadStore } from './browser-upload-store.mjs';
 export const SETUP_KEY='devnet-upload-setup-v1';
 export function uploadClient(provider,store) {
- const umi=devnetUmi(provider),plan=launchPlan({treasury:LAUNCH_OWNER,royaltyRecipient:LAUNCH_OWNER});
+ const umi=devnetUmi(provider,{fetch:paced.fetch,disableRetryOnRateLimit:true}),plan=launchPlan({treasury:LAUNCH_OWNER,royaltyRecipient:LAUNCH_OWNER});
  const target=s=>({cluster:'devnet',collection:s.collection,machine:s.machine});
- const transport=s=>umiUploadTransport(umi,plan,target(s));
+ const transports=new Map();
+ const transport=s=>{const key=`${s.collection}:${s.machine}`;if(!transports.has(key))transports.set(key,umiUploadTransport(umi,plan,target(s),{networkCacheMs:30000}));return transports.get(key);};
  const load=()=>{const s=store.read(SETUP_KEY)||{owner:LAUNCH_OWNER,cluster:'devnet'};if(s.owner!==LAUNCH_OWNER||s.cluster!=='devnet')throw Error('Чужой журнал.');return s;};
  const save=s=>store.write(SETUP_KEY,s);
  async function read(s) {
@@ -55,6 +59,7 @@ export function uploadClient(provider,store) {
    if(s.pending||!current.machine)throw Error('Сначала дождись создания машины.');
    return createUploader(transport(s),store,target(s)).step();
   }),
+  retryAfter:paced.retryAfter,
   groupSupported:()=>typeof provider.signAllTransactions==='function',
   groupStep:options=>store.withLock(SETUP_KEY,async()=>{
    const s=load();

@@ -1,3 +1,4 @@
+import { isRateLimit } from './rpc-pacing.mjs';
 import { publicKey } from '@metaplex-foundation/umi';
 import { GENESIS, loadedItems, nextBatch, validatePending } from './upload.mjs';
 import { LAUNCH_OWNER, SUPPLY } from './launch-plan.mjs';
@@ -73,7 +74,7 @@ export function createGroupUploader(transport, store, target) {
       // An RPC failure may mean the transaction was accepted. Keep the entire
       // journal and reconcile; never rebuild or resend an unknown transaction.
       try {await transport.broadcast(prepared[i],target.cluster);}
-      catch {return {status:'pending',loaded:loaded.size,remaining:entries.length};}
+      catch(error) {if(isRateLimit(error))throw error;return {status:'pending',loaded:loaded.size,remaining:entries.length};}
     }
     return {status:'submitted',loaded:loaded.size,remaining:entries.length};
   })};
