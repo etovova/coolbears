@@ -13,6 +13,10 @@ const wallet = createWalletUI({ language: () => 'ru', onChange: address => {
 function render() {
   $('connect').disabled = busy;
   $('restore').disabled = busy;
+  $('restoreTextButton').disabled = busy;
+  $('showBackup').disabled = busy;
+  $('copyBackup').disabled = busy;
+  $('download').disabled = busy;
   $('refresh').disabled = busy || !wallet.address;
   const ready = !busy && Boolean(client) && Number.isFinite(current?.balance) && current.balance > 0 && !state.pending;
   $('createCollection').disabled = !ready || Boolean(state.collection);
@@ -70,17 +74,42 @@ $('refresh').onclick = () => run(refresh);
 for (const name of ['createCollection', 'createMachine', 'loadItems', 'mint']) {
   $(name).onclick = () => run(async () => { await connectClient(); await client[name](); await refresh(); });
 }
+function showBackup() {
+  $('backupText').value = JSON.stringify(state, null, 2);
+  $('backupPanel').hidden = false;
+}
+$('showBackup').onclick = showBackup;
+$('copyBackup').onclick = async () => {
+  showBackup();
+  try {
+    await navigator.clipboard.writeText($('backupText').value);
+    $('backupStatus').textContent = 'Результат скопирован. Сохрани его в заметках или вставь в чат.';
+  } catch {
+    $('backupText').focus();
+    $('backupText').select();
+    $('backupText').setSelectionRange(0, $('backupText').value.length);
+    $('backupStatus').textContent = 'Автоматическое копирование недоступно. Нажми и удерживай поле с текстом, выбери «Выделить всё», затем «Копировать».';
+  }
+};
 $('download').onclick = () => {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }));
+  showBackup();
+  const url = URL.createObjectURL(new Blob([$('backupText').value], { type: 'application/json' }));
   const a = document.createElement('a'); a.href = url; a.download = 'CoolBears_Solana_Devnet_Result.json'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
+async function restoreText(text) {
+  if (new TextEncoder().encode(text).length > 100000) throw new Error('Слишком большой результат.');
+  const value = JSON.parse(text);
+  const address = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+  if (!value || value.cluster !== 'devnet' || !address.test(value.owner || '') || (value.collection && !address.test(value.collection)) || (value.machine && !address.test(value.machine)) || !Array.isArray(value.assets) || value.assets.length > 2 || value.assets.some(a => !address.test(a))) throw new Error('Это не результат CoolBears Devnet.');
+  if (wallet.address && value.owner !== wallet.address) throw new Error('Результат относится к другому кошельку.');
+  if (state.pending) throw new Error('Сначала нажми «Проверить состояние»: предыдущая операция ещё не проверена.');
+  persist(value); client = null; current = null;
+  if (wallet.address) await refresh();
+}
 $('restore').onchange = () => run(async () => {
   const file = $('restore').files[0]; if (!file) return;
   if (file.size > 100000) throw new Error('Слишком большой файл.');
-  const value = JSON.parse(await file.text());
-  const address = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-  if (value.cluster !== 'devnet' || !address.test(value.owner || '') || (value.collection && !address.test(value.collection)) || (value.machine && !address.test(value.machine)) || !Array.isArray(value.assets) || value.assets.length > 2 || value.assets.some(a => !address.test(a))) throw new Error('Это не результат CoolBears Devnet.');
-  persist(value); client = null; current = null;
-  if (wallet.address) await refresh();
+  await restoreText(await file.text());
 });
+$('restoreTextButton').onclick = () => run(() => restoreText($('restoreText').value));
 render();
