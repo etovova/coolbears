@@ -6,6 +6,7 @@ import {MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-c
 import {createGroupUploader} from '../solana/upload-group.mjs';
 import {createUploader,umiUploadTransport} from '../solana/upload.mjs';
 import {runUpload} from '../solana/upload-runner.mjs';
+import {pacedRpcFetch} from '../solana/rpc-pacing.mjs';
 import {LAUNCH_OWNER,launchPlan} from '../solana/launch-plan.mjs';
 import {configLineSettings,SITE,devnetUmi} from '../solana/builders.mjs';
 const target={cluster:'devnet',machine:'FLpAJpBG7BDEL5cFZPiouGD6ZWnTWRRBrWxtkjVz9s3R',collection:'BZRkdsRsmeBBGb1JsVUbgZbThWraaMPSRazdiQdioLcy'};
@@ -31,6 +32,15 @@ test('Lost response and reload never resubmit uncertain signatures; expiry requi
  assert.equal((await f.step()).status,'pending');assert.equal(f.journal.history.length,1);assert.equal(f.journal.pendingGroup.length,9);
  f.height=21;f.status={confirmationStatus:'finalized',err:null};assert.equal((await f.step()).status,'pending');
  f.status=null;assert.equal((await f.step()).status,'retry-available');assert.equal(f.groups,1);assert.equal(f.sends.length,1);assert.equal(f.journal.history.filter(p=>p.outcome==='expired').length,9);
+});
+test('RPC timeout during broadcast keeps the whole journal and cannot replay the unknown send',async()=>{
+ const f=fixture();
+ const rpc=pacedRpcFetch({interval:0,timeout:15,fetch:async()=>new Promise(()=>{})});
+ f.transport.broadcast=async p=>{assert.equal(f.journal.pendingGroup.length,10);f.sends.push(p.start);await rpc.fetch('rpc');};
+ assert.equal((await f.step()).status,'pending');
+ const journal=structuredClone(f.journal);
+ assert.equal((await f.step()).status,'pending');
+ assert.equal(f.groups,1);assert.equal(f.sends.length,1);assert.deepEqual(f.journal,journal);
 });
 test('Old single pending migrates and old uploader refuses unresolved group',async()=>{
  const f=fixture(25);f.journal={version:1,...target,owner:LAUNCH_OWNER,history:[],pending:{start:0,count:25,signature:signature(1),lastValidBlockHeight:20}};

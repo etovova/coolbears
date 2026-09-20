@@ -1,48 +1,54 @@
 import { generateSigner, publicKey } from '@metaplex-foundation/umi';
-import { fetchCollection } from '@metaplex-foundation/mpl-core';
-import { fetchCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
+import { safeFetchCollectionV1 } from '@metaplex-foundation/mpl-core';
+import { safeFetchCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
 import { devnetUmi, SITE } from './builders.mjs';
 import { launchPlan, LAUNCH_OWNER, launchCollectionBuilder, launchMachineBuilder } from './launch-plan.mjs';
 import { createUploader, umiUploadTransport, loadedItems } from './upload.mjs';
 import { createGroupUploader } from './upload-group.mjs';
 import { sendTracked, canDiscardPending } from './transactions.mjs';
 import { pacedRpcFetch } from './rpc-pacing.mjs';
-const paced= pacedRpcFetch();
+const defaultPaced=pacedRpcFetch();
 export { isRateLimit } from './rpc-pacing.mjs';
 export { runUpload } from './upload-runner.mjs';
+export { readWithRecovery } from './read-runner.mjs';
 export { browserUploadStore } from './browser-upload-store.mjs';
 export const SETUP_KEY='devnet-upload-setup-v1';
-export function uploadClient(provider,store) {
+export function uploadClient(provider,store,{paced=defaultPaced}={}) {
  const umi=devnetUmi(provider,{fetch:paced.fetch,disableRetryOnRateLimit:true}),plan=launchPlan({treasury:LAUNCH_OWNER,royaltyRecipient:LAUNCH_OWNER});
  const target=s=>({cluster:'devnet',collection:s.collection,machine:s.machine});
  const transports=new Map();
  const transport=s=>{const key=`${s.collection}:${s.machine}`;if(!transports.has(key))transports.set(key,umiUploadTransport(umi,plan,target(s),{networkCacheMs:30000}));return transports.get(key);};
  const load=()=>{const s=store.read(SETUP_KEY)||{owner:LAUNCH_OWNER,cluster:'devnet'};if(s.owner!==LAUNCH_OWNER||s.cluster!=='devnet')throw Error('Чужой журнал.');return s;};
  const save=s=>store.write(SETUP_KEY,s);
- async function read(s) {
-  await transport(s).assertNetwork('devnet');
+ async function read(s,{signal}={}) {
+  signal?.throwIfAborted();
+  const reader=signal?devnetUmi(provider,{fetch:(input,options)=>paced.fetch(input,{...options,signal}),disableRetryOnRateLimit:true}):umi;
+  await (signal?umiUploadTransport(reader,plan,target(s)):transport(s)).assertNetwork('devnet');
   let collection,machine;
-  if(s.collection && await umi.rpc.accountExists(publicKey(s.collection),{commitment:'finalized'})) {
-   collection=await fetchCollection(umi,publicKey(s.collection),{commitment:'finalized'});
+  if(s.collection)collection=await safeFetchCollectionV1(reader,publicKey(s.collection),{commitment:'finalized'});
+  if(collection) {
    if(collection.updateAuthority!==LAUNCH_OWNER||collection.name!=='CoolBears'||collection.uri!==`${SITE}/metadata/collection.json`||collection.royalties?.basisPoints!==700)throw Error('Неожиданная коллекция.');
   }
-  if(s.machine && await umi.rpc.accountExists(publicKey(s.machine),{commitment:'finalized'})) {
-   machine=await fetchCandyMachine(umi,publicKey(s.machine),{commitment:'finalized'});loadedItems(machine,target(s));
-  }
+  if(s.machine)machine=await safeFetchCandyMachine(reader,publicKey(s.machine),{commitment:'finalized'});
+  if(machine)loadedItems(machine,target(s));
+  signal?.throwIfAborted();
   if(s.pending) {
    const found=s.pending.kind==='collection'?collection:s.pending.kind==='machine'?machine:null;
    if(found){delete s.pending;save(s);}
-   else if(await canDiscardPending(umi.rpc,s.pending)) {
+   else if(await canDiscardPending(reader.rpc,s.pending)) {
+    signal?.throwIfAborted();
     if(s.pending.kind==='collection')delete s.collection;
     else if(s.pending.kind==='machine')delete s.machine;
     else throw Error('Неизвестная операция.');
     delete s.pending;save(s);
    }
   }
-  return {state:s,collection:!!collection,machine:!!machine,loaded:machine?.itemsLoaded??0,balance:Number((await umi.rpc.getBalance(publicKey(LAUNCH_OWNER))).basisPoints)/1e9};
+  const balance=Number((await reader.rpc.getBalance(publicKey(LAUNCH_OWNER))).basisPoints)/1e9;
+  signal?.throwIfAborted();
+  return {state:s,collection:!!collection,machine:!!machine,loaded:machine?.itemsLoaded??0,balance};
  }
  return {
-  read:()=>store.withLock(SETUP_KEY,()=>read(load())),
+  read:options=>store.withLock(SETUP_KEY,()=>read(load(),options)),
   create:kind=>store.withLock(SETUP_KEY,async()=>{
    const s=load(),current=await read(s);
    if(s.pending)throw Error('Предыдущая операция ещё проверяется.');

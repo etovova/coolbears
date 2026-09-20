@@ -1,11 +1,13 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=upload-paced-1';
+import { uploadClient, browserUploadStore, runUpload, readWithRecovery, isRateLimit } from './sdk.js?v=upload-recovery-2';
 const $=id=>document.getElementById(id),store=browserUploadStore();
-let client,current,busy=false,uploading=false,stopRequested=false;
-const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{if(uploading)stopRequested=true;client=null;current=null;$('account').textContent=address||'Кошелёк не подключён.';render();}});
+let client,current,checking,busy=false,uploading=false,stopRequested=false;
+const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{checking?.abort();if(uploading)stopRequested=true;client=null;current=null;$('account').textContent=address||'Кошелёк не подключён.';render();}});
 function render(){
  $('connect').disabled=busy;$('connect').textContent=wallet.address?'Отключить кошелёк':'Подключить кошелёк';
  $('refresh').disabled=busy||!wallet.address;
+ $('cancel-check').hidden=!checking;
+ $('cancel-check').disabled=!checking||checking.signal.aborted;
  const ready=!busy&&current&&!current.state.pending;
  $('collection').disabled=!ready||!!current.state.collection;
  $('machine').disabled=!ready||!current.collection||!!current.state.machine;
@@ -17,8 +19,15 @@ function render(){
  $('group-info').textContent=client&&!client.groupSupported()?'Кошелёк поддерживает только одиночную подпись. Проверка отправок всё равно выполняется автоматически.':'Один запрос содержит выбранную группу. Количество подтверждений внутри окна зависит от кошелька.';
 }
 function getClient(){if(!wallet.provider)throw Error('Подключи кошелёк.');return client ||= uploadClient(wallet.provider,store);}
-async function refresh(){current=null;const result=await getClient().read();current=result;$('progress').value=result.loaded;$('state').textContent=`Devnet · ${result.balance} тестовых SOL\nПодготовлено ${result.loaded}/10000\nКоллекция: ${result.state.collection||'не создана'}\nМашина: ${result.state.machine||'не создана'}${result.state.pending?'\nОжидается подтверждение создания.':''}`;$('status').textContent='Состояние обновлено.';}
-async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){current=null;$('status').textContent=isRateLimit(e)?'Сервер Solana ограничил запросы. Подожди минуту и нажми «Проверить состояние». Сохранённые транзакции не потеряны.':e.message;}finally{busy=false;render();}}
+async function refresh(){
+ current=null;checking=new AbortController();$('status').textContent='Проверяю сохранённые записи и транзакции…';render();
+ try{
+  const result=await readWithRecovery(getClient(),{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?`Сервер Solana ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.`:`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.`;}});
+  current=result;$('progress').value=result.loaded;$('state').textContent=`Devnet · ${result.balance} тестовых SOL\nПодготовлено ${result.loaded}/10000\nКоллекция: ${result.state.collection||'не создана'}\nМашина: ${result.state.machine||'не создана'}${result.state.pending?'\nОжидается подтверждение создания.':''}`;$('status').textContent='Состояние обновлено.';
+ }finally{checking=null;render();}
+}
+async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){current=null;$('status').textContent=e.name==='AbortError'?'Проверка отменена. Прогресс сохранён. Можно проверить состояние снова.':isRateLimit(e)?'Сервер Solana всё ещё ограничивает запросы. Проверка остановлена; кнопки доступны. Сохранённые транзакции не потеряны.':e.message;}finally{busy=false;render();}}
+$('cancel-check').onclick=()=>{checking?.abort();render();};
 $('connect').onclick=()=>run(async()=>{if(wallet.address){await wallet.disconnect();return;}await wallet.connect();await refresh();});
 $('refresh').onclick=()=>run(refresh);
 for(const kind of ['collection','machine'])$(kind).onclick=()=>run(async()=>{await getClient().create(kind);await refresh();$('status').textContent='Проверь состояние перед следующим действием.';});
