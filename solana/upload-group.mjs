@@ -9,12 +9,12 @@ export function createGroupUploader(transport, store, target) {
   target=Object.freeze({...target});
   if (!GENESIS[target.cluster]) throw Error('Choose explicit supported cluster.');
   publicKey(target.machine); publicKey(target.collection);
-  const key=`coolbears-upload-v1:${target.cluster}:${target.machine}`;
-  const binding={version:1,cluster:target.cluster,machine:target.machine,collection:target.collection,owner:LAUNCH_OWNER};
-  return {step:({size=10,sign=true,stopped=()=>false,onPhase=()=>{}}={})=>store.withLock(key,async()=>{
+  return {step:({size=10,sign=true,stopped=()=>false,onPhase=()=>{}}={})=>store.withLock(`coolbears-upload-v1:${target.cluster}:${target.machine}`,async()=>{
     if (!Number.isInteger(size)||size<1||size>10) throw Error('Invalid group size.');
     await transport.assertNetwork(target.cluster);
-    let journal=await store.read(key)??{...binding,pending:null,history:[]};
+    const key=`coolbears-upload-v1:${target.cluster}:${target.machine}`;
+    let journal=await store.read(key)??{version:1,cluster:target.cluster,machine:target.machine,collection:target.collection,owner:LAUNCH_OWNER,pending:null,history:[]};
+    const binding={version:1,cluster:target.cluster,machine:target.machine,collection:target.collection,owner:LAUNCH_OWNER};
     if (Object.entries(binding).some(([k,v])=>journal[k]!==v)||!Array.isArray(journal.history)) throw Error('Upload journal belongs to another launch.');
     if (journal.pendingGroup!==undefined && (!Array.isArray(journal.pendingGroup)||journal.pendingGroup.length>10)) throw Error('Invalid pending group.');
     if (journal.pending && journal.pendingGroup?.length) throw Error('Conflicting pending journals.');
@@ -60,7 +60,12 @@ export function createGroupUploader(transport, store, target) {
     const planned=new Set(loaded),batches=[];
     while(batches.length<size){const b=nextBatch(planned);if(!b)break;batches.push(b);for(let i=b.start;i<b.start+b.count;i++)planned.add(i);}
     onPhase({status:'signing',count:batches.length,records:planned.size-loaded.size,loaded:loaded.size});
-    const prepared=await transport.prepareGroup(batches,target.cluster);
+    // The public upload page deliberately sends one batch per click. Use the
+    // original single-transaction Umi signing path here because it is the
+    // compatible Phantom mobile path; this still signs only the planned batch.
+    const prepared=batches.length===1
+      ? [await transport.prepare(batches[0],target.cluster)]
+      : await transport.prepareGroup(batches,target.cluster);
     if(!Array.isArray(prepared)||prepared.length!==batches.length)throw Error('Incomplete signed group.');
     const entries=prepared.map((p,i)=>({...batches[i],signature:p.signature,lastValidBlockHeight:p.lastValidBlockHeight}));
     entries.forEach(validatePending);
