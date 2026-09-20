@@ -63,7 +63,7 @@ export function createGroupUploader(transport, store, target) {
     // The public upload page deliberately sends one batch per click. Use the
     // original single-transaction Umi signing path here because it is the
     // compatible Phantom mobile path; this still signs only the planned batch.
-    const prepared=batches.length===1
+    const prepared=batches.length===1 && typeof transport.prepare==='function'
       ? [await transport.prepare(batches[0],target.cluster)]
       : await transport.prepareGroup(batches,target.cluster);
     if(!Array.isArray(prepared)||prepared.length!==batches.length)throw Error('Incomplete signed group.');
