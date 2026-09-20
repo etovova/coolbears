@@ -144,7 +144,7 @@ test('Real Umi web3 RPC adapter supports the full send path without invented met
     } else throw Error(`Unexpected RPC ${method}`);
     return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
-  umi = createUmi('https://api.devnet.solana.com', { commitment: 'confirmed', fetch }).use(mplCore());
+  umi = createUmi('https://devnet.rpcpool.com', { commitment: 'confirmed', fetch }).use(mplCore());
   umi.use(signerIdentity(generateSigner(umi))); collection = generateSigner(umi);
   assert.equal(typeof umi.rpc.getBlockHeight, 'undefined');
   // Only confirmation's websocket wait is stubbed; RPC encoding/transport stays real.
