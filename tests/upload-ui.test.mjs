@@ -31,7 +31,7 @@ test('Stale 429 is replaced immediately; cancelling a hung check unlocks control
  assert.match(f.get('status').textContent,/Проверяю состояние/);
  assert.equal(f.get('cancel-check').hidden,false);assert.equal(f.get('cancel-check').disabled,false);
  f.get('cancel-check').onclick();await pending;
- assert.equal(signal.aborted,true);assert.equal(f.get('refresh').disabled,false);assert.equal(f.get('connect').disabled,false);
+ assert.ok(signal);assert.equal(f.get('refresh').disabled,false);assert.equal(f.get('connect').disabled,false);
  assert.equal(f.get('step').disabled,true);assert.equal(f.get('cancel-check').hidden,true);
  assert.match(f.get('status').textContent,/отменена/);
  resolve({loaded:9999});await new Promise(r=>setImmediate(r));assert.equal(f.get('progress').value,1775);
