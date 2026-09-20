@@ -44,7 +44,7 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
   if(collection) {
    if(collection.updateAuthority!==LAUNCH_OWNER||collection.name!=='CoolBears'||collection.uri!==`${SITE}/metadata/collection.json`||collection.royalties?.basisPoints!==700)throw Error('Неожиданная коллекция.');
   }
-  if(s.machine)machine=await safeFetchCandyMachine(reader,publicKey(s.machine),{commitment:'finalized'});
+  if(s.machine)machine=await safeFetchCandyMachine(reader,publicKey(s.machine),{commitment:'confirmed'});
   if(machine)loadedItems(machine,target(s));
   signal?.throwIfAborted();
   if(s.pending) {
