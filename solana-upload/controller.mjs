@@ -2,7 +2,7 @@ import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
 import { uploadClient, browserUploadStore, runUpload, readWithRecovery, isRateLimit } from './sdk.js?v=upload-rpc-3';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 const CACHE_KEY='devnet-upload-last-confirmed-v1';
-let client,current,checking,busy=false,uploading=false,stopRequested=false,activeReadAbort=()=>{};
+let client,current,checking,busy=false,uploading=false,stopRequested=false;
 const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{checking?.abort();if(uploading)stopRequested=true;client=null;current=null;$('account').textContent=address||'Кошелёк не подключён.';render();}});
 function render(){
  $('connect').disabled=busy;$('connect').textContent=wallet.address?'Отключить кошелёк':'Подключить кошелёк';
@@ -46,20 +46,7 @@ async function refresh(){
  $('status').textContent=current?'Последний подтверждённый счётчик сохранён. Проверяю обновление…':'Проверяю сохранённые записи и транзакции…';
  render();
  try{
-  const active=getClient();
-  const bridgeClient={
-   retryAfter:active.retryAfter,
-   read:options=>{
-    const bridge=new AbortController(),source=options?.signal;
-    const abort=()=>bridge.abort(source?.reason||checking.signal.reason);
-    activeReadAbort=abort;
-    checking.signal.addEventListener('abort',abort,{once:true});
-    source?.addEventListener('abort',abort,{once:true});
-    const result=active.read({...options,signal:bridge.signal});
-    return Promise.resolve(result).finally(()=>{checking.signal.removeEventListener('abort',abort);source?.removeEventListener('abort',abort);if(activeReadAbort===abort)activeReadAbort=()=>{};});
-   }
-  };
-  const result=await readWithRecovery(bridgeClient,{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?`Сервер Devnet RPC ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.`:`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.`;}});
+  const result=await readWithRecovery(getClient(),{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?`Сервер Devnet RPC ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.`:`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.`;}});
   current={...result,stale:false};
   saveCached(result);
   renderState(current,false);
@@ -70,7 +57,7 @@ async function refresh(){
  }finally{checking=null;render();}
 }
 async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){if(current){current.stale=true;renderState(current,true);}$('status').textContent=e.name==='AbortError'?'Проверка отменена. Последний счётчик сохранён. Можно проверить состояние снова.':isRateLimit(e)?'Devnet RPC всё ещё ограничивает запросы. Проверка остановлена; кнопки доступны. Сохранённые транзакции не потеряны.':e.message;}finally{busy=false;render();}}
-$('cancel-check').onclick=()=>{checking?.abort();activeReadAbort();render();};
+$('cancel-check').onclick=()=>{checking?.abort();render();};
 $('connect').onclick=()=>run(async()=>{if(wallet.address){await wallet.disconnect();return;}await wallet.connect();await refresh();});
 $('refresh').onclick=()=>run(refresh);
 for(const kind of ['collection','machine'])$(kind).onclick=()=>run(async()=>{await getClient().create(kind);await refresh();$('status').textContent='Проверь состояние перед следующим действием.';});
