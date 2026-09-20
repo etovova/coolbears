@@ -55,7 +55,7 @@ test('Storage failure, cancellation, malformed and partially applied groups prev
  f.journal.pendingGroup[1].start=1775;await assert.rejects(f.step(),/Overlapping/);
 });
 test('Manual runner reconciles one 25-record group per explicit button press',async()=>{
- const f=fixture(9975);
+ const f=fixture(9975);f.expectedSize=1;
  const first=await runUpload({groupStep:f.step},{size:1});
  assert.equal(first.status,'submitted');assert.equal(f.sends.length,1);assert.equal(f.groups,1);
  const second=await runUpload({groupStep:f.step},{size:1});
@@ -78,7 +78,7 @@ test('Real Umi group builder calls signAll once, rejects changed messages and ex
  mode='ok';height=21;await assert.rejects(t.prepareGroup(batches,'devnet'),/истёк/);
 });
 test('Manual runner sends only one group per invocation without duplicates',async()=>{
- const f=fixture();
+ const f=fixture();f.expectedSize=1;
  const r=await runUpload({groupStep:f.step},{size:1});
  assert.equal(r.status,'submitted');assert.equal(f.groups,1);assert.equal(f.sends.length,1);assert.equal(f.sends[0],1775);
  assert.equal(f.journal.pendingGroup.length,1);assert.equal(f.journal.pendingGroup[0].count,25);
