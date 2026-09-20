@@ -5,6 +5,7 @@ import { mplCore, createCollection } from '@metaplex-foundation/mpl-core';
 import { mplCandyMachine, create, addConfigLines, mintV1 } from '@metaplex-foundation/mpl-core-candy-machine';
 
 export const DEVNET_RPC = 'https://devnet.rpcpool.com';
+export const DEVNET_READ_FALLBACKS = Object.freeze(['https://api.devnet.solana.com']);
 export const SITE = 'https://coolbears-nfts.com';
 export const TEST_SUPPLY = 2;
 export const configLineSettings = {
