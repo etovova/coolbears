@@ -30,4 +30,6 @@ test('Runner performs exactly one manual group without waiting or retrying',asyn
 test('Published page contains no automatic group controls',async()=>{
  const html=await readFile('solana-upload/index.html','utf8');
  assert.doesNotMatch(html,/continuous|group-size|Остановить загрузку|до 125|до 250/);
+ assert.doesNotMatch(html,/id="collection"|id="machine"/);
+ assert.match(html,/solana-test/);
 });
