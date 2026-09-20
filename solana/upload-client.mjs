@@ -1,13 +1,13 @@
 import { publicKey } from '@metaplex-foundation/umi';
 import { safeFetchCollectionV1 } from '@metaplex-foundation/mpl-core';
 import { safeFetchCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
-import { devnetUmi, SITE } from './builders.mjs';
+import { devnetUmi, SITE, DEVNET_READ_FALLBACKS } from './builders.mjs';
 import { launchPlan, LAUNCH_OWNER } from './launch-plan.mjs';
 import { umiUploadTransport, loadedItems } from './upload.mjs';
 import { createGroupUploader } from './upload-group.mjs';
 import { canDiscardPending } from './transactions.mjs';
 import { pacedRpcFetch } from './rpc-pacing.mjs';
-const defaultPaced=pacedRpcFetch();
+const defaultPaced=pacedRpcFetch({fallbackEndpoints:DEVNET_READ_FALLBACKS});
 export { isRateLimit } from './rpc-pacing.mjs';
 export { runUpload } from './upload-runner.mjs';
 export { browserUploadStore } from './browser-upload-store.mjs';
