@@ -11,6 +11,26 @@ test('RPC requests are serialized and spaced; HTTP429 is not replayed and Retry-
  await Promise.all([p.fetch('a'),p.fetch('b'),p.fetch('c')]);
  assert.deepEqual(starts,[0,1500,46500]);assert.equal(p.retryAfter(),0);
 });
+test('Read-only RPC 429 uses a fallback endpoint but sendTransaction is never replayed',async()=>{
+ let readUrls=[];
+ const read=pacedRpcFetch({interval:0,fallbackEndpoints:['backup'],fetch:async(url)=>{
+  readUrls.push(url);
+  return new Response(url==='primary'?'limited':'ok',{status:url==='primary'?429:200});
+ }});
+ const response=await read.fetch('primary',{body:JSON.stringify({method:'getSlot'})});
+ assert.equal(response.status,200);
+ assert.deepEqual(readUrls,['primary','backup']);
+
+ let sendUrls=[];
+ const send=pacedRpcFetch({interval:0,fallbackEndpoints:['backup'],fetch:async(url)=>{
+  sendUrls.push(url);
+  return new Response('limited',{status:429});
+ }});
+ const sent=await send.fetch('primary',{body:JSON.stringify({method:'sendTransaction'})});
+ assert.equal(sent.status,429);
+ assert.deepEqual(sendUrls,['primary']);
+});
+
 test('RPC handles date Retry-After and default 30 second cooldown',async()=>{
  for(const header of [null,'nonsense',new Date(90000).toUTCString()]){
   let clock=0;const p=pacedRpcFetch({now:()=>clock,sleep:async ms=>{clock+=ms;},fetch:async()=>({status:429,headers:{get:()=>header}})});
