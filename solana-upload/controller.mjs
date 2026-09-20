@@ -1,5 +1,5 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=upload-manual-8';
+import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=upload-manual-9';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 let client,current,busy=false;
 const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{client=null;current=null;$('account').textContent=address||'Кошелёк не подключён.';render();}});
@@ -54,4 +54,4 @@ $('step').onclick=()=>run(async()=>{
 $('backup').onclick=()=>run(async()=>{$('text').hidden=false;$('text').value=getClient().backup();$('text').select();});
 render();if(new URL(location.href).searchParams.has('connectWallet'))run(async()=>{await wallet.connect();await refresh();});
 
-// Build marker: upload-manual-8 RPC fallback is included in the generated SDK.
+// Build marker: upload-manual-9 RPC fallback is included in the generated SDK.
