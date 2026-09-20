@@ -18,14 +18,6 @@ function render() {
   $('copyBackup').disabled = busy;
   $('download').disabled = busy;
   $('refresh').disabled = busy || !wallet.address;
-  const ready = !busy && Boolean(client) && Number.isFinite(current?.balance) && current.balance > 0 && !state.pending;
-  $('createCollection').disabled = !ready || Boolean(state.collection);
-  $('createMachine').disabled = !ready || !current?.collection || Boolean(state.machine);
-  $('loadItems').disabled = !ready || !current?.machine || current.machine.itemsLoaded === 2;
-  $('mint').disabled = !ready || current?.machine?.itemsLoaded !== 2 || current.machine.itemsRedeemed >= 2n;
-  $('testReveal').disabled = !ready || current?.assets?.length !== 2 || !current.assets.some(a => a.testRevealed === false);
-  $('testReveal').textContent = current?.assets?.length === 2 && current.assets.every(a => a.testRevealed) ? 'Тестовое раскрытие завершено' : '5. Раскрыть следующий тестовый NFT';
-  $('mint').textContent = current?.machine?.itemsRedeemed >= 2n ? '4. Оба тестовых NFT выпущены' : `4. Получить тестовый #${String(current?.machine?.itemsRedeemed || 0).padStart(4, '0')}`;
 }
 async function connectClient() {
   if (!wallet.provider || !wallet.address) throw new Error('Подключи кошелёк.');
@@ -79,9 +71,6 @@ $('connect').onclick = () => run(async () => {
   else { await wallet.connect(); await refresh(); }
 });
 $('refresh').onclick = () => run(refresh);
-for (const name of ['createCollection', 'createMachine', 'loadItems', 'mint', 'testReveal']) {
-  $(name).onclick = () => run(async () => { await connectClient(); await client[name](); await refresh(); });
-}
 function showBackup() {
   $('backupText').value = JSON.stringify(state, null, 2);
   $('backupPanel').hidden = false;
