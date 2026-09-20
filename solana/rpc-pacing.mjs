@@ -18,7 +18,7 @@ export function rpcDelay(ms,signal) {
   if(signal?.aborted)abort();else signal?.addEventListener('abort',abort,{once:true});
  });
 }
-export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),interval=1500,timeout=15000,now=Date.now,sleep=rpcDelay}={}) {
+export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),interval=1500,timeout=15000,now=Date.now,sleep=rpcDelay,fallbackEndpoints=[]}={}) {
  let tail=Promise.resolve(),next=0,cooldown=0;
  const run=async(input,options={})=>{
   const signal=options.signal;
@@ -32,8 +32,19 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
   const timer=setTimeout(()=>request.abort(new DOMException('Сервер Solana не ответил за 15 секунд. Сохранённые транзакции не потеряны. Проверь состояние ещё раз.','TimeoutError')),timeout);
   try {
    return await abortable((async()=>{
-    const response=await fetcher(input,{...options,signal:request.signal});
-    request.signal.throwIfAborted();
+    let payload;
+    try { payload=typeof options.body==='string'?JSON.parse(options.body):null; } catch {}
+    const methods=Array.isArray(payload)?payload.map(item=>item?.method):[payload?.method];
+    const sends=methods.some(method=>/send(?:Transaction|RawTransaction)/i.test(String(method??'')));
+    const endpoints=!sends&&fallbackEndpoints.length
+      ? [input,...fallbackEndpoints.filter(endpoint=>endpoint&&endpoint!==input)]
+      : [input];
+    let response;
+    for(const endpoint of endpoints){
+     response=await fetcher(endpoint,{...options,signal:request.signal});
+     request.signal.throwIfAborted();
+     if(response.status!==429||endpoint===endpoints[endpoints.length-1])break;
+    }
     if(response.status===429){
      const header=response.headers?.get('retry-after');
      const seconds=header!==null&&header!==undefined&&header.trim()!==''?Number(header):NaN;
