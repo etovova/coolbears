@@ -54,17 +54,17 @@ test('Storage failure, cancellation, malformed and partially applied groups prev
  await assert.rejects(f.step(),/Partial/);assert.equal(f.sends.length,sent);
  f.journal.pendingGroup[1].start=1775;await assert.rejects(f.step(),/Overlapping/);
 });
-test('Final partial group completes, runner automatically reconciles and does not sign after failure',async()=>{
- const f=fixture(9950);f.expectedSize=2;let sleeps=0;
- const result=await runUpload({groupStep:f.step},{sleep:async()=>{sleeps++;}});
- assert.equal(result.status,'complete');assert.equal(f.sends.length,2);assert.equal(f.groups,1);assert.equal(sleeps,1);
- const flags=[];const responses=['ready','submitted','pending','retry-available'];
- const stopped=await runUpload({groupStep:async o=>{flags.push(o.sign);return {status:responses.shift()};}},{sleep:async()=>{}});
- assert.equal(stopped.status,'retry-available');assert.deepEqual(flags,[false,true,false,false]);
+test('Manual runner reconciles one 25-record group per explicit button press',async()=>{
+ const f=fixture(9975);
+ const first=await runUpload({groupStep:f.step},{size:1});
+ assert.equal(first.status,'submitted');assert.equal(f.sends.length,1);assert.equal(f.groups,1);
+ const second=await runUpload({groupStep:f.step},{size:1});
+ assert.equal(second.status,'complete');assert.equal(f.sends.length,1);assert.equal(f.groups,1);assert.equal(f.machine.itemsLoaded,10000);
 });
-test('Runner stops after current action and bounds unknown-result polling',async()=>{
- let stop=false,calls=0;await runUpload({groupStep:async()=>{calls++;stop=true;return {status:'verified'};}},{stopped:()=>stop});assert.equal(calls,1);
- calls=0;const r=await runUpload({groupStep:async()=>{calls++;return {status:'pending'};}},{sleep:async()=>{}});assert.equal(r.status,'waiting');assert.equal(calls,60);
+test('Runner never waits, retries, or signs a second group automatically',async()=>{
+ let calls=0,slept=0;
+ const pending=await runUpload({groupStep:async options=>{calls++;assert.equal(options.sign,true);return {status:'pending',loaded:1775};}},{size:1,sleep:async ms=>{slept+=ms;}});
+ assert.equal(pending.status,'pending');assert.equal(calls,1);assert.equal(slept,0);
 });
 test('Real Umi group builder calls signAll once, rejects changed messages and expired signatures',async()=>{
  let calls=0,mode='ok',height=10;
@@ -77,13 +77,11 @@ test('Real Umi group builder calls signAll once, rejects changed messages and ex
  mode='changed';await assert.rejects(t.prepareGroup(batches,'devnet'),/изменил/);
  mode='ok';height=21;await assert.rejects(t.prepareGroup(batches,'devnet'),/истёк/);
 });
-test('Full remaining rehearsal reaches 10000 with 33 group-sign requests, no duplicate records',async()=>{
- const f=fixture();f.expectedSize=10;
- const original=f.transport.prepareGroup;
- f.transport.prepareGroup=async b=>{f.expectedSize=b.length;return original(b);};
- const r=await runUpload({groupStep:f.step},{sleep:async()=>{}});
- assert.equal(r.status,'complete');assert.equal(f.groups,33);assert.equal(f.sends.length,329);assert.equal(new Set(f.machine.items.map(x=>x.index)).size,10000);
- assert.equal(f.journal.pendingGroup.length,0);assert.equal(f.journal.history.length,329);
+test('Manual runner sends only one group per invocation without duplicates',async()=>{
+ const f=fixture();
+ const r=await runUpload({groupStep:f.step},{size:1});
+ assert.equal(r.status,'submitted');assert.equal(f.groups,1);assert.equal(f.sends.length,1);assert.equal(f.sends[0],1775);
+ assert.equal(f.journal.pendingGroup.length,1);assert.equal(f.journal.pendingGroup[0].count,25);
 });
 test('Wallet rejection and stop while signing never broadcast or create pending entries',async()=>{
  const f=fixture();f.transport.prepareGroup=async()=>{throw Error('User rejected');};
