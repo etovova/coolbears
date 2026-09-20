@@ -53,7 +53,7 @@ function answer(options){
  return new Response(JSON.stringify({jsonrpc:'2.0',id:q.id,result}));
 }
 test('Actual Umi/web3 client reads with four RPC calls and retains saved missing addresses',async()=>{
- const requests=[];const f=fixture(async(url,options)=>{assert.equal(url,'https://api.devnet.solana.com');requests.push(JSON.parse(options.body));return answer(options);});
+ const requests=[];const f=fixture(async(url,options)=>{assert.equal(url,'https://devnet.rpcpool.com');requests.push(JSON.parse(options.body));return answer(options);});
  const result=await f.client.read({signal:new AbortController().signal});
  assert.deepEqual(requests.map(r=>r.method),['getGenesisHash','getAccountInfo','getAccountInfo','getBalance']);
  assert.ok(requests.filter(r=>r.method==='getAccountInfo').every(r=>r.params[1].commitment==='finalized'));
