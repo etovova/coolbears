@@ -10,7 +10,6 @@ import { pacedRpcFetch } from './rpc-pacing.mjs';
 const defaultPaced=pacedRpcFetch();
 export { isRateLimit } from './rpc-pacing.mjs';
 export { runUpload } from './upload-runner.mjs';
-export { readWithRecovery } from './read-runner.mjs';
 export { browserUploadStore } from './browser-upload-store.mjs';
 export const SETUP_KEY='devnet-upload-setup-v1';
 export function uploadClient(provider,store,{paced=defaultPaced}={}) {
@@ -23,9 +22,12 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
  async function read(s,{signal}={}) {
   signal?.throwIfAborted();
   const reader=signal?devnetUmi(provider,{fetch:(input,options)=>paced.fetch(input,{...options,signal}),disableRetryOnRateLimit:true}):umi;
-  await (signal?umiUploadTransport(reader,plan,target(s)):transport(s)).assertNetwork('devnet');
+  const checked=signal?umiUploadTransport(reader,plan,target(s)):transport(s);
+  await checked.assertNetwork('devnet');
   let collection,machine;
-  if(s.collection)collection=await safeFetchCollectionV1(reader,publicKey(s.collection),{commitment:'finalized'});
+  // Existing launches only need the machine account to verify the loaded count.
+  // Read the collection as well during setup or when a collection operation is pending.
+  if(s.collection&&(!s.machine||s.pending?.kind==='collection'))collection=await safeFetchCollectionV1(reader,publicKey(s.collection),{commitment:'finalized'});
   if(collection) {
    if(collection.updateAuthority!==LAUNCH_OWNER||collection.name!=='CoolBears'||collection.uri!==`${SITE}/metadata/collection.json`||collection.royalties?.basisPoints!==700)throw Error('Неожиданная коллекция.');
   }
@@ -43,9 +45,8 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
     delete s.pending;save(s);
    }
   }
-  const balance=Number((await reader.rpc.getBalance(publicKey(LAUNCH_OWNER))).basisPoints)/1e9;
   signal?.throwIfAborted();
-  return {state:s,collection:!!collection,machine:!!machine,loaded:machine?.itemsLoaded??0,balance};
+  return {state:s,collection:!!collection||!!s.collection,machine:!!machine,loaded:machine?.itemsLoaded??0,balance:null};
  }
  return {
   read:options=>store.withLock(SETUP_KEY,()=>read(load(),options)),
@@ -70,7 +71,7 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
   groupStep:options=>store.withLock(SETUP_KEY,async()=>{
    const s=load();
    if(s.pending||!s.machine||!s.collection)throw Error('Сначала дождись создания машины.');
-   const size=typeof provider.signAllTransactions==='function'?options?.size??10:1;
+   const size=1;
    return createGroupUploader(transport(s),store,target(s)).step({...options,size});
   }),
   backup:()=>{const s=load();const key=s.machine?`coolbears-upload-v1:devnet:${s.machine}`:null;return JSON.stringify({setup:s,upload:key?store.read(key):null},null,2);}
