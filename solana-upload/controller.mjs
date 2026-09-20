@@ -1,5 +1,5 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore, runUpload, readWithRecovery, isRateLimit } from './sdk.js?v=upload-rpc-3';
+import { uploadClient, browserUploadStore, runUpload, readWithRecovery, isRateLimit } from './sdk.js?v=upload-manual-4';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 const CACHE_KEY='devnet-upload-last-confirmed-v1';
 let client,current,checking,busy=false,uploading=false,stopRequested=false;
@@ -9,7 +9,7 @@ function render(){
  $('refresh').disabled=busy||!wallet.address;
  $('cancel-check').hidden=!checking;
  $('cancel-check').disabled=!checking||checking.signal.aborted;
- const ready=!busy&&current&&!current.stale&&!current.state.pending;
+ const ready=!busy&&current&&!current.state.pending;
  $('collection').disabled=!ready||!!current.state.collection;
  $('machine').disabled=!ready||!current.collection||!!current.state.machine;
  $('step').disabled=!ready||!current.machine;
