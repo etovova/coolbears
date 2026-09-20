@@ -1,31 +1,17 @@
 import { isRateLimit } from './rpc-pacing.mjs';
-// No background signing on page load. Called only by the Continue button.
-export async function runUpload(client,{size=10,continuous=true,stopped=()=>false,onProgress=()=>{},sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}) {
-  let sign=false,waits=0,rateLimits=0;
-  while(!stopped()){
-    let r;
-    try {r=await client.groupStep({size,sign,stopped,onPhase:onProgress});}
-    catch(error){
-      if(!isRateLimit(error))throw error;
-      sign=false; // Reconcile saved signatures before another signing request.
-      if(++rateLimits>5)return {status:'rate-limited'};
-      let delay=Math.max(client.retryAfter?.()??0,Math.min(120000,30000*2**(rateLimits-1)));
-      while(delay>0&&!stopped()){
-        onProgress({status:'cooldown',seconds:Math.ceil(delay/1000)});
-        const tick=Math.min(1000,delay);await sleep(tick);delay-=tick;
-      }
-      continue;
-    }
-    onProgress(r);
-    if(['complete','retry-available','stopped'].includes(r.status))return r;
-    if(r.status==='verified'&&!continuous)return r;
-    if(r.status==='pending'||r.status==='submitted'){
-      sign=false;
-      if(++waits>=60)return {status:'waiting',loaded:r.loaded};
-      await sleep(12000);
-    }else{
-      waits=0;sign=true;
-    }
+
+// Manual Devnet mode: one button press performs at most one 25-record group.
+// A later button press reconciles a durable pending transaction; this runner
+// never waits, retries, signs another group, or continues in the background.
+export async function runUpload(client,{size=1,onProgress=()=>{}}={}) {
+  if(size!==1)throw Error('Ручной режим поддерживает только одну группу до 25 записей.');
+  let result;
+  try {
+    result=await client.groupStep({size:1,sign:true,onPhase:onProgress});
+  } catch(error) {
+    if(!isRateLimit(error))throw error;
+    result={status:'rate-limited'};
   }
-  return {status:'stopped'};
+  onProgress(result);
+  return result;
 }
