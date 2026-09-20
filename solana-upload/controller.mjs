@@ -53,3 +53,5 @@ $('step').onclick=()=>run(async()=>{
 });
 $('backup').onclick=()=>run(async()=>{$('text').hidden=false;$('text').value=getClient().backup();$('text').select();});
 render();if(new URL(location.href).searchParams.has('connectWallet'))run(async()=>{await wallet.connect();await refresh();});
+
+// Build marker: upload-manual-8 RPC fallback is included in the generated SDK.
