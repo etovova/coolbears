@@ -23,10 +23,10 @@ function getClient(){if(!wallet.provider)throw Error('Подключи коше�
 function renderState(result,stale=false){
  const state=result?.state||{};
  $('progress').value=Number.isInteger(result?.loaded)?result.loaded:0;
- $('state').textContent=`Devnet · ${result?.balance??'—'} тестовых SOL
-Подготовлено ${result?.loaded??0}/10000
-Коллекция: ${state.collection||'не создана'}
-Машина: ${state.machine||'не создана'}${state.pending?'\nОжидается подтверждение создания.':''}${stale?'\nПоследнее подтверждённое состояние; новая проверка не завершена.':''}`;
+ const lines=[`Devnet · ${result?.balance??'—'} тестовых SOL`,`Подготовлено ${result?.loaded??0}/10000`,`Коллекция: ${state.collection||'не создана'}`,`Машина: ${state.machine||'не создана'}`];
+ if(state.pending)lines.push('Ожидается подтверждение создания.');
+ if(stale)lines.push('Последнее подтверждённое состояние; новая проверка не завершена.');
+ $('state').textContent=lines.join(String.fromCharCode(10));
 }
 function restoreCached(){
  if(current||!wallet.address)return;
@@ -46,7 +46,7 @@ async function refresh(){
  $('status').textContent=current?'Последний подтверждённый счётчик сохранён. Проверяю обновление…':'Проверяю сохранённые записи и транзакции…';
  render();
  try{
-  const result=await readWithRecovery(getClient(),{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?\`Сервер Devnet RPC ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.\`:\`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.\`;}});
+  const result=await readWithRecovery(getClient(),{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?`Сервер Devnet RPC ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.`:`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.`;}});
   current={...result,stale:false};
   saveCached(result);
   renderState(current,false);
