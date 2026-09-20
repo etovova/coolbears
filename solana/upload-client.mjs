@@ -5,7 +5,7 @@ import { devnetUmi, SITE } from './builders.mjs';
 import { launchPlan, LAUNCH_OWNER } from './launch-plan.mjs';
 import { umiUploadTransport, loadedItems } from './upload.mjs';
 import { createGroupUploader } from './upload-group.mjs';
-import { sendTracked, canDiscardPending } from './transactions.mjs';
+import { canDiscardPending } from './transactions.mjs';
 import { pacedRpcFetch } from './rpc-pacing.mjs';
 const defaultPaced=pacedRpcFetch();
 export { isRateLimit } from './rpc-pacing.mjs';
