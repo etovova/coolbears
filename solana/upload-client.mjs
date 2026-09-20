@@ -37,12 +37,10 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
  async function read(s,{signal}={}) {
   signal?.throwIfAborted();
   const reader=signal?devnetUmi(provider,{fetch:(input,options)=>paced.fetch(input,{...options,signal}),disableRetryOnRateLimit:true}):umi;
-  const checked=signal?umiUploadTransport(reader,plan,target(s)):transport(s);
-  await checked.assertNetwork('devnet');
   let collection,machine;
   // Existing launches only need the machine account to verify the loaded count.
   // Read the collection as well during setup or when a collection operation is pending.
-  if(s.collection&&(!s.machine||s.pending?.kind==='collection'))collection=await safeFetchCollectionV1(reader,publicKey(s.collection),{commitment:'finalized'});
+  if(s.collection&&(!s.machine||s.pending?.kind==='collection'))collection=await safeFetchCollectionV1(reader,publicKey(s.collection),{commitment:'confirmed'});
   if(collection) {
    if(collection.updateAuthority!==LAUNCH_OWNER||collection.name!=='CoolBears'||collection.uri!==`${SITE}/metadata/collection.json`||collection.royalties?.basisPoints!==700)throw Error('Неожиданная коллекция.');
   }

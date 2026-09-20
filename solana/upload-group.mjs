@@ -11,7 +11,6 @@ export function createGroupUploader(transport, store, target) {
   publicKey(target.machine); publicKey(target.collection);
   return {step:({size=10,sign=true,stopped=()=>false,onPhase=()=>{}}={})=>store.withLock(`coolbears-upload-v1:${target.cluster}:${target.machine}`,async()=>{
     if (!Number.isInteger(size)||size<1||size>10) throw Error('Invalid group size.');
-    await transport.assertNetwork(target.cluster);
     const key=`coolbears-upload-v1:${target.cluster}:${target.machine}`;
     let journal=await store.read(key)??{version:1,cluster:target.cluster,machine:target.machine,collection:target.collection,owner:LAUNCH_OWNER,pending:null,history:[]};
     const binding={version:1,cluster:target.cluster,machine:target.machine,collection:target.collection,owner:LAUNCH_OWNER};
@@ -29,9 +28,10 @@ export function createGroupUploader(transport, store, target) {
         indices.add(i);
       }
     }
+    if(pending.length)await transport.assertNetwork(target.cluster);
     onPhase({status:'checking'});
     const snapshot=await transport.snapshot(pending);
-    if (!Number.isSafeInteger(snapshot.slot)||snapshot.slot<0||!Number.isSafeInteger(snapshot.height)||snapshot.height<0) throw Error('Invalid finalized snapshot.');
+    if(pending.length&&(!Number.isSafeInteger(snapshot.slot)||snapshot.slot<0||!Number.isSafeInteger(snapshot.height)||snapshot.height<0)) throw Error('Invalid finalized snapshot.');
     const loaded=loadedItems(snapshot.machine,target);
     if(pending.length){
       if(!Array.isArray(snapshot.signatureStatus)||snapshot.signatureStatus.length!==pending.length)throw Error('Invalid signature statuses.');

@@ -95,21 +95,21 @@ export function umiUploadTransport(umi,plan,target,{networkCacheMs=0,now=Date.no
     assertNetwork,
     async snapshot(pending) {
       const group = Array.isArray(pending) ? pending : pending ? [pending] : [];
-      const slot = await umi.rpc.call('getSlot',[{commitment:'finalized'}]);
-      if (!Number.isSafeInteger(slot) || slot < 0) throw Error('Invalid finalized slot.');
-      // Tie expiry height to this exact finalized slot, even behind a load
-      // balancer. Status/account reads must be at least as recent as that slot.
-      const block = await umi.rpc.call('getBlock',[slot,{commitment:'finalized',transactionDetails:'none',rewards:false,maxSupportedTransactionVersion:0}]);
-      const height = block?.blockHeight;
-      if (!Number.isSafeInteger(height) || height < 0) throw Error('Cannot establish finalized expiry height.');
-      let signatureStatus;
-      if (group.length) {
-        const r = await umi.rpc.call('getSignatureStatuses',[group.map(p=>p.signature),{searchTransactionHistory:true}]);
-        if (!Number.isSafeInteger(r?.context?.slot) || r.context.slot < slot || !Array.isArray(r.value) || r.value.length!==group.length) throw Error('Stale signature status.');
+      let slot=0,height=0,signatureStatus;
+      if(group.length) {
+        slot=await umi.rpc.call('getSlot',[{commitment:'finalized'}]);
+        if(!Number.isSafeInteger(slot)||slot<0) throw Error('Invalid finalized slot.');
+        const block=await umi.rpc.call('getBlock',[slot,{commitment:'finalized',transactionDetails:'none',rewards:false,maxSupportedTransactionVersion:0}]);
+        height=block?.blockHeight;
+        if(!Number.isSafeInteger(height)||height<0) throw Error('Cannot establish finalized expiry height.');
+        const r=await umi.rpc.call('getSignatureStatuses',[group.map(p=>p.signature),{searchTransactionHistory:true}]);
+        if(!Number.isSafeInteger(r?.context?.slot)||r.context.slot<slot||!Array.isArray(r.value)||r.value.length!==group.length) throw Error('Stale signature status.');
         signatureStatus=Array.isArray(pending)?r.value:r.value[0];
       }
-      // Read after status so finalized success has a chance to be reflected.
-      const machine=await fetchCandyMachine(umi,publicKey(target.machine),{commitment:'finalized',minContextSlot:slot});
+      const machine=await fetchCandyMachine(umi,publicKey(target.machine),{
+        commitment:group.length?'finalized':'confirmed',
+        ...(group.length?{minContextSlot:slot}:{})
+      });
       return {slot,height,machine,signatureStatus};
     },
     async prepare(batch,cluster) {
