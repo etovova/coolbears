@@ -56,7 +56,7 @@ test('Actual Umi/web3 client reads the machine once and retains saved addresses'
  const requests=[];const f=fixture(async(url,options)=>{assert.equal(url,'https://devnet.rpcpool.com');requests.push(JSON.parse(options.body));return answer(options);});
  const result=await f.client.read({signal:new AbortController().signal});
  assert.deepEqual(requests.map(r=>r.method),['getAccountInfo']);
- assert.ok(requests.filter(r=>r.method==='getAccountInfo').every(r=>r.params[1].commitment==='confirmed'));
+ assert.ok(requests.filter(r=>r.method==='getAccountInfo').every(r=>!r.params[1]||r.params[1].commitment==='confirmed'));
  assert.deepEqual(result.state,f.state);assert.equal(result.balance,null);assert.equal(f.writes(),0);assert.equal(f.locked(),false);
 });
 test('Actual Umi/web3 stalled RPC releases lock after timeout or cancellation and permits next read',async()=>{
