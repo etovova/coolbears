@@ -46,7 +46,19 @@ async function refresh(){
  $('status').textContent=current?'Последний подтверждённый счётчик сохранён. Проверяю обновление…':'Проверяю сохранённые записи и транзакции…';
  render();
  try{
-  const result=await readWithRecovery(getClient(),{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?`Сервер Devnet RPC ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.`:`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.`;}});
+  const active=getClient();
+  const bridgeClient={
+   retryAfter:active.retryAfter,
+   read:options=>{
+    const bridge=new AbortController(),source=options?.signal;
+    const abort=()=>bridge.abort(source?.reason||checking.signal.reason);
+    checking.signal.addEventListener('abort',abort,{once:true});
+    source?.addEventListener('abort',abort,{once:true});
+    const result=active.read({...options,signal:bridge.signal});
+    return Promise.resolve(result).finally(()=>{checking.signal.removeEventListener('abort',abort);source?.removeEventListener('abort',abort);});
+   }
+  };
+  const result=await readWithRecovery(bridgeClient,{signal:checking.signal,onProgress:r=>{$('status').textContent=r.status==='cooldown'?`Сервер Devnet RPC ограничил запросы. Повторная проверка через ${r.seconds} с. Можно отменить. Прогресс сохранён.`:`Проверяю состояние · попытка ${r.attempt}/3. Можно отменить проверку.`;}});
   current={...result,stale:false};
   saveCached(result);
   renderState(current,false);
