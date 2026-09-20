@@ -9,7 +9,7 @@ function render(){
  $('refresh').disabled=busy||!wallet.address;
  $('cancel-check').hidden=!checking;
  $('cancel-check').disabled=!checking||checking.signal.aborted;
- const ready=!busy&&current&&!current.state.pending;
+ const ready=!busy&&current&&!current.stale&&!current.state.pending;
  $('collection').disabled=!ready||!!current.state.collection;
  $('machine').disabled=!ready||!current.collection||!!current.state.machine;
  $('step').disabled=!ready||!current.machine;
