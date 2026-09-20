@@ -1,5 +1,5 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=upload-manual-6';
+import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=upload-manual-7';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 let client,current,busy=false;
 const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{client=null;current=null;$('account').textContent=address||'Кошелёк не подключён.';render();}});
@@ -7,8 +7,7 @@ function render(){
  $('connect').disabled=busy;$('connect').textContent=wallet.address?'Отключить кошелёк':'Подключить кошелёк';
  $('refresh').disabled=busy||!wallet.address;
  const ready=!busy&&current&&!current.state.pending;
- $('collection').disabled=!ready||!!current.state.collection;
- $('machine').disabled=!ready||!current.collection||!!current.state.machine;
+ $('setup-info').textContent=current?.state?.collection&&current?.state?.machine?'Используется подтверждённая коллекция и машина Devnet. Повторное создание отключено.':'Подключи кошелёк и нажми «Проверить состояние».';
  $('step').disabled=!ready||!current.machine;
  $('backup').disabled=busy;
  $('group-info').textContent='Одно нажатие отправляет одну группу до 25 записей. Следующая группа — только по твоему нажатию.';
@@ -26,7 +25,6 @@ async function refresh(){const result=await getClient().read();showState(result)
 async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){$('status').textContent=isRateLimit(e)?'Сервер Solana ограничил запросы. Повтори проверку вручную позже. Сохранённые транзакции не потеряны.':e.message;}finally{busy=false;render();}}
 $('connect').onclick=()=>run(async()=>{if(wallet.address){await wallet.disconnect();return;}await wallet.connect();await refresh();});
 $('refresh').onclick=()=>run(refresh);
-for(const kind of ['collection','machine'])$(kind).onclick=()=>run(async()=>{await getClient().create(kind);await refresh();$('status').textContent='Проверь состояние перед следующим действием.';});
 function progress(r){
  if(Number.isInteger(r.loaded)){
   $('progress').value=r.loaded;
