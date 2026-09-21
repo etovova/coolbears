@@ -4,11 +4,10 @@ import { createNoopSigner, createSignerFromKeypair, generateSigner, publicKey, s
 import { toWeb3JsTransaction } from '@metaplex-foundation/umi-web3js-adapters';
 import { mplCore, fetchCollection, fetchAsset, getAssetV1GpaBuilder, Key, updateAuthority } from '@metaplex-foundation/mpl-core';
 import { mplCandyMachine, fetchCandyMachine, fetchCandyGuard, findCandyGuardPda } from '@metaplex-foundation/mpl-core-candy-machine';
-import { SPEC, CLOSED_DATE, PROGRAMS, validateCommitment, assertQuantity, commitmentFor, indexFromName, assertRevealTime } from './spec.mjs';
+import { SPEC, CLOSED_DATE, GENESIS, PROGRAMS, validateCommitment, assertQuantity, commitmentFor, indexFromName, assertRevealTime } from './spec.mjs';
 import { buildCollection, buildReserved, buildMachine, buildMint, buildReveal } from './builders.mjs';
 import { Journal, performOperation } from './journal.mjs';
 
-const GENESIS = { devnet: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1', 'mainnet-beta': '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp' };
 export class CoolBearsClient {
   constructor({ provider, address, endpoint, cluster = 'devnet', storage = globalThis.localStorage, onProgress = () => {} }) {
     if (!GENESIS[cluster]) throw Error('Unsupported Solana network');

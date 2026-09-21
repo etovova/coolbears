@@ -26,6 +26,12 @@ test('network mismatch blocks before Metaplex or wallet actions', async () => {
   const c=client(); c.connection.getGenesisHash=async()=> 'wrong-network';
   await assert.rejects(c.checkNetwork(),/network does not match/);
 });
+test('network check accepts the full genesis hash returned by live Devnet RPC', async () => {
+  const c=client();let programs=0;
+  c.connection.getGenesisHash=async()=> 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
+  c.connection.getAccountInfo=async()=> { programs++;return {executable:true}; };
+  await c.checkNetwork();assert.equal(programs,3);
+});
 test('foreign account is not treated as a completed operation', async () => {
   const c=client(); c.connection.getAccountInfo=async()=>({owner:{toBase58:()=> 'wrong-program'}});
   await assert.rejects(c.exists(SPEC.owner,'expected-program'),/unexpected program/);

@@ -8,6 +8,10 @@ export const SPEC = Object.freeze({
   reservedUri: 'https://coolbears-nfts.com/metadata/hidden/0000.json',
 });
 export const CLOSED_DATE = 9223372036854775807n;
+export const GENESIS = Object.freeze({
+  devnet: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
+  'mainnet-beta': '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',
+});
 export const PROGRAMS = Object.freeze({
   core: 'CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d',
   machine: 'CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J',

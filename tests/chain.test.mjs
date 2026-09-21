@@ -1,11 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { generateSigner, signerIdentity } from '@metaplex-foundation/umi';
+import { generateSigner, signerIdentity, createNoopSigner } from '@metaplex-foundation/umi';
+import { toWeb3JsTransaction } from '@metaplex-foundation/umi-web3js-adapters';
+import { Keypair } from '@solana/web3.js';
+import { getTransactionDecoder } from '@solana/kit';
+import { FailedTransactionMetadata } from 'litesvm';
 import { fetchCollection, fetchAsset, transfer } from '@metaplex-foundation/mpl-core';
 import { fetchCandyMachine, fetchCandyGuard, findCandyGuardPda } from '@metaplex-foundation/mpl-core-candy-machine';
 import { environment } from './svm.mjs';
 import { buildCollection, buildReserved, buildMachine, buildSaleState, buildMint, buildReveal } from '../chain/builders.mjs';
 import { SPEC, CLOSED_DATE } from '../chain/spec.mjs';
+
+test('wallet transport preserves creation-account signature through wallet signing', async () => {
+  const {svm,umi,owner}=environment(), collection=generateSigner(umi);
+  umi.use(signerIdentity(createNoopSigner(owner.publicKey)));
+  const tx=await buildCollection(umi,collection).setBlockhash(svm.latestBlockhash()).buildAndSign(umi);
+  const wire=toWeb3JsTransaction(tx);wire.sign([Keypair.fromSecretKey(owner.secretKey)]);
+  const result=svm.sendTransaction(getTransactionDecoder().decode(wire.serialize()));
+  assert(!(result instanceof FailedTransactionMetadata));
+  assert.equal((await fetchCollection(umi,collection.publicKey)).updateAuthority,owner.publicKey);
+});
 
 test('Real Core programs: setup, closed sale, mint/payment, transfer, reveal and authority boundaries', async () => {
   const { svm, umi, owner, buyer, send } = environment();
