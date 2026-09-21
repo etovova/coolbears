@@ -3,17 +3,38 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {runInNewContext} from 'node:vm';
 import {TARGET} from '../solana/load-model.mjs';
-const app=(await readFile('solana-load/app.mjs','utf8')).replace(/^import .*\n/,'');
-function ui(){
- const elements=new Map(),handlers={},data=new Map(),calls={inspect:0,upload:0},timers=new Set();
+import {phantomBrowseUrl} from '../wallet-core.mjs';
+const app=(await readFile('solana-load/app.mjs','utf8')).replace(/^import .*\n/gm,'');
+function ui({injected=true,userAgent='Android Chrome',maxTouchPoints=0,legacy=false}={}){
+ const elements=new Map(),handlers={},data=new Map(),calls={inspect:0,upload:0,connect:0,writes:0},timers=new Set();
  const get=id=>{if(!elements.has(id))elements.set(id,{id,textContent:'',value:'',disabled:false,hidden:false,dataset:{},focus(){},select(){}});return elements.get(id);};
  let state={progress:{loaded:1950,slot:42,checkedAt:new Date().toISOString()},pending:false,lastAttempt:null},inspectFail;
- const provider={isPhantom:true,publicKey:null,on:(name,fn)=>handlers[name]=fn,connect:async()=>{provider.publicKey={toString:()=>TARGET.owner};},disconnect:async()=>{provider.publicKey=null;handlers.disconnect?.();}};
+ const provider={isPhantom:true,publicKey:null,on:(name,fn)=>handlers[name]=fn,connect:async()=>{calls.connect++;provider.publicKey={toString:()=>TARGET.owner};},disconnect:async()=>{provider.publicKey=null;handlers.disconnect?.();}};
  const client={inspect:async()=>{calls.inspect++;if(inspectFail)throw Error(inspectFail);return state;},upload:async()=>{calls.upload++;state={...state,progress:{...state.progress,loaded:1975},lastAttempt:{start:1950,count:25,outcome:'account-verified'}};return state;},backup:()=>JSON.stringify(state)};
- const scope={document:{getElementById:get},window:{phantom:{solana:provider}},TARGET,SETTINGS_KEY:'rpc',DEFAULT_RPC:'https://api.devnet.solana.com',rpcUrl:x=>new URL(x).href,browserStore:()=>({read:k=>data.get(k),write:(k,v)=>data.set(k,v)}),loadClient:()=>client,Intl,Date,setInterval:fn=>{timers.add(fn);return fn;},clearInterval:fn=>timers.delete(fn)};
+ const window={location:new URL('https://coolbears-nfts.com/solana-load/?api-key=never-forward#private')};
+ if(injected){if(legacy)window.solana=provider;else window.phantom={solana:provider};}
+ const scope={document:{getElementById:get},window,navigator:{userAgent,maxTouchPoints},phantomBrowseUrl,TARGET,SETTINGS_KEY:'rpc',DEFAULT_RPC:'https://api.devnet.solana.com',rpcUrl:x=>new URL(x).href,browserStore:()=>({read:k=>data.get(k),write:(k,v)=>{calls.writes++;data.set(k,v);}}),loadClient:()=>client,Intl,Date,setInterval:fn=>{timers.add(fn);return fn;},clearInterval:fn=>timers.delete(fn)};
  runInNewContext(app,scope);
- return {get,calls,provider,handlers,timers,fail:message=>inspectFail=message};
+ return {get,calls,provider,handlers,timers,window,fail:message=>inspectFail=message};
 }
+test('mobile Chrome opens the same page in Phantom without connecting, RPC calls or exporting secrets',async()=>{
+ const f=ui({injected:false}),link=f.get('wallet-open');
+ assert.equal(link.hidden,false);assert.equal(link.textContent,'Открыть в Phantom');assert.equal(f.get('connect').hidden,true);
+ const url=new URL(link.href);assert.equal(url.origin,'https://phantom.app');assert.equal(decodeURIComponent(url.pathname.slice('/ul/browse/'.length)),'https://coolbears-nfts.com/solana-load/');assert.equal(url.searchParams.get('ref'),'https://coolbears-nfts.com');assert.equal([...url.searchParams.keys()].join(','),'ref');
+ let prevented=false;await link.onclick({preventDefault(){prevented=true;}});assert.equal(prevented,false);
+ assert.deepEqual(f.calls,{inspect:0,upload:0,connect:0,writes:0});assert.equal(f.get('upload').disabled,true);assert.equal(f.get('check').disabled,true);
+});
+test('Phantom in-app provider connects directly, including legacy injection',async()=>{
+ for(const legacy of [false,true]){const f=ui({legacy});assert.equal(f.get('wallet-open').hidden,true);assert.equal(f.get('connect').hidden,false);await f.get('connect').onclick();assert.equal(f.calls.connect,1);assert.equal(f.calls.inspect,1);assert.equal(f.calls.upload,0);}
+});
+test('late Phantom injection uses the provider instead of navigating away',async()=>{
+ const f=ui({injected:false});f.window.phantom={solana:f.provider};let prevented=false;
+ await f.get('wallet-open').onclick({preventDefault(){prevented=true;}});assert.equal(prevented,true);assert.equal(f.calls.connect,1);assert.equal(f.calls.inspect,1);assert.equal(f.get('wallet-open').hidden,true);
+});
+test('iPad desktop user agent opens Phantom while desktop without extension offers installation',()=>{
+ const tablet=ui({injected:false,userAgent:'Macintosh Safari',maxTouchPoints:5});assert.equal(tablet.get('wallet-open').textContent,'Открыть в Phantom');
+ const desktop=ui({injected:false,userAgent:'Macintosh Chrome'});assert.equal(desktop.get('wallet-open').href,'https://phantom.com/download');assert.equal(desktop.get('wallet-open').textContent,'Установить Phantom');
+});
 test('connect automatically reads progress, one upload updates count and preserves last result on refresh',async()=>{
  const f=ui();assert.equal(f.get('connect').disabled,false);assert.equal(f.get('upload').disabled,true);
  await f.get('connect').onclick();assert.equal(f.calls.inspect,1);assert.equal(f.get('upload').disabled,false);
