@@ -25,5 +25,31 @@
   "agentSignedTransactions": 0,
   "agentBroadcastTransactions": 0,
   "rootCauseMinus32603": "unresolved",
-  "deployment": "pending"
+  "deployment": {
+    "commit": "1112d45d12ef27d581fe5b30f3135815afc34d20",
+    "tree": "1ec283199dbaaea1235218af9529fd00a15d46fc",
+    "customPages": {
+      "id": 35587853853,
+      "conclusion": "success"
+    },
+    "builtinPages": {
+      "id": 35587852802,
+      "conclusion": "success"
+    },
+    "url": "https://coolbears-nfts.com/solana-load/",
+    "browser": {
+      "moduleQuery": "load-recovery-20260921",
+      "applicationReady": true,
+      "recoveryControl": "Восстановить загрузку",
+      "realPhantomPresent": false
+    },
+    "gates": [
+      "npm run build:solana",
+      "107 tests passed",
+      "stage-site originals verified",
+      "verify-static",
+      "verify-static --check-committed"
+    ],
+    "directHTTPByteComparison": "not performed"
+  }
 }
