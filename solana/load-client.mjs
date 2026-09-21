@@ -6,7 +6,22 @@ function binding(j) {return j&&Object.entries(TARGET).every(([k,v])=>j[k]===v);}
 function validateBatch(p) {
   if(!p||!Number.isInteger(p.start)||!Number.isInteger(p.count)||p.start<0||p.count<1||p.count>25||p.start+p.count>10000)throw Error('Некорректная запись ожидающей загрузки.');
 }
-function initial() {return {version:2,...TARGET,legacyPending:[],pending:null,history:[],events:[],progress:null,lastAttempt:null};}
+function initial() {return {version:3,...TARGET,legacyPending:[],pending:null,history:[],events:[],progress:null,lastAttempt:null};}
+function attemptId(p){return p?[p.startedAt,p.start,p.count,p.blockhash,p.lastValidBlockHeight].join(':'):null;}
+function unapprovedError(j){
+  const p=j?.pending,a=j?.lastAttempt;
+  if(!binding(j)||j.legacyPending?.length||p?.phase!=='unknown'||p.signature!==null||a?.signature!==null||a?.outcome!=='unknown'||attemptId(a)!==attemptId(p)||!isHeight(p.lastValidBlockHeight)||!Number.isFinite(Date.parse(p.startedAt))||typeof p.blockhash!=='string')return null;
+  if(j.events?.some(e=>e.phase==='wallet-return'&&(!Number.isFinite(Date.parse(e.at))||Date.parse(e.at)>=Date.parse(p.startedAt))))return null;
+  if(p.walletError?.code===-32603&&isHeight(p.walletError.elapsedMs))return p.walletError;
+  // The first v2 mobile journal kept only events. Bind the completed rejection
+  // to this exact request, never to an earlier failure or a returned signature.
+  const events=j.events??[],i=events.findLastIndex(e=>e.phase==='wallet-request'),request=events[i];
+  if(!request||request.start!==p.start||request.count!==p.count||request.lastValidBlockHeight!==p.lastValidBlockHeight||request.at!==p.startedAt)return null;
+  const walletEvents=events.slice(i+1).filter(e=>e.phase==='wallet-return'||e.phase==='wallet-error');
+  const error=walletEvents[0];
+  if(walletEvents.length!==1||error?.phase!=='wallet-error'||error.code!==-32603||!isHeight(error.elapsedMs)||!Number.isFinite(Date.parse(error.at))||Date.parse(error.at)<Date.parse(request.at))return null;
+  return {code:error.code,elapsedMs:error.elapsedMs,source:'legacy-wallet-error-event'};
+}
 function walletDetail(error,endpoint) {
   // Keep the provider's explanation, but never persist its URL or credentials.
   // Do not stringify arbitrary error/data objects (they may contain secrets).
@@ -43,7 +58,8 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
   const rpc=readRpc(endpoint,{fetch,timeout,now,onEvent:event});
   function load() {
     journal=store.read(KEY)??initial();
-    if(journal.version!==2||!binding(journal)||!Array.isArray(journal.history)||!Array.isArray(journal.events)||!Array.isArray(journal.legacyPending))throw Error('Журнал принадлежит другой коллекции.');
+    if(![2,3].includes(journal.version)||!binding(journal)||!Array.isArray(journal.history)||!Array.isArray(journal.events)||!Array.isArray(journal.legacyPending))throw Error('Журнал принадлежит другой коллекции.');
+    if(journal.probe&&journal.probe.count!==1)throw Error('Некорректная запись пробной загрузки.');
     if(journal.pending){
       validateBatch(journal.pending);
       if(journal.pending.signature&&!validSignature(journal.pending.signature))throw Error('Некорректная подпись в журнале.');
@@ -51,7 +67,13 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
         journal.pending.phase='unknown';
         journal.lastAttempt={...journal.pending,outcome:'unknown',message:'Предыдущая попытка прервалась. Проверяю результат в сети.'};save();
       }
+      // Preserve validated legacy evidence before bounded RPC events rotate it.
+      const evidence=unapprovedError(journal);
+      if(evidence&&!journal.pending.walletError){journal.pending.walletError=evidence;journal.lastAttempt.walletError=evidence;save();}
     }
+    // Retire already open v2 runtimes: their strict version check prevents them
+    // from bypassing the persisted one-record probe after manual recovery.
+    if(journal.version===2){journal.version=3;save();}
     lastSlot=Math.max(lastSlot,journal.progress?.slot??0);
   }
   function migrate() {
@@ -81,6 +103,7 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
   function present(p,progress){const states=Array.from({length:p.count},(_,i)=>progress.loaded.has(p.start+i));if(states.some(Boolean)&&!states.every(Boolean))throw Error('Пакет присутствует частично. Новая отправка остановлена.');return states.every(Boolean);}
   function finish(p,outcome,slot) {
     const entry={...p,outcome,slot,finishedAt:new Date(now()).toISOString()};journal.history.push(entry);
+    if(outcome==='account-verified'&&p.count===1)journal.probe=null;
     journal.lastAttempt=entry;journal.pending=null;save();
   }
   async function reconcileLegacy() {
@@ -107,11 +130,28 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
     if(status?.confirmationStatus==='finalized'&&status.err!=null){finish(p,'failed',r.context.slot);return;}
     // Null/unknown never clears a wallet-managed attempt. No blind re-signing.
   }
-  function view() {const j=journal??store.read(KEY);return {progress:j?.progress??null,pending:!!j?.pending||!!j?.legacyPending?.length,lastAttempt:j?.lastAttempt??null,phase:j?.pending?.phase??null};}
+  function view() {const j=journal??store.read(KEY);return {progress:j?.progress??null,pending:!!j?.pending||!!j?.legacyPending?.length,lastAttempt:j?.lastAttempt??null,phase:j?.pending?.phase??null,recoveryId:unapprovedError(j)?attemptId(j.pending):null,nextCount:j?.probe?1:25};}
   async function check() {owner();load();await network();await snapshot();migrate();await reconcileLegacy();if(journal.pending){const p=await snapshot('finalized');await inspectPending(p);}return view();}
   return {
     view,
     inspect:()=>store.lock(check),
+    async recoverUnapproved(declaration){return store.lock(async()=>{
+      owner();load();
+      const eligible=()=>declaration?.notApproved===true&&declaration.attemptId===attemptId(journal.pending)&&unapprovedError(journal);
+      if(!eligible())throw Error('Восстановление доступно только для этой попытки без подтверждения в Phantom.');
+      await network();migrate();if(!eligible())throw Error('Сначала нужно проверить прежние транзакции.');
+      const p=journal.pending,epoch=await rpc('getEpochInfo',[{commitment:'finalized'}]);
+      if(!isHeight(epoch?.absoluteSlot)||!isHeight(epoch?.blockHeight))throw Error('Не удалось проверить состояние Devnet.');
+      const progress=await snapshot('finalized',Math.max(lastSlot,finalizedSlot,epoch.absoluteSlot));owner();
+      if(present(p,progress)){finish(p,'account-verified',progress.slot);return view();}
+      if(epoch.blockHeight<=p.lastValidBlockHeight)throw Error('Исходная транзакция ещё действительна. Восстановление пока остановлено.');
+      // This is the owner's statement, not proof that a wallet-managed send
+      // expired. A hash deadline or absence alone never retires an unknown send.
+      const recovery={statement:'owner-reported-no-approval',at:new Date(now()).toISOString(),attemptId:declaration.attemptId,blockHeight:epoch.blockHeight,slot:progress.slot};
+      journal.probe={count:1,reason:'owner-reported-unapproved',attemptId:declaration.attemptId};
+      finish({...p,recovery},'owner-reported-unapproved',progress.slot);
+      return view();
+    });},
     async upload(){return store.lock(async()=>{
       owner();load();await network();const progress=await snapshot();migrate();
       if(journal.legacyPending.length||journal.pending){await reconcileLegacy();if(journal.pending){const p=await snapshot('finalized');await inspectPending(p);}return view();}
@@ -119,11 +159,12 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
       if(provider.isPhantom!==true||typeof provider.signAndSendTransaction!=='function')throw Error('Открой загрузку в Phantom: требуется подтверждение и отправка транзакции кошельком.');
       const latest=await rpc('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:progress.slot}]);
       if(latest?.context?.slot<progress.slot)throw Error('RPC вернул устаревший блок.');
-      const tx=buildUpload(progress.next,latest);owner();
+      const batch={...progress.next,count:Math.min(progress.next.count,journal.probe?1:25)};
+      const tx=buildUpload(batch,latest);owner();
       // Save intent BEFORE handing control to a wallet capable of broadcasting.
       // Reload, refusal, timeout and lost responses must never trigger a resend.
-      journal.pending={...progress.next,phase:'wallet',startedAt:new Date(now()).toISOString(),blockhash:latest.value.blockhash,lastValidBlockHeight:latest.value.lastValidBlockHeight,signature:null};
-      journal.lastAttempt={...journal.pending,outcome:'wallet'};event({phase:'wallet-request',start:progress.next.start,count:progress.next.count,lastValidBlockHeight:latest.value.lastValidBlockHeight,transactionBytes:tx.serialize({requireAllSignatures:false,verifySignatures:false}).length});
+      journal.pending={...batch,phase:'wallet',startedAt:new Date(now()).toISOString(),blockhash:latest.value.blockhash,lastValidBlockHeight:latest.value.lastValidBlockHeight,signature:null};
+      journal.lastAttempt={...journal.pending,outcome:'wallet'};event({phase:'wallet-request',start:batch.start,count:batch.count,lastValidBlockHeight:latest.value.lastValidBlockHeight,transactionBytes:tx.serialize({requireAllSignatures:false,verifySignatures:false}).length});
       const started=now();let answer;
       try {answer=await provider.signAndSendTransaction(tx,{preflightCommitment:'confirmed',minContextSlot:latest.context.slot,skipPreflight:false,maxRetries:0});}
       catch(e){

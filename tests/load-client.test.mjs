@@ -10,28 +10,34 @@ import {LEGACY_KEY,GENESIS,decodeProgress,buildUpload} from '../solana/load-mode
 import {readRpc} from '../solana/load-rpc.mjs';
 import {account,SLOT,signature,memoryStore} from './load-fixture.mjs';
 const phone=JSON.parse(await readFile(new URL('./fixtures/phone-rpc-failure.json',import.meta.url),'utf8'));
+const unapprovedPhone=JSON.parse(await readFile(new URL('./fixtures/unapproved-phone-attempt.json',import.meta.url),'utf8'));
+function unapprovedStore(api,mutate=()=>{}){
+ const j={...structuredClone(unapprovedPhone),history:[{original:true}],legacyArchive:{version:1,...api.TARGET,history:[{start:0,count:25,outcome:'account-verified'}]}};mutate(j);
+ return memoryStore([[api.KEY,j],[LEGACY_KEY,{version:2,...api.TARGET,retiredTo:api.KEY}]]);
+}
+const phoneSlot=unapprovedPhone.progress.slot+100;
 function setup(api,options={}){
  const store=options.store??memoryStore(),requests=[],urls=[];
  let walletCalls=0,count=1950,time=0;
  const provider={isPhantom:true,publicKey:new PublicKey(api.TARGET.owner),signTransaction:()=>{throw Error('legacy signing must not run');},signAllTransactions:()=>{throw Error('group signing forbidden');},async signAndSendTransaction(tx,sendOptions){
   walletCalls++;
   const intent=store.read(api.KEY)?.pending;
-  assert.equal(intent.start,1950);assert.equal(intent.count,25);assert.equal(intent.phase,'wallet');
+  assert.equal(intent.start,options.expectedStart??1950);assert.equal(intent.count,options.expectedCount??25);assert.equal(intent.phase,'wallet');
   assert.equal(tx.instructions.length,1);assert.equal(tx.instructions[0].programId.toBase58(),MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID);
   const [data]=getAddConfigLinesInstructionDataSerializer().deserialize(tx.instructions[0].data);
-  assert.equal(data.index,1950);assert.equal(data.configLines.length,25);assert.equal(data.configLines[0].uri,'1950.json');
+  assert.equal(data.index,intent.start);assert.equal(data.configLines.length,intent.count);assert.equal(data.configLines[0].uri,`${String(intent.start).padStart(4,'0')}.json`);
   assert.equal(tx.feePayer.toBase58(),api.TARGET.owner);assert.ok(tx.serialize({requireAllSignatures:false,verifySignatures:false}).length<=1232);
   assert.equal(sendOptions.skipPreflight,false);assert.equal(sendOptions.preflightCommitment,'confirmed');assert.equal(sendOptions.maxRetries,0);
   if(options.wallet)return options.wallet({tx,provider,store,setCount:n=>count=n,setTime:n=>time=n});
-  count=1975;return {signature};
+  count=intent.start+intent.count;return {signature};
  }};
  const fetch=async(url,init)=>{
   const q=JSON.parse(init.body);requests.push(q);urls.push(url);let result;
   if(q.method==='getGenesisHash')result=GENESIS;
-  else if(q.method==='getAccountInfo')result=account(count,SLOT+(count>1950?5:0));
-  else if(q.method==='getLatestBlockhash')result={context:{slot:SLOT},value:{blockhash:api.TARGET.owner,lastValidBlockHeight:999999999}};
-  else if(q.method==='getEpochInfo')result={absoluteSlot:SLOT-30,blockHeight:999999999};
-  else if(q.method==='getSignatureStatuses')result={context:{slot:SLOT+5},value:q.params[0].map(()=>null)};
+  else if(q.method==='getAccountInfo')result=account(count,(options.slot??SLOT)+(count>1950?5:0));
+  else if(q.method==='getLatestBlockhash')result={context:{slot:options.slot??SLOT},value:{blockhash:api.TARGET.owner,lastValidBlockHeight:999999999}};
+  else if(q.method==='getEpochInfo')result={absoluteSlot:(options.slot??SLOT)-30,blockHeight:999999999};
+  else if(q.method==='getSignatureStatuses')result={context:{slot:(options.slot??SLOT)+5},value:q.params[0].map(()=>null)};
   else throw Error(`Unexpected request ${q.method}`);
   const replacement=options.reply?.(q,result,store);if(replacement)return replacement;
   return new Response(JSON.stringify({jsonrpc:'2.0',id:q.id,result}));
@@ -142,6 +148,58 @@ for(const [label,api] of [['source',source],['shipped SDK',shipped]]){
  });
  test(`${label}: loaded 10000 needs neither blockhash nor signing`,async()=>{
   const f=setup(api);f.setCount(10000);assert.equal((await f.client.upload()).progress.loaded,10000);assert.equal(f.walletCalls(),0);
+ });
+ test(`${label}: real mobile rejection recovers only by declaration, preserves history, then sends one new record`,async()=>{
+  const store=unapprovedStore(api),original=store.read(api.KEY),f=setup(api,{store,slot:phoneSlot,expectedCount:1});
+  const inspected=await f.client.inspect();assert.ok(inspected.recoveryId);assert.equal(inspected.pending,true);assert.equal(store.read(api.KEY).version,3);
+  assert.equal((await f.client.upload()).pending,true);assert.equal(f.walletCalls(),0);
+  const recovered=await f.client.recoverUnapproved({attemptId:inspected.recoveryId,notApproved:true});
+  assert.equal(recovered.pending,false);assert.equal(recovered.nextCount,1);assert.equal(recovered.progress.loaded,1950);assert.equal(f.walletCalls(),0);
+  const j=store.read(api.KEY),archived=j.history.at(-1);assert.deepEqual(j.legacyArchive,original.legacyArchive);assert.deepEqual(j.history[0],original.history[0]);
+  for(const [key,value] of Object.entries(original.pending))assert.deepEqual(archived[key],value,key);
+  assert.equal(archived.outcome,'owner-reported-unapproved');assert.equal(archived.recovery.statement,'owner-reported-no-approval');assert.ok(archived.recovery.blockHeight>archived.lastValidBlockHeight);
+  const read=f.requests.filter(q=>q.method==='getAccountInfo').at(-1);assert.equal(read.params[1].commitment,'finalized');assert.ok(read.params[1].minContextSlot>=phoneSlot-30);
+  assert.equal(f.requests.some(q=>q.method==='getLatestBlockhash'),false);
+  const reloaded=api.loadClient(f.provider,store,{fetch:f.fetch,pause:async()=>{}});assert.equal((await reloaded.inspect()).nextCount,1);
+  const result=await reloaded.upload();assert.equal(result.progress.loaded,1951);assert.equal(result.pending,false);assert.equal(result.nextCount,25);assert.equal(f.walletCalls(),1);
+  assert.equal(result.lastAttempt.count,1);assert.notEqual(result.lastAttempt.blockhash,original.pending.blockhash);assert.equal(store.read(api.KEY).history.length,3);
+  assert.equal(store.read(api.KEY).events.findLast(e=>e.phase==='wallet-request').transactionBytes,256);
+  assert.equal(f.requests.some(q=>q.method==='sendTransaction'),false);
+ });
+ test(`${label}: recovery requires current explicit declaration and a completed matching rejection`,async()=>{
+  const mutations=[j=>j.pending.signature=signature,j=>j.pending.phase='wallet',j=>j.events.push({phase:'wallet-return',signature}),j=>j.events.find(e=>e.phase==='wallet-error').code=4001,j=>j.events.find(e=>e.phase==='wallet-request').start=1925,j=>j.events.find(e=>e.phase==='wallet-error').at='invalid',j=>j.lastAttempt.startedAt='2026-01-01T00:00:00Z',j=>j.legacyPending.push({start:1925,count:25,signature,lastValidBlockHeight:1})];
+  for(const change of mutations){const f=setup(api,{store:unapprovedStore(api,change),slot:phoneSlot});const id=f.client.view().recoveryId;await assert.rejects(f.client.recoverUnapproved({attemptId:id,notApproved:true}));assert.ok(f.store.read(api.KEY).pending);assert.equal(f.walletCalls(),0);}
+  for(const declaration of [undefined,{notApproved:false},{notApproved:true,attemptId:'stale'}]){const f=setup(api,{store:unapprovedStore(api),slot:phoneSlot});await assert.rejects(f.client.recoverUnapproved(declaration));assert.equal(f.requests.length,0);assert.ok(f.store.read(api.KEY).pending);}
+ });
+ test(`${label}: recovery retains intent on partial, stale, unavailable or mismatched chain state`,async()=>{
+  const replacements=[
+   q=>q.method==='getAccountInfo'?{result:account(1951,phoneSlot)}:null,
+   q=>q.method==='getAccountInfo'?{result:account(1950,phoneSlot-1000)}:null,
+   q=>q.method==='getAccountInfo'?new Response('rate limited',{status:429}):null,
+   q=>q.method==='getGenesisHash'?{result:'mainnet'}:null,
+   q=>q.method==='getEpochInfo'?{result:{absoluteSlot:phoneSlot,blockHeight:unapprovedPhone.pending.lastValidBlockHeight}}:null,
+   q=>q.method==='getEpochInfo'?{result:{absoluteSlot:null,blockHeight:999999999}}:null,
+   q=>q.method==='getAccountInfo'?{result:{...account(1950,phoneSlot),value:{...account(1950,phoneSlot).value,owner:api.TARGET.owner}}}:null
+  ];
+  for(const replace of replacements){const store=unapprovedStore(api),original=store.read(api.KEY),f=setup(api,{store,slot:phoneSlot,reply:q=>{const x=replace(q);return x instanceof Response?x:x?new Response(JSON.stringify(x)):null;}});await assert.rejects(f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true}));assert.ok(store.read(api.KEY).pending);assert.deepEqual(store.read(api.KEY).history,original.history);assert.equal(store.read(api.KEY).probe,undefined);assert.equal(f.walletCalls(),0);}
+ });
+ test(`${label}: recovery detects an already executed batch without a probe or wallet call`,async()=>{
+  const f=setup(api,{store:unapprovedStore(api),slot:phoneSlot});f.setCount(1975);
+  const result=await f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true});
+  assert.equal(result.progress.loaded,1975);assert.equal(result.lastAttempt.outcome,'account-verified');assert.equal(result.nextCount,25);assert.equal(f.walletCalls(),0);
+ });
+ test(`${label}: a failed save, wallet switch or active call cannot release the pending attempt`,async()=>{
+  const store=unapprovedStore(api),write=store.write;store.write=(k,v)=>{if(k===api.KEY&&!v.pending)throw Error('disk full');write(k,v);};
+  const f=setup(api,{store,slot:phoneSlot});await assert.rejects(f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true}),/disk full/);assert.ok(store.read(api.KEY).pending);assert.equal(f.walletCalls(),0);
+  let switched;switched=setup(api,{store:unapprovedStore(api),slot:phoneSlot,reply:q=>{if(q.method==='getEpochInfo')switched.provider.publicKey=new PublicKey('11111111111111111111111111111111');}});
+  await assert.rejects(switched.client.recoverUnapproved({attemptId:switched.client.view().recoveryId,notApproved:true}),/владельца/);assert.ok(switched.store.read(api.KEY).pending);
+  let resolve,entered;const reached=new Promise(r=>entered=r),active=setup(api,{wallet:()=>{entered();return new Promise(r=>resolve=r);}});const call=active.client.upload();await reached;
+  await assert.rejects(active.client.recoverUnapproved({notApproved:true,attemptId:'old'}),/locked/);resolve({signature});await call;assert.equal(active.walletCalls(),1);
+ });
+ test(`${label}: cancelling the one-record probe retains its size across reload`,async()=>{
+  const f=setup(api,{store:unapprovedStore(api),slot:phoneSlot,expectedCount:1,wallet:()=>{throw Object.assign(Error('cancelled'),{code:4001});}});
+  await f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true});await assert.rejects(f.client.upload(),/отменено/);
+  const reloaded=api.loadClient(f.provider,f.store,{fetch:f.fetch});assert.equal((await reloaded.inspect()).nextCount,1);assert.equal(f.walletCalls(),1);
  });
 }
 test('RPC timeout bounds a hung fetch and keeps the endpoint secret',async()=>{

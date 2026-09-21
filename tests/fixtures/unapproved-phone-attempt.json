@@ -1,0 +1,81 @@
+{
+  "version": 2,
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "cluster": "devnet",
+  "collection": "BZRkdsRsmeBBGb1JsVUbgZbThWraaMPSRazdiQdioLcy",
+  "machine": "FLpAJpBG7BDEL5cFZPiouGD6ZWnTWRRBrWxtkjVz9s3R",
+  "legacyPending": [],
+  "pending": {
+    "start": 1950,
+    "count": 25,
+    "phase": "unknown",
+    "startedAt": "2026-09-21T09:07:01.626Z",
+    "blockhash": "G2CbGrFGW6Nt6gLB4Yv4ArbWbUmBhkqnYRn4tPycjbw3",
+    "lastValidBlockHeight": 489087914,
+    "signature": null
+  },
+  "progress": {
+    "loaded": 1950,
+    "slot": 501829547,
+    "checkedAt": "2026-09-21T09:07:01.365Z",
+    "commitment": "confirmed"
+  },
+  "lastAttempt": {
+    "start": 1950,
+    "count": 25,
+    "phase": "unknown",
+    "startedAt": "2026-09-21T09:07:01.626Z",
+    "blockhash": "G2CbGrFGW6Nt6gLB4Yv4ArbWbUmBhkqnYRn4tPycjbw3",
+    "lastValidBlockHeight": 489087914,
+    "signature": null,
+    "outcome": "unknown",
+    "message": "Phantom не подтвердил отправку (код -32603). Проверь состояние; новая отправка пока заблокирована."
+  },
+  "events": [
+    {
+      "at": "2026-09-21T09:05:36.667Z",
+      "phase": "rpc",
+      "method": "getGenesisHash",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 355
+    },
+    {
+      "at": "2026-09-21T09:05:36.956Z",
+      "phase": "rpc",
+      "method": "getAccountInfo",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 273
+    },
+    {
+      "at": "2026-09-21T09:07:01.171Z",
+      "phase": "rpc",
+      "method": "getAccountInfo",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 404
+    },
+    {
+      "at": "2026-09-21T09:07:01.570Z",
+      "phase": "rpc",
+      "method": "getLatestBlockhash",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 203
+    },
+    {
+      "at": "2026-09-21T09:07:01.626Z",
+      "phase": "wallet-request",
+      "start": 1950,
+      "count": 25,
+      "lastValidBlockHeight": 489087914
+    },
+    {
+      "at": "2026-09-21T09:07:53.115Z",
+      "phase": "wallet-error",
+      "code": -32603,
+      "elapsedMs": 51487
+    }
+  ]
+}

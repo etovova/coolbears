@@ -1,7 +1,7 @@
-import {loadClient,browserStore,TARGET,SETTINGS_KEY,rpcUrl,DEFAULT_RPC} from './sdk.js?v=load-diagnostics-20260921';
+import {loadClient,browserStore,TARGET,SETTINGS_KEY,rpcUrl,DEFAULT_RPC} from './sdk.js?v=load-recovery-20260921';
 import {phantomBrowseUrl} from '../wallet-core.mjs';
 const $=id=>document.getElementById(id),store=browserStore();
-let provider,client,busy=false,generation=0,view={},ticker;
+let provider,client,busy=false,generation=0,view={},ticker,recoveryId=null;
 const mobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)||(/Macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1);
 const detectedProvider=()=>window.phantom?.solana?.isPhantom?window.phantom.solana:window.solana?.isPhantom?window.solana:null;
 // App navigation carries only the page address, never RPC settings or journal data.
@@ -22,13 +22,18 @@ function render(next=view){
   $('account').textContent=connected?`${connected.slice(0,8)}…${connected.slice(-8)} · Phantom`:'В Phantom должна быть выбрана сеть Devnet.';$('account').title=connected||'';
   $('check').disabled=busy||!owned;$('save-rpc').disabled=busy||!owned;$('rpc').disabled=busy;
   $('upload').disabled=busy||!owned||!view.progress||view.pending||view.progress.loaded===10000;
-  $('upload').textContent=view.progress?.loaded===10000?'Все записи загружены':view.pending?'Ожидается результат':'Загрузить следующие 25';
+  $('upload').textContent=view.progress?.loaded===10000?'Все записи загружены':view.pending?'Ожидается результат':view.nextCount===1?'Загрузить 1 запись':'Загрузить следующие 25';
+  if(recoveryId!==(view.recoveryId??null)){$('not-approved').checked=false;recoveryId=view.recoveryId??null;}
+  $('recovery').hidden=!owned||!recoveryId;
+  $('not-approved').disabled=busy;
+  $('recover').disabled=busy||!owned||!recoveryId||!$('not-approved').checked;
   $('check').textContent=view.pending?'Проверить результат':'Обновить прогресс';
   $('count').textContent=view.progress?new Intl.NumberFormat('ru-RU').format(view.progress.loaded):'—';$('progress').value=view.progress?.loaded??0;
   $('checked').textContent=view.progress?`Проверено в сети: ${new Date(view.progress.checkedAt).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`:'Подключи кошелёк — прогресс загрузится из сети.';
   const a=view.lastAttempt;
   const labels={rejected:a?.message||'Phantom отклонил запрос.','account-verified':a?`Записи ${a.start+1}–${a.start+a.count} подтверждены в сети.`:'',submitted:'Phantom отправил транзакцию. Ожидается подтверждение сети.',wallet:'Ожидается подтверждение в Phantom.',unknown:a?.message||'Результат отправки пока неизвестен. Нажми «Проверить результат».',cancelled:'Подтверждение отменено. Можно начать новую попытку.',failed:'Транзакция завершилась ошибкой в сети. Можно начать новую попытку.'};
   $('attempt').hidden=!a;$('attempt').textContent=a?(labels[a.outcome]||'Результат сохранён.'):'';
+  if(a?.outcome==='owner-reported-unapproved')$('attempt').textContent='По твоему указанию попытка без подтверждения сохранена в истории. Теперь можно отдельно загрузить 1 запись.';
   if(a?.walletError?.detail&&['unknown','rejected','failed'].includes(a.outcome))$('attempt').textContent+=` Ответ Phantom: ${a.walletError.detail}`;
   $('transaction').hidden=!a?.signature;if(a?.signature)$('transaction').href=`https://explorer.solana.com/tx/${a.signature}?cluster=devnet`;
   if(view.phase==='wallet'&&!ticker){const started=Date.now();ticker=setInterval(()=>activity(`Ожидается ответ Phantom · ${Math.floor((Date.now()-started)/1000)} с`),1000);}
@@ -46,6 +51,12 @@ $('connect').onclick=()=>run(async()=>{
 });
 $('wallet-open').onclick=event=>{if(detectedProvider()){event.preventDefault();return $('connect').onclick();}};
 $('check').onclick=()=>run(async()=>{client??=makeClient();const version=generation;const result=await client.inspect();if(version===generation){render(result);activity(result.pending?'Ожидается результат прежней попытки.':'Прогресс проверен.');}});
+$('not-approved').onchange=()=>render();
+$('recover').onclick=()=>{
+  if(busy||!recoveryId||!$('not-approved').checked)return;
+  const declaration={attemptId:recoveryId,notApproved:true};
+  return run(async()=>{const version=generation;client??=makeClient();const result=await client.recoverUnapproved(declaration);if(version===generation){render(result);activity(result.nextCount===1?'Восстановление завершено. Нажми «Загрузить 1 запись».':'Результат проверен в сети.');}});
+};
 $('upload').onclick=()=>run(async()=>{const version=generation;client??=makeClient();const result=await client.upload();if(version===generation){render(result);activity(result.pending?'Отправка повторяться не будет. Используй «Проверить результат».':result.progress?.loaded===10000?'Все 10 000 записей проверены.':'Можно загрузить следующий пакет.');}});
 $('save-rpc').onclick=()=>run(async()=>{
   const version=generation,url=rpcUrl($('rpc').value.trim()||DEFAULT_RPC),candidate=makeClient(url);

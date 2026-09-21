@@ -1,0 +1,29 @@
+{
+  "version": "load-recovery-20260921",
+  "tests": {
+    "total": 107,
+    "passed": 107,
+    "failed": 0,
+    "wallet": "stub, not real mobile Phantom"
+  },
+  "probe": {
+    "start": 1950,
+    "count": 1,
+    "unsignedBytes": 256,
+    "simulatedClientResult": 1951,
+    "newDevnetSimulation": false
+  },
+  "historicalAttachment": {
+    "sha256": "42f8d86c4e70961fb25146cdfd102540d5592a9dce39013a7f43201fae9c3479",
+    "jsonDocuments": 5,
+    "uploadGroups": 71,
+    "groupSize": 25,
+    "records": 1775,
+    "outcomes": "account-verified",
+    "pending": null
+  },
+  "agentSignedTransactions": 0,
+  "agentBroadcastTransactions": 0,
+  "rootCauseMinus32603": "unresolved",
+  "deployment": "pending"
+}

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex"><title>CoolBears · Загрузка коллекции</title>
-  <link rel="icon" href="/assets/collection/logo.png"><link rel="stylesheet" href="./style.css?v=load-mobile-20260921">
+  <link rel="icon" href="/assets/collection/logo.png"><link rel="stylesheet" href="./style.css?v=load-recovery-20260921">
 </head>
 <body><main>
   <header><a class="brand" href="/"><img src="/assets/collection/logo.png" width="44" height="44" alt="">CoolBears</a><span class="badge">Solana Devnet</span></header>
@@ -21,6 +21,12 @@
     <p id="attempt" hidden></p>
     <a id="transaction" target="_blank" rel="noopener noreferrer" hidden>Транзакция в Solana Explorer ↗</a>
     <button id="check" class="secondary" disabled>Обновить прогресс</button>
+    <div id="recovery" hidden>
+      <p class="muted">Если эту попытку ты не подтверждал в Phantom, можно восстановить загрузку. Сайт проверит записи в сети и сохранит прежнюю попытку в истории.</p>
+      <label class="declaration"><input id="not-approved" type="checkbox">Эту попытку я не подтверждал в Phantom.</label>
+      <button id="recover" class="secondary" disabled>Восстановить загрузку</button>
+      <p class="muted">Затем появится отдельная кнопка «Загрузить 1 запись» для проверки.</p>
+    </div>
     <p class="muted">Одно нажатие — один пакет. После подтверждения результат проверится автоматически.</p>
   </section>
   <details class="panel" id="settings"><summary>Подключение к Devnet</summary>
@@ -42,5 +48,5 @@
   <footer><a href="/solana-test/">Два тестовых NFT</a></footer>
   <noscript>Для подключения Phantom включи JavaScript.</noscript>
 </main>
-<script type="module">import('./app.mjs?v=load-diagnostics-20260921').catch(()=>{document.getElementById('activity').textContent='Не удалось загрузить приложение. Обнови страницу.';});</script>
+<script type="module">import('./app.mjs?v=load-recovery-20260921').catch(()=>{document.getElementById('activity').textContent='Не удалось загрузить приложение. Обнови страницу.';});</script>
 </body></html>
