@@ -57,6 +57,7 @@ async function fixture() {
     } };
   f.wallet = new StandardWalletAdapter({ wallet }); f.wallet.on('error', () => {}); await f.wallet.connect();
   const read = async (key, options = {}) => {
+    if (f.confirmationRateLimited) throw Error('RPC_RATE_LIMIT');
     if (options.minContextSlot !== undefined) {
       assert.ok(Number.isSafeInteger(options.minContextSlot));
       if (f.lagging) throw Error('Minimum context slot has not been reached');
@@ -68,7 +69,7 @@ async function fixture() {
   };
   umi.rpc = new Proxy(umi.rpc, { get(target, name) {
     const methods = {
-      getGenesisHash: async () => f.genesis,
+      getGenesisHash: async () => { if (f.genesisRateLimited) throw Error('RPC_RATE_LIMIT'); return f.genesis; },
       getCluster: () => 'devnet',
       getAccount: read, getAccounts: keys => Promise.all(keys.map(read)),
       getBalance: async key => lamports(vm.getBalance(key) || 0n),
@@ -171,6 +172,20 @@ try {
     f.height += 200; f.lagging = true;
     await assert.rejects(f.flow.retry(), /Minimum context slot/); assert.equal(f.requests, 1);
     assert.equal((await f.store.load()).phase, 'awaiting-wallet');
+  });
+  await check('rate limit before preparation leaves no intent or wallet request', async () => {
+    const f = await fixture(); f.genesisRateLimited = true;
+    await assert.rejects(f.flow.start(), /RPC_RATE_LIMIT/);
+    assert.equal(await f.store.load(), null); assert.equal(f.requests, 0);
+    f.genesisRateLimited = false; assert.equal((await f.flow.start()).phase, 'verified'); assert.equal(f.requests, 1);
+  });
+  await check('rate limit after submission preserves signature and resumes without another mint', async () => {
+    const f = await fixture(); f.confirmationRateLimited = true;
+    await assert.rejects(f.flow.start(), /RPC_RATE_LIMIT/);
+    const saved = await f.store.load(); assert.ok(saved.signature); assert.equal(f.requests, 1);
+    f.confirmationRateLimited = false;
+    const checked = await f.flow.check(); assert.equal(checked.phase, 'verified');
+    assert.equal(checked.asset, saved.asset); assert.equal(f.requests, 1);
   });
   report.passed = true;
 } catch (error) { report.error = String(error.stack); process.exitCode = 1; }

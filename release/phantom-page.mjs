@@ -3,8 +3,9 @@ import { mplCore } from '@metaplex-foundation/mpl-core';
 import { Connection } from '@solana/web3.js';
 import { standardOptions } from '../wallet/standard.mjs';
 import { phantomBrowseUrl } from '../wallet-core.mjs';
-import { phantomCheck } from './phantom-flow.mjs';
+import { phantomCheck, DEVNET_GENESIS } from './phantom-flow.mjs';
 import { openPhantomStore } from './phantom-store.mjs';
+import { createRpcFetch, rpcMessage } from './phantom-rpc.mjs';
 import policy from '../metadata/policy.json' with { type: 'json' };
 
 const endpoint = 'https://api.devnet.solana.com';
@@ -23,21 +24,15 @@ const errors = {
   RESULT_STILL_PENDING: 'Результат ещё не определён. Используй «Проверить результат».',
   SIMULATION_FAILED: 'Проверка транзакции в Devnet не прошла. Подпись не запрашивалась.',
 };
-let store, provider, flow, state, busy = false;
+let store, provider, flow, state, lastError, busy = false;
 let detach = () => {};
-async function boundedFetch(url, init = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal });
-    const body = await response.text();
-    return new Response(body, { status: response.status, statusText: response.statusText, headers: response.headers });
-  } catch (error) {
-    if (controller.signal.aborted) throw Error('RPC_TIMEOUT');
-    throw error;
-  } finally { clearTimeout(timer); }
-}
-const connection = new Connection(endpoint, { commitment: 'confirmed', fetch: boundedFetch, disableRetryOnRateLimit: true });
+const rpc = createRpcFetch({ onEvent: event => {
+  if (event.type === 'waiting' && event.rateLimited) $('status').textContent = `Сервер попросил паузу. Повторная проверка через ${Math.ceil(event.waitMs / 1000)} с; подпись повторно не запрашивается.`;
+  if (event.type === 'request') $('network-status').textContent = 'Проверяю ответ Devnet…';
+  if (event.type === 'limited') $('network-status').textContent = 'Ожидаю разрешённое сервером время следующего запроса…';
+  if (event.type === 'response' && event.httpStatus === 200 && event.rpcCode === undefined) $('network-status').textContent = 'Сервер Devnet ответил.';
+} });
+const connection = new Connection(endpoint, { commitment: 'confirmed', fetch: rpc.fetch, disableRetryOnRateLimit: true });
 function link(id, type, value) {
   const element = $(id); element.hidden = !value;
   if (value) element.href = `https://explorer.solana.com/${type}/${encodeURIComponent(value)}?cluster=devnet`;
@@ -47,11 +42,14 @@ function draw() {
   $('connected').textContent = address || 'Не подключён';
   const ready = address === policy.owner && Boolean(flow);
   const retry = ['cancelled', 'expired', 'failed'].includes(state?.phase);
+  const cooling = rpc.retryAt() > Date.now();
   $('connect').disabled = busy || !store;
-  $('create').disabled = busy || !ready || Boolean(state && !retry);
+  $('connect').textContent = ready ? 'Phantom подключён' : 'Подключить Phantom';
+  $('create').disabled = busy || cooling || !ready || Boolean(state && !retry);
   $('create').textContent = retry ? 'Повторить тест' : 'Создать тестовый NFT';
-  $('check').disabled = busy || !ready || !state;
-  $('copy').disabled = !state;
+  $('check').disabled = busy || cooling || !ready || !state;
+  $('network-check').disabled = busy || cooling;
+  $('copy').disabled = false;
   $('asset').textContent = state?.asset || 'Ещё не создан';
   link('asset-link', 'address', state?.asset);
   link('signature-link', 'tx', state?.signature);
@@ -72,11 +70,32 @@ async function action(task) {
   busy = true; draw();
   try { await task(); }
   catch (error) {
-    $('status').textContent = errors[error.message] ||
-      (String(error.message).includes('429') ? 'Devnet ограничил частоту запросов. Проверь результат чуть позже.' :
+    if (store) state = await store.load().catch(() => state);
+    const text = String(error.message || error);
+    const code = error.code || text.match(/RPC_[A-Z_]+/)?.[0];
+    lastError = { at: new Date().toISOString(), code: code || 'CHECK_FAILED', method: error.method,
+      message: text.slice(0, 220), hasSavedIntent: Boolean(state) };
+    $('status').textContent = rpcMessage(code, Boolean(state)) || errors[error.message] ||
+      (text.includes('429') ? rpcMessage('RPC_RATE_LIMIT', Boolean(state)) :
       `Проверка остановлена: ${String(error.message || error).slice(0, 220)}. Сохранённую попытку можно проверить повторно.`);
+    $('network-status').textContent = 'Диагностику можно скопировать ниже.';
   } finally { if (store) state = await store.load().catch(() => state); busy = false; draw(); }
 }
+let wasCooling = false;
+setInterval(() => {
+  const seconds = Math.ceil((rpc.retryAt() - Date.now()) / 1000);
+  if (seconds > 0) { wasCooling = true; $('network-status').textContent = `Следующий запрос разрешён через ${seconds} с.`; }
+  else if (wasCooling) { wasCooling = false; $('network-status').textContent = 'Пауза закончилась. Можно проверить связь.'; }
+  draw();
+}, 1000);
+$('network-check').onclick = () => action(async () => {
+  $('status').textContent = 'Проверяю связь с Devnet. Подпись не требуется.';
+  if (await connection.getGenesisHash() !== DEVNET_GENESIS) throw Error('WRONG_NETWORK');
+  lastError = null;
+  $('network-status').textContent = 'Связь с Devnet работает.';
+  $('status').textContent = state ? 'Связь есть. Подключи Phantom, если он ещё не подключён, и проверь сохранённый результат.'
+    : 'Связь с Devnet работает. Подключи Phantom, если он ещё не подключён, затем нажми «Создать тестовый NFT».';
+});
 function changed() { flow = null; draw(); $('status').textContent = 'Кошелёк изменён или отключён. Нажми «Подключить Phantom».'; }
 $('connect').onclick = () => action(async () => {
   $('status').textContent = 'Подключи кошелёк в Phantom…';
@@ -98,7 +117,7 @@ $('connect').onclick = () => action(async () => {
     }
   } else if (typeof provider.signAndSendTransaction !== 'function') throw Error('Обнови приложение Phantom');
   const wallet = provider;
-  const umi = createUmi(endpoint, { commitment: 'confirmed', fetch: boundedFetch, disableRetryOnRateLimit: true }).use(mplCore());
+  const umi = createUmi(connection).use(mplCore());
   flow = phantomCheck({ umi, wallet, store, readHeight: async () => {
       const info = await connection.getEpochInfo('finalized');
       return { blockHeight: info.blockHeight, slot: info.absoluteSlot };
@@ -117,7 +136,8 @@ $('create').onclick = () => action(async () => {
 });
 $('check').onclick = () => action(async () => { state = await flow.check(); showResult(); });
 $('copy').onclick = async () => {
-  const report = JSON.stringify({ page: 'phantom-check-v1', wallet: provider?.publicKey?.toString(), ...state }, null, 2);
+  const report = JSON.stringify({ page: 'phantom-check-v2', network: 'devnet', wallet: provider?.publicKey?.toString(),
+    savedIntent: Boolean(state), lastError: lastError || null, rpc: rpc.diagnostics(), ...state }, null, 2);
   try { await navigator.clipboard.writeText(report); $('status').textContent = 'Результат скопирован. Его можно прислать в чат.'; }
   catch { $('diagnostic').hidden = false; $('diagnostic').value = report; $('diagnostic').focus(); $('diagnostic').select(); }
 };

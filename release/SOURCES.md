@@ -83,6 +83,11 @@ from local validator balances: https://faucet.solana.com/.
 
 ## Dependency audit references
 
+Solana public RPC rate limits and Retry-After handling, checked 2026-09-21:
+https://solana.com/docs/references/clusters. The public Devnet service is
+rate-limited and not production infrastructure. Browser reads use a bounded
+queue and the server's cooldown, rather than immediate unlimited retries.
+
 - bn.js fixed release: https://github.com/advisories/GHSA-378v-28hj-76wf
 - uuid fixed release: https://github.com/advisories/GHSA-w5hq-g745-h8pq
 - Remaining stream-json advisory: https://github.com/advisories/GHSA-528h-pc64-c93x

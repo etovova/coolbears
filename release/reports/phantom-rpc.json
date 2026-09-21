@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-21T17:18:56.879Z",
+  "scope": "RPC transport with mocked HTTP responses; actual Umi/Web3.js integration; no wallet signing",
+  "passed": true,
+  "checks": [
+    "429 respects Retry-After before read retry",
+    "date Retry-After and malformed values have safe delays",
+    "persistent rate limit stops after three attempts",
+    "long Retry-After is retained and never shortened by another click",
+    "concurrent reads are queued behind the same rate limit",
+    "submission and unknown methods never retry",
+    "403 does not retry or claim a rate limit",
+    "JSON-RPC 429 is handled even when HTTP succeeds",
+    "timeout covers the response body",
+    "diagnostics contain methods/status only, never request bodies or endpoint credentials",
+    "messages direct an unstarted operation to an available connection check",
+    "actual Umi and Web3.js share the transport and preserve rate-limit errors"
+  ]
+}

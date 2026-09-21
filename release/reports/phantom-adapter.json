@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-21T16:56:10.189Z",
+  "checkedAt": "2026-09-21T17:20:58.478Z",
   "scope": "official StandardWalletAdapter + Umi + Core in LiteSVM; fake IndexedDB and faulted transport; no physical Phantom",
   "passed": true,
   "checks": [
@@ -16,7 +16,9 @@
     "failed simulation and unavailable persistence prevent wallet prompts",
     "on-chain failure is recorded as failed and never as an NFT success",
     "an unfinalized chain error does not authorize a replacement",
-    "a lagging RPC cannot authorize expiry from a stale absent account"
+    "a lagging RPC cannot authorize expiry from a stale absent account",
+    "rate limit before preparation leaves no intent or wallet request",
+    "rate limit after submission preserves signature and resumes without another mint"
   ],
   "transactionBytes": 441
 }

@@ -10,6 +10,7 @@
     "test:devnet": "node devnet.mjs",
     "verify:devnet-finalized": "node verify-devnet-finalized.mjs",
     "verify:phantom": "node verify-phantom.mjs",
+    "verify:phantom-rpc": "node verify-phantom-rpc.mjs",
     "verify:journal": "node verify-journal.mjs"
   },
   "dependencies": {

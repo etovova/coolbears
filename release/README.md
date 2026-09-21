@@ -22,7 +22,7 @@ requires a finalized block height and repeated finalized account absence with
 `minContextSlot`, preventing a lagging RPC from authorizing a replacement. A
 processed or confirmed error is insufficient to retry; failures must finalize.
 
-Run `npm run --prefix release verify:phantom`: 14 adapter/IndexedDB/transport
+Run `npm run --prefix release verify:phantom`: 16 adapter/IndexedDB/transport
 cases pass with the real Core program in LiteSVM, including a wallet exposing
 only sign-and-send, cancellations, concurrency, late/lost responses, wrong
 wallet/network and finality. The signed test transaction is 441 bytes. These
@@ -35,6 +35,22 @@ Phantom, enable Testnet Mode with Solana Devnet, connect the approved owner and
 choose “Создать тестовый NFT”. The page shows the saved asset, transaction link
 and a copyable result. Wallet display, the user's approval and the real
 transaction remain pending until verified after this handoff.
+
+The owner's mobile screenshots confirmed a successful connection, followed by
+HTTP 429 before an asset intent existed. The first error message incorrectly
+directed the user to a disabled result button. The v2 page adds an independent
+read-only connection check and always-available diagnostics, including before
+creation. `phantom-rpc.mjs` serializes reads with an 800 ms minimum interval and
+retries only explicitly allowed reads/simulation, at most three attempts within
+45 seconds. It respects numeric/date Retry-After without shortening a long
+server cooldown; each request including its response body has a 12-second
+deadline. It never retries submission or signing. Umi and Web3.js share one
+connection and transport. Public diagnostics record method/status, never request
+bodies or endpoint credentials. Run `npm run --prefix release verify:phantom-rpc`
+for 12 transport cases. The 16 flow cases include pre-signature 429 and recovery
+after a submitted transaction hits a read limit, without a second wallet request.
+The shared public RPC remains subject to provider/IP limits; this is a bounded
+recovery fix, not a guarantee that the owner's mobile network has recovered.
 
 Builds require both lockfiles: `npm ci` and
 `npm ci --prefix release --omit=dev --ignore-scripts`, then the normal site build.
@@ -153,7 +169,7 @@ npm run --prefix release fetch:programs
 npm run --prefix release verify:runtime
 ```
 
-The next stage is the official wallet adapter and physical Phantom acceptance
+The next stage is the physical Phantom signature and display acceptance
 test. This directory is not included in the website build. Sales remain
 closed; the lab opens only its separately named disposable test collection.
 

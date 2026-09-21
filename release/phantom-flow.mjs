@@ -75,11 +75,10 @@ export function phantomCheck({ umi, wallet, store, send, readHeight,
     const existing = await store.load();
     if (existing) return inspect(existing);
     progress('preparing');
-    const [balance, initialBlockhash] = await Promise.all([
-      umi.rpc.getBalance(owner, { commitment: 'finalized' }),
-      umi.rpc.getLatestBlockhash({ commitment: 'confirmed' }),
-    ]);
+    // Do not leave a queued blockhash request running after a balance failure.
+    const balance = await umi.rpc.getBalance(owner, { commitment: 'finalized' });
     ensure(balance.basisPoints >= 10000000n, 'NEED_TEST_SOL');
+    const initialBlockhash = await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' });
     const asset = generateSigner(umi);
     const builder = createAsset(umi, { asset, owner, name: TEST_NAME, uri: TEST_URI,
       plugins: [{ type: 'Royalties', basisPoints: policy.royaltyPercent * 100,
