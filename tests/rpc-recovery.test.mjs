@@ -2,7 +2,6 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {PublicKey} from '@solana/web3.js';
 import {pacedRpcFetch} from '../solana/rpc-pacing.mjs';
-import {readWithRecovery} from '../solana/read-runner.mjs';
 import {uploadClient,SETUP_KEY} from '../solana/upload-client.mjs';
 import {LAUNCH_OWNER} from '../solana/launch-plan.mjs';
 
@@ -26,19 +25,6 @@ test('Abort cancels active fetch and queued work without sending it',async()=>{
  await new Promise(r=>setImmediate(r));queued.abort();first.abort();await Promise.all(checks);
  await new Promise(r=>setImmediate(r));assert.equal(calls,1);
 });
-test('Cooldown honours Retry-After, reports countdown, and cancellation makes no next read',async()=>{
- let clock=0,calls=0;const phases=[],abort=new AbortController();
- const p=pacedRpcFetch({interval:0,now:()=>clock,sleep:async ms=>{clock+=ms;},fetch:async()=>{calls++;return new Response('limited',{status:429,headers:{'retry-after':'45'}});}});
- await p.fetch('rpc');
- await assert.rejects(readWithRecovery({retryAfter:p.retryAfter,read:async()=>{calls++;}},{signal:abort.signal,onProgress:r=>phases.push(r),sleep:async()=>{abort.abort();}}),{name:'AbortError'});
- assert.equal(calls,1);assert.equal(phases[0].seconds,45);
-});
-test('Read-only retries are bounded, honour cooldown, and recover without signing',async()=>{
- let calls=0,waited=0;const phases=[];
- const result=await readWithRecovery({retryAfter:()=>calls===1?45000:0,read:async()=>{if(++calls===1)throw Error('429');return {loaded:1950};}},{sleep:async ms=>{waited+=ms;},onProgress:r=>phases.push(r)});
- assert.equal(result.loaded,1950);assert.equal(calls,2);assert.equal(waited,45000);assert.ok(phases.some(r=>r.seconds===45));
-});
-
 function fixture(fetch){
  const state={owner:LAUNCH_OWNER,cluster:'devnet',collection:'BZRkdsRsmeBBGb1JsVUbgZbThWraaMPSRazdiQdioLcy',machine:'FLpAJpBG7BDEL5cFZPiouGD6ZWnTWRRBrWxtkjVz9s3R'};
  let locked=false,writes=0;
@@ -63,7 +49,7 @@ test('Actual Umi/web3 stalled RPC releases lock after timeout or cancellation an
  for(const cancel of [false,true]){
   let hang=true;const f=fixture(async(_url,options)=>hang?new Promise(()=>{}):answer(options));
   const abort=new AbortController();const pending=f.client.read({signal:abort.signal});
-  const rejected=assert.rejects(pending,/15 секунд|abort/i);
+  const rejected=assert.rejects(pending,/вовремя|abort/i);
   if(cancel){await new Promise(r=>setImmediate(r));abort.abort();}
   await rejected;assert.equal(f.locked(),false);assert.equal(f.writes(),0);
   hang=false;const result=await f.client.read();assert.deepEqual(result.state,f.state);assert.equal(f.locked(),false);

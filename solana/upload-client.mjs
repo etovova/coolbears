@@ -63,8 +63,6 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
  }
  return {
   read:options=>store.withLock(SETUP_KEY,()=>read(load(),options)),
-  retryAfter:paced.retryAfter,
-  groupSupported:()=>typeof provider.signAllTransactions==='function',
   groupStep:options=>store.withLock(SETUP_KEY,async()=>{
    const s=load();
    if(s.pending||!s.machine||!s.collection)throw Error('Сначала дождись создания машины.');

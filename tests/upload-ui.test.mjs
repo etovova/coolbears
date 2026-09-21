@@ -9,10 +9,10 @@ async function setup(){
  let handler,options;
  const state={collection:'collection',machine:'machine'},wallet={address:'owner',provider:{},connect:async()=>{},disconnect:async()=>{}};
  const client={read:async()=>({state,collection:true,machine:true,loaded:1775,balance:null})};
- const scope={isRateLimit,document:{getElementById:get},URL,location:{href:'https://coolbears-nfts.com/solana-upload/'},createWalletUI:()=>wallet,browserUploadStore:()=>({}),uploadClient:()=>client,runUpload:async(c,o)=>{options=o;return handler(o);}};
+ const scope={AbortController,isRateLimit,document:{getElementById:get},URL,location:{href:'https://coolbears-nfts.com/solana-upload/'},createWalletUI:options=>{wallet.change=options.onChange;return wallet;},browserUploadStore:()=>({}),uploadClient:()=>client,runUpload:async(c,o)=>{options=o;return handler(o);}};
  const source=(await readFile('solana-upload/controller.mjs','utf8')).replace(/^import .*\n/gm,'');runInNewContext(source,scope);
  await get('refresh').onclick();
- return {get,setHandler:f=>handler=f,options:()=>options};
+ return {get,client,wallet,setHandler:f=>handler=f,options:()=>options};
 }
 test('Manual UI performs one group and leaves the next press to the operator',async()=>{
  const f=await setup();assert.equal(f.get('step').disabled,false);
@@ -32,4 +32,19 @@ test('Published page contains no automatic group controls',async()=>{
  assert.doesNotMatch(html,/continuous|group-size|Остановить загрузку|до 125|до 250/);
  assert.doesNotMatch(html,/id="collection"|id="machine"/);
  assert.match(html,/solana-test/);
+});
+test('Refresh replaces stale error immediately, blocks double clicks and retains last verified progress on failure',async()=>{
+ const f=await setup();let reject,calls=0;
+ f.client.read=()=>{calls++;return new Promise((_,r)=>reject=r);};
+ f.get('status').textContent='old error';const one=f.get('refresh').onclick();
+ assert.match(f.get('status').textContent,/Проверяю/);assert.equal(f.get('refresh').disabled,true);
+ await f.get('refresh').onclick();assert.equal(calls,1);
+ reject(Error('429'));await one;
+ assert.equal(f.get('progress').value,1775);assert.equal(f.get('refresh').disabled,false);assert.equal(f.get('step').disabled,false);
+});
+test('Wallet change discards a late read result and keeps upload disabled',async()=>{
+ const f=await setup();let resolve;f.client.read=()=>new Promise(r=>resolve=r);
+ const pending=f.get('refresh').onclick();f.wallet.address='new-owner';f.wallet.change('new-owner');
+ resolve({state:{collection:'old',machine:'old'},machine:true,loaded:1950});await pending;
+ assert.equal(f.get('progress').value,0);assert.equal(f.get('state').textContent,'');assert.equal(f.get('step').disabled,true);
 });
