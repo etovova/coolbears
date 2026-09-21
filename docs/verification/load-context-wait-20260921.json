@@ -1,0 +1,46 @@
+{
+  "version": "load-context-wait-20260921",
+  "trigger": "Screenshot_20260921-134026.Phantom.png: getAccountInfo -32016",
+  "regressionBeforeFix": "failed with RPC getAccountInfo -32016",
+  "tests": {
+    "total": 114,
+    "passed": 114,
+    "failed": 0,
+    "wallet": "stub, not real mobile Phantom"
+  },
+  "readRetry": {
+    "method": "getAccountInfo",
+    "onlyCode": -32016,
+    "maxCalls": 6,
+    "delaysMs": [
+      2000,
+      3000,
+      4000,
+      5000,
+      6000
+    ],
+    "freshnessLowered": false,
+    "sameEndpoint": true,
+    "sameCommitment": true
+  },
+  "networkObservation": {
+    "slot": 501858650,
+    "commitment": "finalized",
+    "loaded": 1950,
+    "minted": 0,
+    "when": "before this patch",
+    "allLoadedEntriesVerified": true
+  },
+  "agentSignedTransactions": 0,
+  "agentBroadcastTransactions": 0,
+  "rootCauseMinus32603": "unresolved",
+  "gates": [
+    "build:solana",
+    "114 tests",
+    "stage-site originals verified",
+    "verify-static"
+  ],
+  "deployment": {
+    "status": "pending"
+  }
+}

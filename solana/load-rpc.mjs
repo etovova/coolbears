@@ -21,7 +21,11 @@ export function readRpc(endpoint,{fetch=globalThis.fetch,timeout=10000,onEvent=(
         if(response.status===401||response.status===403)throw Error('RPC отклонил доступ. Проверь адрес и ключ проекта.');
         if(!response.ok)throw Error(`Сервер RPC недоступен (HTTP ${response.status}).`);
         const body=await response.json();
-        if(body.error){outcome=body.error.code;throw Error(`RPC не выполнил ${method} (код ${body.error.code}).`);}
+        if(body.error){
+          const code=Number.isInteger(body.error.code)?body.error.code:null;outcome=code;
+          // Keep only the numeric code. Provider messages/data may contain keys.
+          throw Object.assign(Error(`RPC не выполнил ${method} (код ${code}).`),{code});
+        }
         if(!Object.hasOwn(body,'result'))throw Error('RPC вернул неполный ответ.');
         return body.result;
       })();

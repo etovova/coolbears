@@ -5,16 +5,16 @@ import {runInNewContext} from 'node:vm';
 import {TARGET} from '../solana/load-model.mjs';
 import {phantomBrowseUrl} from '../wallet-core.mjs';
 const app=(await readFile('solana-load/app.mjs','utf8')).replace(/^import .*\n/gm,'');
-function ui({injected=true,userAgent='Android Chrome',maxTouchPoints=0,legacy=false,initialState={}}={}){
+function ui({injected=true,userAgent='Android Chrome',maxTouchPoints=0,legacy=false,initialState={},duringRecover}={}){
  const elements=new Map(),handlers={},data=new Map(),calls={inspect:0,upload:0,connect:0,writes:0,recover:0},timers=new Set();
  const get=id=>{if(!elements.has(id))elements.set(id,{id,textContent:'',value:'',checked:false,disabled:false,hidden:false,dataset:{},focus(){},select(){}});return elements.get(id);};
- let state={progress:{loaded:1950,slot:42,checkedAt:new Date().toISOString()},pending:false,lastAttempt:null,...initialState},inspectFail;
+ let state={progress:{loaded:1950,slot:42,checkedAt:new Date().toISOString()},pending:false,lastAttempt:null,...initialState},inspectFail,emitChange;
  const provider={isPhantom:true,publicKey:null,on:(name,fn)=>handlers[name]=fn,connect:async()=>{calls.connect++;provider.publicKey={toString:()=>TARGET.owner};},disconnect:async()=>{provider.publicKey=null;handlers.disconnect?.();}};
  const client={inspect:async()=>{calls.inspect++;if(inspectFail)throw Error(inspectFail);return state;},upload:async()=>{calls.upload++;state={...state,progress:{...state.progress,loaded:1975},lastAttempt:{start:1950,count:25,outcome:'account-verified'}};return state;},backup:()=>JSON.stringify(state)};
- client.recoverUnapproved=async declaration=>{calls.recover++;assert.equal(declaration.notApproved,true);assert.equal(declaration.attemptId,state.recoveryId);if(inspectFail)throw Error(inspectFail);state={...state,pending:false,recoveryId:null,nextCount:1,lastAttempt:{...state.lastAttempt,outcome:'owner-reported-unapproved'}};return state;};
+ client.recoverUnapproved=async declaration=>{calls.recover++;assert.equal(declaration.notApproved,true);assert.equal(declaration.attemptId,state.recoveryId);if(inspectFail)throw Error(inspectFail);await duringRecover?.(next=>emitChange({...state,...next}));state={...state,pending:false,recoveryId:null,nextCount:1,syncing:null,lastAttempt:{...state.lastAttempt,outcome:'owner-reported-unapproved'}};return state;};
  const window={location:new URL('https://coolbears-nfts.com/solana-load/?api-key=never-forward#private')};
  if(injected){if(legacy)window.solana=provider;else window.phantom={solana:provider};}
- const scope={document:{getElementById:get},window,navigator:{userAgent,maxTouchPoints},phantomBrowseUrl,TARGET,SETTINGS_KEY:'rpc',DEFAULT_RPC:'https://api.devnet.solana.com',rpcUrl:x=>new URL(x).href,browserStore:()=>({read:k=>data.get(k),write:(k,v)=>{calls.writes++;data.set(k,v);}}),loadClient:()=>client,Intl,Date,setInterval:fn=>{timers.add(fn);return fn;},clearInterval:fn=>timers.delete(fn)};
+ const scope={document:{getElementById:get},window,navigator:{userAgent,maxTouchPoints},phantomBrowseUrl,TARGET,SETTINGS_KEY:'rpc',DEFAULT_RPC:'https://api.devnet.solana.com',rpcUrl:x=>new URL(x).href,browserStore:()=>({read:k=>data.get(k),write:(k,v)=>{calls.writes++;data.set(k,v);}}),loadClient:(_,__,options)=>{emitChange=options.onChange;return client;},Intl,Date,setInterval:fn=>{timers.add(fn);return fn;},clearInterval:fn=>timers.delete(fn)};
  runInNewContext(app,scope);
  return {get,calls,provider,handlers,timers,window,fail:message=>inspectFail=message,setState:next=>state={...state,...next}};
 }
@@ -70,6 +70,16 @@ test('stale declaration resets on attempt change and RPC failure keeps upload bl
  f.setState({recoveryId:'attempt-2'});await f.get('check').onclick();assert.equal(f.get('not-approved').checked,false);assert.equal(f.get('recover').disabled,true);
  f.get('not-approved').checked=true;f.get('not-approved').onchange();f.fail('RPC не ответил');await f.get('recover').onclick();assert.equal(f.get('upload').disabled,true);assert.equal(f.calls.upload,0);assert.equal(f.get('activity').dataset.error,'true');
  f.handlers.disconnect();assert.equal(f.get('recovery').hidden,true);assert.equal(f.get('not-approved').checked,false);
+});
+test('context lag displays read-only waiting and blocks repeated clicks until recovery finishes',async()=>{
+ const f=ui({initialState:{pending:true,recoveryId:'attempt-1'},duringRecover:async notify=>{
+  notify({syncing:{attempt:2}});
+  assert.match(f.get('activity').textContent,/Жду актуальные данные Devnet/);assert.match(f.get('activity').textContent,/2\/5/);
+  assert.equal(f.get('recover').disabled,true);assert.equal(f.get('upload').disabled,true);assert.equal(f.get('check').disabled,true);
+  await f.get('recover').onclick();assert.equal(f.calls.recover,1);assert.equal(f.calls.upload,0);
+ }});
+ await f.get('connect').onclick();f.get('not-approved').checked=true;f.get('not-approved').onchange();await f.get('recover').onclick();
+ assert.match(f.get('activity').textContent,/Восстановление завершено/);assert.equal(f.get('upload').textContent,'Загрузить 1 запись');assert.equal(f.calls.upload,0);
 });
 test('new UI has one upload control, no setup/rehearsal or bulk signing controls',async()=>{
  const html=await readFile('solana-load/index.html','utf8');assert.equal((html.match(/id="upload"/g)||[]).length,1);assert.doesNotMatch(html,/250|Создать|репетиц|signAll/);assert.match(html,/id="attempt"/);assert.match(html,/type="password"/);

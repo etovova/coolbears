@@ -50,7 +50,7 @@ function walletError(e) {
   return `Phantom не подтвердил отправку${Number.isInteger(e?.code)?` (код ${e.code})`:''}. Проверь состояние; новая отправка пока заблокирована.`;
 }
 export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,fetch,timeout,now=Date.now,onChange=()=>{},pause=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
-  endpoint=rpcUrl(endpoint);let networkChecked=false,journal=null,lastSlot=0,finalizedSlot=0;
+  endpoint=rpcUrl(endpoint);let networkChecked=false,journal=null,lastSlot=0,finalizedSlot=0,syncing=null;
   const notify=()=>onChange(view());
   function owner() {if(provider?.publicKey?.toString()!==TARGET.owner)throw Error('Подключи кошелёк владельца коллекции.');}
   function save(){store.write(KEY,journal);notify();}
@@ -93,7 +93,22 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
   }
   async function network(){if(!networkChecked){if(await rpc('getGenesisHash')!==GENESIS)throw Error('Подключён RPC другой сети. Нужен Solana Devnet.');networkChecked=true;}owner();}
   async function snapshot(commitment='confirmed',minSlot=commitment==='finalized'?finalizedSlot:lastSlot) {
-    const result=await rpc('getAccountInfo',[TARGET.machine,{encoding:'base64',commitment,...(minSlot?{minContextSlot:minSlot}:{})}]);
+    // Finalized can lag the last confirmed read, and balanced RPC nodes can
+    // differ. Wait for the SAME freshness floor; never lower it or send here.
+    const params=[TARGET.machine,{encoding:'base64',commitment,...(minSlot?{minContextSlot:minSlot}:{})}];
+    const delays=[2000,3000,4000,5000,6000];let result;
+    try{
+      for(let attempt=0;;attempt++){
+        owner();
+        try{result=await rpc('getAccountInfo',params);break;}
+        catch(e){
+          if(e?.code!==-32016)throw e;
+          if(attempt===delays.length)throw Error('RPC пока не догнал нужный блок. Данные сохранены; повтори проверку или восстановление позже.');
+          syncing={attempt:attempt+1,commitment,minSlot};notify();
+          await pause(delays[attempt]);
+        }
+      }
+    }finally{if(syncing){syncing=null;notify();}}
     owner();const progress=decodeProgress(result,minSlot);
     if(commitment==='finalized')finalizedSlot=progress.slot;
     lastSlot=Math.max(lastSlot,progress.slot);
@@ -130,7 +145,7 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
     if(status?.confirmationStatus==='finalized'&&status.err!=null){finish(p,'failed',r.context.slot);return;}
     // Null/unknown never clears a wallet-managed attempt. No blind re-signing.
   }
-  function view() {const j=journal??store.read(KEY);return {progress:j?.progress??null,pending:!!j?.pending||!!j?.legacyPending?.length,lastAttempt:j?.lastAttempt??null,phase:j?.pending?.phase??null,recoveryId:unapprovedError(j)?attemptId(j.pending):null,nextCount:j?.probe?1:25};}
+  function view() {const j=journal??store.read(KEY);return {progress:j?.progress??null,pending:!!j?.pending||!!j?.legacyPending?.length,lastAttempt:j?.lastAttempt??null,phase:j?.pending?.phase??null,recoveryId:unapprovedError(j)?attemptId(j.pending):null,nextCount:j?.probe?1:25,syncing};}
   async function check() {owner();load();await network();await snapshot();migrate();await reconcileLegacy();if(journal.pending){const p=await snapshot('finalized');await inspectPending(p);}return view();}
   return {
     view,

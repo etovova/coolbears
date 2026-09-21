@@ -42,7 +42,7 @@ function setup(api,options={}){
   const replacement=options.reply?.(q,result,store);if(replacement)return replacement;
   return new Response(JSON.stringify({jsonrpc:'2.0',id:q.id,result}));
  };
- const client=api.loadClient(provider,store,{endpoint:'https://project.example/?api-key=secret-test-key',fetch,now:()=>time,pause:async()=>{}});
+ const client=api.loadClient(provider,store,{endpoint:'https://project.example/?api-key=secret-test-key',fetch,now:()=>time,pause:options.pause??(async()=>{}),onChange:options.onChange});
  return {client,store,provider,fetch,requests,urls,walletCalls:()=>walletCalls,setCount:n=>count=n};
 }
 for(const [label,api] of [['source',source],['shipped SDK',shipped]]){
@@ -165,6 +165,43 @@ for(const [label,api] of [['source',source],['shipped SDK',shipped]]){
   assert.equal(result.lastAttempt.count,1);assert.notEqual(result.lastAttempt.blockhash,original.pending.blockhash);assert.equal(store.read(api.KEY).history.length,3);
   assert.equal(store.read(api.KEY).events.findLast(e=>e.phase==='wallet-request').transactionBytes,256);
   assert.equal(f.requests.some(q=>q.method==='sendTransaction'),false);
+ });
+ test(`${label}: recovery waits for finalized catch-up without lowering freshness or calling Phantom`,async()=>{
+  const waits=[],states=[];let lag=false,reads=0;
+  const f=setup(api,{store:unapprovedStore(api),slot:phoneSlot,pause:async ms=>{waits.push(ms);assert.ok(f.store.read(api.KEY).pending);assert.equal(f.walletCalls(),0);},onChange:v=>states.push(structuredClone(v)),reply:q=>{
+   if(q.method==='getAccountInfo'&&lag&&++reads<=2)return new Response(JSON.stringify({error:{code:-32016,message:'Minimum context slot has not been reached',data:{contextSlot:phoneSlot-30}}}));
+  }});
+  await f.client.inspect();lag=true;
+  const result=await f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true});
+  assert.equal(result.pending,false);assert.equal(result.nextCount,1);assert.equal(f.walletCalls(),0);assert.deepEqual(waits,[2000,3000]);
+  const recoveryReads=f.requests.filter(q=>q.method==='getAccountInfo').slice(-3);
+  assert.ok(recoveryReads.every(q=>q.params[1].commitment==='finalized'&&q.params[1].minContextSlot===phoneSlot));
+  assert.ok(states.some(v=>v.syncing?.attempt===1&&v.pending));assert.equal(result.syncing,null);
+  assert.equal(f.requests.some(q=>['getLatestBlockhash','sendTransaction'].includes(q.method)),false);
+ });
+ test(`${label}: persistent context lag stops after six reads and preserves recovery intent`,async()=>{
+  const waits=[],store=unapprovedStore(api),original=store.read(api.KEY);
+  const f=setup(api,{store,slot:phoneSlot,pause:async ms=>waits.push(ms),reply:q=>q.method==='getAccountInfo'?new Response(JSON.stringify({error:{code:-32016,message:'secret-key'}})):null});
+  await assert.rejects(f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true}),/не догнал/);
+  assert.equal(f.requests.filter(q=>q.method==='getAccountInfo').length,6);assert.deepEqual(waits,[2000,3000,4000,5000,6000]);
+  assert.ok(store.read(api.KEY).pending);assert.deepEqual(store.read(api.KEY).history,original.history);assert.equal(store.read(api.KEY).probe,undefined);assert.equal(f.walletCalls(),0);assert.equal(f.client.view().syncing,null);assert.equal(f.client.backup().includes('secret-key'),false);
+ });
+ test(`${label}: lag wait stops on wallet switch or stale reply and never retries other errors`,async()=>{
+  for(const mode of ['wallet-switch','stale','http429','http503','other-rpc']){
+   let reads=0;const waits=[];
+   const f=setup(api,{store:unapprovedStore(api),slot:phoneSlot,pause:async ms=>{waits.push(ms);if(mode==='wallet-switch')f.provider.publicKey=new PublicKey('11111111111111111111111111111111');},reply:q=>{
+    if(q.method!=='getAccountInfo')return;
+    reads++;
+    if(mode==='http429')return new Response('limited',{status:429});
+    if(mode==='http503')return new Response('unavailable',{status:503});
+    if(mode==='other-rpc')return new Response(JSON.stringify({error:{code:-32005}}));
+    if(reads===1)return new Response(JSON.stringify({error:{code:-32016}}));
+    return new Response(JSON.stringify({result:account(1950,phoneSlot-1000)}));
+   }});
+   await assert.rejects(f.client.recoverUnapproved({attemptId:f.client.view().recoveryId,notApproved:true}));
+   assert.ok(f.store.read(api.KEY).pending);assert.equal(f.walletCalls(),0);assert.equal(f.store.read(api.KEY).probe,undefined);assert.equal(f.client.view().syncing,null);
+   assert.equal(reads,mode==='stale'?2:1);assert.equal(waits.length,['wallet-switch','stale'].includes(mode)?1:0);
+  }
  });
  test(`${label}: recovery requires current explicit declaration and a completed matching rejection`,async()=>{
   const mutations=[j=>j.pending.signature=signature,j=>j.pending.phase='wallet',j=>j.events.push({phase:'wallet-return',signature}),j=>j.events.find(e=>e.phase==='wallet-error').code=4001,j=>j.events.find(e=>e.phase==='wallet-request').start=1925,j=>j.events.find(e=>e.phase==='wallet-error').at='invalid',j=>j.lastAttempt.startedAt='2026-01-01T00:00:00Z',j=>j.legacyPending.push({start:1925,count:25,signature,lastValidBlockHeight:1})];

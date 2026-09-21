@@ -1,4 +1,4 @@
-import {loadClient,browserStore,TARGET,SETTINGS_KEY,rpcUrl,DEFAULT_RPC} from './sdk.js?v=load-recovery-20260921';
+import {loadClient,browserStore,TARGET,SETTINGS_KEY,rpcUrl,DEFAULT_RPC} from './sdk.js?v=load-context-wait-20260921';
 import {phantomBrowseUrl} from '../wallet-core.mjs';
 const $=id=>document.getElementById(id),store=browserStore();
 let provider,client,busy=false,generation=0,view={},ticker,recoveryId=null;
@@ -15,6 +15,7 @@ function rpcLabel(){const custom=endpoint()!==DEFAULT_RPC;$('rpc-current').textC
 function activity(message,error=false){$('activity').textContent=message;$('activity').dataset.error=String(error);}
 function render(next=view){
   view=next;
+  if(view.syncing)activity(`Жду актуальные данные Devnet · проверка ${view.syncing.attempt}/5. Подпись не запрашивается.`);
   const connected=provider?.publicKey?.toString(),owned=connected===TARGET.owner;
   const available=Boolean(detectedProvider());
   $('connect').hidden=!available&&!connected;$('wallet-open').hidden=available||Boolean(connected);
