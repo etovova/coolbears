@@ -21,9 +21,4 @@ for(const file of generated){
   }
 }
 
-for (let i = 0; i < 10000; i++) {
-  const file = `metadata/hidden/${String(i).padStart(4, '0')}.json`;
-  assert.deepEqual(await readFile(file), await readFile(`public-site/${file}`), file);
-  if (i > 0) assert.deepEqual(await readFile(`metadata/mint/${i}.json`), await readFile(`public-site/metadata/mint/${i}.json`));
-}
-console.log('All generated bundles and 10000 hidden metadata files match the staged site.');
+console.log('Static website bundles match the staged site.');

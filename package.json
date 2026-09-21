@@ -6,31 +6,13 @@
   "scripts": {
     "build:site": "node scripts/stage-site.mjs",
     "build:wallet": "node scripts/build-wallet.mjs",
-    "verify": "node scripts/verify-static.mjs",
-    "verify:plan": "python3 scripts/collection/verify-plan.py",
-    "verify:car": "node scripts/collection/verify-car.mjs"
+    "verify": "node scripts/verify-static.mjs"
   },
   "dependencies": {
-    "@metaplex-foundation/mpl-core": "1.10.0",
-    "@metaplex-foundation/mpl-core-candy-machine": "0.3.0",
-    "@metaplex-foundation/mpl-toolbox": "0.11.5",
-    "@metaplex-foundation/umi": "1.6.0",
-    "@metaplex-foundation/umi-bundle-defaults": "1.6.0",
-    "@metaplex-foundation/umi-signer-wallet-adapters": "1.6.0",
-    "@metaplex-foundation/umi-web3js-adapters": "1.6.0",
     "@solana/wallet-standard-wallet-adapter-base": "1.1.6",
     "@solana/web3.js": "1.99.0",
     "@wallet-standard/app": "1.1.1",
     "esbuild": "0.28.2"
-  },
-  "devDependencies": {
-    "@ipld/car": "5.4.7",
-    "@ipld/dag-pb": "4.2.0",
-    "happy-dom": "20.14.5",
-    "ipfs-unixfs-exporter": "16.2.3",
-    "ipfs-unixfs-importer": "17.1.1",
-    "litesvm": "1.4.1",
-    "multiformats": "14.0.5"
   },
   "overrides": {
     "bn.js@^4.0.0": "4.12.5",

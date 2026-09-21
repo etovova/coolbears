@@ -202,5 +202,4 @@
   }
 
   apply(lang);
-  if (globalThis.location?.href && new URL(location.href).searchParams.has('connectWallet')) connect();
 })();

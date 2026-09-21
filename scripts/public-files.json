@@ -16,7 +16,6 @@
   "metadata/0000.json",
   "metadata/collection.json",
   "mobile-fix.css",
-  "preview/index.html",
   "privacy.html",
   "robots.txt",
   "sitemap.xml",
@@ -26,6 +25,5 @@
   "wallet-ui.mjs",
   "wallet.css",
   "wallet-standard.js",
-  "wallet-standard.js.LEGAL.txt",
-  "manage/index.html"
+  "wallet-standard.js.LEGAL.txt"
 ]

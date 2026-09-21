@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir, rm, copyFile } from 'node:fs/promises';
+import { readFile, mkdir, rm, copyFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -29,16 +29,4 @@ for (const file of files) {
   await mkdir(path.dirname(target), { recursive: true });
   await copyFile(file, target);
 }
-await mkdir('public-site/metadata/hidden', { recursive: true });
-await mkdir('public-site/metadata/mint', { recursive: true });
-await mkdir('metadata/mint', { recursive: true });
-for (let i = 0; i < policy.supply; i++) {
-  const id = String(i).padStart(4, '0');
-  const json = JSON.stringify({ ...item, name: `CoolBears #${id} — Hidden Bear` }) + '\n';
-  await writeFile(`public-site/metadata/hidden/${id}.json`, json);
-  if (i > 0) {
-    await writeFile(`public-site/metadata/mint/${i}.json`, json);
-    await writeFile(`metadata/mint/${i}.json`, json);
-  }
-}
-console.log(JSON.stringify({ version: policy.version, staticFiles: files.length, hiddenItems: policy.supply, originalsVerified: true, salesOpen: false }));
+console.log(JSON.stringify({ version: policy.version, staticFiles: files.length, originalsVerified: true, salesOpen: false }));
