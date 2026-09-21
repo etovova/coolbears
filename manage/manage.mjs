@@ -1,6 +1,7 @@
 import { createWalletUI } from '../wallet-ui.mjs';
 import { CoolBearsClient } from '../chain/runtime.mjs';
 import { SPEC, validateCommitment } from '../chain/spec.mjs';
+import { rpcErrorMessage } from '../chain/rpc.mjs';
 const $ = id => document.getElementById(id);
 let busy = false, client, release;
 const status = text => { $('status').textContent = text; };
@@ -29,7 +30,7 @@ function renderState(state) {
 async function action(fn) {
   if (busy) return; busy = true; $('create').disabled = true; $('connect').disabled = true; $('import').disabled = true; $('rpc').disabled = true; $('reveal').disabled = true;
   try { await fn(); } catch (e) {
-    status(e?.code === 4001 ? 'Подпись отменена. Можно продолжить с сохранённого шага.' : `Операция остановлена. Прогресс сохранён. ${e.message}`);
+    status(e?.code === 4001 ? 'Подпись отменена. Можно продолжить с сохранённого шага.' : rpcErrorMessage(e) || `Операция остановлена. ${e.message}`);
   } finally {
     busy = false; $('connect').disabled = false; $('import').disabled = false; $('rpc').disabled = false;
     $('create').disabled = wallet.address !== SPEC.owner || !release?.verified;

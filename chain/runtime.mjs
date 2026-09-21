@@ -7,6 +7,7 @@ import { mplCandyMachine, fetchCandyMachine, fetchCandyGuard, findCandyGuardPda 
 import { SPEC, CLOSED_DATE, GENESIS, PROGRAMS, validateCommitment, assertQuantity, commitmentFor, indexFromName, assertRevealTime } from './spec.mjs';
 import { buildCollection, buildReserved, buildMachine, buildMint, buildReveal } from './builders.mjs';
 import { Journal, performOperation } from './journal.mjs';
+import { createRpcFetch } from './rpc.mjs';
 
 export class CoolBearsClient {
   constructor({ provider, address, endpoint, cluster = 'devnet', storage = globalThis.localStorage, onProgress = () => {} }) {
@@ -16,8 +17,9 @@ export class CoolBearsClient {
     if (!storage?.getItem || !storage?.setItem) throw Error('Progress storage is unavailable');
     this.provider = provider; this.address = publicKey(address); this.cluster = cluster;
     this.storage = storage; this.onProgress = onProgress;
-    this.connection = new Connection(endpoint, { commitment: 'confirmed', confirmTransactionInitialTimeout: 45000 });
-    this.umi = createUmi(endpoint).use(mplCore()).use(mplCandyMachine()).use(signerIdentity(createNoopSigner(this.address)));
+    this.connection = new Connection(endpoint, { commitment: 'confirmed', confirmTransactionInitialTimeout: 45000,
+      disableRetryOnRateLimit: true, fetch: createRpcFetch({ endpoint, cluster, onProgress }) });
+    this.umi = createUmi(this.connection).use(mplCore()).use(mplCandyMachine()).use(signerIdentity(createNoopSigner(this.address)));
     this.journal = new Journal(storage, `${cluster}:${this.address}`);
     this.sessionKey = `coolbears-v2:deployment:${cluster}:${this.address}`;
   }
@@ -26,11 +28,11 @@ export class CoolBearsClient {
   }
   async checkNetwork() {
     this.assertWallet();
+    if (this.networkCheckedUntil > Date.now()) return;
     if (await this.connection.getGenesisHash() !== GENESIS[this.cluster]) throw Error('RPC network does not match the selected network');
-    for (const address of Object.values(PROGRAMS)) {
-      const a = await this.connection.getAccountInfo(new PublicKey(address));
-      if (!a?.executable) throw Error('Metaplex program is not available on this network');
-    }
+    const programs = await this.connection.getMultipleAccountsInfo(Object.values(PROGRAMS).map(address => new PublicKey(address)));
+    if (programs.length !== Object.keys(PROGRAMS).length || programs.some(a => !a?.executable)) throw Error('Metaplex program is not available on this network');
+    this.networkCheckedUntil = Date.now() + 60000;
   }
   load() { return JSON.parse(this.storage.getItem(this.sessionKey) || 'null'); }
   save(state) {

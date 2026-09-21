@@ -23,7 +23,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: node --test tests/journal.test.mjs tests/runtime.test.mjs tests/ui.test.mjs
+      - run: node --test tests/journal.test.mjs tests/runtime.test.mjs tests/rpc.test.mjs tests/ui.test.mjs
       - run: npm run build:wallet
       - run: npm run build:chain
       - run: node scripts/stage-site.mjs
