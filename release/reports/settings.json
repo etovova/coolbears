@@ -1,0 +1,13 @@
+{
+  "date": "2026-09-21T14:58:20.284Z",
+  "scope": "offline SDK construction only",
+  "passed": true,
+  "checks": [
+    "collection name, owner and 700-bps royalties serialized by official SDK",
+    "9999 public items, mutable hidden metadata and exact 32-byte commitment",
+    "0.5 SOL payment, sales closed, no lifetime wallet limit",
+    "complete machine transaction fits Solana packet size and all signatures verify",
+    "invalid commitment and wrong authority rejected before signing",
+    "approved descriptions preserved; hidden placeholder has no private traits"
+  ]
+}
