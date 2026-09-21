@@ -11,7 +11,9 @@
     "verify:devnet-finalized": "node verify-devnet-finalized.mjs",
     "verify:phantom": "node verify-phantom.mjs",
     "verify:phantom-rpc": "node verify-phantom-rpc.mjs",
-    "verify:journal": "node verify-journal.mjs"
+    "verify:journal": "node verify-journal.mjs",
+    "verify:offline": "node verify-offline.mjs",
+    "verify:phantom-live-rpc": "node verify-phantom-live-rpc.mjs"
   },
   "dependencies": {
     "@ipld/car": "5.4.7",

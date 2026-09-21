@@ -1,0 +1,66 @@
+{
+  "page": "phantom-check-v2",
+  "network": "devnet",
+  "savedIntent": false,
+  "lastError": null,
+  "rpc": [
+    {
+      "at": "2026-09-21T17:38:14.345Z",
+      "type": "request",
+      "method": "getGenesisHash",
+      "attempt": 1
+    },
+    {
+      "at": "2026-09-21T17:38:14.683Z",
+      "type": "response",
+      "method": "getGenesisHash",
+      "attempt": 1,
+      "httpStatus": 429,
+      "rpcCode": 429
+    },
+    {
+      "at": "2026-09-21T17:38:14.684Z",
+      "type": "limited",
+      "method": "getGenesisHash",
+      "attempt": 1,
+      "retryAt": 1790012299684
+    },
+    {
+      "at": "2026-09-21T17:38:14.684Z",
+      "type": "waiting",
+      "method": "getGenesisHash",
+      "attempt": 2,
+      "waitMs": 5000,
+      "rateLimited": true
+    },
+    {
+      "at": "2026-09-21T17:38:19.684Z",
+      "type": "request",
+      "method": "getGenesisHash",
+      "attempt": 2
+    },
+    {
+      "at": "2026-09-21T17:38:19.767Z",
+      "type": "response",
+      "method": "getGenesisHash",
+      "attempt": 2,
+      "httpStatus": 429,
+      "rpcCode": 429
+    },
+    {
+      "at": "2026-09-21T17:38:19.767Z",
+      "type": "limited",
+      "method": "getGenesisHash",
+      "attempt": 2,
+      "retryAt": 1790012309767
+    },
+    {
+      "at": "2026-09-21T17:38:19.768Z",
+      "type": "waiting",
+      "method": "getGenesisHash",
+      "attempt": 3,
+      "waitMs": 9999,
+      "rateLimited": true
+    }
+  ]
+}

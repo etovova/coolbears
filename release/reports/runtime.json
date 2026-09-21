@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-21T16:52:13.580Z",
+  "checkedAt": "2026-09-21T17:56:41.902Z",
   "scope": "local LiteSVM only; no real Devnet or Phantom execution",
   "passed": true,
   "litesvm": "1.4.1",
@@ -92,7 +92,7 @@
     {
       "step": "machine-9999",
       "bytes": 797,
-      "computeUnits": "73941"
+      "computeUnits": "75441"
     },
     {
       "step": "open-lab-only",
@@ -102,257 +102,257 @@
     {
       "step": "paid-mint",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-2",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-3",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-4",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-5",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-6",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-7",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-8",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-9",
       "bytes": 652,
-      "computeUnits": "59003"
+      "computeUnits": "60503"
     },
     {
       "step": "paid-mint-10",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-11",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-12",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-13",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-14",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-15",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-16",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-17",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-18",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-19",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-20",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-21",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-22",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-23",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-24",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-25",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-26",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-27",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-28",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-29",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-30",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-31",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-32",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-33",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-34",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-35",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-36",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-37",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-38",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-39",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-40",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-41",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-42",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-43",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-44",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-45",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-46",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-47",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-48",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-49",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-50",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "paid-mint-51",
       "bytes": 652,
-      "computeUnits": "59065"
+      "computeUnits": "60565"
     },
     {
       "step": "close-lab",
@@ -372,7 +372,7 @@
     {
       "step": "one-item-machine",
       "bytes": 797,
-      "computeUnits": "64121"
+      "computeUnits": "74621"
     },
     {
       "step": "open-one-item-lab",
@@ -382,7 +382,7 @@
     {
       "step": "last-available-item",
       "bytes": 652,
-      "computeUnits": "61267"
+      "computeUnits": "71767"
     }
   ]
 }

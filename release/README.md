@@ -22,7 +22,7 @@ requires a finalized block height and repeated finalized account absence with
 `minContextSlot`, preventing a lagging RPC from authorizing a replacement. A
 processed or confirmed error is insufficient to retry; failures must finalize.
 
-Run `npm run --prefix release verify:phantom`: 16 adapter/IndexedDB/transport
+Run `npm run --prefix release verify:phantom`: 78 adapter/IndexedDB/transport
 cases pass with the real Core program in LiteSVM, including a wallet exposing
 only sign-and-send, cancellations, concurrency, late/lost responses, wrong
 wallet/network and finality. The signed test transaction is 441 bytes. These
@@ -30,11 +30,25 @@ tests are not physical Phantom acceptance. `reports/phantom-adapter.json`
 records their exact scope. The owner's finalized Devnet balance was already
 0.2956272 SOL; no funding transfer was needed (`phantom-owner-balance.json`).
 
-For the physical check, open https://coolbears-nfts.com/phantom-check/ inside
-Phantom, enable Testnet Mode with Solana Devnet, connect the approved owner and
-choose “Создать тестовый NFT”. The page shows the saved asset, transaction link
-and a copyable result. Wallet display, the user's approval and the real
-transaction remain pending until verified after this handoff.
+The next owner attempt is blocked until a stable configured Devnet RPC passes
+all preparation reads and simulation. A successful connection in our browser
+is not evidence of availability in the owner's mobile environment. The latest
+provided diagnostic stops while waiting after two `getGenesisHash` 429 errors;
+no saved intent or NFT creation is shown. Do not ask the owner to repeat this
+known failing handoff. No production page change is included in this audit.
+
+Run `npm run --prefix release verify:offline` for the complete local gate:
+193 checks across settings (6), program execution (72), journal (12), Phantom
+flow (78), and HTTP/RPC transport (25). These are not 193 physical-wallet tests.
+The read-only `verify:phantom-live-rpc` script must separately pass against a
+configured RPC before the next handoff; its current reports record failures,
+not a completed real simulation. A hosted Node environment may need
+`node --use-env-proxy release/verify-phantom-live-rpc.mjs`.
+
+The ongoing whole-site documentation review and outstanding gates are recorded
+in `KNOWLEDGE.md`; its source catalogue distinguishes discovered pages from
+reviewed content. The user explicitly requested all linked sites, not only
+NFT-specific URLs, and frequent durable checkpoints.
 
 The owner's mobile screenshots confirmed a successful connection, followed by
 HTTP 429 before an asset intent existed. The first error message incorrectly
@@ -47,7 +61,7 @@ server cooldown; each request including its response body has a 12-second
 deadline. It never retries submission or signing. Umi and Web3.js share one
 connection and transport. Public diagnostics record method/status, never request
 bodies or endpoint credentials. Run `npm run --prefix release verify:phantom-rpc`
-for 12 transport cases. The 16 flow cases include pre-signature 429 and recovery
+for 25 transport cases. The 78 flow cases include pre-signature 429 and recovery
 after a submitted transaction hits a read limit, without a second wallet request.
 The shared public RPC remains subject to provider/IP limits; this is a bounded
 recovery fix, not a guarantee that the owner's mobile network has recovered.
@@ -169,8 +183,8 @@ npm run --prefix release fetch:programs
 npm run --prefix release verify:runtime
 ```
 
-The next stage is the physical Phantom signature and display acceptance
-test. This directory is not included in the website build. Sales remain
+Before the physical Phantom signature and display acceptance test, resolve
+the current RPC blocker and pass the complete preparation gate. This directory is not included in the website build. Sales remain
 closed; the lab opens only its separately named disposable test collection.
 
 The checked source decisions are in SOURCES.md. The settings report explicitly covers offline SDK construction only. Real Devnet execution, the physical Phantom wallet, and marketplace indexing are separate gates.

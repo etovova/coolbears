@@ -97,3 +97,11 @@ streamers. Installed jayson uses StreamValues and Verifier, not the affected
 path filters. npm still flags the dependency tree. This is an inspected usage
 limitation, not a claim that arbitrary future use is safe. Forcing stream-json
 3.x into jayson's 1.x CommonJS API is not an accepted fix; track upstream support.
+
+## Expanded review and test gates
+
+The owner's latest scope is the entire available documentation sites, including
+Phantom and Solflare, not only the original NFT URLs. See [KNOWLEDGE.md](KNOWLEDGE.md)
+and `reports/metaplex-documentation-catalogue.json` for dated coverage and gaps.
+The local aggregate now passes 193 checks; current real preparation attempts are
+blocked by RPC errors. No physical wallet or marketplace pass is implied.

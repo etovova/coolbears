@@ -9,7 +9,14 @@ const ok = () => new Response('{"jsonrpc":"2.0","id":1,"result":"ok"}');
 function fixture(responses, options = {}) {
   let clock = 0; const calls = [], waits = [];
   const rpc = createRpcFetch({ now: () => clock, wait: async ms => { waits.push(ms); clock += ms; }, minIntervalMs: 10,
-    fetchImpl: async (url, init) => { calls.push({ at: clock, method: JSON.parse(init.body).method }); return responses.shift()(); }, ...options });
+    fetchImpl: async (url, init) => {
+      const sent = JSON.parse(init.body); calls.push({ at: clock, method: sent.method });
+      const response = responses.shift()(); const body = await response.text();
+      let data; try { data = JSON.parse(body); } catch {}
+      // A JSON-RPC server echoes the client's ID, including Web3.js string IDs.
+      if (data?.jsonrpc) data.id = sent.id;
+      return new Response(data ? JSON.stringify(data) : body, { status: response.status, headers: response.headers });
+    }, ...options });
   return { rpc, calls, waits };
 }
 async function check(name, fn) { await fn(); report.checks.push(name); }
@@ -76,6 +83,70 @@ try {
     const connection = new Connection('https://api.devnet.solana.com', { fetch: f.rpc.fetch, disableRetryOnRateLimit: true });
     const umi = createUmi(connection);
     await assert.rejects(umi.rpc.getGenesisHash(), /RPC_RATE_LIMIT/); assert.equal(f.calls.length, 1);
+  });
+  await check('observed OnFinality HTTP 429 with JSON code -32029 is recognized', async () => {
+    const f = fixture([() => new Response('{"error":{"code":-32029}}', { status: 429 }), ok]);
+    await f.rpc.fetch('https://example.com', request('getAccountInfo'));
+    assert.deepEqual(f.calls.map(c => c.at), [0, 5000]);
+  });
+  for (const status of [401, 500, 502, 503]) {
+    await check(`HTTP ${status} fails through actual Web3.js without retrying and leaves the queue usable`, async () => {
+      const f = fixture([() => new Response('upstream rejected', { status }), ok]);
+      const c = new Connection('https://example.com', { fetch: f.rpc.fetch, disableRetryOnRateLimit: true });
+      await assert.rejects(c.getGenesisHash()); assert.equal(f.calls.length, 1);
+      assert.equal(await c.getGenesisHash(), 'ok'); assert.equal(f.calls.length, 2);
+    });
+  }
+  await check('HTTP 200 HTML error page is rejected by actual Umi and does not poison the queue', async () => {
+    const f = fixture([() => new Response('<html>error</html>'), ok]);
+    const u = createUmi(new Connection('https://example.com', { fetch: f.rpc.fetch, disableRetryOnRateLimit: true }));
+    await assert.rejects(u.rpc.getGenesisHash()); assert.equal(f.calls.length, 1);
+    assert.equal(await u.rpc.getGenesisHash(), 'ok');
+  });
+  await check('HTTP 200 authentication error remains a failure and is not retried as congestion', async () => {
+    const f = fixture([() => new Response('{"jsonrpc":"2.0","id":1,"error":{"code":-32000,"message":"Unauthorized"}}')]);
+    const u = createUmi(new Connection('https://example.com', { fetch: f.rpc.fetch, disableRetryOnRateLimit: true }));
+    await assert.rejects(u.rpc.getGenesisHash(), /Unauthorized/); assert.equal(f.calls.length, 1); assert.equal(f.rpc.retryAt(), 0);
+  });
+  await check('network loss fails once and a later manual request can succeed', async () => {
+    const f = fixture([() => { throw TypeError('Failed to fetch'); }, ok]);
+    await assert.rejects(f.rpc.fetch('https://example.com', request('getBalance')), /RPC_UNAVAILABLE/);
+    await f.rpc.fetch('https://example.com', request('getBalance')); assert.equal(f.calls.length, 2);
+  });
+  await check('already aborted request performs no network call', async () => {
+    const f = fixture([]); const controller = new AbortController(); controller.abort();
+    await assert.rejects(f.rpc.fetch('https://example.com', { ...request('getBalance'), signal: controller.signal }), /RPC_ABORTED/);
+    assert.equal(f.calls.length, 0);
+  });
+  await check('abort during fetch releases the queue for the next request', async () => {
+    let calls = 0; const controller = new AbortController();
+    const rpc = createRpcFetch({ minIntervalMs: 0, fetchImpl: async (url, init) => {
+      if (++calls > 1) return ok();
+      return new Promise((resolve, reject) => {
+        init.signal.addEventListener('abort', () => reject(Error('aborted'))); controller.abort();
+      });
+    } });
+    await assert.rejects(rpc.fetch('https://example.com', { ...request('getBalance'), signal: controller.signal }), /RPC_ABORTED/);
+    assert.equal((await rpc.fetch('https://example.com', request('getBalance'))).status, 200); assert.equal(calls, 2);
+  });
+  await check('timeout before response headers releases the queue', async () => {
+    let calls = 0; const rpc = createRpcFetch({ timeoutMs: 5, minIntervalMs: 0, fetchImpl: async (url, init) => {
+      if (++calls > 1) return ok();
+      return new Promise((resolve, reject) => init.signal.addEventListener('abort', () => reject(Error('aborted'))));
+    } });
+    await assert.rejects(rpc.fetch('https://example.com', request('getBalance')), /RPC_TIMEOUT/);
+    assert.equal((await rpc.fetch('https://example.com', request('getBalance'))).status, 200); assert.equal(calls, 2);
+  });
+  await check('queue time counts against the overall request deadline', async () => {
+    const f = fixture([ok], { budgetMs: 5, minIntervalMs: 10 });
+    const results = await Promise.allSettled([f.rpc.fetch('https://example.com', request('getBalance')), f.rpc.fetch('https://example.com', request('getBalance'))]);
+    assert.equal(results[0].status, 'fulfilled'); assert.match(results[1].reason.message, /RPC_TIMEOUT/); assert.equal(f.calls.length, 1);
+  });
+  await check('diagnostic history is bounded and returned entries cannot mutate it', async () => {
+    const f = fixture(Array.from({ length: 20 }, () => ok));
+    for (let i = 0; i < 20; i++) await f.rpc.fetch('https://example.com', request('getBalance'));
+    const snapshot = f.rpc.diagnostics(); assert.equal(snapshot.length, 30); snapshot[0].type = 'changed';
+    assert.notEqual(f.rpc.diagnostics()[0].type, 'changed');
   });
   report.passed = true;
 } catch (error) { report.error = String(error.stack); process.exitCode = 1; }

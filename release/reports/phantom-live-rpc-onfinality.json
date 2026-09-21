@@ -1,0 +1,234 @@
+{
+  "checkedAt": "2026-09-21T17:43:51.979Z",
+  "endpoint": "https://solana-devnet.api.onfinality.io/public",
+  "scope": "real Devnet reads and actual page Core simulation; no wallet approval or transaction submission",
+  "passed": false,
+  "checks": [
+    "correct Devnet genesis",
+    "owner finalized balance covers the preflight threshold",
+    "Core program is executable",
+    "existing lab collection deserializes with 7 percent royalties",
+    "historical signature lookup returns the finalized successful lab mint"
+  ],
+  "submittedTransactions": 0,
+  "physicalPhantomVerified": false,
+  "ownerBalanceLamports": 295627200,
+  "error": "Error: RPC_RATE_LIMIT\n    at failure (file:///workspace/scratch/0cdb6e745249/coolbears-audit/release/phantom-rpc.mjs:20:57)\n    at run (file:///workspace/scratch/0cdb6e745249/coolbears-audit/release/phantom-rpc.mjs:58:81)\n    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)",
+  "rpc": [
+    {
+      "at": "2026-09-21T17:44:34.958Z",
+      "type": "response",
+      "method": "getBalance",
+      "attempt": 3,
+      "httpStatus": 200
+    },
+    {
+      "at": "2026-09-21T17:44:34.959Z",
+      "type": "waiting",
+      "method": "getAccountInfo",
+      "attempt": 1,
+      "waitMs": 799,
+      "rateLimited": false
+    },
+    {
+      "at": "2026-09-21T17:44:35.759Z",
+      "type": "request",
+      "method": "getAccountInfo",
+      "attempt": 1
+    },
+    {
+      "at": "2026-09-21T17:44:36.670Z",
+      "type": "response",
+      "method": "getAccountInfo",
+      "attempt": 1,
+      "httpStatus": 429,
+      "rpcCode": -32029
+    },
+    {
+      "at": "2026-09-21T17:44:36.670Z",
+      "type": "limited",
+      "method": "getAccountInfo",
+      "attempt": 1,
+      "retryAt": 1790012681670
+    },
+    {
+      "at": "2026-09-21T17:44:36.670Z",
+      "type": "waiting",
+      "method": "getAccountInfo",
+      "attempt": 2,
+      "waitMs": 5000,
+      "rateLimited": true
+    },
+    {
+      "at": "2026-09-21T17:44:41.672Z",
+      "type": "request",
+      "method": "getAccountInfo",
+      "attempt": 2
+    },
+    {
+      "at": "2026-09-21T17:44:49.467Z",
+      "type": "response",
+      "method": "getAccountInfo",
+      "attempt": 2,
+      "httpStatus": 200
+    },
+    {
+      "at": "2026-09-21T17:44:49.470Z",
+      "type": "waiting",
+      "method": "getAccountInfo",
+      "attempt": 1,
+      "waitMs": 797,
+      "rateLimited": false
+    },
+    {
+      "at": "2026-09-21T17:44:50.268Z",
+      "type": "request",
+      "method": "getAccountInfo",
+      "attempt": 1
+    },
+    {
+      "at": "2026-09-21T17:44:50.598Z",
+      "type": "response",
+      "method": "getAccountInfo",
+      "attempt": 1,
+      "httpStatus": 429,
+      "rpcCode": -32029
+    },
+    {
+      "at": "2026-09-21T17:44:50.599Z",
+      "type": "limited",
+      "method": "getAccountInfo",
+      "attempt": 1,
+      "retryAt": 1790012695599
+    },
+    {
+      "at": "2026-09-21T17:44:50.599Z",
+      "type": "waiting",
+      "method": "getAccountInfo",
+      "attempt": 2,
+      "waitMs": 5000,
+      "rateLimited": true
+    },
+    {
+      "at": "2026-09-21T17:44:55.600Z",
+      "type": "request",
+      "method": "getAccountInfo",
+      "attempt": 2
+    },
+    {
+      "at": "2026-09-21T17:45:05.126Z",
+      "type": "response",
+      "method": "getAccountInfo",
+      "attempt": 2,
+      "httpStatus": 200
+    },
+    {
+      "at": "2026-09-21T17:45:05.137Z",
+      "type": "waiting",
+      "method": "getSignatureStatuses",
+      "attempt": 1,
+      "waitMs": 789,
+      "rateLimited": false
+    },
+    {
+      "at": "2026-09-21T17:45:05.926Z",
+      "type": "request",
+      "method": "getSignatureStatuses",
+      "attempt": 1
+    },
+    {
+      "at": "2026-09-21T17:45:06.453Z",
+      "type": "response",
+      "method": "getSignatureStatuses",
+      "attempt": 1,
+      "httpStatus": 429,
+      "rpcCode": -32029
+    },
+    {
+      "at": "2026-09-21T17:45:06.453Z",
+      "type": "limited",
+      "method": "getSignatureStatuses",
+      "attempt": 1,
+      "retryAt": 1790012711453
+    },
+    {
+      "at": "2026-09-21T17:45:06.453Z",
+      "type": "waiting",
+      "method": "getSignatureStatuses",
+      "attempt": 2,
+      "waitMs": 5000,
+      "rateLimited": true
+    },
+    {
+      "at": "2026-09-21T17:45:11.454Z",
+      "type": "request",
+      "method": "getSignatureStatuses",
+      "attempt": 2
+    },
+    {
+      "at": "2026-09-21T17:45:19.275Z",
+      "type": "response",
+      "method": "getSignatureStatuses",
+      "attempt": 2,
+      "httpStatus": 429,
+      "rpcCode": -32029
+    },
+    {
+      "at": "2026-09-21T17:45:19.275Z",
+      "type": "limited",
+      "method": "getSignatureStatuses",
+      "attempt": 2,
+      "retryAt": 1790012729275
+    },
+    {
+      "at": "2026-09-21T17:45:19.275Z",
+      "type": "waiting",
+      "method": "getSignatureStatuses",
+      "attempt": 3,
+      "waitMs": 10000,
+      "rateLimited": true
+    },
+    {
+      "at": "2026-09-21T17:45:29.276Z",
+      "type": "request",
+      "method": "getSignatureStatuses",
+      "attempt": 3
+    },
+    {
+      "at": "2026-09-21T17:45:39.099Z",
+      "type": "response",
+      "method": "getSignatureStatuses",
+      "attempt": 3,
+      "httpStatus": 200
+    },
+    {
+      "at": "2026-09-21T17:45:39.102Z",
+      "type": "waiting",
+      "method": "getTransaction",
+      "attempt": 1,
+      "waitMs": 797,
+      "rateLimited": false
+    },
+    {
+      "at": "2026-09-21T17:45:39.899Z",
+      "type": "request",
+      "method": "getTransaction",
+      "attempt": 1
+    },
+    {
+      "at": "2026-09-21T17:45:43.529Z",
+      "type": "response",
+      "method": "getTransaction",
+      "attempt": 1,
+      "httpStatus": 429,
+      "rpcCode": -32029
+    },
+    {
+      "at": "2026-09-21T17:45:43.529Z",
+      "type": "limited",
+      "method": "getTransaction",
+      "attempt": 1,
+      "retryAt": 1790012748529
+    }
+  ]
+}

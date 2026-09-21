@@ -24,7 +24,7 @@ async function fixture() {
   const vm = new LiteSVM(); vm.addProgram(CORE_PROGRAM, program);
   const umi = createUmi('https://api.devnet.solana.com').use(mplCore());
   const payer = generateSigner(umi); vm.airdrop(payer.publicKey, 1000000000n);
-  const f = { vm, umi, payer, requests: 0, mode: 'ok', height: 100, genesis: DEVNET_GENESIS, statuses: new Map() };
+  const f = { vm, umi, payer, requests: 0, mode: 'ok', height: 100, genesis: DEVNET_GENESIS, statuses: new Map(), faults: {}, calls: {} };
   let change;
   const account = { address: payer.publicKey, publicKey: Keypair.fromSecretKey(payer.secretKey).publicKey.toBytes(),
     chains: ['solana:devnet'], features: ['solana:signAndSendTransaction'] };
@@ -87,13 +87,22 @@ async function fixture() {
         return { err: f.badSimulation || result instanceof FailedTransactionMetadata ? { simulated: true } : null };
       },
     };
-    if (name in methods) return methods[name];
+    if (name in methods) return (...args) => {
+      f.calls[name] = (f.calls[name] || 0) + 1;
+      const spec = f.faults[name];
+      const fault = typeof spec === 'string' ? { code: spec } : spec;
+      if (fault && (!fault.at || fault.at === f.calls[name])) throw Error(fault.code || fault);
+      return methods[name](...args);
+    };
     if (typeof target[name] === 'function') return () => { throw Error(`Unexpected live RPC: ${String(name)}`); };
     return target[name];
   } });
   f.store = await openPhantomStore(payer.publicKey);
   f.makeFlow = (overrides = {}) => phantomCheck({ umi, wallet: f.wallet, store: f.store,
-    expectedOwner: payer.publicKey, readHeight: async () => ({ blockHeight: f.height, slot: f.height + 5000 }),
+    expectedOwner: payer.publicKey, readHeight: async () => {
+      if (f.faults.readHeight) throw Error(f.faults.readHeight);
+      return { blockHeight: f.height, slot: f.height + 5000 };
+    },
     send: transaction => f.wallet.sendTransaction(transaction, connection, { skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0 }),
     confirmationMs: 0, wait: async () => {}, ...overrides });
   f.flow = f.makeFlow(); return f;
@@ -187,6 +196,103 @@ try {
     const checked = await f.flow.check(); assert.equal(checked.phase, 'verified');
     assert.equal(checked.asset, saved.asset); assert.equal(f.requests, 1);
   });
+  for (const code of ['RPC_RATE_LIMIT', 'RPC_TIMEOUT', 'RPC_UNAVAILABLE', 'RPC_ACCESS_DENIED', 'RPC_ABORTED']) {
+    for (const [method, at] of [['getGenesisHash', 1], ['getBalance', 1], ['getLatestBlockhash', 1], ['simulateTransaction', 1], ['getLatestBlockhash', 2]]) {
+      await check(`${code} at ${method} call ${at} stops before intent/signature and permits a fresh manual attempt`, async () => {
+        const f = await fixture(); f.faults[method] = { code, at };
+        await assert.rejects(f.flow.start(), new RegExp(code));
+        assert.equal(f.requests, 0); assert.equal(await f.store.load(), null);
+        delete f.faults[method]; assert.equal((await f.flow.start()).phase, 'verified'); assert.equal(f.requests, 1);
+      });
+    }
+    for (const method of ['getSignatureStatuses', 'getAccount']) {
+      await check(`${code} at ${method} after submission survives controller restart without a second signature`, async () => {
+        const f = await fixture(); f.faults[method] = code;
+        await assert.rejects(f.flow.start(), new RegExp(code));
+        const before = await f.store.load(); assert.ok(before.signature); assert.equal(before.phase, 'submitted');
+        const balance = f.vm.getBalance(f.payer.publicKey);
+        await assert.rejects(f.makeFlow().retry(), new RegExp(code)); assert.equal(f.requests, 1);
+        delete f.faults[method]; const result = await f.makeFlow().start();
+        assert.equal(result.asset, before.asset); assert.equal(result.phase, 'verified');
+        assert.equal(f.requests, 1); assert.equal(f.vm.getBalance(f.payer.publicKey), balance);
+      });
+    }
+    await check(`${code} while reading finalized height preserves unknown wallet outcome and blocks retry`, async () => {
+      const f = await fixture(); f.mode = 'offline'; await assert.rejects(f.flow.start(), /unavailable/);
+      f.height += 200; f.faults.readHeight = code;
+      await assert.rejects(f.makeFlow().retry(), new RegExp(code));
+      assert.equal((await f.store.load()).phase, 'awaiting-wallet'); assert.equal(f.requests, 1);
+      delete f.faults.readHeight; assert.equal((await f.makeFlow().check()).phase, 'expired'); assert.equal(f.requests, 1);
+    });
+  }
+  await check('insufficient test SOL stops before simulation, persistence or signature', async () => {
+    const f = await fixture(); const a = f.vm.getAccount(f.payer.publicKey);
+    f.vm.setAccount({ ...a, lamports: 9999999n });
+    await assert.rejects(f.flow.start(), /NEED_TEST_SOL/); assert.equal(f.calls.simulateTransaction, undefined);
+    assert.equal(f.requests, 0); assert.equal(await f.store.load(), null);
+  });
+  for (const [field, value] of [['version', 99], ['network', 'mainnet-beta'], ['owner', CORE_PROGRAM]]) {
+    await check(`invalid saved ${field} blocks both start and replacement`, async () => {
+      const f = await fixture(); f.mode = 'offline'; await assert.rejects(f.flow.start());
+      const state = await f.store.load(); await f.store.patch(state.asset, { [field]: value });
+      await assert.rejects(f.makeFlow().start(), /INVALID_SAVED_STATE/);
+      await assert.rejects(f.makeFlow().retry(), /INVALID_SAVED_STATE/); assert.equal(f.requests, 1);
+    });
+  }
+  await check('malformed wallet signature leaves an unresolved intent and never creates another request', async () => {
+    const f = await fixture(); await assert.rejects(f.makeFlow({ send: async () => { f.requests++; return '123'; } }).start(), /INVALID_SIGNATURE/);
+    assert.equal((await f.store.load()).phase, 'awaiting-wallet');
+    await assert.rejects(f.makeFlow().retry(), /RESULT_STILL_PENDING/); assert.equal(f.requests, 1);
+  });
+  await check('disconnect before reopening preserves the journal until the owner reconnects', async () => {
+    const f = await fixture(); f.mode = 'offline'; await assert.rejects(f.flow.start());
+    const state = await f.store.load(); await f.wallet.disconnect();
+    await assert.rejects(f.makeFlow().start(), /WRONG_WALLET/); assert.deepEqual(await f.store.load(), state);
+    await f.wallet.connect(); await f.makeFlow().check(); assert.equal(f.requests, 1);
+  });
+  await check('invalid finalized height cannot expire an unresolved transaction', async () => {
+    const f = await fixture(); f.mode = 'offline'; await assert.rejects(f.flow.start());
+    await assert.rejects(f.makeFlow({ readHeight: async () => ({ blockHeight: NaN, slot: 999999 }) }).retry(), /INVALID_FINALIZED_HEIGHT/);
+    assert.equal((await f.store.load()).phase, 'awaiting-wallet'); assert.equal(f.requests, 1);
+  });
+  for (const code of [4900, 4100, -32000, -32002, -32003, -32601, -32603]) {
+    await check(`Phantom error ${code} preserves the unknown operation and blocks a second prompt`, async () => {
+      const f = await fixture();
+      await assert.rejects(f.makeFlow({ send: async () => { f.requests++; throw Object.assign(Error(`Phantom ${code}`), { code }); } }).start(), /Phantom/);
+      assert.equal((await f.store.load()).phase, 'awaiting-wallet');
+      await assert.rejects(f.makeFlow().retry(), /RESULT_STILL_PENDING/); assert.equal(f.requests, 1);
+    });
+  }
+  for (const wrapper of ['cause', 'error']) {
+    await check(`wrapped 4001 cancellation in ${wrapper} is recognized without automatic retry`, async () => {
+      const f = await fixture();
+      const result = await f.makeFlow({ send: async () => { f.requests++; throw { [wrapper]: { code: 4001 } }; } }).start();
+      assert.equal(result.phase, 'cancelled'); assert.equal(f.requests, 1);
+    });
+  }
+  for (const field of ['program', 'name', 'uri', 'truncated-data']) {
+    await check(`unexpected asset ${field} is rejected during recovery without reminting`, async () => {
+      const f = await fixture(); const first = await f.flow.start();
+      const raw = f.vm.getAccount(first.asset);
+      if (field === 'program') raw.programAddress = f.payer.publicKey;
+      else if (field === 'truncated-data') raw.data = new Uint8Array(3);
+      else {
+        const bytes = Buffer.from(raw.data); const needle = field === 'name' ? TEST_NAME : TEST_URI;
+        const offset = bytes.indexOf(needle); assert.ok(offset >= 0); bytes[offset] ^= 1; raw.data = bytes;
+      }
+      f.vm.setAccount(raw);
+      await assert.rejects(f.makeFlow().check()); await assert.rejects(f.makeFlow().retry()); assert.equal(f.requests, 1);
+    });
+  }
+  for (const commitment of ['processed', 'confirmed']) {
+    await check(`${commitment} signature cannot certify an asset as finalized or authorize another mint`, async () => {
+      const f = await fixture(); f.faults.getAccount = 'RPC_TIMEOUT'; await assert.rejects(f.flow.start());
+      const saved = await f.store.load(); f.statuses.get(saved.signature).commitment = commitment;
+      delete f.faults.getAccount; assert.equal((await f.makeFlow().check()).phase, 'submitted');
+      await assert.rejects(f.makeFlow().retry(), /RESULT_STILL_PENDING/); assert.equal(f.requests, 1);
+      f.statuses.get(saved.signature).commitment = 'finalized'; assert.equal((await f.makeFlow().check()).phase, 'verified');
+    });
+  }
   report.passed = true;
 } catch (error) { report.error = String(error.stack); process.exitCode = 1; }
 await writeFile(new URL('./reports/phantom-adapter.json', import.meta.url), JSON.stringify(report, null, 2) + '\n');
