@@ -1,18 +1,2 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>CoolBears · Выпуск коллекции</title><link rel="stylesheet" href="./manage.css"></head>
-<body><main>
-<header><a href="/"><img src="../assets/collection/logo.png" alt="CoolBears" width="64" height="64"></a><span>COOLBEARS<br><small>ПАНЕЛЬ ВЛАДЕЛЬЦА</small></span><span class="network">SOLANA DEVNET</span></header>
-<section class="hero"><p class="eyebrow">НОВЫЙ ВЫПУСК</p><h1>Коллекция.<br>Три шага.</h1><p>Подключи кошелёк владельца и создай тестовый выпуск. Прогресс сохраняется после каждого шага.</p></section>
-<section class="card"><div class="steps"><div><b>01</b><span>Коллекция</span></div><div><b>02</b><span>Первый NFT</span></div><div><b>03</b><span>Настройка выпуска</span></div></div>
-<div class="specs"><span><strong>10 000</strong> NFT</span><span><strong>0,5 SOL</strong> цена</span><span><strong>7%</strong> роялти</span><span><strong>Закрыты</strong> продажи</span></div>
-<p id="releaseStatus">Проверяю подготовленный выпуск…</p>
-<button id="connect" class="primary">Подключить кошелёк</button><p id="wallet" class="mono"></p>
-<button id="create" class="primary" disabled>Создать / продолжить</button>
-<p class="muted">Это Devnet: понадобятся тестовые SOL и подтверждения в кошельке. Суммы покажет кошелёк перед каждой подписью. Выпуск не открывает продажи.</p>
-<p id="status" role="status" aria-live="polite">Подключи кошелёк владельца.</p>
-</section>
-<section class="card"><h2>Сохранённое состояние</h2><p>После создания скачай состояние. Оно позволит продолжить на другом устройстве.</p><div class="actions"><button id="export" disabled>Скачать состояние</button><label class="file">Восстановить из файла<input id="import" type="file" accept="application/json,.json"></label></div><p class="muted">Файл содержит ключи создаваемых аккаунтов и адреса выпуска. Храни его приватно. Seed-фраза и приватный ключ кошелька здесь не нужны.</p><dl id="addresses"></dl></section>
-<details class="card"><summary>Проверка подключения</summary><label for="rpc">Адрес Solana Devnet RPC</label><input id="rpc" type="url" value="https://api.devnet.solana.com" spellcheck="false"><p class="muted">Сеть проверяется перед операциями. Не используй здесь секретные ключи доступа.</p></details>
-<details class="card"><summary>Раскрытие коллекции</summary><p>Не раньше 1 января 2027 года. Сначала размести финальный архив в IPFS, затем выбери сохранённый файл раскрытия. Проверка даты использует время Solana.</p><label for="revealMap">Приватный файл раскрытия</label><input id="revealMap" type="file" accept="application/json,.json"><button id="reveal" disabled>Раскрыть / продолжить</button><p class="muted">Изображения и характеристики не отправляются с этой страницы до даты раскрытия.</p></details>
-<footer><a href="/">← Сайт CoolBears</a><span>Прогресс сохраняется автоматически</span></footer>
-</main><script type="module" src="./manage.js?v=20260921-rpc1"></script></body></html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>CoolBears · Подготовка выпуска</title><style>body{margin:0;background:#f6f3e9;color:#192729;font:18px/1.6 system-ui,sans-serif}main{max-width:640px;margin:10vh auto;padding:32px}img{width:72px;border-radius:16px}h1{font-size:36px;line-height:1.15}a{color:inherit}p{max-width:540px}</style></head><body><main><img src="../assets/collection/logo.png" alt="CoolBears"><h1>Выпуск на подготовке</h1><p>Панель отключена. Подтверждать операции в кошельке сейчас не нужно.</p><p>Продажи закрыты.</p><a href="/">На сайт CoolBears</a></main></body></html>

@@ -1,9 +1,0 @@
-{
-  "schema": "coolbears-core-v2",
-  "verified": true,
-  "commitment": "c1f3033cc19a498942b6d7c4149aafdf09aa07ef5f19168734c72e0ac2e5b194",
-  "pngVerified": 10000,
-  "metadataVerified": 10000,
-  "programTests": "10000 minted and revealed in LiteSVM",
-  "salesOpen": false
-}

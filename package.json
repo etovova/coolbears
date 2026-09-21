@@ -7,9 +7,6 @@
     "build:site": "node scripts/stage-site.mjs",
     "build:wallet": "node scripts/build-wallet.mjs",
     "verify": "node scripts/verify-static.mjs",
-    "build:chain": "node scripts/build-chain.mjs",
-    "test": "node --test tests/*.test.mjs",
-    "test:supply": "node tests/full-supply.mjs",
     "verify:plan": "python3 scripts/collection/verify-plan.py",
     "verify:car": "node scripts/collection/verify-car.mjs"
   },
