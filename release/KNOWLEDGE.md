@@ -2,6 +2,8 @@
 
 Дата: 21 сентября 2026. Исследование продолжается. Владелец требует изучать сайты целиком, включая соседние разделы, максимально проверять изменения и часто сохранять работу. Этот документ фиксирует реально сделанное; это не заявление, что прочитана каждая страница всех четырёх сайтов.
 
+Контрольная точка, счётчики, ограничения и точная очередь: [SITE_REVIEW.md](SITE_REVIEW.md). Каталог остальных сайтов: [official-sites-catalogue.json](reports/official-sites-catalogue.json).
+
 ## Как читать статусы
 
 - **Каталог:** найден адрес/название страницы. Её содержание ещё не обязательно прочитано.
@@ -152,3 +154,79 @@ Solflare поддерживает официальный adapter и собств
 | Сохранения | Durable intent и отдельные отчёты | Сохранённые коммиты, актуальный checkpoint после каждого завершённого этапа |
 
 Перед новой попыткой владельца устранить известный RPC-блокер. Если реализация требует нового начала, сохранить версию и журналы и пересобрать её; не стирать оригиналы, историю и неразрешённые операции. Разработка и тесты новых возможностей продолжаются только с чётко обозначенным статусом исследования и проверки.
+
+## Обзор остальных направлений Metaplex
+
+Обзор охватывает также продукты вне текущего выпуска. Наличие раздела в этой таблице означает прочитанное описание и ограничения, а не запуск всех его примеров.
+
+| Направление | Что установлено и где применимо |
+| --- | --- |
+| [DAS API](https://www.metaplex.com/docs/dev-tools/das-api) | Общий индекс активов, включая Core и compressed NFTs. Индекс может отставать; проверка фактического аккаунта и finality остаётся отдельной |
+| [Bubblegum v2](https://www.metaplex.com/docs/smart-contracts/bubblegum-v2) | Деревья, proof и Core collections; другая модель, несовместимая с деревьями v1. Нужны DAS и отдельная проверка поддержки кошельками/маркетплейсами |
+| [Bubblegum CLI](https://www.metaplex.com/docs/dev-tools/cli/bubblegum) | Команды относятся к v2; стандартного публичного RPC недостаточно для полного цикла чтения и изменения cNFT |
+| [Genesis](https://www.metaplex.com/docs/smart-contracts/genesis) | Запуски взаимозаменяемых токенов, распределение через buckets и отдельные окна deposit/claim; это другой продукт |
+| [Genesis CLI](https://www.metaplex.com/docs/dev-tools/cli/genesis) | API/manual flows различаются; finalize и revoke необратимы. Amount в базовых единицах нельзя смешивать с отображаемыми токенами |
+| [MPL-Distro](https://www.metaplex.com/docs/smart-contracts/mpl-distro) | Распределение существующих SPL-токенов по Merkle proofs. Нужны сохранённые allocations, nonces и proofs; внесённая сумма сама не подтверждает правильность распределения |
+| [Distro CLI](https://www.metaplex.com/docs/dev-tools/cli/distro) | Документация предупреждает о несовместимости CLI 0.4.3 с текущим Distro: зависимость 0.3.x против необходимой 0.4.x. Создание/пополнение не включает генерацию proofs и claims |
+| [MPL-Hybrid](https://www.metaplex.com/docs/smart-contracts/mpl-hybrid) | Обмен NFT и fungible токенов через escrow, с возможным изменением metadata. Нельзя незаметно добавлять к утверждённому неизменному арту |
+| [Inscription](https://www.metaplex.com/docs/smart-contracts/inscription) | Хранение данных on-chain; данные публичны. Само по себе не даёт скрытого раскрытия и не гарантирует отображение кошельком |
+| [Agent Registry](https://www.metaplex.com/docs/smart-contracts/mpl-agent) | Идентичность агента связана с Core; delegation и Execute расширяют права. Это отдельная модель полномочий, не обязательная часть NFT |
+| [Nori](https://www.metaplex.com/docs/agents/nori) | Платные inference/image/RPC услуги, delegate-pay и x402. Зависимость от сервиса и полномочия на списания требуют отдельного решения; изучение страницы не подключает платный сервис |
+| [Metaplex Skill](https://www.metaplex.com/docs/agents/skill) | Справочные материалы для агентов по CLI/Umi/Kit. Статические инструкции могут отставать от установленного пакета; обещание генерации кода не заменяет тесты |
+| [Amman](https://www.metaplex.com/docs/dev-tools/amman), [Shank](https://www.metaplex.com/docs/dev-tools/shank) | Локальный validator/testing harness и генерация IDL. Назначение отличается от реального теста браузера кошелька |
+| [Mobile SDKs](https://www.metaplex.com/docs/dev-tools/mobile-sdks) | Старые Android/iOS библиотеки deprecated, читают legacy Token Metadata и не являются современным Core SDK |
+| [Token Metadata](https://www.metaplex.com/docs/smart-contracts/token-metadata) | Поддерживаемый отдельный стандарт для токенов/NFT. Не считать весь Metaplex legacy только из-за deprecated Candy Machine |
+| [Auction House](https://www.metaplex.com/docs/smart-contracts/auction-house), [Fixed Price Sale](https://www.metaplex.com/docs/smart-contracts/fixed-price-sale) | Legacy marketplace и выпуск одинаковых print editions. Имеют другую модель активов/продажи, не заменяют Core Candy Machine |
+| [Fusion](https://www.metaplex.com/docs/smart-contracts/fusion), [Hydra](https://www.metaplex.com/docs/smart-contracts/hydra), [Token Auth Rules](https://www.metaplex.com/docs/smart-contracts/token-auth-rules) | Legacy composability, распределение средств и rulesets для Token Metadata. Полезны для понимания старых интеграций; автоматически не переносить их в Core |
+
+### Замечания к самим примерам
+
+В [руководстве Core Candy Machine UI](https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guides/create-a-core-candy-machine-ui) проверка `mintLimit.limit >= mintCounter.count` выставляет запрет. По смыслу запрет наступает, когда счётчик достиг лимита, то есть `count >= limit`. Это вывод из чтения примера, не обнаруженный дефект нашего кода. Там же пример balance явно не учитывает комиссии, блок DAS содержит неполный object literal, а рекомендация `signAllTransactions` требует проверки возможностей выбранного кошелька. Общую фразу о revert нельзя применять без исключения Bot Tax. Перед использованием нужны проверки граничного счётчика, fees/rent, mintArgs, доступных wallet features и фактического NFT.
+
+Anchor guides показывают CPI и разделение payer/authority. Их пример staking требует FreezeDelegate и Attributes, а в приведённой структуре — также подпись update authority. Это не готовый permissionless staking продукт. Временные отметки и остальные Attributes должны сохраняться без повреждения. [Staking guide](https://www.metaplex.com/docs/smart-contracts/core/guides/anchor/anchor-staking-example), [CPI asset](https://www.metaplex.com/docs/smart-contracts/core/guides/anchor/how-to-create-a-core-nft-asset-with-anchor), [CPI collection](https://www.metaplex.com/docs/smart-contracts/core/guides/anchor/how-to-create-a-core-collection-with-anchor).
+
+## Solana: инфраструктура, разработка и остальные сценарии
+
+| Раздел | Вывод из обзорного чтения |
+| --- | --- |
+| [Accounts](https://solana.com/docs/core/accounts) | Program owner аккаунта и пользователь-владелец актива — разные понятия; данные изменяет владеющая ими программа |
+| [Transactions](https://solana.com/docs/core/transactions) | Форматы и ограничения зависят от версии. Наш legacy builder сохраняет предел 1232 bytes; нельзя переносить размер нового v1 формата на старый SDK |
+| [Fees](https://solana.com/docs/core/fees) | Комиссия зависит от подписей и compute budget; цена mint, rent и priority fee считаются отдельно |
+| [Frontend migration](https://solana.com/docs/frontend/web3-compat) | Новые материалы используют Kit и переходные API. Обновление web3/Umi требует совместимости всех зависимостей, сериализации и wallet adapter |
+| [Verified builds](https://solana.com/docs/programs/verified-builds) | Повторяемая сборка позволяет сопоставить бинарник с исходниками. Совпадение хеша не является аудитом безопасности |
+| [Signing in production](https://solana.com/docs/core/transactions/signing-in-production) | Browser wallet, файл тестового ключа, KMS/HSM/MPC решают разные задачи. Ключ владельца не переносится во frontend или CLI ради удобства |
+| [Mollusk](https://solana.com/docs/programs/testing/mollusk) | Изолированные проверки инструкций и compute с заданными аккаунтами; не проверяет мобильную ОС и доступность внешнего RPC |
+| [Surfpool](https://solana.com/docs/tools/surfpool) | Локальная среда, подгрузка аккаунтов, cheatcodes, время и события. Полезно для воспроизведения состояний, но результат остаётся локальным |
+| [Kora](https://solana.com/docs/tools/kora) | Paymaster/fee abstraction: SOL за комиссию платит другая сторона, с собственной авторизацией и лимитами. Не является бесплатным faucet или исправлением 429 |
+| [Payments](https://solana.com/docs/payments) | Переводы, запросы платежей, indexing, subscriptions, agent payments. Receipt и проверка получателя/суммы/сети необходимы независимо от скорости интерфейса |
+| [DeFi](https://solana.com/docs/defi) | Trading infrastructure, MEV и stake-weighted QoS; наличие инфраструктуры не даёт нашей странице автоматического приоритета |
+| [Tokenization](https://solana.com/docs/tokenization) | Issuance, DvP, NAV и permissioned tokens; Token-2022 extensions отличаются от Core plugins |
+| [Privacy](https://solana.com/docs/finance/privacy) | Сокрытие сумм и разные частные execution-модели имеют собственные границы. Они не скрывают уже опубликованные NFT metadata |
+
+[Главная Solana](https://solana.com/) также ведёт в enterprise, ecosystem, network, events, news, templates и products. Эти динамические разделы включаются в отдельный обход; каталог документации из `llms.txt` их полностью не перечисляет. Статистику главной и прогнозы производительности не использовать как доказательство работоспособности CoolBears.
+
+## Phantom и Solflare: дополнительные пути и ограничения
+
+В **Phantom Browser SDK embedded** предварительно подписанные Solana-транзакции не поддерживаются в обычном входе `signAndSendTransaction`. Для второй подписи документация предлагает `presignTransaction` после валидации Phantom. Для **injected provider** ограничения отличаются. Это потенциально важное различие для Core asset signer; существующую схему нельзя заменять embedded-примером без нового набора тестов. [Browser SDK](https://docs.phantom.com/sdks/browser-sdk/sign-and-send-transaction).
+
+Browser SDK позволяет конфигурацию только с `injected`; Portal/appId относится к соответствующему Connect пути. React Native OAuth не имеет обычного browser injected provider. Session persistence Connect и традиционная deeplink session — разные форматы и сроки. [Browser connect](https://docs.phantom.com/sdks/browser-sdk/connect), [React Native](https://docs.phantom.com/sdks/react-native-sdk), [Session management](https://docs.phantom.com/recipes/auth/session-management).
+
+Portal origins проверяются точно по scheme/host/port, redirects — отдельно, включая путь. DNS verification для публичного представления приложения не следует выдавать за условие каждого обычного подключения кошелька. JWT-пример требует отдельной проверки nonce/replay/expiry и реального server secret; демонстрационный fallback секрета не годится для production. [URL configuration](https://docs.phantom.com/phantom-portal/configure-urls), [JWT guide](https://docs.phantom.com/sdks/guides/wallet-authentication-with-jwts).
+
+**Два разных Phantom MCP:** documentation MCP ищет справку; wallet MCP предоставляет операции кошелька. Второй создаёт отдельный agent wallet при авторизации и не предоставляет автоматически доступ к существующему кошельку пользователя. [Documentation MCP](https://docs.phantom.com/resources/mcp-server), [Wallet MCP](https://docs.phantom.com/phantom-mcp-server). [Phantom CLI](https://docs.phantom.com/phantom-cli) также работает через Phantom Connect; его существование не разрешает обход пользовательской подписи.
+
+EVM provider использует EIP-1193 и отдельное пространство `window.phantom.ethereum`. Bitcoin injected provider отмечен deprecated; Sui — с датой прекращения поддержки 2026-09-24 в просмотренных материалах. Не переносить эти статусы на Solana provider. [EVM](https://docs.phantom.com/ethereum-monad-testnet-base-and-polygon/provider-api-reference), [Bitcoin](https://docs.phantom.com/bitcoin/provider-api-reference), [Sui](https://docs.phantom.com/sui/getting-started-with-sui).
+
+Wallet Standard использует события регистрации и готовности: не считать однократное отсутствие provider окончательным результатом. При миграции нельзя изменять подписываемую транзакцию на месте. Testnet Mode включает тестовые сети; Devnet и Testnet остаются разными кластерами. [Wallet Standard](https://docs.phantom.com/developer-powertools/wallet-standard), [Testnet Mode](https://docs.phantom.com/developer-powertools/testnet-mode).
+
+**Solflare onboarding:** reviewed guides разделяют создание, импорт аккаунта и подключение hardware wallet. Многие иллюстрации и инструкции исторические; например страницы Ledger/Keystone описывают старые версии и derivation paths. Это не основание просить экспорт ключа владельца при ремонте сайта или обещать актуальные названия всех кнопок. [Mobile](https://docs.solflare.com/solflare/onboarding/mobile), [Ledger](https://docs.solflare.com/solflare/onboarding/web-app-and-extension/import-your-ledger-device), [Keystone](https://docs.solflare.com/solflare/onboarding/web-app-and-extension/import-your-keystone-device), [Import](https://docs.solflare.com/solflare/onboarding/web-app-and-extension/import-any-solana-wallet).
+
+Solflare Profile Picture Protocol возвращает/builds собственные операции для avatar; это не проверка mint. Notifications требуют подписки пользователя, имеют отдельные broadcast/unicast/read APIs и авторизацию сервиса. Подписка не подтверждает транзакцию, а ключ notifications не должен попадать в frontend. [Profile picture](https://docs.solflare.com/solflare/technical/profile-picture-protocol), [Notifications](https://docs.solflare.com/solflare/technical/solflare-notifications), [Subscription management](https://docs.solflare.com/solflare/technical/solflare-notifications/users-perspective/subscription-management).
+
+На [основном сайте Solflare](https://www.solflare.com/sitemap/) отдельно находятся продукты, staking, cards, perps, hardware, AI, resources, guides, glossary, ecosystem, news и events. Каталог 55 GitBook-страниц не равен всему этому сайту. Часть страниц вернула ошибку типа содержимого/недоступность; прямое чтение одной такой страницы вернуло 403. Их содержание не объявляется изученным.
+
+Дополнительно просмотрены [Shield](https://www.solflare.com/hardware-wallet/) и [Magic](https://www.solflare.com/magic/): отдельный аппаратный продукт и экспериментальный AI-продукт, не обязательные условия работы обычного кошелька. [App Guides](https://www.solflare.com/guides/) имеют пагинацию; [Glossary](https://www.solflare.com/glossary/) — собственные дочерние статьи. Прочитанная страница-каталог не закрывает их очередь.
+
+Solflare `signAllTransactions` возвращает подписанные транзакции без отправки; для каждой остаются отправка, срок blockhash и независимое подтверждение. `signMessage` доказывает подпись сообщения, не выполнение mint. [Batch signing](https://docs.solflare.com/solflare/technical/deeplinks/provider-methods/signalltransactions), [Message signing](https://docs.solflare.com/solflare/technical/deeplinks/provider-methods/signmessage).
+
+Для диагностики физического Phantom документация описывает Web View Debugging и подключение к desktop DevTools. Эта возможность полезна на отдельном этапе проверки устройства, но не делает текущую среду физическим телефоном владельца. [Mobile web debugging](https://docs.phantom.com/developer-powertools/mobile-web-debugging).

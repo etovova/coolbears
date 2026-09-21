@@ -38,7 +38,8 @@
       "sha": "a974e4442d33ceca933d22aa46d6e9fa5987930e",
       "bytes": 934,
       "url": "https://www.metaplex.com/docs/agents",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/agents/mint-agent.md",
@@ -66,7 +67,8 @@
       "sha": "ebf80c9d0cd0a0523c1cceaa73832f00ea680bc6",
       "bytes": 14684,
       "url": "https://www.metaplex.com/docs/agents/nori",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/agents/nori/pricing-and-billing.md",
@@ -108,7 +110,8 @@
       "sha": "dd71dd491a3b40639eb2f50028db5816215eb6f4",
       "bytes": 5744,
       "url": "https://www.metaplex.com/docs/agents/skill",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/agents/skill/installation.md",
@@ -157,7 +160,8 @@
       "sha": "c383b372158d22b014b16dd0e75e2df770efd5ee",
       "bytes": 675,
       "url": "https://www.metaplex.com/docs/dev-tools/amman",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/amman/pre-made-configs.md",
@@ -192,7 +196,8 @@
       "sha": "884335875a5f1f56d708671ed8c0cf41ab02a823",
       "bytes": 8698,
       "url": "https://www.metaplex.com/docs/dev-tools/cli/agents",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/cli/agents/register.md",
@@ -241,7 +246,8 @@
       "sha": "38779600a0f82f30effd199a6e96dc8eb6471756",
       "bytes": 3378,
       "url": "https://www.metaplex.com/docs/dev-tools/cli/bubblegum",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/cli/bubblegum/list-trees.md",
@@ -283,7 +289,8 @@
       "sha": "f659a812bb42e0318609c1999f5fc6817c25419b",
       "bytes": 7129,
       "url": "https://www.metaplex.com/docs/dev-tools/cli/cm",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/cli/cm/insert.md",
@@ -423,7 +430,8 @@
       "sha": "029f606495c28c77cb37bec6bf0022d1b547540b",
       "bytes": 9712,
       "url": "https://www.metaplex.com/docs/dev-tools/cli/distro",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/cli/distro/withdraw.md",
@@ -451,7 +459,8 @@
       "sha": "25fe81fb1ff0c58a733f4cb6a7fb42c290e482b7",
       "bytes": 11392,
       "url": "https://www.metaplex.com/docs/dev-tools/cli/genesis",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/cli/genesis/launch-pool.md",
@@ -486,7 +495,8 @@
       "sha": "fe91aba406807e6177dba0679138b79dc14b1ac8",
       "bytes": 3833,
       "url": "https://www.metaplex.com/docs/dev-tools/cli",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/cli/installation.md",
@@ -822,7 +832,8 @@
       "sha": "cdec14cac9ba6d2b297475f39cc1724d28daf361",
       "bytes": 2382,
       "url": "https://www.metaplex.com/docs/dev-tools/das-api",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/das-api/methods/get-asset-proof.md",
@@ -941,7 +952,8 @@
       "sha": "edec9e983412c68b9693476c2ac92f7a4f9403ba",
       "bytes": 1025,
       "url": "https://www.metaplex.com/docs/dev-tools/mobile-sdks",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/mobile-sdks/ios.md",
@@ -969,7 +981,8 @@
       "sha": "e173a40ff5070de2fc429e33a9229cd0529cd24f",
       "bytes": 1879,
       "url": "https://www.metaplex.com/docs/dev-tools/shank",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/shank/macros.md",
@@ -1046,7 +1059,8 @@
       "sha": "348c14d7d1ce444565f6bfcbb098271392d09b20",
       "bytes": 1127,
       "url": "https://www.metaplex.com/docs/dev-tools/umi",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/dev-tools/umi/interfaces.md",
@@ -1291,7 +1305,8 @@
       "sha": "038037b043afb6ce93488f88eddc665dffad0f60",
       "bytes": 12577,
       "url": "https://www.metaplex.com/docs/smart-contracts/auction-house",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/auction-house/manage-using-cli.md",
@@ -1403,7 +1418,8 @@
       "sha": "00394b48405eed96dbbcedd1d4199cd71874d3af",
       "bytes": 19355,
       "url": "https://www.metaplex.com/docs/smart-contracts/bubblegum-v2",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/bubblegum-v2/merkle-tree-canopy.md",
@@ -1529,7 +1545,8 @@
       "sha": "12cd7141fe512440943f6e190a24429c89b36b9f",
       "bytes": 10472,
       "url": "https://www.metaplex.com/docs/smart-contracts/bubblegum",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/bubblegum/mint-cnfts.md",
@@ -2033,8 +2050,9 @@
       "sha": "bd9706199a2b1d08f09f34eceefcd2e0b3e7c8f1",
       "bytes": 34868,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/anti-bot-protection-best-practices",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/create.md",
@@ -2048,37 +2066,39 @@
       "sha": "bc21fee2cf8cf6f1447831e612339d7ac862e59f",
       "bytes": 6999,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/custom-guards/generating-client",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/fetching-a-candy-machine.md",
       "sha": "1c55237f0c869a2658391ffbb0ed1330d71b257f",
       "bytes": 2836,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/fetching-a-candy-machine",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guard-groups.md",
       "sha": "401e5a1221f0837c4809a826dc2fdc01b9f24409",
       "bytes": 21388,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guard-groups",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guard-route.md",
       "sha": "daf56ceba96fd7d2215d2238aef74d876b9041e9",
       "bytes": 17196,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guard-route",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards.md",
       "sha": "2645f579b9cc72396ecd1869fe4139e1f30f0b20",
       "bytes": 20829,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/address-gate.md",
@@ -2092,176 +2112,198 @@
       "sha": "ec146404f888bf2d84bf46ada17df1590a1d2ec3",
       "bytes": 9379,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/allocation",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/allow-list.md",
       "sha": "351160b2288f0506a1327ce69d87b381633dcb60",
       "bytes": 18731,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/allow-list",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/asset-burn-multi.md",
       "sha": "33f547686534836e6524c1cdc7449cca5911f612",
       "bytes": 6138,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/asset-burn-multi",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/asset-burn.md",
       "sha": "33ef05f69945fc2a2717433e05b45f781d2159d1",
       "bytes": 5816,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/asset-burn",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/asset-gate.md",
       "sha": "a1903e46b674c4a1c6b246bce6449dc6594a133b",
       "bytes": 5667,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/asset-gate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/asset-mint-limit.md",
       "sha": "8433b55309201da0a6a9bd4ecad86f474aa478e0",
       "bytes": 6968,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/asset-mint-limit",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/asset-payment-multi.md",
       "sha": "92414101062ca5a0630f692d9549d3755c509021",
       "bytes": 6950,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/asset-payment-multi",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/asset-payment.md",
       "sha": "13b0a8768c59a0ac729e60ff6250ce7ac8df6452",
       "bytes": 6539,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/asset-payment",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/bot-tax.md",
       "sha": "fe68b178fc7c2f7d30759a33c1c163095d4edbed",
       "bytes": 6386,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/bot-tax",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/edition.md",
       "sha": "1e53c9da1c9d01652fa285bd2d2fb5b78de5c3ed",
       "bytes": 3877,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/edition",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/end-date.md",
       "sha": "f2cdf8ecd802b9ba50651705397f27f298a57b6b",
       "bytes": 3804,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/end-date",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/freeze-sol-payment.md",
       "sha": "341a60d73c4d567f4cfc589ffb90c4498147d99e",
       "bytes": 26245,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/freeze-sol-payment",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/freeze-token-payment.md",
       "sha": "a720680c101e1c4827ae381420b4b81cfdc5fbe4",
       "bytes": 27703,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/freeze-token-payment",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/gatekeeper.md",
       "sha": "20cbdb8c0667d48eb449f3cf276c15213d0ca5bf",
       "bytes": 7710,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/gatekeeper",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/mint-limit.md",
       "sha": "406d756becc4283a83129e8dd2acf246e6e5c618",
       "bytes": 6292,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/mint-limit",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/nft-burn.md",
       "sha": "535d861561ed2ad261ab0792de2a02419e45cf49",
       "bytes": 5815,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/nft-burn",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/nft-gate.md",
       "sha": "1ba8c091d2e2d15bd06f8e2d3a5a9ab8fe3895c6",
       "bytes": 5600,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/nft-gate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/nft-mint-limit.md",
       "sha": "35709daeb01c53b194aea7cc781f25a0ed0ba133",
       "bytes": 7005,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/nft-mint-limit",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/nft-payment.md",
       "sha": "e1f13db0d0c3a9131fd908bae8a2be1d97d8f9b0",
       "bytes": 6972,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/nft-payment",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/program-gate.md",
       "sha": "49b5a303feb2a0815ebb4190e34888a2a218e49b",
       "bytes": 4406,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/program-gate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/redeemed-amount.md",
       "sha": "54078be5e86dc45ce541dcaf9713e453ebdb534a",
       "bytes": 5010,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/redeemed-amount",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/sol-fixed-fee.md",
       "sha": "87fc35ed2a5ce1177aac237280acfbfdd3db049d",
       "bytes": 5581,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/sol-fixed-fee",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/sol-payment.md",
@@ -2282,62 +2324,70 @@
       "sha": "4d3efef38e855d152528bad9b0301637a7c04060",
       "bytes": 5305,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/third-party-signer",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/token-burn.md",
       "sha": "fb6cf484bbe0935a1bbb447875201cb975aabb04",
       "bytes": 5287,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/token-burn",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/token-gate.md",
       "sha": "dc59c6ffd62d361838528e73c32934e7ca2d066f",
       "bytes": 5495,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/token-gate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/token-payment.md",
       "sha": "dee939a9f5bfc5cfd257f70e2a0cc01974643f11",
       "bytes": 7162,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/token-payment",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/token2022-payment.md",
       "sha": "1a885e263b946c09b55520e6d4488cb1e547809d",
       "bytes": 7376,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/token2022-payment",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guards/vanity-mint.md",
       "sha": "8f979329962c3aee1a24c214fe6fabbccb0fbb4e",
       "bytes": 4907,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guards/vanity-mint",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guides/create-a-core-candy-machine-ui.md",
       "sha": "8c8446f08b5902e0dbbd952e1e5b45422048f9c0",
       "bytes": 35904,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guides/create-a-core-candy-machine-ui",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guides/create-a-core-candy-machine-with-hidden-settings.md",
       "sha": "60f00e317b42bc7c0782844503fa54dfd5297b2a",
       "bytes": 16433,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/guides/create-a-core-candy-machine-with-hidden-settings",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/guides/index.md",
@@ -2358,8 +2408,9 @@
       "sha": "b4701b4e6bd29daee6695e2c2d8b8f0ffaae4521",
       "bytes": 10874,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/insert-items",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/mint.md",
@@ -2373,16 +2424,18 @@
       "sha": "b95b970005f08a575b56b0238f11036d68ce819a",
       "bytes": 22013,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/overview",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/preparing-assets.md",
       "sha": "93936ece636a638985acf0c6788d2fde258a5c78",
       "bytes": 16071,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/preparing-assets",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/references/index.md",
@@ -2403,47 +2456,52 @@
       "sha": "d0a25bacf605558592264f49385d554630b41fdb",
       "bytes": 3271,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/sdk/javascript",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/sdk/rust.md",
       "sha": "0758a7ddc2d5d49538659e0967a610c5e60d4b88",
       "bytes": 3371,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/sdk/rust",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/update.md",
       "sha": "d2156fc91c4310aea4db76a873f5f0602f56261c",
       "bytes": 12270,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/update",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core-candy-machine/withdrawing-a-candy-machine.md",
       "sha": "5219018382226e496591e18e17b6568bffd7141c",
       "bytes": 2813,
       "url": "https://www.metaplex.com/docs/smart-contracts/core-candy-machine/withdrawing-a-candy-machine",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core/burn.md",
       "sha": "d6c5045e4f63f6e3b6c73763b92fc1efa733d2c3",
       "bytes": 11538,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/burn",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/collections.md",
       "sha": "5c3370a5dc75b198696509d5b7e0c58a91446b55",
       "bytes": 8574,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/collections",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/collections/create.md",
@@ -2457,16 +2515,18 @@
       "sha": "4db48f34751087a03773119f6b6036fc19cd312e",
       "bytes": 2709,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/collections/fetch",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/collections/update.md",
       "sha": "2a410b317f9d7850cc7ed6665930ed2639cd4d2c",
       "bytes": 8021,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/collections/update",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/create-asset.md",
@@ -2480,8 +2540,9 @@
       "sha": "575ea4e478732dfaf426cf589a0eb15eb1e06370",
       "bytes": 5067,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/deserialization",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/ecosystem-support.md",
@@ -2495,56 +2556,63 @@
       "sha": "49b01720cc455be47122d355f9cdb2ff5c800fd2",
       "bytes": 13720,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/execute-asset-signing",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/external-plugins/adding-external-plugins.md",
       "sha": "d442f0321616a8810433f84dca4d5c719015085f",
       "bytes": 14849,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/external-plugins/adding-external-plugins",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/external-plugins/app-data.md",
       "sha": "a296e9696550b2ecb0cf10da0fecb9209ba29faf",
       "bytes": 18946,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/external-plugins/app-data",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/external-plugins/oracle.md",
       "sha": "5146aaec674b13713429c770f928f2f2de8381db",
       "bytes": 27357,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/external-plugins/oracle",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/external-plugins/overview.md",
       "sha": "25e7a40e9ce4d1bd49d7dc2644d9e6979447cf8a",
       "bytes": 7979,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/external-plugins/overview",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/external-plugins/removing-external-plugins.md",
       "sha": "49a07e0f072073ef46a5efde90ac82e6b69048c7",
       "bytes": 8000,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/external-plugins/removing-external-plugins",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/faq.md",
       "sha": "9b0b5297e2338df545c9bc5ba8ce6db8d83c0cdc",
       "bytes": 5771,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/faq",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/fetch.md",
@@ -2558,29 +2626,33 @@
       "sha": "fdfa5a83b00bb0e099b9da7c1852bb160ce0c6fe",
       "bytes": 10100,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/groups",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/guides/anchor/anchor-staking-example.md",
       "sha": "fb87ca49c063da080fae80893d9124e5477d45da",
       "bytes": 24851,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/guides/anchor/anchor-staking-example",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/guides/anchor/how-to-create-a-core-collection-with-anchor.md",
       "sha": "7c6cbf641f756a73a5cc6ce71252802c5066e1c3",
       "bytes": 14109,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/guides/anchor/how-to-create-a-core-collection-with-anchor",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/guides/anchor/how-to-create-a-core-nft-asset-with-anchor.md",
       "sha": "49768574a0b165e4410500742c141ec61fc4b6b6",
       "bytes": 14825,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/guides/anchor/how-to-create-a-core-nft-asset-with-anchor",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/guides/create-soulbound-nft-asset.md",
@@ -2594,15 +2666,16 @@
       "sha": "eed6d6c8611f9f3604846ecf61ad7770107c2b39",
       "bytes": 2498,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/guides/immutability",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core/guides/index.md",
       "sha": "eb4ed7262f62f2abc28814c5ce3db0b2b4367aca",
       "bytes": 1955,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/guides",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/guides/javascript/how-to-create-a-core-collection-with-javascript.md",
@@ -2658,8 +2731,9 @@
       "sha": "fba470037181816b8241afc9e781d891df7fabb1",
       "bytes": 5063,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/helpers",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/index.md",
@@ -2680,8 +2754,9 @@
       "sha": "cb6613bd67dbd4650fd1d8814885a3789f860489",
       "bytes": 7449,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/addBlocker",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/adding-plugins.md",
@@ -2695,32 +2770,36 @@
       "sha": "41dbf15fce4f33e7c73ae2566782be1f1a33323f",
       "bytes": 12867,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/attribute",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/autograph.md",
       "sha": "0e9b62f5ce097da4d6f3fbd9c0db359052647c18",
       "bytes": 10313,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/autograph",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/bubblegum.md",
       "sha": "f8f6776407b97376d75e4d2c4bb948a735fdab5f",
       "bytes": 1877,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/bubblegum",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/burn-delegate.md",
       "sha": "fdde0d0b9117753b3c3fe858ae425115a3904fa0",
       "bytes": 9360,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/burn-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/delegating-and-revoking-plugins.md",
@@ -2734,32 +2813,36 @@
       "sha": "41c71b511454d05ccb7edb9a115aab204be97f34",
       "bytes": 11171,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/edition",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/freeze-delegate.md",
       "sha": "52cd95ec6ba49a1df2ce847dd92126f460887b9d",
       "bytes": 19230,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/freeze-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/freeze-execute.md",
       "sha": "1f37251adc77c5255900f3e7fc896001fdc6d853",
       "bytes": 17131,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/freeze-execute",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/immutableMetadata.md",
       "sha": "803fb34b097ab7d5bc6baa77fcf26944f630457c",
       "bytes": 7131,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/immutableMetadata",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/index.md",
@@ -2773,39 +2856,43 @@
       "sha": "fcce44d067de0baab10280d2d0934069c45f9d4f",
       "bytes": 9483,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/master-edition",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/permanent-burn-delegate.md",
       "sha": "044a6ef7ecf85d4ab3d1efeab570ff3e9fdc0fbf",
       "bytes": 8796,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/permanent-burn-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/permanent-freeze-delegate.md",
       "sha": "8efb127bc8c330e2d71a4a0c8ca685ef191de6ac",
       "bytes": 11617,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/permanent-freeze-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/permanent-transfer-delegate.md",
       "sha": "90b6b305d5ed5f03e1d4ea316f0f1cad3e2c65b2",
       "bytes": 8654,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/permanent-transfer-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/removing-plugins.md",
       "sha": "4deda0b585a46b529a66b18e678a2306228136f0",
       "bytes": 8724,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/removing-plugins",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/royalties.md",
@@ -2819,31 +2906,34 @@
       "sha": "1fc8d7ca4ba6f73f86665401e4ce8efc8f0c9b3f",
       "bytes": 16117,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/transfer-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/update-delegate.md",
       "sha": "d19af988f479d5aa07859277f45cc08b78602a44",
       "bytes": 18132,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/update-delegate",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/update-plugins.md",
       "sha": "3580eaad7bf3fa143b11b316aeafd450b809b64f",
       "bytes": 10361,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/update-plugins",
-      "status": "catalogued"
+      "status": "text_partially_reviewed"
     },
     {
       "path": "src/pages/en/smart-contracts/core/plugins/verified-creators.md",
       "sha": "f94ac1550392d7238b7be95b9e6a88f948f506ca",
       "bytes": 12918,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/plugins/verified-creators",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/sdk/index.md",
@@ -2857,63 +2947,71 @@
       "sha": "85214528a181e0b2408c227a6886b5822e9a2cc4",
       "bytes": 16744,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/sdk/javascript",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/sdk/rust.md",
       "sha": "d57f6121129882abf1cf1b20b6d084e52c2bfae0",
       "bytes": 4050,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/sdk/rust",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/tm-differences.md",
       "sha": "505676651538227c82cef0f737ff2f3bd49dc4f2",
       "bytes": 12496,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/tm-differences",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/transfer.md",
       "sha": "289dee2b8d5df86589341e01e9e548a9f8dc41bf",
       "bytes": 10502,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/transfer",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/update.md",
       "sha": "3eb5b881f63e1326e0366f0bf1c5dbc7025e7044",
       "bytes": 12960,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/update",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/using-core-in-anchor.md",
       "sha": "2031a543a615c03bec95386308b769bffd8c67f0",
       "bytes": 13006,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/using-core-in-anchor",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/core/what-is-an-asset.md",
       "sha": "8811dfe888e0ea3f352be384ed867cc8fcdeadd1",
       "bytes": 14170,
       "url": "https://www.metaplex.com/docs/smart-contracts/core/what-is-an-asset",
-      "status": "reviewed_text",
-      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md."
+      "status": "text_partially_reviewed",
+      "detail": "Текст и назначение просмотрены; не каждый пример кода исполнен. Уровень глубины — в KNOWLEDGE.md.",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/fixed-price-sale/index.md",
       "sha": "4da8c50e8bf099dbfad0c2ed9c721f3580d245da",
       "bytes": 1323,
       "url": "https://www.metaplex.com/docs/smart-contracts/fixed-price-sale",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/fixed-price-sale/tech-description.md",
@@ -2941,7 +3039,8 @@
       "sha": "23e7a5126ab64b993fedc88b2ae959b822a33137",
       "bytes": 3888,
       "url": "https://www.metaplex.com/docs/smart-contracts/fusion",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/fusion/transfer-effects.md",
@@ -3011,7 +3110,8 @@
       "sha": "151994b1d851938033ddae4db19c04fcbcab74ac",
       "bytes": 9585,
       "url": "https://www.metaplex.com/docs/smart-contracts/genesis",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/genesis/integration-apis/claim-creator-rewards.md",
@@ -3144,7 +3244,8 @@
       "sha": "71bc20634ac2d187c4615c92a90e8d9c14ca203a",
       "bytes": 11447,
       "url": "https://www.metaplex.com/docs/smart-contracts/hydra",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/hydra/quick-start.md",
@@ -3228,7 +3329,8 @@
       "sha": "fe879b2111f15e39ecbaaf53f024cfe5747fc805",
       "bytes": 13983,
       "url": "https://www.metaplex.com/docs/smart-contracts/inscription",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/inscription/initialize.md",
@@ -3270,7 +3372,8 @@
       "sha": "795dcd23751767303c8c0c6830d46c701af90e3a",
       "bytes": 4494,
       "url": "https://www.metaplex.com/docs/smart-contracts/mpl-agent",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/mpl-agent/tools.md",
@@ -3298,7 +3401,8 @@
       "sha": "2e0222604c06e0d4ef6bd90bed17a519f689f327",
       "bytes": 7968,
       "url": "https://www.metaplex.com/docs/smart-contracts/mpl-distro",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/mpl-distro/legacy-nft-distribution.md",
@@ -3403,7 +3507,8 @@
       "sha": "efb9acc6b30a05bea7d7cd46aed46510cbe77947",
       "bytes": 1953,
       "url": "https://www.metaplex.com/docs/smart-contracts/mpl-hybrid",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/mpl-hybrid/initializeNFTData.md",
@@ -3501,7 +3606,8 @@
       "sha": "3f505834366528bd82497d04f0f7c24de141facf",
       "bytes": 4262,
       "url": "https://www.metaplex.com/docs/smart-contracts/token-auth-rules",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/token-auth-rules/mplx-rule-sets.md",
@@ -3711,7 +3817,8 @@
       "sha": "0a6b17f075f7df6a31f461dbf1ed0755658bf13b",
       "bytes": 24452,
       "url": "https://www.metaplex.com/docs/smart-contracts/token-metadata",
-      "status": "catalogued"
+      "status": "text_partially_reviewed",
+      "reviewScope": "Обзор полученного текста; примеры кода и полный текст каждого раздела не объявляются проверенными"
     },
     {
       "path": "src/pages/en/smart-contracts/token-metadata/lock.md",
@@ -4105,5 +4212,10 @@
       "url": "https://www.metaplex.com/docs/tokens/update-token",
       "status": "catalogued"
     }
-  ]
+  ],
+  "statusDefinitions": {
+    "catalogued": "Адрес найден; содержание не обязательно прочитано",
+    "text_partially_reviewed": "Изучен доступный текст или его часть; не свидетельство проверки всех примеров"
+  },
+  "reviewRefNote": "Каталог привязан к treeSha; дополнительные исходники прочитаны из main 2026-09-21, версии примеров перед применением сверять заново."
 }
