@@ -34,7 +34,9 @@
   "wallet-standard.js",
   "wallet-standard.js.LEGAL.txt",
   "solana-upload/index.html",
-  "solana-upload/controller.mjs",
-  "solana-upload/sdk.js",
-  "solana-upload/sdk.js.LEGAL.txt"
+  "solana-load/index.html",
+  "solana-load/app.mjs",
+  "solana-load/style.css",
+  "solana-load/sdk.js",
+  "solana-load/sdk.js.LEGAL.txt"
 ]

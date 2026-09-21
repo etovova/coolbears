@@ -1,0 +1,134 @@
+import {TARGET,GENESIS,KEY,LEGACY_KEY,SETTINGS_KEY,decodeProgress,buildUpload,isHeight,validSignature,browserStore} from './load-model.mjs';
+import {readRpc,rpcUrl,DEFAULT_RPC} from './load-rpc.mjs';
+export {TARGET,KEY,SETTINGS_KEY,browserStore,DEFAULT_RPC,rpcUrl};
+
+function binding(j) {return j&&Object.entries(TARGET).every(([k,v])=>j[k]===v);}
+function validateBatch(p) {
+  if(!p||!Number.isInteger(p.start)||!Number.isInteger(p.count)||p.start<0||p.count<1||p.count>25||p.start+p.count>10000)throw Error('Некорректная запись ожидающей загрузки.');
+}
+function initial() {return {version:2,...TARGET,legacyPending:[],pending:null,history:[],events:[],progress:null,lastAttempt:null};}
+function walletError(e) {
+  if(e?.code===4001)return 'Подтверждение отменено в Phantom. Загрузка не отправлена.';
+  // Never put provider text in the exported log: it may contain an RPC key.
+  if(e?.code===-32002)return 'В Phantom уже открыто другое подтверждение. Заверши его перед новой попыткой.';
+  if(e?.code===-32003)return 'Phantom отклонил транзакцию как недействительную. Результат сохранён.';
+  if(e?.code===4100)return 'Phantom не разрешил действие для этого аккаунта. Подключи кошелёк заново.';
+  if(e?.code===-32000)return 'Phantom отклонил параметры транзакции. Результат сохранён.';
+  if(e?.code===-32601)return 'Эта версия Phantom не поддерживает отправку. Обнови приложение Phantom.';
+  return `Phantom не подтвердил отправку${Number.isInteger(e?.code)?` (код ${e.code})`:''}. Проверь состояние; новая отправка пока заблокирована.`;
+}
+export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,fetch,timeout,now=Date.now,onChange=()=>{},pause=ms=>new Promise(r=>setTimeout(r,ms))}={}) {
+  endpoint=rpcUrl(endpoint);let networkChecked=false,journal=null,lastSlot=0,finalizedSlot=0;
+  const notify=()=>onChange(view());
+  function owner() {if(provider?.publicKey?.toString()!==TARGET.owner)throw Error('Подключи кошелёк владельца коллекции.');}
+  function save(){store.write(KEY,journal);notify();}
+  function event(e) {if(!journal)return;journal.events.push({at:new Date(now()).toISOString(),...e});journal.events=journal.events.slice(-60);save();}
+  const rpc=readRpc(endpoint,{fetch,timeout,now,onEvent:event});
+  function load() {
+    journal=store.read(KEY)??initial();
+    if(journal.version!==2||!binding(journal)||!Array.isArray(journal.history)||!Array.isArray(journal.events)||!Array.isArray(journal.legacyPending))throw Error('Журнал принадлежит другой коллекции.');
+    if(journal.pending){
+      validateBatch(journal.pending);
+      if(journal.pending.signature&&!validSignature(journal.pending.signature))throw Error('Некорректная подпись в журнале.');
+      if(journal.pending.phase==='wallet'){
+        journal.pending.phase='unknown';
+        journal.lastAttempt={...journal.pending,outcome:'unknown',message:'Предыдущая попытка прервалась. Проверяю результат в сети.'};save();
+      }
+    }
+    lastSlot=Math.max(lastSlot,journal.progress?.slot??0);
+  }
+  function migrate() {
+    const old=store.read(LEGACY_KEY);
+    if(old?.retiredTo===KEY&&old.version===2)return;
+    if(old){
+      if(old.version!==1||!binding(old)||!Array.isArray(old.history))throw Error('Не удалось проверить прежний журнал. Данные сохранены.');
+      const pending=[...(old.pending?[old.pending]:[]),...(old.pendingGroup??[])];
+      const covered=new Set();
+      for(const p of pending){validateBatch(p);if(!validSignature(p.signature)||!isHeight(p.lastValidBlockHeight))throw Error('Повреждён прежний журнал.');for(let i=p.start;i<p.start+p.count;i++){if(covered.has(i))throw Error('Пересекающиеся старые пакеты.');covered.add(i);}}
+      // A failed retirement write can be retried safely under the same locks.
+      if(!journal.legacyArchive){journal.legacyArchive=old;journal.legacyPending=pending;save();}
+    }else save();
+    // An already open v1 tab now fails its version check. Its original history
+    // and unresolved signatures remain recoverable in legacyArchive above.
+    store.write(LEGACY_KEY,{version:2,...TARGET,retiredTo:KEY});
+  }
+  async function network(){if(!networkChecked){if(await rpc('getGenesisHash')!==GENESIS)throw Error('Подключён RPC другой сети. Нужен Solana Devnet.');networkChecked=true;}owner();}
+  async function snapshot(commitment='confirmed',minSlot=commitment==='finalized'?finalizedSlot:lastSlot) {
+    const result=await rpc('getAccountInfo',[TARGET.machine,{encoding:'base64',commitment,...(minSlot?{minContextSlot:minSlot}:{})}]);
+    owner();const progress=decodeProgress(result,minSlot);
+    if(commitment==='finalized')finalizedSlot=progress.slot;
+    lastSlot=Math.max(lastSlot,progress.slot);
+    if(!journal.progress||progress.slot>=journal.progress.slot)journal.progress={loaded:progress.loaded.size,slot:progress.slot,checkedAt:new Date(now()).toISOString(),commitment};
+    save();return progress;
+  }
+  function present(p,progress){const states=Array.from({length:p.count},(_,i)=>progress.loaded.has(p.start+i));if(states.some(Boolean)&&!states.every(Boolean))throw Error('Пакет присутствует частично. Новая отправка остановлена.');return states.every(Boolean);}
+  function finish(p,outcome,slot) {
+    const entry={...p,outcome,slot,finishedAt:new Date(now()).toISOString()};journal.history.push(entry);
+    journal.lastAttempt=entry;journal.pending=null;save();
+  }
+  async function reconcileLegacy() {
+    if(!journal.legacyPending.length)return;
+    const epoch=await rpc('getEpochInfo',[{commitment:'finalized'}]);
+    if(!isHeight(epoch?.absoluteSlot)||!isHeight(epoch?.blockHeight))throw Error('Не удалось проверить срок прежних транзакций.');
+    const progress=await snapshot('finalized',Math.max(finalizedSlot,epoch.absoluteSlot));
+    const missing=journal.legacyPending.filter(p=>!present(p,progress));
+    let statuses;
+    if(missing.length){statuses=await rpc('getSignatureStatuses',[missing.map(p=>p.signature),{searchTransactionHistory:true}]);if(!isHeight(statuses?.context?.slot)||statuses.context.slot<epoch.absoluteSlot||statuses.value?.length!==missing.length)throw Error('RPC вернул устаревшее подтверждение.');}
+    const unresolved=[];
+    for(const p of journal.legacyPending){let outcome='account-verified';if(!present(p,progress)){const s=statuses.value[missing.indexOf(p)];outcome=s?.confirmationStatus==='finalized'&&s.err!=null?'failed':s===null&&epoch.blockHeight>p.lastValidBlockHeight?'expired':null;}if(outcome)journal.history.push({...p,outcome,slot:progress.slot,legacy:true});else unresolved.push(p);}
+    journal.legacyPending=unresolved;save();
+  }
+  async function inspectPending(progress) {
+    const p=journal.pending;if(!p)return;
+    if(present(p,progress)){finish(p,'account-verified',progress.slot);return;}
+    // A wallet may refresh the blockhash before sending. Its original deadline
+    // cannot prove that a wallet-managed, unknown submission has expired.
+    if(!p.signature)return;
+    const r=await rpc('getSignatureStatuses',[[p.signature],{searchTransactionHistory:true}]);
+    if(!isHeight(r?.context?.slot)||r.context.slot<progress.slot||r.value?.length!==1)throw Error('Не удалось проверить подтверждение транзакции.');
+    const status=r.value[0];
+    if(status?.confirmationStatus==='finalized'&&status.err!=null){finish(p,'failed',r.context.slot);return;}
+    // Null/unknown never clears a wallet-managed attempt. No blind re-signing.
+  }
+  function view() {const j=journal??store.read(KEY);return {progress:j?.progress??null,pending:!!j?.pending||!!j?.legacyPending?.length,lastAttempt:j?.lastAttempt??null,phase:j?.pending?.phase??null};}
+  async function check() {owner();load();await network();await snapshot();migrate();await reconcileLegacy();if(journal.pending){const p=await snapshot('finalized');await inspectPending(p);}return view();}
+  return {
+    view,
+    inspect:()=>store.lock(check),
+    async upload(){return store.lock(async()=>{
+      owner();load();await network();const progress=await snapshot();migrate();
+      if(journal.legacyPending.length||journal.pending){await reconcileLegacy();if(journal.pending){const p=await snapshot('finalized');await inspectPending(p);}return view();}
+      if(!progress.next)return view();
+      if(provider.isPhantom!==true||typeof provider.signAndSendTransaction!=='function')throw Error('Открой загрузку в Phantom: требуется подтверждение и отправка транзакции кошельком.');
+      const latest=await rpc('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:progress.slot}]);
+      if(latest?.context?.slot<progress.slot)throw Error('RPC вернул устаревший блок.');
+      const tx=buildUpload(progress.next,latest);owner();
+      // Save intent BEFORE handing control to a wallet capable of broadcasting.
+      // Reload, refusal, timeout and lost responses must never trigger a resend.
+      journal.pending={...progress.next,phase:'wallet',startedAt:new Date(now()).toISOString(),blockhash:latest.value.blockhash,lastValidBlockHeight:latest.value.lastValidBlockHeight,signature:null};
+      journal.lastAttempt={...journal.pending,outcome:'wallet'};event({phase:'wallet-request',start:progress.next.start,count:progress.next.count,lastValidBlockHeight:latest.value.lastValidBlockHeight});
+      const started=now();let answer;
+      try {answer=await provider.signAndSendTransaction(tx,{preflightCommitment:'confirmed',minContextSlot:latest.context.slot,skipPreflight:false,maxRetries:0});}
+      catch(e){
+        const message=walletError(e);event({phase:'wallet-error',code:Number.isInteger(e?.code)?e.code:null,elapsedMs:now()-started});
+        if(e?.code===4001){finish(journal.pending,'cancelled',lastSlot);}
+        else if([4100,-32000,-32002,-32003,-32601].includes(e?.code)){finish({...journal.pending,message},'rejected',lastSlot);}
+        else{journal.pending.phase='unknown';journal.lastAttempt={...journal.pending,outcome:'unknown',message};save();}
+        throw Error(message);
+      }
+      if(!validSignature(answer?.signature)){journal.pending.phase='unknown';journal.lastAttempt={...journal.pending,outcome:'unknown',message:'Phantom не вернул номер транзакции. Нужна проверка результата.'};save();return view();}
+      journal.pending={...journal.pending,signature:answer.signature,phase:'confirming'};
+      journal.lastAttempt={...journal.pending,outcome:'submitted'};event({phase:'wallet-return',signature:answer.signature,elapsedMs:now()-started});
+      owner();
+      // Bounded read-only confirmation. This never asks for another signature
+      // and never sends another transaction or starts the next packet.
+      for(let attempt=0;attempt<3;attempt++){
+        if(attempt)await pause(1500);owner();
+        const p=await snapshot('confirmed');
+        if(present(journal.pending,p)){finish(journal.pending,'account-verified',p.slot);break;}
+      }
+      return view();
+    });},
+    backup:()=>JSON.stringify(store.read(KEY)??initial(),null,2)
+  };
+}

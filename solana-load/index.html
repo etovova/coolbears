@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex"><title>CoolBears · Загрузка коллекции</title>
+  <link rel="icon" href="/assets/collection/logo.png"><link rel="stylesheet" href="./style.css?v=load-v2-20260921">
+</head>
+<body><main>
+  <header><a class="brand" href="/"><img src="/assets/collection/logo.png" width="44" height="44" alt="">CoolBears</a><span class="badge">Solana Devnet</span></header>
+  <h1>Загрузка коллекции</h1>
+  <p class="intro">Продолжение загрузки 10 000 записей. Используются тестовые SOL.</p>
+  <section class="panel" aria-label="Загрузка">
+    <button id="connect" class="secondary" disabled>Подключить Phantom</button>
+    <p id="account" class="muted">В Phantom должна быть выбрана сеть Devnet.</p>
+    <div class="counter"><strong id="count">—</strong><span> / 10 000</span></div>
+    <progress id="progress" value="0" max="10000" aria-label="Загружено записей"></progress>
+    <p id="checked" class="muted">Подключи кошелёк — прогресс загрузится из сети.</p>
+    <button id="upload" disabled>Загрузить следующие 25</button>
+    <div id="activity" role="status" aria-live="polite">Загружается приложение…</div>
+    <p id="attempt" hidden></p>
+    <a id="transaction" target="_blank" rel="noopener noreferrer" hidden>Транзакция в Solana Explorer ↗</a>
+    <button id="check" class="secondary" disabled>Обновить прогресс</button>
+    <p class="muted">Одно нажатие — один пакет. После подтверждения результат проверится автоматически.</p>
+  </section>
+  <details class="panel" id="settings"><summary>Подключение к Devnet</summary>
+    <p id="rpc-current" class="muted"></p>
+    <label for="rpc">HTTPS-адрес RPC твоего проекта</label>
+    <input id="rpc" type="password" autocomplete="off" spellcheck="false" placeholder="https://devnet.helius-rpc.com/?api-key=…">
+    <button id="save-rpc" class="secondary" disabled>Проверить и сохранить</button>
+    <p id="settings-status" role="status"></p>
+    <p class="muted">Сохраняется только в этом браузере. Phantom отправляет транзакцию через своё подключение; этот адрес используется для подготовки и проверки.</p>
+    <a href="https://dashboard.helius.dev/" target="_blank" rel="noopener noreferrer">Настройки проекта Helius ↗</a>
+  </details>
+  <details class="panel"><summary>Результаты и адреса</summary>
+    <p class="muted">История сохраняется автоматически. Ключ RPC в неё не входит.</p>
+    <button id="export" class="secondary" disabled>Показать историю</button>
+    <textarea id="history" rows="10" readonly hidden aria-label="История загрузки" spellcheck="false"></textarea>
+    <p><a id="machine" target="_blank" rel="noopener noreferrer">Машина Devnet ↗</a></p>
+    <p><a id="collection" target="_blank" rel="noopener noreferrer">Коллекция Devnet ↗</a></p>
+  </details>
+  <footer><a href="/solana-test/">Два тестовых NFT</a></footer>
+  <noscript>Для подключения Phantom включи JavaScript.</noscript>
+</main>
+<script type="module">import('./app.mjs?v=load-v2-20260921').catch(()=>{document.getElementById('activity').textContent='Не удалось загрузить приложение. Обнови страницу.';});</script>
+</body></html>

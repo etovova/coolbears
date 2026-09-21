@@ -10,8 +10,8 @@ const generated=[
   'solana-test/sdk.js.LEGAL.txt',
   'wallet-standard.js',
   'wallet-standard.js.LEGAL.txt',
-  'solana-upload/sdk.js',
-  'solana-upload/sdk.js.LEGAL.txt'
+  'solana-load/sdk.js',
+  'solana-load/sdk.js.LEGAL.txt'
 ];
 for(const file of generated){
   const built=await readFile(file);
