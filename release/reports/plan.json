@@ -1,7 +1,13 @@
 {
+  "checkedAt": "2026-09-21T15:28:38.890955+00:00",
   "passed": true,
   "items": 10000,
   "sourceLayersVerified": 454,
+  "sourceLayerHashesMatched": 454,
+  "sourceLayerDimensionsMatched": 454,
+  "allLayerTraitMappingsMatch": true,
+  "allBodyMouthVariantsMatch": true,
+  "allFixedCountsMatchSavedRequirements": true,
   "uniqueCombinations": 10000,
   "uniqueExactScores": 10000,
   "uniqueDisplayedScores": 10000,

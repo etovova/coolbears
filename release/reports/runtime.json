@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-21T15:17:45.953Z",
+  "checkedAt": "2026-09-21T15:39:33.305Z",
   "scope": "local LiteSVM only; no real Devnet or Phantom execution",
   "passed": true,
   "litesvm": "1.4.1",
@@ -9,14 +9,74 @@
     "standalone-item",
     "machine-9999",
     "closed-mint-rejected",
+    "unauthorized-guard-update-rejected",
     "open-lab-only",
+    "wrong-payment-destination-rejected",
+    "insufficient-payment-rejected",
+    "unauthorized-metadata-update-rejected",
     "paid-mint",
     "same-asset-cannot-mint-twice",
+    "paid-mint-2",
+    "paid-mint-3",
+    "paid-mint-4",
+    "paid-mint-5",
+    "paid-mint-6",
+    "paid-mint-7",
+    "paid-mint-8",
+    "paid-mint-9",
+    "paid-mint-10",
+    "paid-mint-11",
+    "paid-mint-12",
+    "paid-mint-13",
+    "paid-mint-14",
+    "paid-mint-15",
+    "paid-mint-16",
+    "paid-mint-17",
+    "paid-mint-18",
+    "paid-mint-19",
+    "paid-mint-20",
+    "paid-mint-21",
+    "paid-mint-22",
+    "paid-mint-23",
+    "paid-mint-24",
+    "paid-mint-25",
+    "paid-mint-26",
+    "paid-mint-27",
+    "paid-mint-28",
+    "paid-mint-29",
+    "paid-mint-30",
+    "paid-mint-31",
+    "paid-mint-32",
+    "paid-mint-33",
+    "paid-mint-34",
+    "paid-mint-35",
+    "paid-mint-36",
+    "paid-mint-37",
+    "paid-mint-38",
+    "paid-mint-39",
+    "paid-mint-40",
+    "paid-mint-41",
+    "paid-mint-42",
+    "paid-mint-43",
+    "paid-mint-44",
+    "paid-mint-45",
+    "paid-mint-46",
+    "paid-mint-47",
+    "paid-mint-48",
+    "paid-mint-49",
+    "paid-mint-50",
+    "paid-mint-51",
+    "51 paid mints from one wallet; no lifetime cap; each transaction fits 1232 bytes",
     "close-lab",
     "closed-again-rejects-mint",
     "transfer",
+    "former-owner-cannot-transfer",
     "synthetic-metadata-update",
-    "final collection size, payment, ownership and machine state"
+    "final collection size, payment, ownership and machine state",
+    "one-item-machine",
+    "open-one-item-lab",
+    "last-available-item",
+    "sold-out-machine-rejected"
   ],
   "transactions": [
     {
@@ -45,6 +105,256 @@
       "computeUnits": "59003"
     },
     {
+      "step": "paid-mint-2",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-3",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-4",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-5",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-6",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-7",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-8",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-9",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "paid-mint-10",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-11",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-12",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-13",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-14",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-15",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-16",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-17",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-18",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-19",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-20",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-21",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-22",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-23",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-24",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-25",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-26",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-27",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-28",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-29",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-30",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-31",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-32",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-33",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-34",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-35",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-36",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-37",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-38",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-39",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-40",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-41",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-42",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-43",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-44",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-45",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-46",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-47",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-48",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-49",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-50",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
+      "step": "paid-mint-51",
+      "bytes": 652,
+      "computeUnits": "59065"
+    },
+    {
       "step": "close-lab",
       "bytes": 309,
       "computeUnits": "11747"
@@ -58,6 +368,21 @@
       "step": "synthetic-metadata-update",
       "bytes": 295,
       "computeUnits": "11700"
+    },
+    {
+      "step": "one-item-machine",
+      "bytes": 797,
+      "computeUnits": "65621"
+    },
+    {
+      "step": "open-one-item-lab",
+      "bytes": 301,
+      "computeUnits": "9838"
+    },
+    {
+      "step": "last-available-item",
+      "bytes": 652,
+      "computeUnits": "61267"
     }
   ]
 }

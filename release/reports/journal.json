@@ -1,10 +1,12 @@
 {
-  "checkedAt": "2026-09-21T15:22:55.677Z",
+  "checkedAt": "2026-09-21T15:39:32.578Z",
   "passed": true,
   "scope": "fault injection with real SDK signatures and simulated transport; not real Devnet/Phantom",
   "checks": [
+    "simultaneous requests for the same step share one signed transaction",
     "signature rejection leaves no receipt and sends nothing",
     "failed simulation sends nothing",
+    "rejected signing releases the in-flight lock for an explicit retry",
     "failed persistence prevents submission",
     "response lost after send resumes with the same signature and no resend",
     "unresolved signature times out and restart never replaces it",

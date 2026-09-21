@@ -43,6 +43,16 @@ function fixture() {
 const checks = [];
 async function check(name, fn) { await fn(); checks.push(name); }
 try {
+  await check('simultaneous requests for the same step share one signed transaction', async () => {
+    const f = fixture();
+    const results = await Promise.all([
+      f.execute('create', f.builder, f.verify),
+      f.execute('create', f.builder, f.verify),
+    ]);
+    assert.equal(f.sends, 1);
+    assert.equal(f.verifications, 1);
+    assert.equal(results[0].signature, results[1].signature);
+  });
   await check('signature rejection leaves no receipt and sends nothing', async () => {
     const f = fixture(); f.rejectSignature = true;
     await assert.rejects(f.execute('create', f.builder, f.verify), /rejected/);
@@ -52,6 +62,13 @@ try {
     const f = fixture(); f.simulationError = 'InsufficientFunds';
     await assert.rejects(f.execute('create', f.builder, f.verify), /simulation failed/);
     assert.equal(f.sends, 0); assert.deepEqual(f.state.receipts, {});
+  });
+  await check('rejected signing releases the in-flight lock for an explicit retry', async () => {
+    const f = fixture(); f.rejectSignature = true;
+    await assert.rejects(f.execute('create', f.builder, f.verify), /rejected/);
+    f.rejectSignature = false;
+    await f.execute('create', f.builder, f.verify);
+    assert.equal(f.sends, 1); assert.equal(f.verifications, 1);
   });
   await check('failed persistence prevents submission', async () => {
     const f = fixture(); f.saveFailure = true;

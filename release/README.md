@@ -21,12 +21,43 @@ Verified on 2026-09-21:
   disposable test payer has zero test SOL. No real Devnet transaction was sent:
   `reports/devnet.json`.
 
-Ten transaction-journal fault checks passed: signature rejection, simulation
+Twelve transaction-journal fault checks passed: concurrent repeated calls, signature rejection, simulation
 failure, persistence failure, lost send response, confirmation timeout, status
 outage, processed-only status, on-chain failure, failed account read and restart
 after later state changes. See `reports/journal.json` and run
 `npm run --prefix release verify:journal`. The transport is simulated; these are
 not a physical Phantom or network test.
+
+## Extended audit on 2026-09-21
+
+The source, archive and runtime checks were independently reviewed and extended.
+Concurrent calls for the same journal step previously submitted twice. They now
+share one in-flight promise, including signing and submission; rejection releases
+the lock for an explicit retry. The durable receipt still protects restarts.
+
+- `reports/plan.json`: original SHA-256 and dimensions of all 454 layers,
+  every layer-to-trait mapping, body/mouth matching, saved fixed counts and all
+  10,000 exact/displayed scores and ranks recomputed.
+- `reports/metadata.json` and `archive-links.json`: all 10,000 exact image and
+  reveal links, canonical reveal commitment, seven unique attribute categories,
+  and actual CAR child-directory CIDs checked without publishing private values.
+- `reports/archive-recheck.json`: all 12,763,395,054 archive bytes rehashed and
+  matched to the archive fully decoded in `assets.json`; the unchanged PNGs were
+  not needlessly decoded a second time.
+- `reports/runtime.json`: 72 local checks, including 51 paid mints from one
+  wallet, insufficient payment, incorrect treasury, unauthorized guard/metadata
+  changes, former-owner transfer rejection and a one-item sellout boundary.
+  These are individual transactions, not a 50-NFT browser order acceptance test.
+- `reports/browser.json` and `live-site.json`: languages, quantity limits,
+  closed mint, wallet chooser, all 26 public content files and eight retired
+  URLs checked. CNAME is deployment configuration, not a required content URL.
+- `reports/dependencies.json`: narrow bn.js and uuid fixes installed in the
+  release lockfile, then all 90 SDK/journal/runtime checks rerun successfully.
+
+Real Devnet execution remains blocked on test funds. The audit's bounded RPC
+airdrop request returned 429; the official web faucet then requested Cloudflare
+CAPTCHA. No issuance transaction was sent. Physical Phantom signing and Magic
+Eden indexing remain separate unfinished checks.
 
 The next gate is real Devnet execution. Test payer:
 `BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF`.

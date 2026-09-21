@@ -1,0 +1,184 @@
+{
+  "checkedAt": "2026-09-21T15:34:57.073970+00:00",
+  "scope": "26 public content files and 8 retired URLs; CNAME is local deployment configuration",
+  "passed": true,
+  "results": [
+    {
+      "path": "app.js",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/collection/banner.png",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/collection/gif.gif",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/collection/logo.png",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/hero-main.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/promo-02.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/promo-03.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/promo-04.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/promo-05.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/promo-06.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "assets/nft/promo-07.webp",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "config.js",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "index.html",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "metadata/0000.json",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "metadata/collection.json",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "mobile-fix.css",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "privacy.html",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "robots.txt",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "sitemap.xml",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "style.css",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "terms.html",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "wallet-core.mjs",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "wallet-ui.mjs",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "wallet.css",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "wallet-standard.js",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "wallet-standard.js.LEGAL.txt",
+      "status": 200,
+      "matched": true
+    },
+    {
+      "path": "manage/",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "manage/manage.js",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "preview/",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "mint-client.js",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "metadata/hidden/0001.json",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "metadata/mint/1.json",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "solana-load/",
+      "status": 404,
+      "removed": true
+    },
+    {
+      "path": "solana-test/",
+      "status": 404,
+      "removed": true
+    }
+  ],
+  "deploymentControlFiles": [
+    {
+      "path": "CNAME",
+      "status": 404,
+      "matched": false
+    }
+  ]
+}

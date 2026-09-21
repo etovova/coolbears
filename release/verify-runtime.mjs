@@ -40,7 +40,7 @@ umi.rpc = new Proxy(umi.rpc, { get(target, key) {
 } });
 const payer = generateSigner(umi); umi.use(signerIdentity(payer));
 assert.notEqual(payer.publicKey, policy.owner);
-assert.ok(!(vm.airdrop(payer.publicKey, 10000000000n) instanceof FailedTransactionMetadata));
+assert.ok(!(vm.airdrop(payer.publicKey, 40000000000n) instanceof FailedTransactionMetadata));
 const collection = generateSigner(umi), item = generateSigner(umi), machine = generateSigner(umi);
 const treasury = generateSigner(umi), minted = generateSigner(umi), recipient = generateSigner(umi);
 const report = { checkedAt: new Date().toISOString(), scope: 'local LiteSVM only; no real Devnet or Phantom execution',
@@ -67,31 +67,79 @@ try {
     treasury: treasury.publicKey, commitment: new Uint8Array(32).fill(7), uri: `${policy.website}/metadata/0000.json` }));
   assert.equal((await fetchCandyMachine(umi, machine.publicKey)).data.itemsAvailable, 9999n);
   const guard = findCandyGuardPda(umi, { base: machine.publicKey })[0];
-  const mint = asset => setComputeUnitLimit(umi, { units: 400000 }).add(mintV1(umi, {
+  const mint = (asset, overrides = {}) => setComputeUnitLimit(umi, { units: 400000 }).add(mintV1(umi, {
     candyMachine: machine.publicKey, candyGuard: guard, collection: collection.publicKey,
-    asset, mintArgs: { solPayment: some({ destination: treasury.publicKey }) },
+    asset, mintArgs: { solPayment: some({ destination: treasury.publicKey }) }, ...overrides,
   }));
   await send('closed-mint-rejected', mint(minted), /MintNotLive|Mint not live/i);
   assert.equal((await fetchCandyMachine(umi, machine.publicKey)).itemsRedeemed, 0n);
+  await send('unauthorized-guard-update-rejected', updateCandyGuard(umi, {
+    candyGuard: guard, authority: recipient, guards: {}, groups: [],
+  }), /ConstraintHasOne|has one constraint|0x7d1/i);
+  assert.equal((await fetchCandyGuard(umi, guard)).guards.startDate.value.date, CLOSED_UNTIL);
   await send('open-lab-only', updateCandyGuard(umi, { candyGuard: guard,
     guards: { solPayment: closedGuards(treasury.publicKey).solPayment }, groups: [] }));
+  await send('wrong-payment-destination-rejected', mint(generateSigner(umi), {
+    mintArgs: { solPayment: some({ destination: recipient.publicKey }) },
+  }), /PublicKeyMismatch|Public key mismatch/i);
+  const poorBuyer = generateSigner(umi);
+  vm.airdrop(poorBuyer.publicKey, 100000000n);
+  await send('insufficient-payment-rejected', mint(generateSigner(umi), {
+    payer: poorBuyer, minter: poorBuyer,
+  }), /NotEnoughSOL|Not enough SOL/i);
+  assert.equal(vm.getBalance(treasury.publicKey) || 0n, 0n);
+  assert.equal((await fetchCandyMachine(umi, machine.publicKey)).itemsRedeemed, 0n);
+  await send('unauthorized-metadata-update-rejected', update(umi, {
+    asset: await fetchAsset(umi, item.publicKey), collection: await readCollection(),
+    authority: recipient, name: 'Unauthorized test change',
+  }), /custom program error: 0x1a\b/i); // Core NoApprovals, official error 26.
+  assert.equal((await fetchAsset(umi, item.publicKey)).name, 'VM item');
   await send('paid-mint', mint(minted));
   assert.equal(vm.getBalance(treasury.publicKey), 500000000n);
   assert.equal((await fetchAsset(umi, minted.publicKey)).owner, payer.publicKey);
   assert.equal((await fetchCandyMachine(umi, machine.publicKey)).itemsRedeemed, 1n);
   await send('same-asset-cannot-mint-twice', mint(minted), /MetadataAccountMustBeEmpty/);
   assert.equal(vm.getBalance(treasury.publicKey), 500000000n);
+  // Separate transactions: a UI order must never imply 50 NFTs fit one packet.
+  for (let index = 2; index <= 51; index++) {
+    await send(`paid-mint-${index}`, mint(generateSigner(umi)));
+  }
+  assert.equal((await fetchCandyMachine(umi, machine.publicKey)).itemsRedeemed, 51n);
+  assert.equal(vm.getBalance(treasury.publicKey), 25500000000n);
+  report.checks.push('51 paid mints from one wallet; no lifetime cap; each transaction fits 1232 bytes');
   await send('close-lab', updateCandyGuard(umi, { candyGuard: guard, guards: closedGuards(treasury.publicKey), groups: [] }));
   assert.equal((await fetchCandyGuard(umi, guard)).guards.startDate.value.date, CLOSED_UNTIL);
   await send('closed-again-rejects-mint', mint(generateSigner(umi)), /MintNotLive|Mint not live/i);
   await send('transfer', transfer(umi, { asset: await fetchAsset(umi, minted.publicKey), collection: await readCollection(), newOwner: recipient.publicKey }));
   assert.equal((await fetchAsset(umi, minted.publicKey)).owner, recipient.publicKey);
+  await send('former-owner-cannot-transfer', transfer(umi, {
+    asset: await fetchAsset(umi, minted.publicKey), collection: await readCollection(), newOwner: payer.publicKey,
+  }), /custom program error: 0x1a\b/i); // Former owner has no transfer approval.
+  assert.equal((await fetchAsset(umi, minted.publicKey)).owner, recipient.publicKey);
   await send('synthetic-metadata-update', update(umi, { asset: await fetchAsset(umi, item.publicKey), collection: await readCollection(), name: 'VM updated item' }));
   assert.equal((await fetchAsset(umi, item.publicKey)).name, 'VM updated item');
-  assert.equal((await readCollection()).numMinted, 2);
-  assert.equal((await fetchCandyMachine(umi, machine.publicKey)).itemsRedeemed, 1n);
-  assert.equal(vm.getBalance(treasury.publicKey), 500000000n);
-  report.checks.push('final collection size, payment, ownership and machine state'); report.passed = true;
+  assert.equal((await readCollection()).numMinted, 52);
+  assert.equal((await fetchCandyMachine(umi, machine.publicKey)).itemsRedeemed, 51n);
+  assert.equal(vm.getBalance(treasury.publicKey), 25500000000n);
+  report.checks.push('final collection size, payment, ownership and machine state');
+  // A separate one-item machine exercises the exhaustion boundary with the
+  // identical guard/program code; the main 9,999-item fixture is unchanged.
+  const lastMachine = generateSigner(umi);
+  await send('one-item-machine', await machineBuilder(umi, lastMachine, collection.publicKey, {
+    owner: payer.publicKey, treasury: treasury.publicKey, itemsAvailable: 1,
+    commitment: new Uint8Array(32).fill(8), uri: `${policy.website}/metadata/0000.json`,
+  }));
+  const lastGuard = findCandyGuardPda(umi, { base: lastMachine.publicKey })[0];
+  await send('open-one-item-lab', updateCandyGuard(umi, { candyGuard: lastGuard,
+    guards: { solPayment: closedGuards(treasury.publicKey).solPayment }, groups: [] }));
+  const lastMint = () => mint(generateSigner(umi), { candyMachine: lastMachine.publicKey, candyGuard: lastGuard });
+  await send('last-available-item', lastMint());
+  assert.equal(vm.getBalance(treasury.publicKey), 26000000000n);
+  await send('sold-out-machine-rejected', lastMint(), /CandyMachineEmpty|Candy machine is empty/i);
+  assert.equal((await fetchCandyMachine(umi, lastMachine.publicKey)).itemsRedeemed, 1n);
+  assert.equal((await readCollection()).numMinted, 53);
+  assert.equal(vm.getBalance(treasury.publicKey), 26000000000n);
+  report.passed = true;
 } catch (error) {
   report.error = String(error.message); process.exitCode = 1;
 } finally {

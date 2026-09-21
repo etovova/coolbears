@@ -1,0 +1,11 @@
+{
+  "checkedAt": "2026-09-21T15:42:58.898Z",
+  "passed": true,
+  "rootChildren": [
+    "images",
+    "metadata"
+  ],
+  "imageDirectoryCidMatched": true,
+  "metadataDirectoryCidMatched": true,
+  "sourcesUnmodified": true
+}

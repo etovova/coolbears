@@ -63,3 +63,15 @@ Program binaries are freshly fetched from finalized Devnet accounts and checked
 against the recorded SHA-256 values. No binary or test from the deleted release
 implementation is restored. The official faucet distinguishes real Devnet funds
 from local validator balances: https://faucet.solana.com/.
+
+## Dependency audit references
+
+- bn.js fixed release: https://github.com/advisories/GHSA-378v-28hj-76wf
+- uuid fixed release: https://github.com/advisories/GHSA-w5hq-g745-h8pq
+- Remaining stream-json advisory: https://github.com/advisories/GHSA-528h-pc64-c93x
+
+The last advisory explicitly excludes the StreamValues/StreamArray/StreamObject
+streamers. Installed jayson uses StreamValues and Verifier, not the affected
+path filters. npm still flags the dependency tree. This is an inspected usage
+limitation, not a claim that arbitrary future use is safe. Forcing stream-json
+3.x into jayson's 1.x CommonJS API is not an accepted fix; track upstream support.

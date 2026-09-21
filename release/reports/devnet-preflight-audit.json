@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-09-21T15:33:01.164113+00:00",
+  "scope": "real Devnet read and faucet request only",
+  "status": "blocked_test_funds",
+  "testPayer": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
+  "finalizedBalanceLamports": 0,
+  "balanceSlot": 501967380,
+  "airdropRequestLamports": 1000000000,
+  "airdropErrorCode": 429,
+  "airdropReason": "Daily limit or faucet has run dry",
+  "issuanceTransactionsSentByThisAudit": 0,
+  "webFaucet": "https://faucet.solana.com/",
+  "webFaucetStatus": "Cloudflare CAPTCHA requires user action; not attempted"
+}

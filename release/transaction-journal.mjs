@@ -5,11 +5,12 @@ import { base58 } from '@metaplex-foundation/umi/serializers';
 
 export function transactionJournal({ umi, state, save, record = async () => {},
   now = Date.now, wait = delay, confirmationMs = 40000, pollMs = 2000 }) {
+  const pending = new Map();
   async function status(signature) {
     const [result] = await umi.rpc.getSignatureStatuses([base58.serialize(signature)], { searchTransactionHistory: true });
     return result;
   }
-  return async function execute(label, builder, verify) {
+  async function executeOnce(label, builder, verify) {
     let receipt = state.receipts[label];
     if (receipt) {
       const found = await status(receipt.signature);
@@ -46,5 +47,14 @@ export function transactionJournal({ umi, state, save, record = async () => {},
     }
     await record(label, receipt);
     return receipt;
+  }
+  return function execute(label, builder, verify) {
+    // Coalesce repeated clicks before signing, simulation or persistence can
+    // yield. A saved receipt protects restarts; this protects in-flight calls.
+    if (pending.has(label)) return pending.get(label);
+    const task = Promise.resolve().then(() => executeOnce(label, builder, verify))
+      .finally(() => pending.delete(label));
+    pending.set(label, task);
+    return task;
   };
 }
