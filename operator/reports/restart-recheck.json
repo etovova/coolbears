@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-21T21:01:39.976Z",
+  "sourceCommit": "50f7ecac40a0cc659447474f23a749ef5746ebfe",
+  "scope": "fresh checkout; 22 local tests plus independent read-only Devnet verification",
+  "localTestsPassed": 22,
+  "transactionsSent": 0,
+  "physicalPhantomVerified": false,
+  "passed": true,
+  "checks": [
+    "Devnet genesis",
+    "original mint finalized without execution error",
+    "Core asset owner, name, URI and collection",
+    "collection royalties 7 percent and approved creator",
+    "same lab machine; one item redeemed"
+  ],
+  "asset": "J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57",
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "name": "CoolBears #0002 — Hidden Bear",
+  "signature": "3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7",
+  "finalizedSlot": 502070178,
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH"
+}
