@@ -1,0 +1,40 @@
+{
+  "checkedAt": "2026-09-21T17:07:05.575947+00:00",
+  "site": "https://coolbears-nfts.com/phantom-check/",
+  "publishedCodeCommit": "377fa01fd0f3d87fc6c69322b8871eba53c0deae",
+  "http": {
+    "allFivePhantomFilesMatchLocal": true,
+    "mainAppMatchesLocal": true,
+    "mainConfigMatchesLocal": true,
+    "retiredRoutesStill404": [
+      "/manage/",
+      "/solana-load/",
+      "/solana-test/"
+    ]
+  },
+  "browser": {
+    "pageLoaded": true,
+    "connectWithoutWalletShowsInstructions": true,
+    "createDisabledBeforeConnection": true,
+    "devnetInstructionsExpand": true,
+    "imageLoaded": true,
+    "viewportWidth": 1348,
+    "scrollWidth": 1348,
+    "applicationErrors": [],
+    "unrelatedExtensionErrorObserved": true,
+    "physicalPhantomVerified": false,
+    "mobilePhantomVerified": false
+  },
+  "cleanInstall": {
+    "npm": "10.9.8",
+    "node": "24.19.0",
+    "rootAndReleaseNpmCi": true,
+    "productionReleasePackages": 178,
+    "buildAndStaticVerification": true,
+    "allFourCommittedBrowserBundlesIdentical": true,
+    "lockFix": "Added missing optional utf-8-validate 5.0.10 entry required by npm 10; initial custom Pages workflow failed before build."
+  },
+  "localChecksPassed": 104,
+  "mainnetUsed": false,
+  "salesOpen": false
+}
