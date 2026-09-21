@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-21T20:09:01.843Z",
+  "cluster": "devnet",
+  "production": false,
+  "transactionsSentByRecovery": 0,
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+  "candyMachine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+  "asset": "J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57",
+  "signature": "5pNd4PK3XsJgGi93iM8pTWbSM6wM5e35aFqnajZwZaAwUNrNLFVkg9CNCxUoNZ4sJhyoYQP1q4yyh6JTjKpjdhKt",
+  "signatureStatus": null,
+  "blockhashValidAtFinalized": false,
+  "assetExistsAtFinalized": false,
+  "machineItems": 2,
+  "loadedItems": 2,
+  "redeemedItems": 0,
+  "status": "expired-without-mint",
+  "physicalWalletVerified": false,
+  "magicEdenIndexed": false
+}

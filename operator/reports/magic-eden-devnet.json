@@ -1,0 +1,14 @@
+{
+  "checkedAt": "2026-09-21T20:12:26Z",
+  "network": "devnet",
+  "url": "https://api-devnet.magiceden.dev/v2/tokens/J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57",
+  "apiKeyUsed": false,
+  "tradingRequests": 0,
+  "transportExit": 0,
+  "indexingVerified": false,
+  "httpStatus": 404,
+  "response": {
+    "message": "no Route matched with those values",
+    "request_id": "49e6d352a93e275a881e2d32373e802b"
+  }
+}

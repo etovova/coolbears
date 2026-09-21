@@ -9,6 +9,7 @@
 - Конфигурация Core Candy Machine, cache для CLI и плагин роялти. Конфигурация закрыта addressGate; цена соответствует утверждённой политике.
 - Проверка доступности Devnet, программ, баланса и blockhash без записи в сеть.
 - Симуляция создания коллекции/NFT и небольшой машины в реальной Devnet. Это не выпуск NFT и не проверка подписи Phantom.
+- Реальное создание новой тестовой коллекции, машины на 2 позиции, загрузка обеих записей и один платный mint на кошелёк владельца. Все четыре операции finalized; это отдельная лабораторная коллекция.
 
 ## Воспроизведение
 
@@ -45,7 +46,7 @@ npm run --prefix operator mplx -- cm create --help
 5. Создать Core Candy Machine через `mplx cm create`, затем `mplx cm insert` и `mplx cm fetch`. После неопределённого результата команды не запускать создание заново: сначала восстановить адрес/подпись и проверить состояние.
 6. После настоящего теста создания, загрузки и минта подключить отдельный mint UI по официальной документации Metaplex и протестировать физические Phantom и Solflare. Не возвращать старую панель.
 
-Реальные операции выпуска, полноценный mint UI, пакетные покупки и раскрытие в этой точке ещё не реализованы и не проверены. Продажи не открывать автоматически. Прежние тесты и старые адреса не подтверждают новый процесс.
+Полный выпуск коллекции, полноценный mint UI, пакетные покупки и раскрытие ещё не завершены. Продажи не открывать автоматически. Прежние тесты и старые адреса не подтверждают новый процесс; новая отдельная Devnet-проверка описана ниже.
 
 ## Совместимость CLI с сервером
 
@@ -77,6 +78,18 @@ node --import ./operator/cli-transport.mjs operator/cost.mjs
 
 Подтверждение идёт через getSignatureStatuses по HTTPS; WebSocket через эту среду не требуется. Результат дополнительно проверяется до finalized с err=null, независимо от текста успеха CLI. В CLI 0.4.3 обнаружена ветка confirmTransaction.js, допускающая успех при положительном context.slot без проверки value.err; собственная проверка не допускает этого. Само формирование и подписание инструкций CLI не заменено.
 
-Новая тестовая коллекция FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH создана через CLI, подпись 2teD6hqpUaUiEWe9Q1nCdHsTKhSBF3zRTeijFXsoyQrseRqfnoK81HDS4Xeh6F5WeoBEC9kKzjaTBz6n17Aj6XB3 подтверждена finalized. Это лабораторная коллекция с тестовым update authority, не production-коллекция владельца. Полный результат небольшого цикла будет записан отдельно в reports/cli-devnet-mint.json после проверки.
+Новая тестовая коллекция FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH создана через CLI; машина CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2 содержит 2 позиции, обе загружены. Это лабораторная коллекция с тестовым update authority, не production-коллекция владельца. В CLI нет команды cm mint: единичный mint выполнен через официальный Core Candy Machine SDK в lab-mint.mjs. Отчёты reports/cli-devnet-setup.json и reports/cli-devnet-mint.json содержат настоящие подписи и проверки.
+
+NFT J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57 — CoolBears #0002 — Hidden Bear — принадлежит утверждённому кошельку владельца. Подпись 3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7 finalized, err=null. По pre/postBalances транзакции владелец получил ровно 500000000 тестовых lamports. Роялти коллекции 700 basis points; загружены 2, заминчен 1, addressGate всё ещё закрывает доступ посторонним. Попытка неразрешённого minter отклонена реальной симуляцией AddressNotAuthorized (6033). Подпись владельца и физический Phantom/Solflare не проверялись.
+
+Первая отправленная mint-транзакция 5pNd…dhKt была принята RPC, но не включена в блок. Read-only recovery подтвердил одновременно: signature status=null с searchTransactionHistory, blockhash недействителен в finalized, asset отсутствует, itemsRedeemed=0. Только после этого выполнена новая попытка с тем же сохранённым адресом NFT. Исправлены получение свежего confirmed blockhash, matching preflight commitment и разрешённая RPC-доставка тех же подписанных bytes (maxRetries=5). Нового NFT-адреса не создавали, неизвестную транзакцию не заменяли. Это соответствует [семантике sendTransaction](https://solana.com/docs/rpc/http/sendtransaction): принятие RPC не гарантирует включение в блок.
+
+После прерывания подтверждения использовать только чтение:
+
+```sh
+node --import ./operator/cli-transport.mjs operator/verify-lab-mint.mjs /absolute/private/lab /absolute/private/lab/mint-operation
+```
+
+Не устанавливать COOLBEARS_LAB_OPERATION для этой команды. Она проверяет сохранённую подпись, срок blockhash, Core asset, коллекцию, guard, счётчик и оплату; новых транзакций не создаёт и не отправляет. История истёкшей операции остаётся в приватном журнале.
 
 Проверки: 22 локальных сценария; в том числе ошибка исполнения при положительном слоте, отсутствие подписи в сети, HTTP 429, неверная сеть, запрет отправки от кошелька владельца, сохранение signed bytes до отправки, запрет второй отправки и повторного запуска операции. Приватные ключи и журналы не публикуются. Выводы по присланному примеру Magic Eden: [MAGIC_EDEN.md](MAGIC_EDEN.md).

@@ -1,0 +1,41 @@
+{
+  "checkedAt": "2026-09-21T20:12:09.473Z",
+  "cluster": "devnet",
+  "production": false,
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+  "candyMachine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+  "candyGuard": "7UHKjfr3tcJhiuiPXrzgX2nLE89LvTgmNW5zKnEawANo",
+  "asset": "J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57",
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "name": "CoolBears #0002 — Hidden Bear",
+  "uri": "https://coolbears-nfts.com/metadata/hidden/0002.json",
+  "signature": "3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7",
+  "confirmation": "finalized",
+  "paymentToOwnerLamports": 500000000,
+  "royaltyBasisPoints": 700,
+  "machineItems": 2,
+  "loadedItems": 2,
+  "redeemedItems": 1,
+  "addressGateStillClosed": true,
+  "unauthorizedMintSimulation": {
+    "err": {
+      "InstructionError": [
+        1,
+        {
+          "Custom": 6033
+        }
+      ]
+    },
+    "logs": [
+      "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+      "Program ComputeBudget111111111111111111111111111111 success",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ invoke [1]",
+      "Program log: Instruction: MintV1",
+      "Program log: AnchorError thrown in program/src/guards/address_gate.rs:29. Error Code: AddressNotAuthorized. Error Number: 6033. Error Message: Address not authorized.",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ consumed 13712 of 299850 compute units",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ failed: custom program error: 0x1791"
+    ]
+  },
+  "physicalWalletVerified": false,
+  "magicEdenIndexed": false
+}

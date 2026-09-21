@@ -1,35 +1,48 @@
 {
-  "createdAt": "2026-09-21T19:22:22.363045+00:00",
-  "stage": "new-cli-preparation",
-  "officialCli": "0.4.3",
-  "offlineTests": 13,
-  "offlinePassed": 13,
-  "preparedMetadata": 10000,
-  "publicMetadataPublished": false,
-  "devnetReadOnly": true,
-  "devnetSimulation": [
-    "collection-and-asset",
-    "two-item-machine-guard-and-insertion"
-  ],
-  "signaturesVerified": false,
-  "walletAcceptanceVerified": false,
-  "transactionsSent": 0,
-  "dedicatedRpcConfigured": false,
-  "salesOpen": false,
-  "resetCommit": "9061280823687d1a7134d54b31731421b7ba4881",
-  "cliCompatibility": "documented lazy Ledger import; no transaction/signing implementation replacement",
-  "pending": [
-    "dedicated RPC and operator signing setup",
-    "rent/funding assessment of full config-line machine",
-    "publication and complete link validation of hidden metadata",
-    "actual new collection, machine, insertion and mint",
-    "new mint UI and physical Phantom/Solflare",
-    "reveal and batch purchases"
-  ],
-  "toolchain": {
-    "node": "24.19.0",
-    "npm": "11.9.0",
-    "cleanInstallVerified": true
+  "stage": "cli-devnet-mint-verified",
+  "checkedAt": "2026-09-21T20:12:09.473Z",
+  "operator": "Metaplex CLI 0.4.3 plus Core Candy Machine SDK 0.3.0",
+  "localTests": {
+    "passed": 22,
+    "failed": 0
   },
-  "firstCI": "npm 10.9.8 optional peer lock mismatch; toolchain pinned to tested npm 11.9.0"
+  "metadata": {
+    "publishedHiddenFiles": 10000,
+    "allCommittedAndStagedBytesVerified": true,
+    "liveHttpSamplesVerified": 8,
+    "mintedAssetMetadataHttpVerified": true
+  },
+  "devnet": {
+    "production": false,
+    "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+    "machine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+    "machineItems": 2,
+    "loadedItems": 2,
+    "minted": 1,
+    "asset": "J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57",
+    "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "signature": "3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7",
+    "confirmation": "finalized",
+    "paymentToOwnerLamports": 500000000,
+    "royaltyBasisPoints": 700,
+    "confirmedTransactions": 4,
+    "submittedTransactions": 5,
+    "expiredWithoutMint": 1,
+    "addressGateStillClosed": true
+  },
+  "salesOpen": false,
+  "mainnetTransactions": 0,
+  "ownerKeyUsed": false,
+  "physicalWalletVerified": false,
+  "magicEdenIndexed": false,
+  "magicEdenDevnetHttp": 404,
+  "remaining": [
+    "Production operator identity and appropriate RPC",
+    "Full 9999-item machine funding, creation and insertion",
+    "Reserved production #0000",
+    "Wallet-signed mint UI and physical Phantom/Solflare checks",
+    "Batches up to 50 without a lifetime wallet limit",
+    "Reveal no earlier than 2027-01-01",
+    "Actual marketplace indexing and collection setup"
+  ]
 }

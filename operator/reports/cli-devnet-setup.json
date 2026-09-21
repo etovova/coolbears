@@ -1,0 +1,48 @@
+{
+  "checkedAt": "2026-09-21T20:03:13Z",
+  "cluster": "devnet",
+  "production": false,
+  "cliVersion": "0.4.3",
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+  "candyMachine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+  "labPayer": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
+  "machineItems": 2,
+  "confirmedOperations": [
+    {
+      "operation": "01b-collection",
+      "signature": "2teD6hqpUaUiEWe9Q1nCdHsTKhSBF3zRTeijFXsoyQrseRqfnoK81HDS4Xeh6F5WeoBEC9kKzjaTBz6n17Aj6XB3",
+      "slot": 502064717,
+      "confirmationStatus": "finalized",
+      "err": null,
+      "simulationErr": null,
+      "simulationUnits": 13273,
+      "simulationVerifiedSignatures": true,
+      "forwardingAttempts": 1
+    },
+    {
+      "operation": "02-machine",
+      "signature": "MkVjpib39zgBBzRvvGz3anZ3GAswHBwLNAPx9Y269Cus6K6PRuz5t7GMLc7nR4xBLbQKh1oyD3WsxixAx4S1aat",
+      "slot": 502065379,
+      "confirmationStatus": "finalized",
+      "err": null,
+      "simulationErr": null,
+      "simulationUnits": 68154,
+      "simulationVerifiedSignatures": true,
+      "forwardingAttempts": 1
+    },
+    {
+      "operation": "03-insert",
+      "signature": "mBd9tpReK1PWj6goEPKLHy5CLzxhfNgcg6tj9kmHyUsoes93qSrAhABYuDemFviMt6Ei9DgePGKfeCajhihL4RD",
+      "slot": 502065914,
+      "confirmationStatus": "finalized",
+      "err": null,
+      "simulationErr": null,
+      "simulationUnits": 12395,
+      "simulationVerifiedSignatures": true,
+      "forwardingAttempts": 1
+    }
+  ],
+  "publicSalesOpened": false,
+  "ownerKeyUsed": false,
+  "mainnetTransactions": 0
+}

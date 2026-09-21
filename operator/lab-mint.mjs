@@ -23,11 +23,11 @@ const asset = await signer('mint.json');
 assert.equal((await umi.rpc.getAccount(asset.publicKey)).exists, false, 'The saved asset already exists; do not mint again');
 const machine = await fetchCandyMachine(umi, publicKey(config.candyMachineId));
 const guard = await fetchCandyGuard(umi, machine.mintAuthority);
-const collection = await fetchCollection(umi, machine.collection);
+const collection = await fetchCollection(umi, machine.collectionMint);
 assert.equal(machine.data.itemsAvailable, 2n);
 assert.equal(machine.itemsLoaded, 2);
 assert.equal(machine.itemsRedeemed, 0n);
-assert.equal(machine.collection, config.config.collection);
+assert.equal(machine.collectionMint, config.config.collection);
 assert.equal(guard.guards.addressGate.value.address, umi.identity.publicKey);
 assert.equal(guard.guards.solPayment.value.lamports.basisPoints, 500000000n);
 assert.equal(guard.guards.solPayment.value.destination, policy.owner);
@@ -36,20 +36,22 @@ assert.equal(collection.royalties.creators[0].address, policy.owner);
 
 const input = {
   candyMachine: machine.publicKey, candyGuard: machine.mintAuthority,
-  collection: machine.collection, asset, owner: publicKey(policy.owner),
+  collection: machine.collectionMint, asset, owner: publicKey(policy.owner),
   mintArgs: { solPayment: { destination: publicKey(policy.owner) } },
 };
 const closedTx = await setComputeUnitLimit(umi, { units: 300000 }).add(mintV1(umi, {
   ...input, payer: umi.identity, minter: createNoopSigner(publicKey(policy.owner)),
-})).setBlockhash(await umi.rpc.getLatestBlockhash()).buildAndSign(umi);
+})).setBlockhash(await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' })).buildAndSign(umi);
 const closedSimulation = await umi.rpc.simulateTransaction(closedTx, { verifySignatures: false });
 assert.ok(closedSimulation.err, 'Non-allowlisted minter must be rejected');
 assert.ok(closedSimulation.logs.some(line => /AddressNotAuthorized|AddressGate|address gate/i.test(line)), 'The negative simulation must fail specifically at addressGate');
+await writeFile(path.join(process.env.COOLBEARS_LAB_OPERATION, 'closed-simulation.json'), JSON.stringify(closedSimulation, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
 
 const builder = setComputeUnitLimit(umi, { units: 300000 }).add(mintV1(umi, input));
 assert.ok(builder.fitsInOneTransaction(umi));
-const transaction = await builder.setBlockhash(await umi.rpc.getLatestBlockhash()).buildAndSign(umi);
-const signature = await umi.rpc.sendTransaction(transaction, { skipPreflight: false, maxRetries: 0 });
+const transaction = await builder.setBlockhash(await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' })).buildAndSign(umi);
+// The RPC may relay these exact signed bytes again; no new signing or mint is performed.
+const signature = await umi.rpc.sendTransaction(transaction, { commitment: 'confirmed', skipPreflight: false, maxRetries: 5 });
 const finalized = await confirmSignature(process.env.COOLBEARS_RPC_URL, signature);
 await writeFile(path.join(process.env.COOLBEARS_LAB_OPERATION, 'finalized.json'), JSON.stringify(finalized, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
 const minted = await fetchAsset(umi, asset.publicKey);

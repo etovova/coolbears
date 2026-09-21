@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-09-21T20:14:08.177Z",
+  "cluster": "devnet",
+  "production": false,
+  "transactionsSentByRecovery": 0,
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+  "candyMachine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+  "asset": "J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57",
+  "signature": "3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7",
+  "signatureStatus": {
+    "confirmationStatus": "finalized",
+    "confirmations": null,
+    "err": null,
+    "slot": 502070178,
+    "status": {
+      "Ok": null
+    }
+  },
+  "blockhashValidAtFinalized": false,
+  "assetExistsAtFinalized": true,
+  "machineItems": 2,
+  "loadedItems": 2,
+  "redeemedItems": 1,
+  "status": "verified-finalized",
+  "physicalWalletVerified": false,
+  "magicEdenIndexed": false,
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "name": "CoolBears #0002 — Hidden Bear",
+  "uri": "https://coolbears-nfts.com/metadata/hidden/0002.json",
+  "paymentToOwnerLamports": 500000000,
+  "royaltyBasisPoints": 700,
+  "addressGateStillClosed": true
+}
