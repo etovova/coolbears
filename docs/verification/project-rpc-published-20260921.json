@@ -1,0 +1,38 @@
+{
+  "at": "2026-09-21T06:17:05.416433+00:00",
+  "commit": "46bc205074291144fb7ef963c17c28b9bc9e069c",
+  "checks": [
+    {
+      "path": "solana-upload/index.html",
+      "status": 200,
+      "mime": "text/html; charset=utf-8",
+      "bytes": 4050,
+      "sha256": "02ff1c1e9f1784f8b9b5cb2723665b0b921772406eb1e95b646e91c700e028a5",
+      "matches": true
+    },
+    {
+      "path": "solana-upload/controller.mjs",
+      "status": 200,
+      "mime": "text/javascript; charset=utf-8",
+      "bytes": 7519,
+      "sha256": "3e70ac5c141e0014863de9e2c28c80ad4f1a2efc805fff6ece0981b02fb51079",
+      "matches": true
+    },
+    {
+      "path": "solana-upload/sdk.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 1337013,
+      "sha256": "3c5ff940a61538403bdfbd7430feb3cd4935c7ff108a147346f39c19b35e47fc",
+      "matches": true
+    },
+    {
+      "path": "solana-test/sdk.js",
+      "status": 200,
+      "mime": "application/javascript; charset=utf-8",
+      "bytes": 1328790,
+      "sha256": "beefa2234247d480b900ca85f154f06fbe251729626689eb96ecd0fd965d7667",
+      "matches": true
+    }
+  ]
+}
