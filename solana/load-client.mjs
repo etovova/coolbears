@@ -7,9 +7,26 @@ function validateBatch(p) {
   if(!p||!Number.isInteger(p.start)||!Number.isInteger(p.count)||p.start<0||p.count<1||p.count>25||p.start+p.count>10000)throw Error('Некорректная запись ожидающей загрузки.');
 }
 function initial() {return {version:2,...TARGET,legacyPending:[],pending:null,history:[],events:[],progress:null,lastAttempt:null};}
+function walletDetail(error,endpoint) {
+  // Keep the provider's explanation, but never persist its URL or credentials.
+  // Do not stringify arbitrary error/data objects (they may contain secrets).
+  const parts=[];
+  for(const field of [()=>error?.message,()=>error?.data?.message,()=>error?.cause?.message]){
+    try{const value=field();if(typeof value==='string'&&!parts.includes(value))parts.push(value);}catch{}
+  }
+  let text=parts.join(' / ').slice(0,4000);
+  for(const value of new URL(endpoint).searchParams.values()){
+    if(value)for(const spelling of new Set([value,encodeURIComponent(value)]))text=text.split(spelling).join('[скрыто]');
+  }
+  return text
+    .replace(/https?:\/\/[^\s<>"']+/gi,'[URL скрыт]')
+    .replace(/https?%3a%2f%2f[^\s<>"']+/gi,'[URL скрыт]')
+    .replace(/\b(?:bearer\s+|(?:api[-_]?key|token|secret|password|authorization)["']?\s*[:=]\s*["']?)[^\s,;"'}]+/gi,'[ключ скрыт]')
+    .replace(/[a-z0-9_+\/-]{24,}={0,2}/gi,'[скрыто]')
+    .replace(/[\u0000-\u001f\u007f]/g,' ').slice(0,600);
+}
 function walletError(e) {
   if(e?.code===4001)return 'Подтверждение отменено в Phantom. Загрузка не отправлена.';
-  // Never put provider text in the exported log: it may contain an RPC key.
   if(e?.code===-32002)return 'В Phantom уже открыто другое подтверждение. Заверши его перед новой попыткой.';
   if(e?.code===-32003)return 'Phantom отклонил транзакцию как недействительную. Результат сохранён.';
   if(e?.code===4100)return 'Phantom не разрешил действие для этого аккаунта. Подключи кошелёк заново.';
@@ -106,14 +123,24 @@ export function loadClient(provider,store=browserStore(),{endpoint=DEFAULT_RPC,f
       // Save intent BEFORE handing control to a wallet capable of broadcasting.
       // Reload, refusal, timeout and lost responses must never trigger a resend.
       journal.pending={...progress.next,phase:'wallet',startedAt:new Date(now()).toISOString(),blockhash:latest.value.blockhash,lastValidBlockHeight:latest.value.lastValidBlockHeight,signature:null};
-      journal.lastAttempt={...journal.pending,outcome:'wallet'};event({phase:'wallet-request',start:progress.next.start,count:progress.next.count,lastValidBlockHeight:latest.value.lastValidBlockHeight});
+      journal.lastAttempt={...journal.pending,outcome:'wallet'};event({phase:'wallet-request',start:progress.next.start,count:progress.next.count,lastValidBlockHeight:latest.value.lastValidBlockHeight,transactionBytes:tx.serialize({requireAllSignatures:false,verifySignatures:false}).length});
       const started=now();let answer;
       try {answer=await provider.signAndSendTransaction(tx,{preflightCommitment:'confirmed',minContextSlot:latest.context.slot,skipPreflight:false,maxRetries:0});}
       catch(e){
-        const message=walletError(e);event({phase:'wallet-error',code:Number.isInteger(e?.code)?e.code:null,elapsedMs:now()-started});
+        const message=walletError(e),detail=walletDetail(e,endpoint);
+        journal.pending.walletError={code:Number.isInteger(e?.code)?e.code:null,detail,elapsedMs:now()-started};
+        event({phase:'wallet-error',...journal.pending.walletError});
         if(e?.code===4001){finish(journal.pending,'cancelled',lastSlot);}
         else if([4100,-32000,-32002,-32003,-32601].includes(e?.code)){finish({...journal.pending,message},'rejected',lastSlot);}
-        else{journal.pending.phase='unknown';journal.lastAttempt={...journal.pending,outcome:'unknown',message};save();}
+        else{
+          journal.pending.phase='unknown';journal.lastAttempt={...journal.pending,outcome:'unknown',message};save();
+          // A provider error does not prove failure to broadcast. Check once,
+          // without another wallet call, before asking the owner to intervene.
+          try{
+            const progress=await snapshot('finalized');await inspectPending(progress);
+            if(!journal.pending)return view();
+          }catch(checkError){event({phase:'wallet-error-verification',outcome:'unavailable',detail:walletDetail(checkError,endpoint)});}
+        }
         throw Error(message);
       }
       if(!validSignature(answer?.signature)){journal.pending.phase='unknown';journal.lastAttempt={...journal.pending,outcome:'unknown',message:'Phantom не вернул номер транзакции. Нужна проверка результата.'};save();return view();}

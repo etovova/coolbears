@@ -5,10 +5,10 @@ import {runInNewContext} from 'node:vm';
 import {TARGET} from '../solana/load-model.mjs';
 import {phantomBrowseUrl} from '../wallet-core.mjs';
 const app=(await readFile('solana-load/app.mjs','utf8')).replace(/^import .*\n/gm,'');
-function ui({injected=true,userAgent='Android Chrome',maxTouchPoints=0,legacy=false}={}){
+function ui({injected=true,userAgent='Android Chrome',maxTouchPoints=0,legacy=false,initialState={}}={}){
  const elements=new Map(),handlers={},data=new Map(),calls={inspect:0,upload:0,connect:0,writes:0},timers=new Set();
  const get=id=>{if(!elements.has(id))elements.set(id,{id,textContent:'',value:'',disabled:false,hidden:false,dataset:{},focus(){},select(){}});return elements.get(id);};
- let state={progress:{loaded:1950,slot:42,checkedAt:new Date().toISOString()},pending:false,lastAttempt:null},inspectFail;
+ let state={progress:{loaded:1950,slot:42,checkedAt:new Date().toISOString()},pending:false,lastAttempt:null,...initialState},inspectFail;
  const provider={isPhantom:true,publicKey:null,on:(name,fn)=>handlers[name]=fn,connect:async()=>{calls.connect++;provider.publicKey={toString:()=>TARGET.owner};},disconnect:async()=>{provider.publicKey=null;handlers.disconnect?.();}};
  const client={inspect:async()=>{calls.inspect++;if(inspectFail)throw Error(inspectFail);return state;},upload:async()=>{calls.upload++;state={...state,progress:{...state.progress,loaded:1975},lastAttempt:{start:1950,count:25,outcome:'account-verified'}};return state;},backup:()=>JSON.stringify(state)};
  const window={location:new URL('https://coolbears-nfts.com/solana-load/?api-key=never-forward#private')};
@@ -45,6 +45,12 @@ test('failed check retains last good count and leaves export usable',async()=>{
  const f=ui();await f.get('connect').onclick();const count=f.get('count').textContent;f.fail('RPC не ответил');
  await f.get('check').onclick();assert.equal(f.get('count').textContent,count);assert.equal(f.get('activity').dataset.error,'true');assert.equal(f.get('export').disabled,false);
  f.get('export').onclick();assert.equal(f.get('history').hidden,false);
+});
+test('connecting with unresolved send never says upload can continue and keeps wallet reason visible',async()=>{
+ const f=ui({initialState:{pending:true,lastAttempt:{start:1950,count:25,outcome:'unknown',message:'Phantom не подтвердил отправку.',walletError:{code:-32603,detail:'Preflight unavailable'}}}});
+ await f.get('connect').onclick();assert.equal(f.get('upload').disabled,true);assert.match(f.get('activity').textContent,/остановлена/);assert.doesNotMatch(f.get('activity').textContent,/Можно продолжать/);
+ assert.match(f.get('attempt').textContent,/Preflight unavailable/);
+ await f.get('check').onclick();assert.match(f.get('attempt').textContent,/Preflight unavailable/);assert.equal(f.calls.upload,0);
 });
 test('wallet switch clears actionable state',async()=>{
  const f=ui();await f.get('connect').onclick();f.provider.publicKey={toString:()=> 'other'};f.handlers.accountChanged();assert.equal(f.get('upload').disabled,true);assert.equal(f.get('check').disabled,true);

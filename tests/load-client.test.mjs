@@ -67,6 +67,28 @@ for(const [label,api] of [['source',source],['shipped SDK',shipped]]){
   await assert.rejects(f.client.upload(),/отменено/);assert.equal(f.store.read(api.KEY).pending,null);assert.equal(f.store.read(api.KEY).lastAttempt.outcome,'cancelled');
   await f.client.inspect();assert.equal(f.store.read(api.KEY).lastAttempt.outcome,'cancelled');
  });
+ test(`${label}: wallet -32603 preserves its redacted reason and checks finalized progress once`,async()=>{
+  const reason=Object.assign(Error('Transaction too large: 1260 > 1232; https://rpc.example/?api-key=other-secret; key=secret-test-key'),{code:-32603,data:{message:'Minimum context slot has not been reached; "password":"short-secret"; token=another-secret'},cause:Error('Bearer private-token-value')});
+  const f=setup(api,{wallet:()=>{throw reason;}});
+  await assert.rejects(f.client.upload(),/32603/);
+  const j=f.store.read(api.KEY),error=j.events.find(e=>e.phase==='wallet-error');
+  assert.match(error.detail,/Transaction too large: 1260 > 1232/);assert.match(error.detail,/Minimum context slot/);
+  assert.equal(j.pending.phase,'unknown');assert.deepEqual(j.pending.walletError,j.lastAttempt.walletError);
+  assert.equal(j.events.find(e=>e.phase==='wallet-request').transactionBytes,1145);
+  const reads=f.requests.filter(q=>q.method==='getAccountInfo');assert.equal(reads.length,2);assert.equal(reads[1].params[1].commitment,'finalized');assert.equal(f.walletCalls(),1);
+  for(const secret of ['other-secret','secret-test-key','short-secret','another-secret','private-token-value','rpc.example'])assert.equal(f.client.backup().includes(secret),false,secret);
+ });
+ test(`${label}: lost wallet response after execution is recovered without another signature`,async()=>{
+  const f=setup(api,{wallet:({setCount})=>{setCount(1975);throw Object.assign(Error('Unexpected error'),{code:-32603});}});
+  const result=await f.client.upload();assert.equal(result.progress.loaded,1975);assert.equal(result.pending,false);assert.equal(result.lastAttempt.outcome,'account-verified');
+  assert.equal(result.lastAttempt.walletError.code,-32603);assert.equal(f.walletCalls(),1);
+  assert.equal(f.requests.filter(q=>q.method==='getAccountInfo').at(-1).params[1].commitment,'finalized');
+ });
+ test(`${label}: failed post-error check preserves unknown intent and original wallet reason`,async()=>{
+  const f=setup(api,{wallet:()=>{throw Object.assign(Error('Preflight unavailable'),{code:-32603});},reply:q=>q.method==='getAccountInfo'&&f.walletCalls()?new Response('unavailable',{status:503}):null});
+  await assert.rejects(f.client.upload(),/32603/);const j=f.store.read(api.KEY);
+  assert.equal(j.pending.phase,'unknown');assert.equal(j.lastAttempt.walletError.detail,'Preflight unavailable');assert.equal(j.events.at(-1).phase,'wallet-error-verification');assert.equal(f.walletCalls(),1);
+ });
  test(`${label}: documented Phantom rejections preserve the explanation and release only this unsent intent`,async()=>{
   for(const code of [4100,-32000,-32002,-32003,-32601]){
    const f=setup(api,{wallet:()=>{throw Object.assign(Error('provider error'),{code});}});

@@ -1,4 +1,4 @@
-import {loadClient,browserStore,TARGET,SETTINGS_KEY,rpcUrl,DEFAULT_RPC} from './sdk.js?v=load-v2-20260921';
+import {loadClient,browserStore,TARGET,SETTINGS_KEY,rpcUrl,DEFAULT_RPC} from './sdk.js?v=load-diagnostics-20260921';
 import {phantomBrowseUrl} from '../wallet-core.mjs';
 const $=id=>document.getElementById(id),store=browserStore();
 let provider,client,busy=false,generation=0,view={},ticker;
@@ -29,6 +29,7 @@ function render(next=view){
   const a=view.lastAttempt;
   const labels={rejected:a?.message||'Phantom отклонил запрос.','account-verified':a?`Записи ${a.start+1}–${a.start+a.count} подтверждены в сети.`:'',submitted:'Phantom отправил транзакцию. Ожидается подтверждение сети.',wallet:'Ожидается подтверждение в Phantom.',unknown:a?.message||'Результат отправки пока неизвестен. Нажми «Проверить результат».',cancelled:'Подтверждение отменено. Можно начать новую попытку.',failed:'Транзакция завершилась ошибкой в сети. Можно начать новую попытку.'};
   $('attempt').hidden=!a;$('attempt').textContent=a?(labels[a.outcome]||'Результат сохранён.'):'';
+  if(a?.walletError?.detail&&['unknown','rejected','failed'].includes(a.outcome))$('attempt').textContent+=` Ответ Phantom: ${a.walletError.detail}`;
   $('transaction').hidden=!a?.signature;if(a?.signature)$('transaction').href=`https://explorer.solana.com/tx/${a.signature}?cluster=devnet`;
   if(view.phase==='wallet'&&!ticker){const started=Date.now();ticker=setInterval(()=>activity(`Ожидается ответ Phantom · ${Math.floor((Date.now()-started)/1000)} с`),1000);}
   if(view.phase!=='wallet'&&ticker){clearInterval(ticker);ticker=null;}
@@ -41,7 +42,7 @@ $('connect').onclick=()=>run(async()=>{
   const detected=detectedProvider();
   if(!detected){activity(connectPrompt());return;}
   if(provider!==detected){provider=detected;provider.on?.('accountChanged',changed);provider.on?.('disconnect',changed);}
-  await provider.connect();generation++;client=makeClient();render(await client.inspect());activity('Прогресс проверен. Можно продолжать.');
+  await provider.connect();generation++;client=makeClient();const result=await client.inspect();render(result);activity(result.pending?'Прошлая попытка ещё не подтверждена. Загрузка пока остановлена.':'Прогресс проверен. Можно продолжать.');
 });
 $('wallet-open').onclick=event=>{if(detectedProvider()){event.preventDefault();return $('connect').onclick();}};
 $('check').onclick=()=>run(async()=>{client??=makeClient();const version=generation;const result=await client.inspect();if(version===generation){render(result);activity(result.pending?'Ожидается результат прежней попытки.':'Прогресс проверен.');}});
