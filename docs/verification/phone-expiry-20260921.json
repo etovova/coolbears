@@ -1,0 +1,52 @@
+{
+  "phoneRpc": [
+    {
+      "at": "2026-09-21T07:54:37.918Z",
+      "method": "getGenesisHash",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 278
+    },
+    {
+      "at": "2026-09-21T07:54:38.181Z",
+      "method": "getAccountInfo",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 249
+    },
+    {
+      "at": "2026-09-21T07:54:42.641Z",
+      "method": "getAccountInfo",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 261
+    },
+    {
+      "at": "2026-09-21T07:54:42.900Z",
+      "method": "getLatestBlockhash",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 158
+    },
+    {
+      "at": "2026-09-21T07:55:41.091Z",
+      "method": "getGenesisHash",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 264
+    },
+    {
+      "at": "2026-09-21T07:55:41.251Z",
+      "method": "getBlockHeight",
+      "host": "devnet.helius-rpc.com",
+      "outcome": 200,
+      "elapsedMs": 151
+    }
+  ],
+  "pending": null,
+  "pendingGroup": [],
+  "historyCount": 81,
+  "screenshotMessage": "Signature expired before upload.",
+  "signatureRoundTripGapMs": 58191,
+  "note": "Gap includes wallet processing and user interaction; it is not a measured popup-opening duration. No sendTransaction in this page diagnostics. Error guard also rejects invalid block-height values; RPC response values were not captured."
+}
