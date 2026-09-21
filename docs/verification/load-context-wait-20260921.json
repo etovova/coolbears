@@ -38,9 +38,46 @@
     "build:solana",
     "114 tests",
     "stage-site originals verified",
-    "verify-static"
+    "verify-static",
+    "verify-static --check-committed"
   ],
   "deployment": {
-    "status": "pending"
+    "status": "published",
+    "commit": "5024d0de7e0b8711225599f1d36ede6d4fa78c9b",
+    "tree": "7101ec2e25b1f0086c77f19dc732747f2e794132",
+    "customPages": {
+      "id": 35590709199,
+      "conclusion": "success"
+    },
+    "builtinPages": {
+      "id": 35590708067,
+      "conclusion": "success"
+    },
+    "browser": {
+      "moduleQuery": "load-context-wait-20260921",
+      "applicationReady": true,
+      "realPhantomPresent": false
+    },
+    "url": "https://coolbears-nfts.com/solana-load/",
+    "httpFiles": [
+      {
+        "path": "solana-load/index.html",
+        "bytes": 4723,
+        "matches": true,
+        "sha256": "f3232d372f753b1516712aaa3489c09f952f51168a276facc3cb369ed438d4a2"
+      },
+      {
+        "path": "solana-load/app.mjs",
+        "bytes": 9183,
+        "matches": true,
+        "sha256": "6457ad4ebee0721153d240c95dd96030dbc25c00e945b269f546491108c41aee"
+      },
+      {
+        "path": "solana-load/sdk.js",
+        "bytes": 1342822,
+        "matches": true,
+        "sha256": "811315e3476bb600cf5ad098b8521541eb29346fc63f5810a4811c99f3fc3810"
+      }
+    ]
   }
 }
