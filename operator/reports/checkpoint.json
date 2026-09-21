@@ -25,5 +25,11 @@
     "actual new collection, machine, insertion and mint",
     "new mint UI and physical Phantom/Solflare",
     "reveal and batch purchases"
-  ]
+  ],
+  "toolchain": {
+    "node": "24.19.0",
+    "npm": "11.9.0",
+    "cleanInstallVerified": true
+  },
+  "firstCI": "npm 10.9.8 optional peer lock mismatch; toolchain pinned to tested npm 11.9.0"
 }
