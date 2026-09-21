@@ -8,6 +8,8 @@ import { execFileSync } from 'node:child_process';
 const generated=[
   'wallet-standard.js',
   'wallet-standard.js.LEGAL.txt',
+  'phantom-check/app.js',
+  'phantom-check/app.js.LEGAL.txt',
 ];
 for(const file of generated){
   const built=await readFile(file);

@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-21T16:56:10.189Z",
+  "scope": "official StandardWalletAdapter + Umi + Core in LiteSVM; fake IndexedDB and faulted transport; no physical Phantom",
+  "passed": true,
+  "checks": [
+    "official signAndSend-only wallet creates a Core asset with owner, URI and 7% royalties",
+    "concurrent clicks coalesce to one wallet request",
+    "two controllers sharing atomic IndexedDB claim cannot both request mint",
+    "completed restart checks existing account with no new request or fee",
+    "wallet cancellation requires an explicit retry",
+    "lost successful wallet response recovers by saved asset without another mint",
+    "unknown wallet outcome blocks retry until finalized expiry and repeated absence",
+    "late wallet signature is saved after UI timeout",
+    "wrong wallet and wrong genesis cannot request a signature",
+    "account change during preparation stops before persisting or prompting",
+    "failed simulation and unavailable persistence prevent wallet prompts",
+    "on-chain failure is recorded as failed and never as an NFT success",
+    "an unfinalized chain error does not authorize a replacement",
+    "a lagging RPC cannot authorize expiry from a stale absent account"
+  ],
+  "transactionBytes": 441
+}

@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-21T15:39:33.305Z",
+  "checkedAt": "2026-09-21T16:52:13.580Z",
   "scope": "local LiteSVM only; no real Devnet or Phantom execution",
   "passed": true,
   "litesvm": "1.4.1",
@@ -92,7 +92,7 @@
     {
       "step": "machine-9999",
       "bytes": 797,
-      "computeUnits": "72441"
+      "computeUnits": "73941"
     },
     {
       "step": "open-lab-only",
@@ -372,7 +372,7 @@
     {
       "step": "one-item-machine",
       "bytes": 797,
-      "computeUnits": "65621"
+      "computeUnits": "64121"
     },
     {
       "step": "open-one-item-lab",

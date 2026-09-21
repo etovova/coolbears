@@ -25,5 +25,10 @@
   "wallet-ui.mjs",
   "wallet.css",
   "wallet-standard.js",
-  "wallet-standard.js.LEGAL.txt"
+  "wallet-standard.js.LEGAL.txt",
+  "phantom-check/index.html",
+  "phantom-check/style.css",
+  "phantom-check/app.js",
+  "phantom-check/app.js.LEGAL.txt",
+  "phantom-check/nft.json"
 ]

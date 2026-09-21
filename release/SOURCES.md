@@ -55,6 +55,23 @@ final metadata and CIDs out of this public repository. A test may be called a
 real Devnet pass only when its signature and fetched on-chain account state agree.
 # Runtime verification sources
 
+## Phantom signing flow checked on 2026-09-21
+
+- https://www.metaplex.com/docs/dev-tools/umi/getting-started
+- https://docs.phantom.com/solana/establishing-a-connection
+- https://docs.phantom.com/solana/sending-a-transaction
+- https://docs.phantom.com/developer-powertools/testnet-mode
+
+Phantom currently recommends sign-and-send. Its Wallet Standard implementation
+does not require detached signTransaction. The page uses Umi for identity and
+Core instruction construction, signs the ephemeral asset locally, converts
+with the official Umi/web3 adapter, then asks Phantom to sign and send. The
+standard adapter passes the explicit solana:devnet chain. The injected fallback
+also receives a transaction built with a verified Devnet blockhash.
+
+The Phantom test metadata copies the approved hidden description/GIF and uses
+the distinct name “CoolBears Phantom Devnet”. No production metadata changes.
+
 LiteSVM 1.4.1 is used only for a separate local execution check. Its installed
 TypeScript declarations and implementation define the adapter:
 https://github.com/LiteSVM/litesvm.

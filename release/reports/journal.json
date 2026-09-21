@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-21T15:39:32.578Z",
+  "checkedAt": "2026-09-21T16:52:12.837Z",
   "passed": true,
   "scope": "fault injection with real SDK signatures and simulated transport; not real Devnet/Phantom",
   "checks": [

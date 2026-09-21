@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-21T16:57:15.798059+00:00",
+  "scope": "release npm audit --omit=dev after adding official transaction adapter",
+  "vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 9,
+    "high": 0,
+    "critical": 0,
+    "total": 9
+  },
+  "addedRuntimeDependencies": {
+    "@metaplex-foundation/umi-web3js-adapters": "1.6.0",
+    "buffer": "6.0.3"
+  },
+  "addedTestDependency": {
+    "fake-indexeddb": "6.2.5"
+  },
+  "remainingAdvisory": "https://github.com/advisories/GHSA-528h-pc64-c93x",
+  "localChecksPassed": 104,
+  "physicalPhantomTested": false
+}

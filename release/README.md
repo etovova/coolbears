@@ -1,6 +1,44 @@
 # CoolBears — official SDK release
 
-Isolated rebuild, not deployed to the public website.
+The release lab is isolated from the public website. The separate
+`/phantom-check/` page is the owner-only Devnet acceptance check.
+
+## Phantom acceptance check
+
+`phantom-flow.mjs` uses the official Umi wallet identity and transaction adapter.
+The connected Phantom wallet signs and sends through its Wallet Standard
+`solana:signAndSendTransaction` feature, or its documented injected
+`signAndSendTransaction` provider when Wallet Standard is unavailable. Detached
+`signTransaction` is not required. The page enforces the approved owner's
+address, checks Devnet genesis, and creates one separately named Core test NFT
+with the approved GIF and a 7% royalty plugin. It does not open the collection's
+Candy Machine or charge the production mint price.
+
+Before requesting a wallet signature, an atomic IndexedDB claim saves the
+random asset's public address. No private wallet key, asset secret or seed phrase
+is stored. Concurrent tabs cannot both claim an operation. An ambiguous wallet
+response only permits checking the recorded asset. A retry after expiration
+requires a finalized block height and repeated finalized account absence with
+`minContextSlot`, preventing a lagging RPC from authorizing a replacement. A
+processed or confirmed error is insufficient to retry; failures must finalize.
+
+Run `npm run --prefix release verify:phantom`: 14 adapter/IndexedDB/transport
+cases pass with the real Core program in LiteSVM, including a wallet exposing
+only sign-and-send, cancellations, concurrency, late/lost responses, wrong
+wallet/network and finality. The signed test transaction is 441 bytes. These
+tests are not physical Phantom acceptance. `reports/phantom-adapter.json`
+records their exact scope. The owner's finalized Devnet balance was already
+0.2956272 SOL; no funding transfer was needed (`phantom-owner-balance.json`).
+
+For the physical check, open https://coolbears-nfts.com/phantom-check/ inside
+Phantom, enable Testnet Mode with Solana Devnet, connect the approved owner and
+choose “Создать тестовый NFT”. The page shows the saved asset, transaction link
+and a copyable result. Wallet display, the user's approval and the real
+transaction remain pending until verified after this handoff.
+
+Builds require both lockfiles: `npm ci` and
+`npm ci --prefix release --omit=dev --ignore-scripts`, then the normal site build.
+Both Pages publishing routes include the committed browser bundle and notices.
 
 Install: `npm ci --prefix release --ignore-scripts`.
 Verify official instruction construction: `npm run --prefix release verify:settings`.

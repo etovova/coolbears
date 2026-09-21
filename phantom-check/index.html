@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><meta name="color-scheme" content="dark">
+  <title>CoolBears — проверка Phantom</title><link rel="stylesheet" href="./style.css">
+</head>
+<body><main>
+  <header><a href="/">COOLBEARS</a><span class="badge">DEVNET · ТЕСТ</span></header>
+  <section class="intro"><img src="/assets/collection/gif.gif" alt="CoolBears" width="112" height="112">
+    <div><h1>Проверка Phantom</h1><p>Подключи кошелёк и создай один тестовый NFT.</p></div></section>
+  <p class="note">Используются бесплатные тестовые SOL. Потребуется небольшая комиссия Devnet; покупки NFT за 0,5 SOL здесь нет.</p>
+  <details><summary>Как включить Devnet в Phantom</summary><p>Настройки → Настройки разработчика (Developer Settings) → Тестовый режим (Testnet Mode). Для Solana выбери Devnet.</p><p>На телефоне открой эту страницу внутри Phantom.</p></details>
+  <a class="open" id="open-phantom" href="https://phantom.app/">Открыть в Phantom</a>
+  <dl><dt>Кошелёк владельца</dt><dd id="owner">FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y</dd><dt>Подключён</dt><dd id="connected">Не подключён</dd></dl>
+  <div class="actions"><button id="connect" disabled>Подключить Phantom</button><button id="create" disabled>Создать тестовый NFT</button><button class="secondary" id="check" disabled>Проверить результат</button></div>
+  <p id="status" role="status" aria-live="polite">Загрузка проверки…</p>
+  <dl><dt>Адрес тестового NFT</dt><dd id="asset">Ещё не создан</dd></dl>
+  <div class="links"><a id="asset-link" hidden target="_blank" rel="noopener noreferrer">NFT в Solana Explorer ↗</a><a id="signature-link" hidden target="_blank" rel="noopener noreferrer">Транзакция ↗</a></div>
+  <button id="copy" class="secondary" disabled>Скопировать результат</button><textarea id="diagnostic" hidden readonly aria-label="Результат проверки"></textarea>
+  <footer>Тестовая страница. Продажи коллекции закрыты.</footer>
+</main><script type="module" src="./app.js?v=20260921-phantom-1" onerror="document.getElementById('status').textContent='Не удалось загрузить страницу проверки. Обнови её.'"></script></body></html>
