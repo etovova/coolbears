@@ -16,7 +16,7 @@ const owner='FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y';
 const state={owner,cluster:'devnet',collection:'BZRkdsRsmeBBGb1JsVUbgZbThWraaMPSRazdiQdioLcy',machine:fixture.machine};
 const key=`coolbears-upload-v1:devnet:${state.machine}`;
 function setup(api,journal,config={}){
- const saved=new Map([[api.SETUP_KEY,structuredClone(state)],[key,journal]]),locks=new Set(),requests=[];
+ const saved=new Map([[api.SETUP_KEY,structuredClone(state)],[key,journal]]),locks=new Set(),requests=[],urls=[];
  let signs=0,sends=0;
  const store={read:k=>structuredClone(saved.get(k)??null),write:(k,v)=>saved.set(k,structuredClone(v)),withLock:async(k,fn)=>{
   assert.equal(locks.has(k),false);locks.add(k);try{return await fn();}finally{locks.delete(k);}
@@ -25,7 +25,7 @@ function setup(api,journal,config={}){
   signs++;tx.signatures[0]=new Uint8Array(64).fill(9);assert.ok(tx.serialize().length<=1232);return tx;
  }};
  const fetch=async(_url,options)=>{
-  const q=JSON.parse(options.body);requests.push(q);
+  const q=JSON.parse(options.body);requests.push(q);urls.push(_url);
   const slot=fixture.result.context.slot;let result;
   if(q.method==='getAccountInfo'){assert.equal(q.params[0],state.machine);result=fixture.result;}
   else if(q.method==='getGenesisHash')result='EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
@@ -39,8 +39,8 @@ function setup(api,journal,config={}){
   }else throw Error(`Unexpected RPC: ${q.method}`);
   return config.reply?.(q,result)??new Response(JSON.stringify({jsonrpc:'2.0',id:q.id,result}));
  };
- const paced=config.paced?pacedRpcFetch({fetch,fallbackEndpoints:['https://api.devnet.solana.com']}):{fetch};
- return {client:api.uploadClient(provider,store,{paced}),requests,saved,signs:()=>signs,sends:()=>sends};
+ const paced=config.paced?pacedRpcFetch({fetch,fallbackEndpoints:config.endpoint?[]:['https://api.devnet.solana.com']}):{fetch};
+ return {client:api.uploadClient(provider,store,{paced,endpoint:config.endpoint??api.DEVNET_RPC}),requests,urls,saved,signs:()=>signs,sends:()=>sends};
 }
 for(const [name,api] of [['source',source],['published bundle',published]]){
  test(`${name}: real account decoder validates 1950 records using exactly one read`,async()=>{
@@ -81,6 +81,30 @@ for(const [name,api] of [['source',source],['published bundle',published]]){
   const result=await api.runUpload(f.client);assert.equal(result.status,'rate-limited');assert.equal(result.rpc.method,'getSignatureStatuses');
   assert.deepEqual(f.saved.get(key),journal);assert.equal(f.signs(),0);assert.equal(f.sends(),0);
   const backup=JSON.parse(f.client.backup());assert.equal(backup.rpc.at(-1).outcome,429);assert.equal(backup.rpc.at(-1).method,'getSignatureStatuses');
+ });
+
+ test(`${name}: phone sequence restores wrapped getAccountInfo 429 and never signs during cooldown`,async()=>{
+  const phone=JSON.parse(await readFile(new URL('./fixtures/phone-rpc-failure.json',import.meta.url),'utf8'));
+  const journal={version:1,...state,history:[],pending:null,pendingGroup:phone.pendingGroup};let reads=0;
+  const f=setup(api,journal,{paced:true,reply:q=>q.method==='getAccountInfo'&&++reads>1?new Response('limited',{status:429,headers:{'Retry-After':'45'}}):undefined});
+  assert.equal((await f.client.read()).loaded,1950);
+  await assert.rejects(f.client.read(),e=>api.isRateLimit(e)&&e.rpc.method==='getAccountInfo'&&e.status===429);
+  assert.equal((await api.runUpload(f.client)).status,'rate-limited');assert.equal(f.signs(),0);assert.equal(f.sends(),0);assert.deepEqual(f.saved.get(key),journal);
+ });
+ test(`${name}: project RPC handles read, signature and send without falling back or exporting its key`,async()=>{
+  const endpoint='https://project.example/devnet?api-key=private-test-key';
+  const f=setup(api,undefined,{endpoint,paced:true});assert.equal((await f.client.read()).loaded,1950);
+  assert.deepEqual(f.requests.map(q=>q.method),['getGenesisHash','getAccountInfo']);
+  assert.equal((await api.runUpload(f.client)).status,'submitted');assert.equal(f.signs(),1);assert.equal(f.sends(),1);
+  assert.ok(f.urls.every(url=>url===endpoint));assert.doesNotMatch(f.client.backup(),/private-test-key|api-key|https:/);
+ });
+ test(`${name}: project RPC with wrong genesis is rejected before signing or account reads`,async()=>{
+  const f=setup(api,undefined,{endpoint:'https://project.example/mainnet',reply:q=>q.method==='getGenesisHash'?new Response(JSON.stringify({jsonrpc:'2.0',id:q.id,result:'5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d'})):undefined});
+  await assert.rejects(f.client.read(),/Сеть RPC/);assert.deepEqual(f.requests.map(q=>q.method),['getGenesisHash']);assert.equal(f.signs(),0);assert.equal(f.sends(),0);
+ });
+ test(`${name}: expired/invalid RPC key fails closed without exposing the response body`,async()=>{
+  const f=setup(api,undefined,{endpoint:'https://project.example/?api-key=private-test-key',paced:true,reply:()=>new Response('private-test-key',{status:401})});
+  await assert.rejects(f.client.read(),e=>e.status===401&&!e.message.includes('private-test-key'));assert.equal(f.requests.length,1);assert.equal(f.signs(),0);
  });
 
 }

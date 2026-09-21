@@ -82,12 +82,12 @@ export function createUploader(transport, store, target) {
 
 export function umiUploadTransport(umi,plan,target,{networkCacheMs=0,now=Date.now}={}) {
   let checkedAt=-Infinity,checkedEndpoint,checkedCluster;
-  const assertNetwork = async cluster => {
+  const assertNetwork = async (cluster,{rpc=umi.rpc}={}) => {
     if (plan.owner !== LAUNCH_OWNER || umi.identity.publicKey !== LAUNCH_OWNER || umi.payer.publicKey !== LAUNCH_OWNER) throw Error('Upload wallet changed.');
-    const endpoint=umi.rpc.getEndpoint();
+    const endpoint=rpc.getEndpoint();
     if (!GENESIS[cluster]) throw Error('Unsupported network.');
     if (checkedCluster!==cluster || checkedEndpoint!==endpoint || now()-checkedAt>=networkCacheMs) {
-      if (await umi.rpc.call('getGenesisHash',[]) !== GENESIS[cluster]) throw Error('Сеть RPC не совпадает с выбранной сетью загрузки.');
+      if (await rpc.call('getGenesisHash',[]) !== GENESIS[cluster]) throw Error('Сеть RPC не совпадает с выбранной сетью загрузки.');
       checkedAt=now();checkedEndpoint=endpoint;checkedCluster=cluster;
     }
   };

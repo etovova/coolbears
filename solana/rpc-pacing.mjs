@@ -1,4 +1,4 @@
-export const isRateLimit = error => error?.status===429 || error?.code===429 || /(?:\b429\b|rate limit|too many requests)/i.test(String(error?.message??error));
+export const isRateLimit = error => error?.status===429 || error?.code===429 || /(?:\b429\b|rate limit|too many requests|Сервер Solana ограничил запросы)/i.test(String(error?.message??error));
 
 // One HTTP request at a time, shared by all uploader clients in this page.
 // No automatic replay here: especially never replay sendTransaction.
@@ -20,13 +20,23 @@ export function rpcDelay(ms,signal) {
 }
 export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),interval=0,timeout=15000,now=Date.now,sleep=rpcDelay,fallbackEndpoints=[]}={}) {
  let tail=Promise.resolve(),next=0;
- const cooldowns=new Map(),events=[];
+ const cooldowns=new Map(),events=[],failures=[];
  const record=(method,endpoint,outcome,started)=>{
   let host;try{host=new URL(endpoint).hostname;}catch{host='rpc';}
   const event={at:new Date(now()).toISOString(),method,host,outcome,elapsedMs:Math.max(0,now()-started)};
   events.push(event);if(events.length>40)events.shift();return event;
  };
- const limited=endpoint=>Object.assign(Error('Сервер Solana ограничил запросы. Повтори проверку вручную позже.'),{status:429,retryAfterMs:Math.max(0,(cooldowns.get(endpoint)??0)-now())});
+ const remember=(error,event)=>{
+  error.rpc=event;failures.push({message:String(error.message),rpc:event,status:error.status,name:error.name});if(failures.length>40)failures.shift();return error;
+ };
+ // web3.js getAccountInfo wraps fetch errors in a new Error and drops fields.
+ // Match the original message to restore its structured code and diagnostics.
+ const restoreError=error=>{
+  const failure=[...failures].reverse().find(f=>String(error?.message??error).includes(f.message));
+  if(failure&&error instanceof Error)Object.assign(error,{rpc:failure.rpc,status:failure.status,name:failure.name});
+  return error;
+ };
+ const limited=endpoint=>Object.assign(Error('RPC 429: Сервер Solana ограничил запросы. Повтори проверку вручную позже.'),{status:429,retryAfterMs:Math.max(0,(cooldowns.get(endpoint)??0)-now())});
  const reads=new Set(['getAccountInfo','getMultipleAccounts','getBalance','getGenesisHash','getSlot','getBlock','getEpochInfo','getBlockHeight','getLatestBlockhash','getSignatureStatuses']);
  const run=async(input,options={})=>{
   const signal=options.signal;
@@ -45,7 +55,7 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
   for(const endpoint of endpoints){
    signal?.throwIfAborted();
    // Respect Retry-After without freezing the next manual action in a timer.
-   if((cooldowns.get(endpoint)??0)>now()){lastError=limited(endpoint);lastError.rpc=record(method,endpoint,'cooldown',now());continue;}
+   if((cooldowns.get(endpoint)??0)>now()){lastError=remember(limited(endpoint),record(method,endpoint,'cooldown',now()));continue;}
    const started=now();
    const request=new AbortController();
    const abort=()=>request.abort(signal.reason);
@@ -67,13 +77,14 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
       throw limited(endpoint);
      }
      if(readOnly&&[502,503,504].includes(response.status))throw Object.assign(Error('Сервер Solana временно недоступен.'),{status:response.status});
+     if(response.status>=400)throw Object.assign(Error([401,403].includes(response.status)?'RPC отклонил доступ. Проверь адрес и ключ проекта.':`Ошибка сервера RPC: HTTP ${response.status}.`),{status:response.status});
      record(method,endpoint,errors[0]?.code??response.status,started);
      return body===null?response:new Response(body,{status:response.status,statusText:response.statusText,headers:response.headers});
     })(),request.signal);
     return result;
    } catch(error){
     signal?.throwIfAborted();
-    error.rpc=record(method,endpoint,error.status??(error.name==='TimeoutError'?'timeout':error.code??error.name),started);
+    remember(error,record(method,endpoint,error.status??(error.name==='TimeoutError'?'timeout':error.code??error.name),started));
     const transient=isRateLimit(error)||error.name==='TimeoutError'||error instanceof TypeError||[502,503,504].includes(error.status);
     if(!readOnly||!transient)throw error;
     lastError=error;
@@ -82,5 +93,5 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
   throw lastError;
  };
  const fetch=(input,options)=>{const result=tail.then(()=>run(input,options));tail=result.catch(()=>{});return abortable(result,options?.signal);};
- return {fetch,retryAfter:()=>Math.max(0,...[...cooldowns.values()].map(until=>until-now())),diagnostics:()=>events.map(e=>({...e}))};
+ return {fetch,restoreError,retryAfter:()=>Math.max(0,...[...cooldowns.values()].map(until=>until-now())),diagnostics:()=>events.map(e=>({...e}))};
 }

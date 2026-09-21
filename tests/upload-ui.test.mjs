@@ -6,13 +6,13 @@ import {runUpload} from '../solana/upload-runner.mjs';
 import {runInNewContext} from 'node:vm';
 async function setup(){ 
  const elements=new Map();const get=id=>{if(!elements.has(id))elements.set(id,{value:'',select(){}});return elements.get(id);};
- let handler,options;
+ let handler,options;const saved=new Map(),endpoints=[];const store={read:k=>saved.get(k),write:(k,v)=>saved.set(k,v),withLock:async(k,fn)=>fn()};
  const state={collection:'collection',machine:'machine'},wallet={address:'owner',provider:{},connect:async()=>{},disconnect:async()=>{}};
  const client={read:async()=>({state,collection:true,machine:true,loaded:1775,balance:null})};
- const scope={AbortController,isRateLimit,document:{getElementById:get},URL,location:{href:'https://coolbears-nfts.com/solana-upload/'},createWalletUI:options=>{wallet.change=options.onChange;return wallet;},browserUploadStore:()=>({}),uploadClient:()=>client,runUpload:async(c,o)=>{options=o;return handler(o);}};
+ const scope={AbortController,DOMException,RPC_SETTINGS_KEY:'rpc-setting',DEVNET_RPC:'https://devnet.rpcpool.com',isRateLimit,document:{getElementById:get},URL,location:{href:'https://coolbears-nfts.com/solana-upload/'},createWalletUI:options=>{wallet.change=options.onChange;return wallet;},browserUploadStore:()=>store,uploadClient:(p,s,o)=>{endpoints.push(o.endpoint);return client;},runUpload:async(c,o)=>{options=o;return handler(o);}};
  const source=(await readFile('solana-upload/controller.mjs','utf8')).replace(/^import .*\n/gm,'');runInNewContext(source,scope);
  await get('refresh').onclick();
- return {get,client,wallet,setHandler:f=>handler=f,options:()=>options};
+ return {get,client,wallet,saved,endpoints,setHandler:f=>handler=f,options:()=>options};
 }
 test('Manual UI performs one group and leaves the next press to the operator',async()=>{
  const f=await setup();assert.equal(f.get('step').disabled,false);
@@ -53,4 +53,14 @@ test('RPC failure shows the exact method and next check clears stale diagnostics
  const f=await setup();f.setHandler(async()=>({status:'rate-limited',rpc:{method:'getSignatureStatuses',host:'api.devnet.solana.com',outcome:429}}));
  await f.get('step').onclick();assert.equal(f.get('rpc-details').hidden,false);assert.match(f.get('rpc-error').textContent,/getSignatureStatuses.*429/);assert.equal(f.get('step').disabled,false);
  await f.get('refresh').onclick();assert.equal(f.get('rpc-details').hidden,true);assert.equal(f.get('rpc-error').textContent,'');
+});
+
+test('Project RPC is saved only after validation; failure leaves the previous selection and progress',async()=>{
+ const f=await setup();f.get('rpc-url').value='https://project.example/?api-key=private';
+ await f.get('rpc-save').onclick();assert.equal(f.saved.get('rpc-setting').endpoint,'https://project.example/?api-key=private');assert.equal(f.get('progress').value,1775);
+ f.get('rpc-url').value='https://bad.example';f.client.read=async()=>{throw Error('wrong network');};await f.get('rpc-save').onclick();assert.equal(f.saved.get('rpc-setting').endpoint,'https://project.example/?api-key=private');assert.equal(f.get('progress').value,1775);assert.equal(f.get('rpc-save').disabled,false);
+});
+test('Wallet change during RPC validation prevents saving the new endpoint',async()=>{
+ const f=await setup();let resolve;f.client.read=()=>new Promise(r=>resolve=r);f.get('rpc-url').value='https://project.example';
+ const pending=f.get('rpc-save').onclick();f.wallet.change('different-owner');resolve({state:{},machine:true,loaded:1950});await pending;assert.equal(f.saved.has('rpc-setting'),false);assert.equal(f.get('progress').value,0);
 });

@@ -1,7 +1,7 @@
 import { publicKey } from '@metaplex-foundation/umi';
 import { safeFetchCollectionV1 } from '@metaplex-foundation/mpl-core';
 import { safeFetchCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
-import { devnetUmi, SITE, DEVNET_READ_FALLBACKS } from './builders.mjs';
+import { devnetUmi, SITE, DEVNET_RPC, DEVNET_READ_FALLBACKS } from './builders.mjs';
 import { launchPlan, LAUNCH_OWNER } from './launch-plan.mjs';
 import { umiUploadTransport, loadedItems } from './upload.mjs';
 import { createGroupUploader } from './upload-group.mjs';
@@ -12,10 +12,22 @@ export { isRateLimit } from './rpc-pacing.mjs';
 export { runUpload } from './upload-runner.mjs';
 export { browserUploadStore } from './browser-upload-store.mjs';
 export const SETUP_KEY='devnet-upload-setup-v1';
+export const RPC_SETTINGS_KEY='devnet-rpc-settings-v1';
+export { DEVNET_RPC } from './builders.mjs';
+export function devnetRpcUrl(value=DEVNET_RPC){
+ let url;try{url=new URL(value);}catch{throw Error('Вставь полный HTTPS-адрес RPC для Solana Devnet.');}
+ if(url.protocol!=='https:'||url.username||url.password||url.hash)throw Error('Нужен HTTPS-адрес RPC без логина, пароля и фрагмента.');
+ return value.trim();
+}
 export const UPLOAD_COLLECTION='BZRkdsRsmeBBGb1JsVUbgZbThWraaMPSRazdiQdioLcy';
 export const UPLOAD_MACHINE='FLpAJpBG7BDEL5cFZPiouGD6ZWnTWRRBrWxtkjVz9s3R';
-export function uploadClient(provider,store,{paced=defaultPaced}={}) {
- const umi=devnetUmi(provider,{fetch:paced.fetch,disableRetryOnRateLimit:true}),plan=launchPlan({treasury:LAUNCH_OWNER,royaltyRecipient:LAUNCH_OWNER});
+export function uploadClient(provider,store,{paced,endpoint=DEVNET_RPC}={}) {
+ endpoint=devnetRpcUrl(endpoint);
+ // A project RPC has its own quota. Never silently send its reads or writes
+ // through the shared public servers, and never export its URL/API key.
+ paced??=endpoint===DEVNET_RPC?defaultPaced:pacedRpcFetch();
+ const umi=devnetUmi(provider,{endpoint,fetch:paced.fetch,disableRetryOnRateLimit:true}),plan=launchPlan({treasury:LAUNCH_OWNER,royaltyRecipient:LAUNCH_OWNER});
+ const checked=async fn=>{try{return await fn();}catch(error){throw paced.restoreError?.(error)??error;}};
  const target=s=>({cluster:'devnet',collection:s.collection,machine:s.machine});
  const transports=new Map();
  const transport=s=>{const key=`${s.collection}:${s.machine}`;if(!transports.has(key))transports.set(key,umiUploadTransport(umi,plan,target(s),{networkCacheMs:30000}));return transports.get(key);};
@@ -36,7 +48,8 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
  const save=s=>store.write(SETUP_KEY,s);
  async function read(s,{signal}={}) {
   signal?.throwIfAborted();
-  const reader=signal?devnetUmi(provider,{fetch:(input,options)=>paced.fetch(input,{...options,signal}),disableRetryOnRateLimit:true}):umi;
+  const reader=signal?devnetUmi(provider,{endpoint,fetch:(input,options)=>paced.fetch(input,{...options,signal}),disableRetryOnRateLimit:true}):umi;
+  if(endpoint!==DEVNET_RPC)await transport(s).assertNetwork('devnet',{rpc:reader.rpc});
   let collection,machine;
   // Existing launches only need the machine account to verify the loaded count.
   // Read the collection as well during setup or when a collection operation is pending.
@@ -62,13 +75,13 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
   return {state:s,collection:!!collection||!!s.collection,machine:!!machine,loaded:machine?.itemsLoaded??0,balance:null};
  }
  return {
-  read:options=>store.withLock(SETUP_KEY,()=>read(load(),options)),
-  groupStep:options=>store.withLock(SETUP_KEY,async()=>{
+  read:options=>checked(()=>store.withLock(SETUP_KEY,()=>read(load(),options))),
+  groupStep:options=>checked(()=>store.withLock(SETUP_KEY,async()=>{
    const s=load();
    if(s.pending||!s.machine||!s.collection)throw Error('Сначала дождись создания машины.');
    const size=1;
    return createGroupUploader(transport(s),store,target(s)).step({...options,size});
-  }),
+  })),
   backup:()=>{const s=load();const key=s.machine?`coolbears-upload-v1:devnet:${s.machine}`:null;return JSON.stringify({setup:s,upload:key?store.read(key):null,rpc:paced.diagnostics?.()??[]},null,2);}
  };
 }

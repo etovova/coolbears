@@ -13,8 +13,8 @@ export const configLineSettings = {
   prefixUri: `${SITE}/metadata/hidden/`, uriLength: 9,
   isSequential: true
 };
-export function devnetUmi(provider, rpcOptions = {}) {
-  const umi = createUmi(DEVNET_RPC, { ...rpcOptions, commitment: 'confirmed' }).use(mplCore()).use(mplCandyMachine());
+export function devnetUmi(provider, {endpoint=DEVNET_RPC,...rpcOptions} = {}) {
+  const umi = createUmi(endpoint, { ...rpcOptions, commitment: 'confirmed' }).use(mplCore()).use(mplCandyMachine());
   if (provider) umi.use(walletAdapterIdentity(provider));
   return umi;
 }

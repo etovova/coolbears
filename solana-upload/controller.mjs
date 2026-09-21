@@ -1,5 +1,5 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=manual-25-check-20260921';
+import { uploadClient, browserUploadStore, runUpload, isRateLimit, RPC_SETTINGS_KEY, DEVNET_RPC } from './sdk.js?v=project-rpc-20260921';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 let client,current,busy=false,connectionVersion=0,activeRead;
 const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{connectionVersion++;activeRead?.abort();client=null;current=null;$('progress').value=0;$('state').textContent='';$('status').textContent='';$('account').textContent=address||'Кошелёк не подключён.';render();}});
@@ -10,9 +10,21 @@ function render(){
  $('setup-info').textContent=current?.state?.collection&&current?.state?.machine?'Используется подтверждённая коллекция и машина Devnet. Повторное создание отключено.':wallet.address?'Нажми «Проверить состояние», чтобы получить сохранённые в сети записи.':'Подключи кошелёк и нажми «Проверить состояние».';
  $('step').disabled=!ready||!current.machine||current.loaded===10000;
  $('backup').disabled=busy;
+ $('rpc-save').disabled=busy||!wallet.address;$('rpc-url').disabled=busy;
  $('group-info').textContent='Одно нажатие отправляет одну группу до 25 записей. Следующая группа — только по твоему нажатию.';
 }
-function getClient(){if(!wallet.provider)throw Error('Подключи кошелёк.');return client ||= uploadClient(wallet.provider,store);}
+function selectedEndpoint(){return store.read(RPC_SETTINGS_KEY)?.endpoint||DEVNET_RPC;}
+function getClient(){if(!wallet.provider)throw Error('Подключи кошелёк.');return client ||= uploadClient(wallet.provider,store,{endpoint:selectedEndpoint()});}
+function showRpcSelection(){
+ const endpoint=selectedEndpoint();$('rpc-current').textContent=endpoint===DEVNET_RPC?'Сейчас используется общий RPC.':'Подключён RPC твоего проекта.';
+ $('rpc-url').value=endpoint===DEVNET_RPC?'':endpoint;
+}
+function rateMessage(){
+ $('rpc-settings').open=true;
+ return selectedEndpoint()===DEVNET_RPC
+  ?'RPC отклонил запрос (429). Прогресс сохранён. Подключи RPC своего проекта в разделе «Сервер Devnet» ниже.'
+  :'RPC проекта отклонил запрос (429). Прогресс сохранён. Проверь доступный лимит в панели своего RPC.';
+}
 function showRpc(rpc){
  $('rpc-details').hidden=!rpc;
  $('rpc-error').textContent=rpc?`${rpc.method} · ${rpc.outcome}\n${rpc.host}\nПодробности включены в журнал для сохранения.`:'';
@@ -32,7 +44,7 @@ async function refresh(){
  try{const result=await getClient().read({signal:abort.signal});if(version===connectionVersion){showState(result);$('status').textContent='Состояние обновлено.';}}
  finally{if(activeRead===abort)activeRead=null;}
 }
-async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){if(e.name!=='AbortError'){$('status').textContent=isRateLimit(e)?'Сервер Solana ограничил запросы. Повтори проверку вручную позже. Сохранённые транзакции не потеряны.':e.message;showRpc(e.rpc);}}finally{busy=false;render();}}
+async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){if(e.name!=='AbortError'){$('status').textContent=isRateLimit(e)?rateMessage():e.message;showRpc(e.rpc);}}finally{busy=false;render();}}
 $('connect').onclick=()=>run(async()=>{if(wallet.address){await wallet.disconnect();return;}await wallet.connect();await refresh();});
 $('refresh').onclick=()=>run(refresh);
 function progress(r){
@@ -45,7 +57,7 @@ function progress(r){
 Машина: ${current.state.machine}`;}
  }
  const labels={
-  'rate-limited':'Сервер Solana ограничил запросы. Повтори действие вручную позже; повторная отправка не выполняется.',
+  'rate-limited':r.status==='rate-limited'?rateMessage():'',
   checking:'Проверяю сохранённые записи и транзакции…',
   signing:`Подтверди загрузку ${r.records} записей в кошельке.`,
   sending:'Отправляю подписанный пакет…',
@@ -64,6 +76,24 @@ $('step').onclick=()=>run(async()=>{
  update(result);
 });
 $('backup').onclick=()=>run(async()=>{$('text').hidden=false;$('text').value=getClient().backup();$('text').select();});
+// Change only the RPC preference, after a successful Devnet/account check.
+// The setup/upload journal is never replaced by this operation.
+$('rpc-save').onclick=()=>run(async()=>{
+ if(!wallet.provider)throw Error('Подключи кошелёк.');
+ const version=connectionVersion,abort=new AbortController();activeRead=abort;
+ const endpoint=$('rpc-url').value.trim()||DEVNET_RPC;
+ $('status').textContent='Проверяю подключение к Devnet…';showRpc();
+ try{
+  const candidate=uploadClient(wallet.provider,store,{endpoint}),result=await candidate.read({signal:abort.signal});
+  if(!result.machine)throw Error('Этот RPC не вернул существующую машину Devnet. Адрес не сохранён.');
+  await store.withLock(RPC_SETTINGS_KEY,async()=>{
+   if(version!==connectionVersion)throw new DOMException('Кошелёк изменился.','AbortError');
+   store.write(RPC_SETTINGS_KEY,{endpoint});
+  });
+  client=candidate;showState(result);showRpcSelection();$('status').textContent='Подключение проверено и сохранено. Можно продолжить загрузку.';
+ }finally{if(activeRead===abort)activeRead=null;}
+});
+showRpcSelection();
 render();if(new URL(location.href).searchParams.has('connectWallet'))run(async()=>{await wallet.connect();await refresh();});
 
 // Bundle and controller are published together; see verify-static.mjs.
