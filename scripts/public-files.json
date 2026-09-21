@@ -25,18 +25,6 @@
   "wallet-core.mjs",
   "wallet-ui.mjs",
   "wallet.css",
-  "solana-test/index.html",
-  "solana-test/controller.mjs",
-  "solana-test/sdk.js",
-  "solana-test/sdk.js.LEGAL.txt",
-  "metadata/devnet-reveal/0000.json",
-  "metadata/devnet-reveal/0001.json",
   "wallet-standard.js",
-  "wallet-standard.js.LEGAL.txt",
-  "solana-upload/index.html",
-  "solana-load/index.html",
-  "solana-load/app.mjs",
-  "solana-load/style.css",
-  "solana-load/sdk.js",
-  "solana-load/sdk.js.LEGAL.txt"
+  "wallet-standard.js.LEGAL.txt"
 ]

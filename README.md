@@ -2,9 +2,8 @@
 
 Сайт: https://coolbears-nfts.com
 
-Активная сборка: `fresh-20260918`.
-Текущее состояние: [docs/STATUS.md](docs/STATUS.md).
-Утверждённые тексты и параметры: [metadata/policy.json](metadata/policy.json).
+Основной сайт, оригинальные лого, баннер и GIF, а также публичные скрытые метаданные коллекции. Утверждённые описания и параметры: `metadata/policy.json`.
 
-Публикация: `node scripts/stage-site.mjs`.
-В Pages попадают только перечисленные файлы сайта и скрытые metadata.
+Сборка: `npm ci`, `npm run build:wallet`, `npm run build:site`, `npm run verify`.
+
+Продажи закрыты. Приватная готовая коллекция хранится отдельно. Служебные страницы тестирования и загрузки удалены по указанию владельца.

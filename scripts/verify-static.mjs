@@ -6,12 +6,8 @@ import { execFileSync } from 'node:child_process';
 // Check that every generated asset is present and non-empty; comparing a
 // multi-megabyte bundle through git diff can overflow Node's default buffer.
 const generated=[
-  'solana-test/sdk.js',
-  'solana-test/sdk.js.LEGAL.txt',
   'wallet-standard.js',
   'wallet-standard.js.LEGAL.txt',
-  'solana-load/sdk.js',
-  'solana-load/sdk.js.LEGAL.txt'
 ];
 for(const file of generated){
   const built=await readFile(file);
@@ -21,7 +17,7 @@ for(const file of generated){
   // must not hide stale committed bundles that this second publisher can serve.
   if(process.env.CI==='true'||process.argv.includes('--check-committed')){
     const committed=execFileSync('git',['show',`HEAD:${file}`],{maxBuffer:10*1024*1024});
-    assert.ok(built.equals(committed),`Run build:solana and commit generated asset: ${file}`);
+    assert.ok(built.equals(committed),`Run build:wallet and commit generated asset: ${file}`);
   }
 }
 

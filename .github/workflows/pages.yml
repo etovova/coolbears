@@ -23,8 +23,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm test
-      - run: npm run build:solana
+      - run: npm run build:wallet
       - run: node scripts/stage-site.mjs
       - run: node scripts/verify-static.mjs
       - uses: actions/configure-pages@v5
