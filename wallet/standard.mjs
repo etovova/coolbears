@@ -3,7 +3,8 @@ import { StandardWalletAdapter } from '@solana/wallet-standard-wallet-adapter-ba
 const adapters = new WeakMap();
 export function compatible(wallet) {
   const f = wallet.features || {};
-  return wallet.chains?.includes('solana:devnet') && typeof f['standard:connect']?.connect === 'function' && typeof f['standard:events']?.on === 'function' && typeof f['solana:signTransaction']?.signTransaction === 'function' && f['solana:signTransaction'].supportedTransactionVersions?.includes('legacy');
+  const send = f['solana:signAndSendTransaction'];
+  return wallet.chains?.some(chain => chain.startsWith('solana:')) && typeof f['standard:connect']?.connect === 'function' && typeof f['standard:events']?.on === 'function' && typeof send?.signAndSendTransaction === 'function' && (send.supportedTransactionVersions?.includes('legacy') || send.supportedTransactionVersions?.includes(0));
 }
 export function standardOptions(wallets = getWallets().get()) {
   return wallets.filter(compatible).map(wallet => {

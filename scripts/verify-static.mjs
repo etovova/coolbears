@@ -8,6 +8,10 @@ import { execFileSync } from 'node:child_process';
 const generated=[
   'wallet-standard.js',
   'wallet-standard.js.LEGAL.txt',
+  'manage/manage.js',
+  'manage/manage.js.LEGAL.txt',
+  'mint-client.js',
+  'mint-client.js.LEGAL.txt',
 ];
 for(const file of generated){
   const built=await readFile(file);
@@ -24,5 +28,6 @@ for(const file of generated){
 for (let i = 0; i < 10000; i++) {
   const file = `metadata/hidden/${String(i).padStart(4, '0')}.json`;
   assert.deepEqual(await readFile(file), await readFile(`public-site/${file}`), file);
+  if (i > 0) assert.deepEqual(await readFile(`metadata/mint/${i}.json`), await readFile(`public-site/metadata/mint/${i}.json`));
 }
 console.log('All generated bundles and 10000 hidden metadata files match the staged site.');

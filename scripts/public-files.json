@@ -26,5 +26,12 @@
   "wallet-ui.mjs",
   "wallet.css",
   "wallet-standard.js",
-  "wallet-standard.js.LEGAL.txt"
+  "wallet-standard.js.LEGAL.txt",
+  "manage/index.html",
+  "manage/manage.css",
+  "manage/manage.js",
+  "manage/manage.js.LEGAL.txt",
+  "manage/release.json",
+  "mint-client.js",
+  "mint-client.js.LEGAL.txt"
 ]
