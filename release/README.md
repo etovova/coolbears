@@ -17,9 +17,9 @@ Verified on 2026-09-21:
   closed mint rejection, 0.5 SOL payment, duplicate asset rejection with no second
   payment, closing sales again, transfer and a synthetic metadata update:
   `reports/runtime.json`. This is **not** a real Devnet or physical Phantom test.
-- Real Devnet preflight: genesis and three executable programs verified. The
-  disposable test payer has zero test SOL. No real Devnet transaction was sent:
-  `reports/devnet.json`.
+- Real Devnet execution: 12 checks and eight signed transactions passed,
+  including creation, closed mint rejection, a 0.5 SOL mint, closing the lab,
+  transfer and a synthetic metadata update: `reports/devnet-first-run.json`.
 
 Twelve transaction-journal fault checks passed: concurrent repeated calls, signature rejection, simulation
 failure, persistence failure, lost send response, confirmation timeout, status
@@ -54,15 +54,35 @@ the lock for an explicit retry. The durable receipt still protects restarts.
 - `reports/dependencies.json`: narrow bn.js and uuid fixes installed in the
   release lockfile, then all 90 SDK/journal/runtime checks rerun successfully.
 
-Real Devnet execution remains blocked on test funds. The audit's bounded RPC
-airdrop request returned 429; the official web faucet then requested Cloudflare
-CAPTCHA. No issuance transaction was sent. Physical Phantom signing and Magic
-Eden indexing remain separate unfinished checks.
+The funding block was resolved: a finalized RPC read found 2 Devnet SOL at
+slot 501983846, even though the user's faucet page displayed an application
+error. The existing disposable payer and journal were restored together, then
+the real network scenario passed. See `reports/devnet-funding.json`.
+Physical Phantom signing and Magic Eden indexing remain unfinished checks.
 
-The next gate is real Devnet execution. Test payer:
+All eight lab transactions were independently checked at `finalized`, with no
+on-chain error: `reports/devnet-finalized.json`. The read-only check can be run
+with `npm run --prefix release verify:devnet-finalized`; it never signs or sends.
+The remaining test-payer balance after the sequence was 1.487094960 Devnet SOL.
+The payment destination retains the 0.5 test SOL used by the mint.
+
+Disposable collection: `NJb9UojPgLu18UfJiAH9AjgkiMhY9uusE1FRNo7LCmX`.
+Disposable machine: `BSWrDpyfy1HmxxPEoystCB2m4sdeEwFythfJ8zu5xfiv`.
+These are test accounts controlled by the lab, not the owner's production
+collection. No private art, reveal CID or final traits were published.
+The closed-mint rejection was checked by Devnet RPC simulation; that rejected
+transaction was not broadcast. The eight successful operations were broadcast.
+
+A completed restart also passed: the eight saved signatures and the private
+journal stayed byte-for-byte unchanged, final account state was revalidated,
+and the finalized payer balance was identical before and after. No additional
+transaction was submitted. See `reports/devnet-restart.json`; `reports/devnet.json`
+is the latest successful run and `devnet-first-run.json` retains the first one.
+
+Test payer:
 `BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF`.
-It needs approximately 1 **Devnet** SOL; never send mainnet SOL. Official faucet:
-https://faucet.solana.com/. The key is private/devnet-lab.json and is disposable;
+No further faucet request is needed for this completed run. Never send mainnet
+SOL. The key is private/devnet-lab.json and is disposable;
 it has no connection to the owner's wallet. The disposable key is also saved privately in the continuation backup. Restore
 that key and journal together if the local working directory is lost. Never use
 this public test address for real funds.
@@ -95,8 +115,8 @@ npm run --prefix release fetch:programs
 npm run --prefix release verify:runtime
 ```
 
-The owner-facing workflow and physical Phantom acceptance test are pending the
-network test. This directory is not included in the website build. Sales remain
+The next stage is the official wallet adapter and physical Phantom acceptance
+test. This directory is not included in the website build. Sales remain
 closed; the lab opens only its separately named disposable test collection.
 
 The checked source decisions are in SOURCES.md. The settings report explicitly covers offline SDK construction only. Real Devnet execution, the physical Phantom wallet, and marketplace indexing are separate gates.

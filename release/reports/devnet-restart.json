@@ -1,0 +1,16 @@
+{
+  "checkedAt": "2026-09-21T16:29:06.546848+00:00",
+  "scope": "real Devnet completed restart with saved receipts",
+  "passed": true,
+  "savedReceipts": 8,
+  "sameTransactionSignatures": true,
+  "privateJournalByteForByteUnchanged": true,
+  "finalAccountStateRevalidated": true,
+  "finalizedBalanceBeforeLamports": "1487094960",
+  "finalizedBalanceAfterLamports": "1487094960",
+  "balanceSlot": 501989688,
+  "additionalTransactionsSubmitted": 0,
+  "limitations": [
+    "No physical Phantom signing or marketplace indexing tested."
+  ]
+}

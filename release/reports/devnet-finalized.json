@@ -1,65 +1,69 @@
 {
-  "checkedAt": "2026-09-21T16:24:45.838Z",
-  "scope": "real Devnet only",
-  "status": "passed",
-  "checks": [
-    "Devnet genesis",
-    "three executable Metaplex programs",
-    "collection",
-    "standalone-item",
-    "closed-machine",
-    "open-lab-only",
-    "paid-mint",
-    "close-lab",
-    "transfer",
-    "lab-metadata-update",
-    "closed mint rejected by start-date guard",
-    "final account state after all steps"
-  ],
+  "checkedAt": "2026-09-21T16:23:52.416Z",
+  "scope": "read-only finalized Devnet signatures",
+  "passed": true,
   "transactions": [
     {
       "step": "collection",
       "signature": "5QxMDSjza2rHwiehvbd6jUZy553kzS8q1MsXJ16yyu77DDoboenBLhcnrUcgTGNi5V3NpUZek7puEqyxT9KdKLcV",
-      "accountStateVerified": true
+      "slot": 501984585,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "standalone-item",
       "signature": "4cFTWYP7X1AwMqAxtFsEGYofUUkXnpbeYPRNFfvjDxHUu3VpZmgL9ft8CMW5m3a1KszMHhtS4EjZuKMonERabB3E",
-      "accountStateVerified": true
+      "slot": 501984832,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "closed-machine",
       "signature": "3ZKWUGQLcfWx4otugHFGqREt31DYcyAzd1jRgKsSW7qTjvXkyi748vXn9UZZpW7N8EAo6t64ENyHDjYCDBSWfwMB",
-      "accountStateVerified": true
+      "slot": 501985186,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "open-lab-only",
       "signature": "5MJjMr6yu3HLxKusKMFvpUCkPRV877gU51SMJaEDc1q4rRNrJgriC55Go1TipduWD1NF7B4UdBX4aUjPjW213KQK",
-      "accountStateVerified": true
+      "slot": 501985564,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "paid-mint",
       "signature": "5Q3hooZ8jNabJGVpcdq7oAhf7grDEsCbTCFU8QVtGqZ4fe7Pp6nKkAs7bLdwekcwmZRqmFzkuCGmyDsiUCSfbd2k",
-      "accountStateVerified": true
+      "slot": 501985878,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "close-lab",
       "signature": "4EXSTWVWrVYXkzc67uMnpnMGn9TZnfJbf4UEbg5eKGCWZbk3UeQL66aoba4yE9gSXHyrgJ9R4SPG9ex29MvazMU7",
-      "accountStateVerified": true
+      "slot": 501986224,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "transfer",
       "signature": "4Ff51qTVv2m4rqcY6Sq84Eq2nFNwKrtm3JMXN6sckioUDPLfgWFWVM1TkYEqWqReAXvp99iCQucYhUFXG75itrhF",
-      "accountStateVerified": true
+      "slot": 501986640,
+      "confirmationStatus": "finalized",
+      "error": null
     },
     {
       "step": "lab-metadata-update",
       "signature": "3HA1x7W2ERC2A3MsmRUibBBkdjxxSvkXwBM5GoiwLZeAi5Mn6RL3igBJ9kKR4QZb9sN8bTFbuDzjUSLYoixXBd9K",
-      "accountStateVerified": true
+      "slot": 501987110,
+      "confirmationStatus": "finalized",
+      "error": null
     }
   ],
   "testPayer": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
-  "balanceLamports": "1487094960",
-  "collection": "NJb9UojPgLu18UfJiAH9AjgkiMhY9uusE1FRNo7LCmX",
-  "machine": "BSWrDpyfy1HmxxPEoystCB2m4sdeEwFythfJ8zu5xfiv"
+  "balanceSlot": 501987904,
+  "finalizedBalanceLamports": "1487094960",
+  "limitations": [
+    "Physical Phantom signing and marketplace indexing are not tested here."
+  ]
 }

@@ -1,5 +1,5 @@
 {
-  "checkedAt": "2026-09-21T16:24:45.838Z",
+  "checkedAt": "2026-09-21T16:14:03.727Z",
   "scope": "real Devnet only",
   "status": "passed",
   "checks": [
@@ -59,7 +59,7 @@
     }
   ],
   "testPayer": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
-  "balanceLamports": "1487094960",
+  "balanceLamports": "2000000000",
   "collection": "NJb9UojPgLu18UfJiAH9AjgkiMhY9uusE1FRNo7LCmX",
   "machine": "BSWrDpyfy1HmxxPEoystCB2m4sdeEwFythfJ8zu5xfiv"
 }

@@ -8,6 +8,7 @@
     "verify:runtime": "node verify-runtime.mjs",
     "fetch:programs": "node fetch-programs.mjs",
     "test:devnet": "node devnet.mjs",
+    "verify:devnet-finalized": "node verify-devnet-finalized.mjs",
     "verify:journal": "node verify-journal.mjs"
   },
   "dependencies": {

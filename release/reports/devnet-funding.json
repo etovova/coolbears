@@ -1,0 +1,9 @@
+{
+  "scope": "finalized Devnet RPC balance read",
+  "testPayer": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
+  "slot": 501983846,
+  "balanceLamports": "2000000000",
+  "fundingConfirmed": true,
+  "note": "Read before starting the integration lab; no mainnet funds requested.",
+  "recordedAt": "2026-09-21T16:15:48.765754+00:00"
+}
