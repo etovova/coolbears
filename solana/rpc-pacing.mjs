@@ -20,9 +20,14 @@ export function rpcDelay(ms,signal) {
 }
 export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),interval=0,timeout=15000,now=Date.now,sleep=rpcDelay,fallbackEndpoints=[]}={}) {
  let tail=Promise.resolve(),next=0;
- const cooldowns=new Map();
+ const cooldowns=new Map(),events=[];
+ const record=(method,endpoint,outcome,started)=>{
+  let host;try{host=new URL(endpoint).hostname;}catch{host='rpc';}
+  const event={at:new Date(now()).toISOString(),method,host,outcome,elapsedMs:Math.max(0,now()-started)};
+  events.push(event);if(events.length>40)events.shift();return event;
+ };
  const limited=endpoint=>Object.assign(Error('Сервер Solana ограничил запросы. Повтори проверку вручную позже.'),{status:429,retryAfterMs:Math.max(0,(cooldowns.get(endpoint)??0)-now())});
- const reads=new Set(['getAccountInfo','getMultipleAccounts','getBalance','getGenesisHash','getSlot','getBlock','getBlockHeight','getLatestBlockhash','getSignatureStatuses']);
+ const reads=new Set(['getAccountInfo','getMultipleAccounts','getBalance','getGenesisHash','getSlot','getBlock','getEpochInfo','getBlockHeight','getLatestBlockhash','getSignatureStatuses']);
  const run=async(input,options={})=>{
   const signal=options.signal;
   signal?.throwIfAborted();
@@ -32,6 +37,7 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
   let payload;
   try {payload=JSON.parse(options.body);} catch {}
   const methods=Array.isArray(payload)?payload.map(item=>item?.method):[payload?.method];
+  const method=methods.filter(m=>typeof m==='string').join(',')||'unknown';
   // Only known read methods may fail over. Sending is always attempted once.
   const readOnly=methods.length>0&&methods.every(method=>reads.has(method));
   const endpoints=readOnly?[...new Set([input,...fallbackEndpoints])]:[input];
@@ -39,7 +45,8 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
   for(const endpoint of endpoints){
    signal?.throwIfAborted();
    // Respect Retry-After without freezing the next manual action in a timer.
-   if((cooldowns.get(endpoint)??0)>now()){lastError=limited(endpoint);continue;}
+   if((cooldowns.get(endpoint)??0)>now()){lastError=limited(endpoint);lastError.rpc=record(method,endpoint,'cooldown',now());continue;}
+   const started=now();
    const request=new AbortController();
    const abort=()=>request.abort(signal.reason);
    signal?.addEventListener('abort',abort,{once:true});
@@ -60,11 +67,13 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
       throw limited(endpoint);
      }
      if(readOnly&&[502,503,504].includes(response.status))throw Object.assign(Error('Сервер Solana временно недоступен.'),{status:response.status});
+     record(method,endpoint,errors[0]?.code??response.status,started);
      return body===null?response:new Response(body,{status:response.status,statusText:response.statusText,headers:response.headers});
     })(),request.signal);
     return result;
    } catch(error){
     signal?.throwIfAborted();
+    error.rpc=record(method,endpoint,error.status??(error.name==='TimeoutError'?'timeout':error.code??error.name),started);
     const transient=isRateLimit(error)||error.name==='TimeoutError'||error instanceof TypeError||[502,503,504].includes(error.status);
     if(!readOnly||!transient)throw error;
     lastError=error;
@@ -73,5 +82,5 @@ export function pacedRpcFetch({fetch:fetcher=globalThis.fetch.bind(globalThis),i
   throw lastError;
  };
  const fetch=(input,options)=>{const result=tail.then(()=>run(input,options));tail=result.catch(()=>{});return abortable(result,options?.signal);};
- return {fetch,retryAfter:()=>Math.max(0,...[...cooldowns.values()].map(until=>until-now()))};
+ return {fetch,retryAfter:()=>Math.max(0,...[...cooldowns.values()].map(until=>until-now())),diagnostics:()=>events.map(e=>({...e}))};
 }

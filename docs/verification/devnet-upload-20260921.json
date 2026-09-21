@@ -1,0 +1,66 @@
+{
+  "at": "2026-09-21T05:46:37.894Z",
+  "cluster": "devnet",
+  "target": {
+    "cluster": "devnet",
+    "machine": "FLpAJpBG7BDEL5cFZPiouGD6ZWnTWRRBrWxtkjVz9s3R",
+    "collection": "BZRkdsRsmeBBGb1JsVUbgZbThWraaMPSRazdiQdioLcy"
+  },
+  "finalizedSlot": 501756702,
+  "before": 1950,
+  "batch": {
+    "start": 1950,
+    "count": 25
+  },
+  "transactionBytes": 1147,
+  "simulationSlot": 501756927,
+  "simulationError": null,
+  "simulatedLoaded": 1975,
+  "unitsConsumed": 96974,
+  "signed": false,
+  "broadcast": false,
+  "rpc": [
+    {
+      "at": "2026-09-21T05:45:37.174Z",
+      "method": "getGenesisHash",
+      "host": "devnet.rpcpool.com",
+      "outcome": 23,
+      "elapsedMs": 15018
+    },
+    {
+      "at": "2026-09-21T05:45:52.039Z",
+      "method": "getGenesisHash",
+      "host": "api.devnet.solana.com",
+      "outcome": 200,
+      "elapsedMs": 14864
+    },
+    {
+      "at": "2026-09-21T05:46:05.083Z",
+      "method": "getEpochInfo",
+      "host": "devnet.rpcpool.com",
+      "outcome": 200,
+      "elapsedMs": 13043
+    },
+    {
+      "at": "2026-09-21T05:46:16.386Z",
+      "method": "getAccountInfo",
+      "host": "devnet.rpcpool.com",
+      "outcome": 200,
+      "elapsedMs": 11302
+    },
+    {
+      "at": "2026-09-21T05:46:25.967Z",
+      "method": "getLatestBlockhash",
+      "host": "devnet.rpcpool.com",
+      "outcome": 200,
+      "elapsedMs": 9502
+    },
+    {
+      "at": "2026-09-21T05:46:37.866Z",
+      "method": "simulateTransaction",
+      "host": "devnet.rpcpool.com",
+      "outcome": 200,
+      "elapsedMs": 11892
+    }
+  ]
+}

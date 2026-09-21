@@ -10,7 +10,7 @@ export async function runUpload(client,{size=1,onProgress=()=>{}}={}) {
     result=await client.groupStep({size:1,sign:true,onPhase:onProgress});
   } catch(error) {
     if(!isRateLimit(error))throw error;
-    result={status:'rate-limited'};
+    result={status:'rate-limited',...(error.rpc?{rpc:error.rpc}:{})};
   }
   onProgress(result);
   return result;

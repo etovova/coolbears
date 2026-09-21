@@ -69,6 +69,6 @@ export function uploadClient(provider,store,{paced=defaultPaced}={}) {
    const size=1;
    return createGroupUploader(transport(s),store,target(s)).step({...options,size});
   }),
-  backup:()=>{const s=load();const key=s.machine?`coolbears-upload-v1:devnet:${s.machine}`:null;return JSON.stringify({setup:s,upload:key?store.read(key):null},null,2);}
+  backup:()=>{const s=load();const key=s.machine?`coolbears-upload-v1:devnet:${s.machine}`:null;return JSON.stringify({setup:s,upload:key?store.read(key):null,rpc:paced.diagnostics?.()??[]},null,2);}
  };
 }

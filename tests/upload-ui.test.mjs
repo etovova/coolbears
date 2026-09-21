@@ -48,3 +48,9 @@ test('Wallet change discards a late read result and keeps upload disabled',async
  resolve({state:{collection:'old',machine:'old'},machine:true,loaded:1950});await pending;
  assert.equal(f.get('progress').value,0);assert.equal(f.get('state').textContent,'');assert.equal(f.get('step').disabled,true);
 });
+
+test('RPC failure shows the exact method and next check clears stale diagnostics',async()=>{
+ const f=await setup();f.setHandler(async()=>({status:'rate-limited',rpc:{method:'getSignatureStatuses',host:'api.devnet.solana.com',outcome:429}}));
+ await f.get('step').onclick();assert.equal(f.get('rpc-details').hidden,false);assert.match(f.get('rpc-error').textContent,/getSignatureStatuses.*429/);assert.equal(f.get('step').disabled,false);
+ await f.get('refresh').onclick();assert.equal(f.get('rpc-details').hidden,true);assert.equal(f.get('rpc-error').textContent,'');
+});

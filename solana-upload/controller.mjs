@@ -1,5 +1,5 @@
 import { createWalletUI } from '../wallet-ui.mjs?v=wallet-standard-20260920';
-import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=manual-25-20260921';
+import { uploadClient, browserUploadStore, runUpload, isRateLimit } from './sdk.js?v=manual-25-check-20260921';
 const $=id=>document.getElementById(id),store=browserUploadStore();
 let client,current,busy=false,connectionVersion=0,activeRead;
 const wallet=createWalletUI({language:()=> 'ru',onChange:address=>{connectionVersion++;activeRead?.abort();client=null;current=null;$('progress').value=0;$('state').textContent='';$('status').textContent='';$('account').textContent=address||'Кошелёк не подключён.';render();}});
@@ -13,6 +13,10 @@ function render(){
  $('group-info').textContent='Одно нажатие отправляет одну группу до 25 записей. Следующая группа — только по твоему нажатию.';
 }
 function getClient(){if(!wallet.provider)throw Error('Подключи кошелёк.');return client ||= uploadClient(wallet.provider,store);}
+function showRpc(rpc){
+ $('rpc-details').hidden=!rpc;
+ $('rpc-error').textContent=rpc?`${rpc.method} · ${rpc.outcome}\n${rpc.host}\nПодробности включены в журнал для сохранения.`:'';
+}
 function showState(result){
  current=result;
  $('progress').value=result.loaded;
@@ -24,13 +28,15 @@ function showState(result){
 async function refresh(){
  const version=connectionVersion,abort=new AbortController();activeRead=abort;
  $('status').textContent='Проверяю состояние в Devnet…';
+ showRpc();
  try{const result=await getClient().read({signal:abort.signal});if(version===connectionVersion){showState(result);$('status').textContent='Состояние обновлено.';}}
  finally{if(activeRead===abort)activeRead=null;}
 }
-async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){if(e.name!=='AbortError')$('status').textContent=isRateLimit(e)?'Сервер Solana ограничил запросы. Повтори проверку вручную позже. Сохранённые транзакции не потеряны.':e.message;}finally{busy=false;render();}}
+async function run(fn){if(busy)return;busy=true;render();try{await fn();}catch(e){if(e.name!=='AbortError'){$('status').textContent=isRateLimit(e)?'Сервер Solana ограничил запросы. Повтори проверку вручную позже. Сохранённые транзакции не потеряны.':e.message;showRpc(e.rpc);}}finally{busy=false;render();}}
 $('connect').onclick=()=>run(async()=>{if(wallet.address){await wallet.disconnect();return;}await wallet.connect();await refresh();});
 $('refresh').onclick=()=>run(refresh);
 function progress(r){
+ showRpc(r.rpc);
  if(Number.isInteger(r.loaded)){
   $('progress').value=r.loaded;
   if(current){current.loaded=r.loaded;$('state').textContent=`Devnet

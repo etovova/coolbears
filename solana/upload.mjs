@@ -97,19 +97,29 @@ export function umiUploadTransport(umi,plan,target,{networkCacheMs=0,now=Date.no
       const group = Array.isArray(pending) ? pending : pending ? [pending] : [];
       let slot=0,height=0,signatureStatus;
       if(group.length) {
-        slot=await umi.rpc.call('getSlot',[{commitment:'finalized'}]);
-        if(!Number.isSafeInteger(slot)||slot<0) throw Error('Invalid finalized slot.');
-        const block=await umi.rpc.call('getBlock',[slot,{commitment:'finalized',transactionDetails:'none',rewards:false,maxSupportedTransactionVersion:0}]);
-        height=block?.blockHeight;
-        if(!Number.isSafeInteger(height)||height<0) throw Error('Cannot establish finalized expiry height.');
-        const r=await umi.rpc.call('getSignatureStatuses',[group.map(p=>p.signature),{searchTransactionHistory:true}]);
-        if(!Number.isSafeInteger(r?.context?.slot)||r.context.slot<slot||!Array.isArray(r.value)||r.value.length!==group.length) throw Error('Stale signature status.');
-        signatureStatus=Array.isArray(pending)?r.value:r.value[0];
+        // One finalized bank supplies BOTH the slot and expiry height. Reading
+        // a historical block adds an avoidable RPC dependency to every click.
+        const epoch=await umi.rpc.call('getEpochInfo',[{commitment:'finalized'}]);
+        slot=epoch?.absoluteSlot;height=epoch?.blockHeight;
+        if(!Number.isSafeInteger(slot)||slot<0||!Number.isSafeInteger(height)||height<0) throw Error('Cannot establish finalized expiry height.');
       }
       const machine=await fetchCandyMachine(umi,publicKey(target.machine),{
         commitment:group.length?'finalized':'confirmed',
         ...(group.length?{minContextSlot:slot}:{})
       });
+      if(group.length) {
+        const loaded=loadedItems(machine,target);
+        const missing=group.map((p,i)=>({p,i})).filter(({p})=>!Array.from({length:p.count},(_,i)=>loaded.has(p.start+i)).every(Boolean));
+        // Applied config lines are the durable result. Their signatures need
+        // no archive lookup. Undefined means "not queried", never "expired".
+        const statuses=group.map(()=>undefined);
+        if(missing.length) {
+          const r=await umi.rpc.call('getSignatureStatuses',[missing.map(({p})=>p.signature),{searchTransactionHistory:true}]);
+          if(!Number.isSafeInteger(r?.context?.slot)||r.context.slot<slot||!Array.isArray(r.value)||r.value.length!==missing.length) throw Error('Stale signature status.');
+          missing.forEach(({i},j)=>{statuses[i]=r.value[j];});
+        }
+        signatureStatus=Array.isArray(pending)?statuses:statuses[0];
+      }
       return {slot,height,machine,signatureStatus};
     },
     async prepare(batch,cluster) {
