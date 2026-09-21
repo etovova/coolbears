@@ -7,7 +7,8 @@
     "verify:settings": "node verify-settings.mjs",
     "verify:runtime": "node verify-runtime.mjs",
     "fetch:programs": "node fetch-programs.mjs",
-    "test:devnet": "node devnet.mjs"
+    "test:devnet": "node devnet.mjs",
+    "verify:journal": "node verify-journal.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "1.10.0",

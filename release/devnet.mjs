@@ -4,15 +4,15 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { setTimeout as delay } from 'node:timers/promises';
 import { spawn } from 'node:child_process';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
 import { createSignerFromKeypair, generateSigner, signerIdentity, publicKey, some } from '@metaplex-foundation/umi';
-import { base58 } from '@metaplex-foundation/umi/serializers';
 import { mplCore, fetchCollection, fetchAsset, update, transfer } from '@metaplex-foundation/mpl-core';
 import { mplCandyMachine, fetchCandyMachine, fetchCandyGuard, findCandyGuardPda, mintV1, updateCandyGuard } from '@metaplex-foundation/mpl-core-candy-machine';
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import { DEVNET_GENESIS, CLOSED_UNTIL, policy, closedGuards, collectionBuilder, assetBuilder, machineBuilder } from './settings.mjs';
+
+import { transactionJournal } from './transaction-journal.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const privateDir = path.join(root, 'private');
@@ -82,47 +82,10 @@ async function getSigner(label) {
   }
   return createSignerFromKeypair(umi, umi.eddsa.createKeypairFromSecretKey(Uint8Array.from(state.signers[label])));
 }
-async function status(signature) {
-  const [result] = await umi.rpc.getSignatureStatuses([base58.serialize(signature)], { searchTransactionHistory: true });
-  return result;
-}
-async function execute(label, builder, verify) {
-  let receipt = state.receipts[label];
-  if (receipt) {
-    const found = await status(receipt.signature);
-    assert.ok(found && ['confirmed', 'finalized'].includes(found.commitment), `Saved ${label} is still unresolved; do not resend`);
-    assert.equal(found.error, null, `Saved ${label} failed on-chain`);
-  } else {
-    const blockhash = await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' });
-    const signed = await builder.useLegacyVersion().setBlockhash(blockhash).buildAndSign(umi);
-    const simulation = await umi.rpc.simulateTransaction(signed, { commitment: 'confirmed', verifySignatures: true });
-    assert.equal(simulation.err, null, `${label} simulation failed`);
-    receipt = { signature: base58.deserialize(signed.signatures[0])[0], ...blockhash,
-      signedBytes: Buffer.from(umi.transactions.serialize(signed)).toString('base64'), status: 'saved-before-send' };
-    state.receipts[label] = receipt; await save();
-    const returned = await umi.rpc.sendTransaction(signed, { commitment: 'confirmed', preflightCommitment: 'confirmed', skipPreflight: false, maxRetries: 0 });
-    assert.equal(base58.deserialize(returned)[0], receipt.signature);
-    receipt.status = 'submitted'; await save();
-    const deadline = Date.now() + 40000; let confirmed = false;
-    while (Date.now() < deadline) {
-      const found = await status(receipt.signature);
-      if (found) {
-        assert.equal(found.error, null, `${label} failed on-chain`);
-        if (['confirmed', 'finalized'].includes(found.commitment)) { confirmed = true; break; }
-      }
-      await delay(2000);
-    }
-    assert.ok(confirmed, `${label} confirmation pending; signature saved, do not resend`);
-  }
-  // Later steps intentionally change earlier account state (guard, owner, name).
-  // A verified historical receipt is checked on-chain, not against obsolete state.
-  if (receipt.status !== 'verified') {
-    await verify(); receipt.verifiedAt = new Date().toISOString();
-    receipt.status = 'verified'; await save();
-  }
+const execute = transactionJournal({ umi, state, save, record: async (label, receipt) => {
   report.transactions.push({ step: label, signature: receipt.signature, accountStateVerified: true });
   report.checks.push(label); await saveReport(); console.log(`Verified Devnet: ${label}`);
-}
+} });
 
 try {
   assert.equal(await umi.rpc.getGenesisHash(), DEVNET_GENESIS, 'Only Devnet is allowed');

@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-09-21T15:22:55.677Z",
+  "passed": true,
+  "scope": "fault injection with real SDK signatures and simulated transport; not real Devnet/Phantom",
+  "checks": [
+    "signature rejection leaves no receipt and sends nothing",
+    "failed simulation sends nothing",
+    "failed persistence prevents submission",
+    "response lost after send resumes with the same signature and no resend",
+    "unresolved signature times out and restart never replaces it",
+    "status service failure preserves the receipt",
+    "processed-only status cannot be reported as confirmed",
+    "confirmed on-chain failure is not accepted or resubmitted",
+    "account verification failure is retried without a new transaction",
+    "completed restart validates historical receipt without obsolete state assertions"
+  ]
+}

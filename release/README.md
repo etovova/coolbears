@@ -21,12 +21,20 @@ Verified on 2026-09-21:
   disposable test payer has zero test SOL. No real Devnet transaction was sent:
   `reports/devnet.json`.
 
+Ten transaction-journal fault checks passed: signature rejection, simulation
+failure, persistence failure, lost send response, confirmation timeout, status
+outage, processed-only status, on-chain failure, failed account read and restart
+after later state changes. See `reports/journal.json` and run
+`npm run --prefix release verify:journal`. The transport is simulated; these are
+not a physical Phantom or network test.
+
 The next gate is real Devnet execution. Test payer:
 `BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF`.
 It needs approximately 1 **Devnet** SOL; never send mainnet SOL. Official faucet:
 https://faucet.solana.com/. The key is private/devnet-lab.json and is disposable;
-it has no connection to the owner's wallet. If this local key is lost, create
-a fresh disposable key and update this address before funding.
+it has no connection to the owner's wallet. The disposable key is also saved privately in the continuation backup. Restore
+that key and journal together if the local working directory is lost. Never use
+this public test address for real funds.
 
 Run with a stable Devnet HTTPS RPC:
 `COOLBEARS_DEVNET_RPC='https://your-devnet-rpc' npm run --prefix release test:devnet`.
@@ -63,3 +71,8 @@ closed; the lab opens only its separately named disposable test collection.
 The checked source decisions are in SOURCES.md. The settings report explicitly covers offline SDK construction only. Real Devnet execution, the physical Phantom wallet, and marketplace indexing are separate gates.
 
 Private artwork and test keypairs stay in the root private/ directory. Never commit them. No owner seed or private key is required.
+
+Dependency note: Core Candy Machine 0.3.0 currently declares older Umi peer
+ranges in its transitive Token Metadata/toolbox dependencies. npm reports these
+warnings. The lockfile is pinned and the selected Core flows passed construction
+and program execution; unused guards and plugins are not certified by this test.
