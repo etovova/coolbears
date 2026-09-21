@@ -23,7 +23,6 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --no-audit --no-fund
-      - run: npm ci --prefix release --omit=dev --ignore-scripts --no-audit --no-fund
       - run: npm run build:wallet
       - run: node scripts/stage-site.mjs
       - run: node scripts/verify-static.mjs
