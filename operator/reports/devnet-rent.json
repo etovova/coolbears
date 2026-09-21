@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-09-21T19:47:33.003Z",
+  "cluster": "devnet",
+  "transactionsSent": 0,
+  "machineItems": 9999,
+  "configLineSettings": {
+    "prefixName": "",
+    "nameLength": 31,
+    "prefixUri": "",
+    "uriLength": 52,
+    "isSequential": false
+  },
+  "accountBytes": 871827,
+  "machineRentLamports": 4429531400,
+  "machineRentSol": 4.4295314,
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "ownerBalanceLamports": 295627200,
+  "machineRentShortfallLamports": 4133904200,
+  "sufficientForMachineRent": false,
+  "totalReleaseCostQuoted": false,
+  "excluded": [
+    "Core collection and reserved asset",
+    "Candy Guard account",
+    "creation/insertion transaction fees",
+    "priority fees",
+    "buyer mint payments and asset rent"
+  ]
+}

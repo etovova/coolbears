@@ -39,7 +39,7 @@ export async function quoteMachine(endpoint) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { console.log(JSON.stringify(await quoteMachine(process.env.COOLBEARS_RPC_URL), null, 2)); }
   catch (error) {
-    console.error(String(error.message).replaceAll(process.env.COOLBEARS_RPC_URL || '[unset]', '[RPC]'));
+    console.log(JSON.stringify({ checkedAt: new Date().toISOString(), status: 'blocked', transactionsSent: 0, message: String(error.message).replaceAll(process.env.COOLBEARS_RPC_URL || '[unset]', '[RPC]') }, null, 2));
     process.exitCode = 1;
   }
 }

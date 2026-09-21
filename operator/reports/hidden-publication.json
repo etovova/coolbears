@@ -1,0 +1,56 @@
+{
+  "checkedAt": "2026-09-21T19:51:37.563Z",
+  "all10000VerifiedInCommittedBuild": true,
+  "liveHttpSample": [
+    {
+      "path": "metadata/hidden/0000.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "da53813717120e485ad59f7994e373ef752381ae51f5635c8249305f303ab0ea"
+    },
+    {
+      "path": "metadata/hidden/0001.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "120b69940040f32851c763cbe13b2c9d0533ede4f84d389833b4c18206ce84db"
+    },
+    {
+      "path": "metadata/hidden/0099.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "68a1bf98d0c91a7823ac24ba62c31ab0a40c362f1fea52116717d5bfb0ca855f"
+    },
+    {
+      "path": "metadata/hidden/0100.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "0dea81d3e8de7d3122b5f1673c6ea839a48ebf346b38e29e58fac38f5921429a"
+    },
+    {
+      "path": "metadata/hidden/0999.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "0a8631d15fcf0281c1211fcd2cd885481f4cee4da56377ce85d848863381d5f9"
+    },
+    {
+      "path": "metadata/hidden/1000.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "44a906ce9b480be89453b358e3f172f0c7a28ab8d57bd67eedf80902b34e56af"
+    },
+    {
+      "path": "metadata/hidden/9998.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "0d1170bc3dd5835f04317690b7ecacd6e51056ef409c53e11fb6a00fa77b0655"
+    },
+    {
+      "path": "metadata/hidden/9999.json",
+      "status": 200,
+      "byteMatch": true,
+      "expectedSha256": "42866d087df6cd02d495d6841225592f9970512757481f236fed06fc343547cb"
+    }
+  ],
+  "liveAll10000Requested": false,
+  "salesOpen": false
+}
