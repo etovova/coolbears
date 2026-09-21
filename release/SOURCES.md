@@ -53,3 +53,13 @@ Save each completed stage in the official-release branch and update the existing
 CoolBears_Collection.md. Keep private inputs, keypairs, signed test transactions,
 final metadata and CIDs out of this public repository. A test may be called a
 real Devnet pass only when its signature and fetched on-chain account state agree.
+# Runtime verification sources
+
+LiteSVM 1.4.1 is used only for a separate local execution check. Its installed
+TypeScript declarations and implementation define the adapter:
+https://github.com/LiteSVM/litesvm.
+
+Program binaries are freshly fetched from finalized Devnet accounts and checked
+against the recorded SHA-256 values. No binary or test from the deleted release
+implementation is restored. The official faucet distinguishes real Devnet funds
+from local validator balances: https://faucet.solana.com/.

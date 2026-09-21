@@ -1,0 +1,63 @@
+{
+  "checkedAt": "2026-09-21T15:17:45.953Z",
+  "scope": "local LiteSVM only; no real Devnet or Phantom execution",
+  "passed": true,
+  "litesvm": "1.4.1",
+  "programSnapshot": "2026-09-21T15:16:03.296Z",
+  "checks": [
+    "collection",
+    "standalone-item",
+    "machine-9999",
+    "closed-mint-rejected",
+    "open-lab-only",
+    "paid-mint",
+    "same-asset-cannot-mint-twice",
+    "close-lab",
+    "closed-again-rejects-mint",
+    "transfer",
+    "synthetic-metadata-update",
+    "final collection size, payment, ownership and machine state"
+  ],
+  "transactions": [
+    {
+      "step": "collection",
+      "bytes": 424,
+      "computeUnits": "13085"
+    },
+    {
+      "step": "standalone-item",
+      "bytes": 409,
+      "computeUnits": "13158"
+    },
+    {
+      "step": "machine-9999",
+      "bytes": 797,
+      "computeUnits": "72441"
+    },
+    {
+      "step": "open-lab-only",
+      "bytes": 301,
+      "computeUnits": "9838"
+    },
+    {
+      "step": "paid-mint",
+      "bytes": 652,
+      "computeUnits": "59003"
+    },
+    {
+      "step": "close-lab",
+      "bytes": 309,
+      "computeUnits": "11747"
+    },
+    {
+      "step": "transfer",
+      "bytes": 274,
+      "computeUnits": "7208"
+    },
+    {
+      "step": "synthetic-metadata-update",
+      "bytes": 295,
+      "computeUnits": "11700"
+    }
+  ]
+}

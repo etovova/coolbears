@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "items": 10000,
+  "sourceLayersVerified": 454,
+  "uniqueCombinations": 10000,
+  "uniqueExactScores": 10000,
+  "uniqueDisplayedScores": 10000,
+  "uniqueRanks": 10000,
+  "allMetadataFrequenciesMatch": true,
+  "rankOrderRecomputed": true,
+  "planSha256": "93157b82f107815d376ea46104235f044fb78ecb9d01612ac3a163abb8aa4a9c",
+  "sourcesUnmodified": true
+}

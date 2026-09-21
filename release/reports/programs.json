@@ -1,0 +1,28 @@
+{
+  "checkedAt": "2026-09-21T15:16:03.296Z",
+  "cluster": "devnet",
+  "finalizedReadSlot": 501963202,
+  "programs": [
+    {
+      "program": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+      "programData": "9ZC25KLUrfgSoFVgjE1rrydZBbZns58UXi8A8ZhTdGfr",
+      "deploymentSlot": "492585604",
+      "bytes": 855888,
+      "sha256": "5680d2371204033f55cdcf0c08d393ed737d99cfe35d83f65befe80f7537484a"
+    },
+    {
+      "program": "CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J",
+      "programData": "3w3omcedXpcSCMASSGLFrbeSR4Bv27EUUxWuE7JXV7WC",
+      "deploymentSlot": "465360225",
+      "bytes": 943120,
+      "sha256": "744fd03055950cbc496e844260e537f0e1a06c758df2726403aee726f212182c"
+    },
+    {
+      "program": "CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ",
+      "programData": "GADi4g14b9y6fcn6DWbZy7nd2DCToD7viEMu9UGEDXqB",
+      "deploymentSlot": "465360252",
+      "bytes": 1871248,
+      "sha256": "376d2a57c501560cf78d36dc81d60ee864f7e2007e7d4c9a3785356f5b5975ee"
+    }
+  ]
+}

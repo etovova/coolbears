@@ -1,0 +1,12 @@
+{
+  "checkedAt": "2026-09-21T15:09:55.823Z",
+  "scope": "real Devnet only",
+  "status": "awaiting_test_sol",
+  "checks": [
+    "Devnet genesis",
+    "three executable Metaplex programs"
+  ],
+  "transactions": [],
+  "testPayer": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
+  "balanceLamports": "0"
+}

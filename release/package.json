@@ -4,7 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "verify:settings": "node verify-settings.mjs"
+    "verify:settings": "node verify-settings.mjs",
+    "verify:runtime": "node verify-runtime.mjs",
+    "fetch:programs": "node fetch-programs.mjs",
+    "test:devnet": "node devnet.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "1.10.0",
@@ -14,6 +17,16 @@
     "@metaplex-foundation/umi-bundle-defaults": "1.6.0",
     "@metaplex-foundation/umi-signer-wallet-adapters": "1.6.0",
     "@solana/web3.js": "1.99.0",
-    "ipfs-car": "3.1.0"
+    "ipfs-car": "3.1.0",
+    "@ipld/car": "5.4.7",
+    "ipfs-unixfs-exporter": "13.7.3",
+    "@web3-storage/car-block-validator": "1.2.2"
+  },
+  "devDependencies": {
+    "litesvm": "1.4.1",
+    "@solana/kit": "8.3.0"
+  },
+  "engines": {
+    "node": ">=22.12.0"
   }
 }
