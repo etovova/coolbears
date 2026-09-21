@@ -9,6 +9,8 @@ import { verifyHiddenFiles } from './hidden-metadata.mjs';
 const generated=[
   'wallet-standard.js',
   'wallet-standard.js.LEGAL.txt',
+  'devnet/app.js',
+  'devnet/app.js.LEGAL.txt',
 ];
 for(const file of generated){
   const built=await readFile(file);

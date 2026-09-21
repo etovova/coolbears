@@ -1,0 +1,19 @@
+{
+  "checkedAt": "2026-09-21T23:37:36.431Z",
+  "cluster": "devnet",
+  "production": false,
+  "action": "existing-laboratory-address-gate-to-owner",
+  "signature": "3npVtuiFhsG78wTCcRTAeGxpzWnBfua4wFE2GcJ9wDDYKtft7Dc4a41BMLR4CdbqNRN1dEw2iQdz3pGDmiBY7ctv",
+  "confirmation": "finalized",
+  "slot": 502144728,
+  "machine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+  "guard": "7UHKjfr3tcJhiuiPXrzgX2nLE89LvTgmNW5zKnEawANo",
+  "beforeAllowed": "BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF",
+  "nowAllowed": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "priceLamports": "500000000",
+  "loaded": 2,
+  "redeemed": 1,
+  "nftsCreatedByThisOperation": 0,
+  "salesOpen": false
+}

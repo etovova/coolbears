@@ -1,0 +1,18 @@
+{
+  "checkedAt": "2026-09-21T23:43:27.928Z",
+  "realWallet": false,
+  "realTransactionsSent": 0,
+  "assertions": [
+    "mobile layout without overflow",
+    "desktop render",
+    "wallet connect and preflight",
+    "partially signed v0 transaction",
+    "journal before prompt",
+    "user rejection",
+    "unknown wallet outcome",
+    "reload without duplicate prompt",
+    "read-only finalized recovery",
+    "success requires verified Core asset"
+  ],
+  "pageErrors": []
+}

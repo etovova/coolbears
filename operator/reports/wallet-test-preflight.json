@@ -1,0 +1,59 @@
+{
+  "checkedAt": "2026-09-21T23:39:09.146Z",
+  "cluster": "devnet",
+  "production": false,
+  "machine": "CZsECgYevYf68MbjfeX11PrkbQnXdzrskWMAcWWgvyq2",
+  "collection": "FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH",
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "positive": {
+    "err": null,
+    "unitsConsumed": 57949,
+    "logs": [
+      "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+      "Program ComputeBudget111111111111111111111111111111 success",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ invoke [1]",
+      "Program log: Instruction: MintV1",
+      "Program 11111111111111111111111111111111 invoke [2]",
+      "Program 11111111111111111111111111111111 success",
+      "Program CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J invoke [2]",
+      "Program log: Instruction: MintAsset",
+      "Program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d invoke [3]",
+      "Program log: Instruction: Create",
+      "Program 11111111111111111111111111111111 invoke [4]",
+      "Program 11111111111111111111111111111111 success",
+      "Program log: programs/mpl-core/src/plugins/internal/authority_managed/update_delegate.rs:60:Approve",
+      "Program log: programs/mpl-core/src/plugins/lifecycle.rs:741:Approve",
+      "Program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d consumed 14722 of 259100 compute units",
+      "Program CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d success",
+      "Program CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J consumed 37677 of 280551 compute units",
+      "Program CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J success",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ consumed 57799 of 299850 compute units",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ success"
+    ]
+  },
+  "unauthorized": {
+    "err": {
+      "InstructionError": [
+        1,
+        {
+          "Custom": 6033
+        }
+      ]
+    },
+    "logs": [
+      "Program ComputeBudget111111111111111111111111111111 invoke [1]",
+      "Program ComputeBudget111111111111111111111111111111 success",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ invoke [1]",
+      "Program log: Instruction: MintV1",
+      "Program log: AnchorError thrown in program/src/guards/address_gate.rs:29. Error Code: AddressNotAuthorized. Error Number: 6033. Error Message: Address not authorized.",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ consumed 13712 of 299850 compute units",
+      "Program CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ failed: custom program error: 0x1791"
+    ]
+  },
+  "ownerBalanceLamports": 1795627200,
+  "serializedTransactionBytes": 622,
+  "ownerSignatureVerified": false,
+  "simulationSignatureVerification": false,
+  "transactionsSent": 0,
+  "physicalWalletVerified": false
+}

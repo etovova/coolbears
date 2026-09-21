@@ -1,0 +1,17 @@
+{
+  "context": {
+    "apiVersion": "4.3.0-rc.0",
+    "slot": 502146413
+  },
+  "value": {
+    "data": [
+      "AdWlIkkeD68Vshd8CwfLrVEtK4mC3Kfk+jykoXNYUrhmAt7fNqpQRpBvK6GtDYU1jv//26WsuTbYvqw0YSFl96bsHwAAAENvb2xCZWFycyAjMDAwMiDigJQgSGlkZGVuIEJlYXI0AAAAaHR0cHM6Ly9jb29sYmVhcnMtbmZ0cy5jb20vbWV0YWRhdGEvaGlkZGVuLzAwMDIuanNvbgA=",
+      "base64"
+    ],
+    "executable": false,
+    "lamports": 2952880,
+    "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+    "rentEpoch": 18446744073709552000,
+    "space": 158
+  }
+}
