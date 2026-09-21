@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
+import { verifyHiddenFiles } from './hidden-metadata.mjs';
 
 // The build step creates these browser bundles immediately before staging.
 // Check that every generated asset is present and non-empty; comparing a
@@ -21,4 +22,12 @@ for(const file of generated){
   }
 }
 
-console.log('Static website bundles match the staged site.');
+const hidden = await verifyHiddenFiles('public-site');
+if (process.env.CI === 'true' || process.argv.includes('--check-committed')) {
+  const entries = execFileSync('git', ['ls-tree', '-r', 'HEAD', 'metadata/hidden/'], { maxBuffer: 2 * 1024 * 1024 }).toString().trim().split('\n');
+  const blobs = new Map(entries.map(line => { const [head, file] = line.split('\t'); return [file, head.split(' ')[2]]; }));
+  assert.equal(blobs.size, hidden.length, 'Commit all approved hidden metadata for both Pages publishers');
+  for (const file of hidden) assert.equal(blobs.get(file.path), file.gitBlob, `Stale committed metadata: ${file.path}`);
+}
+
+console.log(`Static website bundles and ${hidden.length} hidden metadata files match the staged site.`);

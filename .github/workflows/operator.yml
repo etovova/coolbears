@@ -2,7 +2,7 @@ name: Verify new CoolBears operator
 on:
   push:
     branches: [main, official-release]
-    paths: ['operator/**', 'metadata/**', '.github/workflows/operator.yml']
+    paths: ['operator/**', 'metadata/**', 'scripts/hidden-metadata.mjs', '.github/workflows/operator.yml']
   workflow_dispatch:
 permissions:
   contents: read

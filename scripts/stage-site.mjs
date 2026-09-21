@@ -3,8 +3,11 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { PublicKey } from '@solana/web3.js';
+import { verifyHiddenFiles } from './hidden-metadata.mjs';
 
 const files = JSON.parse(await readFile('scripts/public-files.json', 'utf8'));
+const hidden = await verifyHiddenFiles();
+files.push(...hidden.map(file => file.path));
 const policy = JSON.parse(await readFile('metadata/policy.json', 'utf8'));
 const collection = JSON.parse(await readFile('metadata/collection.json', 'utf8'));
 const item = JSON.parse(await readFile('metadata/0000.json', 'utf8'));
@@ -29,4 +32,4 @@ for (const file of files) {
   await mkdir(path.dirname(target), { recursive: true });
   await copyFile(file, target);
 }
-console.log(JSON.stringify({ version: policy.version, staticFiles: files.length, originalsVerified: true, salesOpen: false }));
+console.log(JSON.stringify({ version: policy.version, staticFiles: files.length, hiddenMetadata: hidden.length, originalsVerified: true, salesOpen: false }));

@@ -3,24 +3,22 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publicKey } from '@metaplex-foundation/umi';
+import { hiddenDocuments, policy } from '../scripts/hidden-metadata.mjs';
+
+export { policy };
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-export const policy = JSON.parse(await readFile(path.join(root, 'metadata/policy.json'), 'utf8'));
-const hidden = JSON.parse(await readFile(path.join(root, 'metadata/0000.json'), 'utf8'));
 
 export function makePreparation({ collection = '', metadataBase } = {}) {
   assert.equal(policy.supply, 10000);
   assert.equal(policy.priceSol, 0.5);
   assert.equal(policy.royaltyPercent, 7);
-  assert.equal(hidden.description, policy.hiddenDescription);
   publicKey(policy.owner);
   if (collection) publicKey(collection);
   const base = new URL(metadataBase ?? `${policy.website}/metadata/hidden/`);
   assert.equal(base.protocol, 'https:', 'Metadata must use HTTPS');
   assert.ok(base.pathname.endsWith('/') && !base.search && !base.hash && !base.username && !base.password, 'Use a directory URL without credentials, query or fragment');
-  const documents = Array.from({ length: policy.supply }, (_, index) => {
-    const document = structuredClone(hidden);
-    document.name = policy.hiddenName.replace('{index:04d}', String(index).padStart(4, '0'));
+  const documents = hiddenDocuments().map(document => {
     assert.equal(Buffer.byteLength(document.name, 'utf8') <= 32, true);
     for (const field of ['attributes', 'rank', 'rarity', 'rarity_score']) assert.ok(!(field in document));
     return document;
