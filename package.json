@@ -6,7 +6,12 @@
   "scripts": {
     "build:site": "node scripts/stage-site.mjs",
     "build:wallet": "node scripts/build-wallet.mjs",
-    "verify": "node scripts/verify-static.mjs"
+    "verify": "node scripts/verify-static.mjs",
+    "build:chain": "node scripts/build-chain.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:supply": "node tests/full-supply.mjs",
+    "verify:plan": "python3 scripts/collection/verify-plan.py",
+    "verify:car": "node scripts/collection/verify-car.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "1.10.0",
@@ -24,7 +29,14 @@
   "devDependencies": {
     "@ipld/car": "5.4.7",
     "@ipld/dag-pb": "4.2.0",
+    "happy-dom": "20.14.5",
+    "ipfs-unixfs-exporter": "16.2.3",
+    "ipfs-unixfs-importer": "17.1.1",
     "litesvm": "1.4.1",
     "multiformats": "14.0.5"
+  },
+  "overrides": {
+    "bn.js@^4.0.0": "4.12.5",
+    "uuid@<11.1.1": "11.1.1"
   }
 }

@@ -76,6 +76,9 @@
   let connected = false;
   let wallet = null;
   let walletAddress = '';
+  let minting = false;
+  const mintEnabled = cfg.demoMode === false && cfg.salesOpen === true && cfg.cluster === 'mainnet-beta'
+    && Boolean(cfg.collectionAddress && cfg.candyMachineAddress && cfg.revealCommitment && cfg.rpcEndpoint);
 
   const t = k => tr[lang][k] ?? tr.en[k] ?? k;
   const qty = $('#qty');
@@ -89,7 +92,10 @@
 
   function renderConnectionState() {
     if (walletBtn) { walletBtn.textContent = connected ? walletAddress.slice(0, 4) + '…' + walletAddress.slice(-4) + '\n' + t('disconnectWallet') : t('connectWallet'); walletBtn.title = walletAddress; }
-    if (mintBtn) { mintBtn.textContent = t('prelaunchButton'); mintBtn.disabled = true; }
+    if (mintBtn) {
+      mintBtn.textContent = mintEnabled ? (connected ? t('mintN').replace('{n}', qty?.value || '1') : t('connectToMint')) : t('prelaunchButton');
+      mintBtn.disabled = !mintEnabled || minting;
+    }
     if ($('#minted')) $('#minted').textContent = t('prelaunchStatus');
   }
 
@@ -194,6 +200,27 @@
   }
 
   walletBtn?.addEventListener('click', connect);
+  mintBtn?.addEventListener('click', async () => {
+    if (!mintEnabled || minting) return;
+    if (!connected) { await connect(); return; }
+    minting = true; renderConnectionState();
+    const controls = [qty, $('#minus'), $('#plus'), walletBtn].filter(Boolean);
+    controls.forEach(element => { element.disabled = true; });
+    try {
+      const { CoolBearsClient } = await import('./mint-client.js');
+      const client = new CoolBearsClient({ provider: wallet.provider, address: walletAddress, endpoint: cfg.rpcEndpoint,
+        cluster: cfg.cluster, onProgress: progress => { if (note) note.textContent = progress; } });
+      const key = `coolbears-v2:active-order:${cfg.cluster}:${walletAddress}:${cfg.candyMachineAddress}`;
+      let order = JSON.parse(localStorage.getItem(key) || 'null');
+      if (!order) { order = { id: crypto.randomUUID(), quantity: Number(qty.value) }; localStorage.setItem(key, JSON.stringify(order)); }
+      qty.value = String(order.quantity);
+      const assets = await client.mintOrder({ collection: { address: cfg.collectionAddress }, machine: { address: cfg.candyMachineAddress }, commitment: cfg.revealCommitment }, order.quantity, order.id);
+      localStorage.removeItem(key);
+      if (note) note.textContent = `${assets.length}/${order.quantity} ✓`;
+    } catch (error) {
+      if (note) note.textContent = error?.code === 4001 ? t('connectCancelled') : error.message;
+    } finally { minting = false; controls.forEach(element => { element.disabled = false; }); renderConnectionState(); }
+  });
   if (backTop) {
     const updateBackTop = () => backTop.classList.toggle('show', window.scrollY > 500);
     window.addEventListener('scroll', updateBackTop, { passive:true });

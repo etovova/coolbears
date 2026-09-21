@@ -17,7 +17,7 @@ export async function performOperation({ id, journal, inspect, prepare, submit, 
     if (await inspect(previous)) return previous;
     throw Error('Saved confirmation does not match chain state');
   }
-  if (previous && await inspect(previous)) return journal.put(id, { state: 'confirmed', reconciled: true });
+  if (await inspect(previous)) return journal.put(id, { state: 'confirmed', reconciled: true });
   if (previous?.state === 'submitted' || previous?.state === 'submitting' || previous?.state === 'unknown') {
     if (previous.signature && await confirm(previous.signature)) {
       if (await inspect(previous)) return journal.put(id, { state: 'confirmed', reconciled: true });
