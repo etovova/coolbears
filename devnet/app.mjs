@@ -57,7 +57,7 @@ async function check() {
   await withMintLock(navigator.locks, async () => {
     loadSaved(); requireValue(!storageError, 'Нужна проверка сохранённого журнала');
     if (operation && !mayStart(operation)) return recover();
-    message('Проверяю Devnet и условия минта…');
+    message('Проверяю Devnet и условия минта… Первое подключение может занять до 25 секунд.');
     const state = await readState(client);
     ready = state.machine.itemsRedeemed === 1n;
     message(ready ? 'Devnet доступен. Подключи FNyt…CW6y и выпусти один тестовый NFT.' : 'Оба тестовых NFT уже выпущены.');

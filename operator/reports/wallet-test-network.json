@@ -1,0 +1,81 @@
+{
+  "checkedAt": "2026-09-21T23:54:29.886Z",
+  "result": {
+    "status": 200,
+    "body": {
+      "jsonrpc": "2.0",
+      "result": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG",
+      "id": 1
+    }
+  },
+  "traffic": [
+    {
+      "id": "43322ABB21D05C45D74AB6BC88CDE00B",
+      "type": "Other",
+      "method": "OPTIONS",
+      "url": "https://api.devnet.solana.com/",
+      "time": 71430.135958
+    },
+    {
+      "id": "17.8",
+      "type": "Fetch",
+      "method": "POST",
+      "url": "https://api.devnet.solana.com/",
+      "time": 71430.135631
+    },
+    {
+      "id": "43322ABB21D05C45D74AB6BC88CDE00B",
+      "type": "Preflight",
+      "status": 200,
+      "time": 71447.271178
+    },
+    {
+      "id": "17.8",
+      "type": "Fetch",
+      "status": 200,
+      "time": 71447.695521
+    },
+    {
+      "id": "17.9",
+      "type": "Fetch",
+      "method": "POST",
+      "url": "https://api.devnet.solana.com/",
+      "time": 71447.790901
+    },
+    {
+      "id": "17.9",
+      "type": "Fetch",
+      "status": 200,
+      "time": 71448.222086
+    },
+    {
+      "id": "17.10",
+      "type": "Fetch",
+      "method": "POST",
+      "url": "https://api.devnet.solana.com/",
+      "time": 71448.226315
+    },
+    {
+      "id": "E54F9A796DEED9044D7715D9F69F7EC0",
+      "type": "Other",
+      "method": "OPTIONS",
+      "url": "https://api.devnet.solana.com/",
+      "time": 71448.227045
+    },
+    {
+      "id": "E54F9A796DEED9044D7715D9F69F7EC0",
+      "type": "Preflight",
+      "status": 200,
+      "time": 71448.512102
+    },
+    {
+      "id": "17.10",
+      "type": "Fetch",
+      "status": 200,
+      "time": 71448.984447
+    }
+  ],
+  "appStatus": "Devnet доступен. Подключи FNyt…CW6y и выпусти один тестовый NFT.",
+  "testBrowserProxyCaBypass": true,
+  "transactionsSent": 0
+}

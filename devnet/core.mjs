@@ -13,7 +13,7 @@ const validAddress = value => typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z
 export const isSignature = value => typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(value);
 
 // Reads and simulations only. The wallet owns signing AND submission.
-export function makeReadFetch(fetchImpl = globalThis.fetch, timeoutMs = 12000) {
+export function makeReadFetch(fetchImpl = globalThis.fetch, timeoutMs = 25000) {
   return async (url, options = {}) => {
     requireValue(String(url) === S.rpc, 'Unexpected RPC endpoint');
     const request = JSON.parse(options.body);
@@ -31,7 +31,7 @@ export function makeReadFetch(fetchImpl = globalThis.fetch, timeoutMs = 12000) {
       const text = await response.text();
       return new Response(text, { status: response.status, headers: response.headers });
     } catch (error) {
-      if (controller.signal.aborted) throw Error('RPC не ответил за 12 секунд. Повтори проверку результата позже.');
+      if (controller.signal.aborted) throw Error(`RPC не ответил за ${Math.ceil(timeoutMs / 1000)} секунд. Повтори проверку результата позже.`);
       throw error;
     } finally {
       clearTimeout(timer);
