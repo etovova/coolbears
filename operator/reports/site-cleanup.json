@@ -1,0 +1,30 @@
+[
+  {
+    "path": "/",
+    "status": 200,
+    "matchesLocal": true,
+    "sha256": "b9c17cc94728fafc81e1b65780cc8f58111a453431964c772f898c4ad65006d0"
+  },
+  {
+    "path": "/wallet-standard.js",
+    "status": 200,
+    "matchesLocal": true,
+    "sha256": "9cf41c7e42536486150a2a04c4a2e1e2474f925294edb416e7c963c01b26a372"
+  },
+  {
+    "path": "/phantom-check/",
+    "status": 404
+  },
+  {
+    "path": "/phantom-check/app.js",
+    "status": 404
+  },
+  {
+    "path": "/manage/",
+    "status": 404
+  },
+  {
+    "path": "/release/phantom-page.mjs",
+    "status": 404
+  }
+]

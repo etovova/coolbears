@@ -1,0 +1,33 @@
+{
+  "checkedAt": "2026-09-21T19:16:07.939Z",
+  "status": "read-path-passed",
+  "cluster": "devnet",
+  "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "balanceLamports": 295627200,
+  "programCount": 3,
+  "methods": [
+    {
+      "method": "getGenesisHash",
+      "httpStatus": 200,
+      "durationMs": 11038
+    },
+    {
+      "method": "getMultipleAccounts",
+      "httpStatus": 200,
+      "durationMs": 531
+    },
+    {
+      "method": "getBalance",
+      "httpStatus": 200,
+      "durationMs": 380
+    },
+    {
+      "method": "getLatestBlockhash",
+      "httpStatus": 200,
+      "durationMs": 532
+    }
+  ],
+  "writes": 0,
+  "simulationVerified": false,
+  "walletVerified": false
+}

@@ -1,0 +1,7 @@
+{
+  "code": 0,
+  "signal": null,
+  "timedOut": false,
+  "stdout": "{\n  \"address\": \"FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y\",\n  \"balance\": 0.2956272\n}\n",
+  "stderr": "bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)\n"
+}

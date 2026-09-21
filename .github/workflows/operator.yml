@@ -1,0 +1,21 @@
+name: Verify new CoolBears operator
+on:
+  push:
+    branches: [main, official-release]
+    paths: ['operator/**', 'metadata/**', '.github/workflows/operator.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: operator/package-lock.json
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run --prefix operator setup
+      - run: npm run --prefix operator verify

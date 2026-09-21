@@ -1,0 +1,29 @@
+{
+  "createdAt": "2026-09-21T19:22:22.363045+00:00",
+  "stage": "new-cli-preparation",
+  "officialCli": "0.4.3",
+  "offlineTests": 13,
+  "offlinePassed": 13,
+  "preparedMetadata": 10000,
+  "publicMetadataPublished": false,
+  "devnetReadOnly": true,
+  "devnetSimulation": [
+    "collection-and-asset",
+    "two-item-machine-guard-and-insertion"
+  ],
+  "signaturesVerified": false,
+  "walletAcceptanceVerified": false,
+  "transactionsSent": 0,
+  "dedicatedRpcConfigured": false,
+  "salesOpen": false,
+  "resetCommit": "9061280823687d1a7134d54b31731421b7ba4881",
+  "cliCompatibility": "documented lazy Ledger import; no transaction/signing implementation replacement",
+  "pending": [
+    "dedicated RPC and operator signing setup",
+    "rent/funding assessment of full config-line machine",
+    "publication and complete link validation of hidden metadata",
+    "actual new collection, machine, insertion and mint",
+    "new mint UI and physical Phantom/Solflare",
+    "reveal and batch purchases"
+  ]
+}

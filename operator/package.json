@@ -1,0 +1,25 @@
+{
+  "name": "coolbears-official-operator",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "setup": "node scripts/lazy-ledger.mjs",
+    "stage:files": "node prepare.mjs",
+    "check:rpc": "node preflight.mjs",
+    "simulate": "node simulate.mjs",
+    "mplx": "mplx",
+    "verify": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@metaplex-foundation/cli": "0.4.3",
+    "@metaplex-foundation/umi": "1.6.0",
+    "@metaplex-foundation/umi-bundle-defaults": "1.5.1",
+    "@metaplex-foundation/mpl-core": "1.10.0",
+    "@metaplex-foundation/mpl-core-candy-machine": "0.3.0",
+    "@metaplex-foundation/mpl-toolbox": "0.10.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
