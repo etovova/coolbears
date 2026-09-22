@@ -11,7 +11,8 @@ import { mintV1, mplCandyMachine } from '@metaplex-foundation/mpl-core-candy-mac
 import { mplCore } from '@metaplex-foundation/mpl-core';
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import worker, { RpcGate } from '../rpc-proxy/worker.mjs';
-import { ORIGIN, LAB, validateRpcRequest } from '../rpc-proxy/policy.mjs';
+import { ORIGIN, LAB, ProxyError, validateRpcRequest } from '../rpc-proxy/policy.mjs';
+import { errorResponse } from '../rpc-proxy/io.mjs';
 import { createClient, readState, prepareMint } from '../devnet/core.mjs';
 
 const genesis = 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
@@ -374,12 +375,37 @@ test('HTTP errors and redirect responses do not leak provider messages or creden
   for (const status of [301, 302, 307, 400, 401, 403, 429, 500, 502, 503]) {
     const h = harness({ fetchImpl: async () => new Response(secret, { status, headers: { location: 'https://evil.example/?api-key=' + secret } }) });
     const response = await h.run();
-    assert.ok(response.status >= 400);
+    assert.equal(response.status, status === 429 ? 429 : 502);
     const text = await response.text();
     assert.ok(!text.includes(secret)); assert.ok(!text.includes('evil.example'));
+    assert.deepEqual(JSON.parse(text).error.data, { category: 'UPSTREAM_HTTP', upstreamStatus: status });
+    assert.equal(response.headers.get('retry-after'), [429, 503].includes(status) ? '1' : null);
     assert.equal(response.headers.get('location'), null);
     assert.equal(h.calls.length, 1, 'No immediate retry against a failed or redirected provider');
+    assert.equal(h.storage.data.get('rate:v1').credits, 1);
     assert.equal(h.calls[0].options.redirect, 'manual');
+  }
+});
+
+test('upstream HTTP status diagnostics reject invalid values and stay absent from other errors', async () => {
+  for (const upstreamStatus of [undefined, null, '401', 0, 100, 200, 299, 600, 401.5, NaN, Infinity, secret, { status: 401, message: secret }]) {
+    const error = new ProxyError('UPSTREAM_HTTP', 502, { upstreamStatus });
+    assert.equal(Object.hasOwn(error, 'upstreamStatus'), false);
+    // Serialization also rejects an invalid field attached after construction.
+    error.upstreamStatus = upstreamStatus;
+    const response = errorResponse(error, 1);
+    assert.equal(response.status, 502);
+    assert.deepEqual((await response.json()).error.data, { category: 'UPSTREAM_HTTP' });
+  }
+  for (const category of ['CONFIGURATION', 'RATE_LIMIT', 'UPSTREAM_RPC', 'UPSTREAM_TIMEOUT', 'INTERNAL']) {
+    const error = new ProxyError(category, 503, { upstreamStatus: 401 });
+    assert.equal(Object.hasOwn(error, 'upstreamStatus'), false);
+    error.upstreamStatus = 401;
+    assert.deepEqual((await errorResponse(error).json()).error.data, { category });
+  }
+  for (const upstreamStatus of [300, 599]) {
+    const error = new ProxyError('UPSTREAM_HTTP', 502, { upstreamStatus });
+    assert.deepEqual((await errorResponse(error).json()).error.data, { category: 'UPSTREAM_HTTP', upstreamStatus });
   }
 });
 

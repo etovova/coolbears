@@ -153,7 +153,7 @@ export class RpcGate {
           let retryAfter;
           if (response.status === 429 || response.status === 503) retryAfter = await this.deferUpstream(response.headers.get('retry-after'));
           try { void response.body?.cancel()?.catch(() => {}); } catch { /* Do not await a failed body. */ }
-          throw new ProxyError('UPSTREAM_HTTP', response.status === 429 ? 429 : 502, { retryAfter });
+          throw new ProxyError('UPSTREAM_HTTP', response.status === 429 ? 429 : 502, { retryAfter, upstreamStatus: response.status });
         }
         const data = await readJsonBody(response, this.limits.responseBytes, signal);
         return sanitizeRpcResponse(data, validated, { lab: this.lab });
