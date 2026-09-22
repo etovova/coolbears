@@ -4,3 +4,8 @@ private/
 build/
 *.PRIVATE.*
 __pycache__/
+
+# Local Worker state and credentials
+.wrangler/
+.dev.vars*
+rpc-proxy/.env*

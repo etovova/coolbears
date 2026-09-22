@@ -4,7 +4,11 @@ import path from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { PublicKey } from '@solana/web3.js';
 import { verifyHiddenFiles } from './hidden-metadata.mjs';
+import { deploymentRpc } from '../devnet/deployment.mjs';
 
+// A configured public relay must never embed a provider credential.
+// Fail before touching the existing staged site if deployment settings are bad.
+deploymentRpc();
 const files = JSON.parse(await readFile('scripts/public-files.json', 'utf8'));
 const hidden = await verifyHiddenFiles();
 files.push(...hidden.map(file => file.path));

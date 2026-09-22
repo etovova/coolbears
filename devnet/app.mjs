@@ -5,17 +5,22 @@ import { validateRpcEndpoint } from './rpc.mjs';
 import { walletErrorDetails, publicWalletAttempt, publicPreparation, publicSubmission } from './diagnostics.mjs';
 import { signAndSubmit } from './submission.mjs';
 import { validateSubmissionEndpoint } from './sender.mjs';
+import { deploymentRpc } from './deployment.mjs';
 import { phantomBrowseUrl, solflareBrowseUrl, backpackBrowseUrl } from '../wallet-core.mjs';
 
 const $ = id => document.getElementById(id);
 const publicEndpoint = validateRpcEndpoint(S.rpc);
-let endpoint = publicEndpoint;
+let deployment = null;
+let deploymentFailure = '';
+try { deployment = deploymentRpc(); } catch (error) { deploymentFailure = error.message; }
+let endpoint = deployment?.endpoint || null;
+const rpcKind = () => deploymentFailure ? 'unavailable' : endpoint === deployment.endpoint ? deployment.kind : endpoint === publicEndpoint ? 'public-devnet' : 'custom-devnet';
 let networkController = null;
 const newClient = () => createClient(globalThis.fetch, {
   endpoint, getSignal: () => networkController?.signal,
   onRetry: ({ delayMs, attempt, maxAttempts }) => message(`Сервер Devnet занят или временно недоступен. Повтор проверки через ${Math.ceil(delayMs / 1000)} сек. (${attempt}/${maxAttempts})`),
 });
-let client = newClient();
+let client = endpoint ? newClient() : null;
 let wallet = null;
 let walletGeneration = 0;
 let busy = false;
@@ -47,21 +52,23 @@ function updateWalletOptions() {
 }
 
 function render() {
-  $('mint').disabled = busy || storageError || !ready || wallet?.address !== S.owner || !mayStart(operation);
-  $('check').disabled = busy || storageError;
-  $('phantom').disabled = busy;
-  $('solflare').disabled = busy;
-  $('backpack').disabled = busy;
-  $('connect-other').disabled = busy;
-  $('wallet-choice').disabled = busy;
-  $('rpc-apply').disabled = busy;
-  $('rpc-reset').disabled = busy;
-  $('rpc-endpoint').disabled = busy;
-  $('phantom-rpc-option').hidden = !canSubmitCustom() || !hasPhantomSigner();
-  $('phantom-rpc').disabled = busy || storageError;
+  const unavailable = busy || Boolean(deploymentFailure);
+  $('mint').disabled = unavailable || storageError || !ready || wallet?.address !== S.owner || !mayStart(operation);
+  $('check').disabled = unavailable || storageError;
+  $('phantom').disabled = unavailable;
+  $('solflare').disabled = unavailable;
+  $('backpack').disabled = unavailable;
+  $('connect-other').disabled = unavailable;
+  $('wallet-choice').disabled = unavailable;
+  $('rpc-apply').disabled = unavailable;
+  $('rpc-reset').disabled = unavailable;
+  $('rpc-endpoint').disabled = unavailable;
+  $('phantom-rpc-option').hidden = rpcKind() === 'site-devnet' || !canSubmitCustom() || !hasPhantomSigner();
+  $('phantom-rpc').disabled = unavailable || storageError;
   $('phantom-rpc').textContent = wallet?.route === 'custom-rpc' ? 'Phantom: свой RPC выбран' : 'Phantom: отправлять через свой RPC';
   $('wallet-route').hidden = !wallet;
-  $('wallet-route').textContent = wallet?.route === 'custom-rpc' ? 'Подпись: Phantom. Отправка: свой Devnet RPC.' : 'Подпись и отправка: приложение кошелька.';
+  $('wallet-route').textContent = wallet?.route === 'custom-rpc' ? rpcKind() === 'site-devnet' ? 'Подпись: Phantom. Отправка: RPC сайта.' : 'Подпись: Phantom. Отправка: свой Devnet RPC.' : 'Подпись и отправка: приложение кошелька.';
+  $('rpc-current').textContent = deploymentFailure ? 'Подключение сайта к Devnet требует исправления.' : rpcKind() === 'site-devnet' ? 'Подключение к Devnet настроено сайтом. Вводить адрес RPC не нужно.' : rpcKind() === 'public-devnet' ? 'Используется общий Devnet RPC.' : 'Используется свой Devnet RPC до перезагрузки страницы.';
   $('phantom').textContent = wallet?.name === 'Phantom' ? 'Phantom подключён' : walletConnectionAction('Phantom', window, location.origin + '/devnet/').type === 'browse' ? 'Открыть Phantom' : 'Подключить Phantom';
   $('solflare').textContent = wallet?.name === 'Solflare' ? 'Solflare подключён' : 'Solflare';
   $('backpack').textContent = wallet?.name === 'Backpack' ? 'Backpack подключён' : 'Backpack';
@@ -96,7 +103,7 @@ function report(value) {
 async function action(callback) {
   if (busy) return;
   busy = true; render();
-  try { await callback(); }
+  try { requireValue(!deploymentFailure, deploymentFailure); await callback(); }
   catch (error) { ready = false; message(error.message || 'Не удалось завершить проверку.'); }
   finally { busy = false; render(); }
 }
@@ -136,10 +143,19 @@ async function check() {
   });
 }
 async function connect(name, customRpc = false) {
-  if (customRpc) requireValue(canSubmitCustom() && hasPhantomSigner(), 'Сначала настрой свой Devnet RPC и открой страницу внутри Phantom.');
+  const selectedName = getAvailableWallets().find(item => item.id === name)?.name || name;
+  const sitePhantom = rpcKind() === 'site-devnet' && selectedName === 'Phantom';
   const action = walletConnectionAction(name, window, location.origin + '/devnet/');
-  if (!customRpc && action.type === 'browse') { message('Открываю страницу в приложении кошелька…'); location.assign(action.url); return; }
-  if ((wallet?.name === name || wallet?.id === name) && wallet.address === S.owner && (wallet.route === 'custom-rpc') === customRpc) return check();
+  if (!customRpc && action.type === 'browse' && !(sitePhantom && hasPhantomSigner())) { message('Открываю страницу в приложении кошелька…'); location.assign(action.url); return; }
+  // On the configured site endpoint, an explicit Phantom connection chooses
+  // signing-only directly. A failed/missing signer never falls back to a wallet
+  // broadcast. Other wallet buttons retain their advertised normal path.
+  if (sitePhantom) {
+    requireValue(hasPhantomSigner(), 'Этот Phantom не поддерживает подпись через RPC сайта. Обнови Phantom или выбери другой кошелёк.');
+    customRpc = true;
+  }
+  if (customRpc) requireValue(canSubmitCustom() && hasPhantomSigner(), 'Сначала настрой свой Devnet RPC и открой страницу внутри Phantom.');
+  if ((wallet?.name === name || wallet?.id === name || sitePhantom && wallet?.name === 'Phantom') && wallet.address === S.owner && (wallet.route === 'custom-rpc') === customRpc) return check();
   const generation = ++walletGeneration;
   wallet?.off(); wallet = null;
   ready = false;
@@ -165,7 +181,7 @@ function changeEndpoint(next) {
   if (endpoint === next) return;
   endpoint = next; client = newClient();
   // A selected sign-only session is bound to the endpoint chosen at connection.
-  if (wallet?.route === 'custom-rpc') { ++walletGeneration; wallet.off(); wallet = null; }
+  if (wallet?.route === 'custom-rpc' || wallet?.name === 'Phantom' && rpcKind() === 'site-devnet') { ++walletGeneration; wallet.off(); wallet = null; }
 }
 $('rpc-form').onsubmit = event => {
   event.preventDefault();
@@ -174,14 +190,12 @@ $('rpc-form').onsubmit = event => {
     $('rpc-endpoint').value = '';
     changeEndpoint(next);
     ready = false;
-    $('rpc-current').textContent = endpoint === publicEndpoint ? 'Используется общий Devnet RPC.' : 'Используется свой Devnet RPC до перезагрузки страницы.';
     await check();
   });
 };
 $('rpc-reset').onclick = () => action(async () => {
-  changeEndpoint(publicEndpoint);
+  changeEndpoint(deployment.endpoint);
   $('rpc-endpoint').value = ''; ready = false;
-  $('rpc-current').textContent = 'Используется общий Devnet RPC.';
   await check();
 });
 $('check').onclick = () => action(check);
@@ -215,7 +229,7 @@ $('mint').onclick = () => action(() => withMintLock(navigator.locks, async () =>
         persist: value => {
           persist(value);
           if (value.walletAttempt?.outcome !== 'pending') clearTimeout(waiting);
-          if (isActive() && value.submission?.state === 'sending') message('Подпись проверена. Отправляю транзакцию через свой Devnet RPC…');
+          if (isActive() && value.submission?.state === 'sending') message(rpcKind() === 'site-devnet' ? 'Подпись проверена. Отправляю транзакцию через RPC сайта…' : 'Подпись проверена. Отправляю транзакцию через свой Devnet RPC…');
         },
         checkFresh: () => runNetwork(async client => {
           requireValue(await client.rpc('getGenesisHash') === S.genesis, 'Требуется Solana Devnet');
@@ -281,9 +295,10 @@ function diagnosticText() {
   const status = httpStatus ? `RPC HTTP ${httpStatus}` : unreadable ? 'Не удалось прочитать сохранённую операцию' : busy ? 'Проверка выполняется' : ready ? 'Devnet доступен' : 'См. состояние операции и сообщение на странице';
   return JSON.stringify({
     exportedAt: new Date().toISOString(), page: location.origin + '/devnet/',
-    appVersion: 'devnet-20260922-6', operation: publicOperation, storageError: unreadable,
-    rpc: endpoint === publicEndpoint ? 'public-devnet' : 'custom-devnet',
-    rpcProvider: endpoint === publicEndpoint ? 'solana-public' : new URL(endpoint).hostname === 'devnet.helius-rpc.com' ? 'helius' : 'other',
+    appVersion: 'devnet-20260922-7', operation: publicOperation, storageError: unreadable,
+    rpc: rpcKind(),
+    rpcProvider: deploymentFailure ? 'none' : rpcKind() === 'site-devnet' ? 'site' : endpoint === publicEndpoint ? 'solana-public' : new URL(endpoint).hostname === 'devnet.helius-rpc.com' ? 'helius' : 'other',
+    configurationError: Boolean(deploymentFailure),
     walletConnected: Boolean(wallet), ownerConnected: wallet?.address === S.owner,
     walletRoute: wallet ? wallet.route === 'custom-rpc' ? 'custom-rpc' : 'wallet' : 'none',
     busy, ready, status,
@@ -322,5 +337,6 @@ window.addEventListener('pagehide', () => { ++walletGeneration; wallet?.off(); w
 loadSaved(); render();
 updateWalletOptions();
 subscribeWallets(updateWalletOptions);
-if (operation && !storageError) report(operation);
+if (deploymentFailure) message(deploymentFailure);
+else if (operation && !storageError) report(operation);
 // No automatic wallet prompts, signing, resubmission, or polling after reload.
