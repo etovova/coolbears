@@ -14,6 +14,7 @@ export function makePreparation({ collection = '', metadataBase } = {}) {
   assert.equal(policy.priceSol, 0.5);
   assert.equal(policy.royaltyPercent, 7);
   publicKey(policy.owner);
+  assert.equal(typeof collection, 'string', 'Collection must be a public-key string or an empty string');
   if (collection) publicKey(collection);
   const base = new URL(metadataBase ?? `${policy.website}/metadata/hidden/`);
   assert.equal(base.protocol, 'https:', 'Metadata must use HTTPS');
@@ -53,7 +54,29 @@ export function makePreparation({ collection = '', metadataBase } = {}) {
     creators: [{ address: policy.owner, percentage: 100 }],
     ruleSet: { type: 'None' },
   } };
-  return { cmConfig, assetCache: { assetItems }, plugins, documents };
+  // This is an explicit operator contract, not an on-chain authority assignment.
+  // CLI defaults must be checked against it before any future signature.
+  const releasePlan = {
+    version: 1, stage: 'prepared-offline', networkSelected: false,
+    collection, supply: policy.supply,
+    publicItems: { count: items.length, firstIndex: 1, lastIndex: policy.supply - 1 },
+    reservedAsset: {
+      index: 0, name: documents[0].name, owner: policy.owner, collection,
+      uri: new URL('0000.json', base).href, created: false,
+    },
+    requiredAuthorities: {
+      collectionUpdateAuthority: policy.owner,
+      candyMachineAuthority: policy.owner,
+      candyGuardAuthority: policy.owner,
+    },
+    authoritiesVerifiedOnChain: false,
+    payment: { lamports: cmConfig.config.guardConfig.solPayment.lamports, destination: policy.owner },
+    royalties: { basisPoints: policy.royaltyPercent * 100, recipient: policy.owner },
+    maxPerOrder: policy.maxPerOrder,
+    earliestRevealDate: policy.earliestRevealDate, privateRevealMappingVerified: false,
+    salesOpen: false, transactionsSent: 0,
+  };
+  return { cmConfig, assetCache: { assetItems }, plugins, documents, releasePlan };
 }
 
 export async function prepare(output, options) {
@@ -66,6 +89,7 @@ export async function prepare(output, options) {
   await save('cm-config.json', result.cmConfig);
   await save('asset-cache.json', result.assetCache);
   await save('collection-plugins.json', result.plugins);
+  await save('release-plan.json', result.releasePlan);
   await save('collection.json', JSON.parse(await readFile(path.join(root, 'metadata/collection.json'), 'utf8')));
   for (let i = 0; i < result.documents.length; i++) {
     await save(`hidden/${String(i).padStart(4, '0')}.json`, result.documents[i]);
