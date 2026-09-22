@@ -2,7 +2,7 @@ import { getWallets } from '@wallet-standard/app';
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { VersionedTransaction } from '@solana/web3.js';
 import { requireValue, isSignature } from './core.mjs';
-import { phantomBrowseUrl, solflareBrowseUrl } from '../wallet-core.mjs';
+import { phantomBrowseUrl, solflareBrowseUrl, backpackBrowseUrl } from '../wallet-core.mjs';
 
 const CHAIN = 'solana:devnet';
 const SEND = 'solana:signAndSendTransaction';
@@ -63,7 +63,7 @@ export function walletConnectionAction(name, scope = globalThis, pageUrl = scope
   if (getAvailableWallets(scope, registry).some(wallet => wallet.name === name || wallet.id === name)) return { type: 'connect' };
   const mobile = /Android|iPhone|iPad|iPod/i.test(scope.navigator?.userAgent || '') ||
     (scope.navigator?.platform === 'MacIntel' && scope.navigator?.maxTouchPoints > 1);
-  const browse = name === 'Phantom' ? phantomBrowseUrl : name === 'Solflare' ? solflareBrowseUrl : null;
+  const browse = name === 'Phantom' ? phantomBrowseUrl : name === 'Solflare' ? solflareBrowseUrl : name === 'Backpack' ? backpackBrowseUrl : null;
   if (mobile && browse) {
     const page = new URL(pageUrl);
     if (page.protocol === 'https:') return { type: 'browse', url: browse(new URL('/devnet/', page.origin).href) };

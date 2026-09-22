@@ -148,7 +148,7 @@
     let timer;
     try {
       return await Promise.race([
-        import('./wallet-ui.mjs?v=wallet-reliability-20260922'),
+        import('./wallet-ui.mjs?v=wallet-reliability-20260922-2'),
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(t('walletFailed'))), 15000); })
       ]);
     } finally { clearTimeout(timer); }

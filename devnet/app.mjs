@@ -2,7 +2,7 @@ import { settings as S } from './settings.mjs';
 import { createClient, readState, prepareMint, readOperation, saveOperation, mayStart, withMintLock, settleOperation, assetUrl, signatureUrl, requireValue, boundedWalletCall, mergeOperationEvidence } from './core.mjs';
 import { connectWallet, getAvailableWallets, subscribeWallets, walletConnectionAction } from './wallet.mjs';
 import { validateRpcEndpoint } from './rpc.mjs';
-import { phantomBrowseUrl, solflareBrowseUrl } from '../wallet-core.mjs';
+import { phantomBrowseUrl, solflareBrowseUrl, backpackBrowseUrl } from '../wallet-core.mjs';
 
 const $ = id => document.getElementById(id);
 let endpoint = S.rpc;
@@ -30,7 +30,7 @@ async function runNetwork(callback) {
 function updateWalletOptions() {
   const selected = $('wallet-choice').value;
   const available = getAvailableWallets();
-  const options = available.filter(item => !['Phantom', 'Solflare'].includes(item.name) || available.filter(other => other.name === item.name).length > 1);
+  const options = available.filter(item => !['Phantom', 'Solflare', 'Backpack'].includes(item.name) || available.filter(other => other.name === item.name).length > 1);
   $('wallet-choice').replaceChildren(...options.map(item => {
     const option = document.createElement('option'); option.value = item.id;
     option.textContent = options.filter(other => other.name === item.name).length > 1 ? `${item.name} (${item.id})` : item.name;
@@ -46,6 +46,7 @@ function render() {
   $('check').disabled = busy || storageError;
   $('phantom').disabled = busy;
   $('solflare').disabled = busy;
+  $('backpack').disabled = busy;
   $('connect-other').disabled = busy;
   $('wallet-choice').disabled = busy;
   $('rpc-apply').disabled = busy;
@@ -53,6 +54,7 @@ function render() {
   $('rpc-endpoint').disabled = busy;
   $('phantom').textContent = wallet?.name === 'Phantom' ? 'Phantom подключён' : walletConnectionAction('Phantom', window, location.origin + '/devnet/').type === 'browse' ? 'Открыть Phantom' : 'Подключить Phantom';
   $('solflare').textContent = wallet?.name === 'Solflare' ? 'Solflare подключён' : 'Solflare';
+  $('backpack').textContent = wallet?.name === 'Backpack' ? 'Backpack подключён' : 'Backpack';
   $('wallet').textContent = wallet?.address || 'Кошелёк не подключён';
   $('result').hidden = !operation;
   if (operation) {
@@ -125,6 +127,7 @@ async function connect(name) {
 
 $('phantom').onclick = () => action(() => connect('Phantom'));
 $('solflare').onclick = () => action(() => connect('Solflare'));
+$('backpack').onclick = () => action(() => connect('Backpack'));
 $('connect-other').onclick = () => action(() => connect($('wallet-choice').value));
 $('rpc-form').onsubmit = event => {
   event.preventDefault();
@@ -185,6 +188,7 @@ $('download').onclick = () => {
 if (location.protocol === 'https:') {
   $('open-phantom').href = phantomBrowseUrl(location.origin + '/devnet/');
   $('open-solflare').href = solflareBrowseUrl(location.origin + '/devnet/');
+  $('open-backpack').href = backpackBrowseUrl(location.origin + '/devnet/');
 } else { $('mobile-links').hidden = true; }
 window.addEventListener('storage', event => { if (event.key === S.storageKey && !busy) { loadSaved(); render(); } });
 loadSaved(); render();

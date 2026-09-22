@@ -1,0 +1,43 @@
+{
+  "checkedAt": "2026-09-22T00:36:48.062Z",
+  "realNetwork": true,
+  "physicalWallet": false,
+  "transactionsSent": 0,
+  "provider": "Solana public Devnet",
+  "previousAttempt": {
+    "checkedAt": "2026-09-22T00:34:06.984Z",
+    "realNetwork": true,
+    "physicalWallet": false,
+    "transactionsSent": 0,
+    "provider": "Solana public Devnet",
+    "itemsRedeemed": 1,
+    "guardValidated": true,
+    "ok": false,
+    "error": "Проверка RPC отменена.",
+    "rpcRequests": 7,
+    "methods": [
+      "getGenesisHash",
+      "getMultipleAccounts",
+      "getGenesisHash",
+      "getMultipleAccounts",
+      "getBalance",
+      "getLatestBlockhash",
+      "simulateTransaction"
+    ]
+  },
+  "simulation": {
+    "err": null,
+    "unitsConsumed": 57949,
+    "transactionBytes": 622
+  },
+  "guardValidated": true,
+  "ok": true,
+  "rpcRequests": 5,
+  "methods": [
+    "getGenesisHash",
+    "getMultipleAccounts",
+    "getBalance",
+    "getLatestBlockhash",
+    "simulateTransaction"
+  ]
+}

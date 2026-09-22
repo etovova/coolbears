@@ -6,6 +6,7 @@ export const rpcPolicy = Object.freeze({
   baseDelayMs: 1000,
   maxDelayMs: 8000,
   maxPending: 8,
+  minIntervalMs: 250,
 });
 export const settings = Object.freeze({
   rpc: 'https://api.devnet.solana.com',

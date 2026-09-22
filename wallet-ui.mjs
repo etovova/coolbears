@@ -1,4 +1,4 @@
-import { getWalletOptions, createWalletSession, walletDeadline } from './wallet-core.mjs?v=wallet-reliability-20260922';
+import { getWalletOptions, createWalletSession, walletDeadline } from './wallet-core.mjs?v=wallet-reliability-20260922-2';
 
 const text = {
   en: { title: 'Connect wallet', open: 'Open in {wallet}', install: 'Install {wallet}', close: 'Close' },

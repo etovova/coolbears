@@ -198,10 +198,10 @@ test('injected invalid account, missing event cleanup and silent account switche
 
 test('Android, iPhone and iPad browse actions use official URLs and remove query credentials', () => {
   for (const navigator of [{ userAgent: 'Mozilla Android Chrome' }, { userAgent: 'Mozilla iPhone Safari' }, { userAgent: 'Safari', platform: 'MacIntel', maxTouchPoints: 5 }]) {
-    for (const name of ['Phantom', 'Solflare']) {
+    for (const name of ['Phantom', 'Solflare', 'Backpack']) {
       const action = walletConnectionAction(name, { navigator }, 'https://user:password@coolbears-nfts.com/other?api-key=secret#rpc-secret');
       assert.equal(action.type, 'browse');
-      const prefix = name === 'Phantom' ? 'https://phantom.app/ul/browse/' : 'https://solflare.com/ul/v1/browse/';
+      const prefix = name === 'Phantom' ? 'https://phantom.app/ul/browse/' : name === 'Solflare' ? 'https://solflare.com/ul/v1/browse/' : 'https://backpack.app/ul/v1/browse/';
       assert.equal(action.url, `${prefix}${encodeURIComponent('https://coolbears-nfts.com/devnet/')}?ref=${encodeURIComponent('https://coolbears-nfts.com')}`);
       assert.equal(action.url.includes('secret'), false); assert.equal(action.url.includes('password'), false);
     }
@@ -211,7 +211,7 @@ test('Android, iPhone and iPad browse actions use official URLs and remove query
 test('desktop/http/unknown-wallet fallback is explicit; detected wallet and ID connect in place', t => {
   assert.equal(walletConnectionAction('Phantom', {}, 'https://coolbears-nfts.com/devnet/').type, 'unavailable');
   assert.equal(walletConnectionAction('Phantom', { navigator: { userAgent: 'Android' } }, 'http://localhost/devnet/').type, 'unavailable');
-  assert.equal(walletConnectionAction('Backpack', { navigator: { userAgent: 'Android' } }, 'https://coolbears-nfts.com/devnet/').type, 'unavailable');
+  assert.equal(walletConnectionAction('Unknown Wallet', { navigator: { userAgent: 'Android' } }, 'https://coolbears-nfts.com/devnet/').type, 'unavailable');
   const fixture = makeStandard(t, 'Backpack'); const [{ id }] = getAvailableWallets({});
   assert.equal(walletConnectionAction(id, {}, 'http://localhost/').type, 'connect');
   assert.equal(walletConnectionAction(fixture.wallet.name, {}, 'http://localhost/').type, 'connect');

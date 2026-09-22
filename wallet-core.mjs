@@ -6,18 +6,28 @@ export function detectWallets(scope = globalThis) {
   return wallets;
 }
 
-export function phantomBrowseUrl(url) {
+function browsePage(url) {
   const page = new URL(url);
   if (page.protocol !== 'https:') throw new Error('HTTPS required');
-  page.hash = '';
+  const wallet = page.searchParams.get('connectWallet');
+  page.hash = ''; page.search = ''; page.username = ''; page.password = '';
+  if (['Phantom', 'Solflare', 'Backpack'].includes(wallet)) page.searchParams.set('connectWallet', wallet);
+  return page;
+}
+
+export function phantomBrowseUrl(url) {
+  const page = browsePage(url);
   return `https://phantom.app/ul/browse/${encodeURIComponent(page.href)}?ref=${encodeURIComponent(page.origin)}`;
 }
 
 export function solflareBrowseUrl(url) {
-  const page = new URL(url);
-  if (page.protocol !== 'https:') throw new Error('HTTPS required');
-  page.hash = '';
+  const page = browsePage(url);
   return `https://solflare.com/ul/v1/browse/${encodeURIComponent(page.href)}?ref=${encodeURIComponent(page.origin)}`;
+}
+
+export function backpackBrowseUrl(url) {
+  const page = browsePage(url);
+  return `https://backpack.app/ul/v1/browse/${encodeURIComponent(page.href)}?ref=${encodeURIComponent(page.origin)}`;
 }
 
 // Keep common wallets visible and append compatible registered wallets.
@@ -26,7 +36,7 @@ export function getWalletOptions(scope, pageUrl, mobile, standard = []) {
   const options = [
     { name: 'Phantom', browse: phantomBrowseUrl, install: 'https://phantom.com/download' },
     { name: 'Solflare', browse: solflareBrowseUrl, install: 'https://www.solflare.com/download/' },
-    { name: 'Backpack', install: 'https://backpack.app/' }
+    { name: 'Backpack', browse: backpackBrowseUrl, install: 'https://backpack.app/' }
   ].map(wallet => {
     const available = detected.find(item => item.name === wallet.name);
     return available || { name: wallet.name, href: mobile && wallet.browse ? wallet.browse(pageUrl) : wallet.install, opensApp: Boolean(mobile && wallet.browse) };

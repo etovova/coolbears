@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-09-22T00:37:56.453560+00:00",
+  "baseCommit": "e0c84febcc503ce16a0b9359588b00f53ef809a0",
+  "unitTests": 60,
+  "operatorTests": 22,
+  "chromiumDevnetScenarios": 31,
+  "chromiumMainScenarios": 12,
+  "transactionsSent": 0,
+  "physicalWalletsTested": false,
+  "firefoxAndWebkit": "Workflow prepared; execution not verified. Local Firefox official download returned HTML Site Unavailable instead of ZIP; WebKit lacks system dependencies.",
+  "privateRpcConfigured": false,
+  "files": {
+    "devnet/app.js": "8147a5d0b67d92674560df2ac2c04c91ac9c0ac71af56f4d2b9c713577f0429f",
+    "devnet/index.html": "a6028574f31888c22a39ee06612c407e890fddcf57db1ed9fc3dd2177d187ac2",
+    "wallet-core.mjs": "942c9a108ae0d8824e969eef307a74409ae1ba9c47dd4aa46567cc88ca518647",
+    "app.js": "39ed9c8b45cff9702666cde9b7e9041a03362e8172365e873143e267fe6e756f",
+    "index.html": "a93003101a691093be184305ca8630d496a956eff69c610878ec29a605a71996",
+    "wallet-ui.mjs": "7ba665018029ea7fa2c73ce0a81276262aa1b679a938de8b213dc4b54b1f6e02"
+  },
+  "realDevnetSimulation": {
+    "ok": true,
+    "unitsConsumed": 57949,
+    "transactionsSent": 0,
+    "physicalSignatureVerified": false
+  },
+  "publication": "User authorized publication on 2026-09-22; blocked by missing Git HTTPS credentials and GitHub connector HTTP 400 Invalid MCP request metadata; branch not pushed",
+  "publicationAttempt": {
+    "checkedAt": "2026-09-22T05:45:58.762247+00:00",
+    "userAuthorized": true,
+    "remoteMain": "e0c84febcc503ce16a0b9359588b00f53ef809a0",
+    "localVerifiedCodeCommit": "693eb583a5b24121d7216ecf26c4849adc1d3957",
+    "gitPush": "fatal: could not read Username for https://github.com: No such device or address",
+    "githubConnector": "HTTP 400 Invalid MCP request metadata",
+    "libraryConnector": "HTTP 400 Invalid MCP request metadata",
+    "pluginManagementConnector": "HTTP 400 Invalid MCP request metadata",
+    "actionsStarted": false,
+    "siteUpdated": false
+  }
+}

@@ -4,20 +4,23 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const { chromium, devices } = await import(process.env.COOLBEARS_PLAYWRIGHT || 'playwright');
+const playwright = await import(process.env.COOLBEARS_PLAYWRIGHT || 'playwright');
+const { devices } = playwright;
+const engine = process.env.COOLBEARS_ENGINE || 'chromium';
 const output = process.env.COOLBEARS_MAIN_BROWSER_OUTPUT || 'build/main-browser-check';
 const source = path.resolve(process.env.COOLBEARS_MAIN_SITE_ROOT || '.');
 const origin = 'https://coolbears.test';
 const owner = 'FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y';
 const other = 'BjstMSoKGXKyDNgR6VegPkHbxBmdY7LHu8FXbrBmvqyF';
-const report = { checkedAt: new Date().toISOString(), engine: 'chromium', physicalDevices: false, realWallets: false, realTransactionsSent: 0, source: process.env.COOLBEARS_MAIN_SITE_ROOT ? 'staged site' : 'repository source', cases: [], pageErrors: [] };
+const report = { checkedAt: new Date().toISOString(), engine, physicalDevices: false, realWallets: false, realTransactionsSent: 0, source: process.env.COOLBEARS_MAIN_SITE_ROOT ? 'staged site' : 'repository source', cases: [], pageErrors: [] };
 const contents = new Map();
 let unexpectedWrites = 0;
 await mkdir(output, { recursive: true });
-const browser = await chromium.launch({ executablePath: process.env.COOLBEARS_CHROMIUM || undefined, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] });
+const browser = await playwright[engine].launch({ executablePath: process.env.COOLBEARS_CHROMIUM || undefined, headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [] });
 
 async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false } = {}) {
   const { defaultBrowserType: _engine, ...descriptor } = devices[device];
+  if (engine === 'firefox') delete descriptor.isMobile;
   const context = await browser.newContext(descriptor);
   const page = await context.newPage();
   const errors = [];
@@ -117,11 +120,13 @@ try {
     const mobile = !device.startsWith('Desktop');
     const phantom = links.find(link => link.text.includes('Phantom'));
     const solflare = links.find(link => link.text.includes('Solflare'));
-    assert.ok(phantom && solflare);
+    const backpack = links.find(link => link.text.includes('Backpack'));
+    assert.ok(phantom && solflare && backpack);
     if (mobile) {
       assert.equal(new URL(phantom.href).hostname, 'phantom.app');
       assert.ok(decodeURIComponent(phantom.href).includes(origin));
       assert.equal(new URL(solflare.href).hostname, 'solflare.com');
+      assert.ok(backpack.href.startsWith('https://backpack.app/ul/v1/browse/'));
     } else assert.equal(new URL(phantom.href).hostname, 'phantom.com');
     await page.screenshot({ path: path.join(output, `${device.toLowerCase().replaceAll(' ', '-')}-wallet.png`), fullPage: false });
     await dialog.locator('.wallet-close').click();

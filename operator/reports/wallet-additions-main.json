@@ -1,0 +1,109 @@
+{
+  "checkedAt": "2026-09-22T00:36:08.613Z",
+  "engine": "chromium",
+  "physicalDevices": false,
+  "realWallets": false,
+  "realTransactionsSent": 0,
+  "source": "staged site",
+  "cases": [
+    {
+      "name": "three languages, quantity boundaries, closed mint and wallet links",
+      "device": "iPhone SE",
+      "storage": "normal",
+      "languages": [
+        "en",
+        "ru",
+        "zh"
+      ],
+      "mobileUserAgent": true,
+      "touchEmulation": true
+    },
+    {
+      "name": "three languages, quantity boundaries, closed mint and wallet links",
+      "device": "iPhone 13",
+      "storage": "normal",
+      "languages": [
+        "en",
+        "ru",
+        "zh"
+      ],
+      "mobileUserAgent": true,
+      "touchEmulation": true
+    },
+    {
+      "name": "three languages, quantity boundaries, closed mint and wallet links",
+      "device": "Pixel 7",
+      "storage": "normal",
+      "languages": [
+        "en",
+        "ru",
+        "zh"
+      ],
+      "mobileUserAgent": true,
+      "touchEmulation": true
+    },
+    {
+      "name": "three languages, quantity boundaries, closed mint and wallet links",
+      "device": "iPad Pro 11",
+      "storage": "normal",
+      "languages": [
+        "en",
+        "ru",
+        "zh"
+      ],
+      "mobileUserAgent": true,
+      "touchEmulation": true
+    },
+    {
+      "name": "three languages, quantity boundaries, closed mint and wallet links",
+      "device": "Desktop Chrome",
+      "storage": "normal",
+      "languages": [
+        "en",
+        "ru",
+        "zh"
+      ],
+      "mobileUserAgent": false,
+      "touchEmulation": false
+    },
+    {
+      "name": "storage unavailable preserves calculator, language and wallet picker",
+      "device": "Pixel 7",
+      "storage": "denied"
+    },
+    {
+      "name": "storage unavailable preserves calculator, language and wallet picker",
+      "device": "Pixel 7",
+      "storage": "full"
+    },
+    {
+      "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+      "device": "Desktop Chrome",
+      "storage": "normal"
+    },
+    {
+      "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+      "device": "Pixel 7",
+      "storage": "normal"
+    },
+    {
+      "name": "cancelled connection is retryable and repeated clicks cannot duplicate a pending connection",
+      "device": "Desktop Chrome",
+      "storage": "normal"
+    },
+    {
+      "name": "unresponsive wallet releases UI after deadline; late reply is ignored and reconnect works",
+      "device": "Desktop Chrome",
+      "storage": "normal",
+      "clockAdvanced": true
+    },
+    {
+      "name": "stalled wallet-module download releases loading state",
+      "device": "Desktop Chrome",
+      "storage": "normal",
+      "clockAdvanced": true
+    }
+  ],
+  "pageErrors": [],
+  "networkWrites": 0
+}

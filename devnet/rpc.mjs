@@ -93,8 +93,9 @@ export function makeReadFetch(fetchImpl = globalThis.fetch, configuration = {}) 
     if (!Number.isSafeInteger(config[key]) || config[key] < 1) throw new RpcError('CONFIG', 'Некорректная настройка RPC.');
   }
   if (config.maxAttempts > 3 || config.maxPending > 8) throw new RpcError('CONFIG', 'Превышен предел повторов RPC.');
+  if (!Number.isSafeInteger(config.minIntervalMs) || config.minIntervalMs < 0) throw new RpcError('CONFIG', 'Некорректная частота RPC.');
   const emit = event => { try { config.onRetry?.(Object.freeze(event)); } catch { /* UI diagnostics cannot break transport. */ } };
-  let tail = Promise.resolve(), pending = 0, notBefore = 0, cooldownError = null;
+  let tail = Promise.resolve(), pending = 0, notBefore = 0, nextRequestAt = 0, cooldownError = null;
 
   return async (url, options = {}) => {
     const request = checkedRequest(url, options, endpoint);
@@ -118,7 +119,9 @@ export function makeReadFetch(fetchImpl = globalThis.fetch, configuration = {}) 
       for (let attempt = 1; attempt <= config.maxAttempts; attempt++) {
         const remainingCooldown = Math.max(0, notBefore - Date.now());
         if (remainingCooldown >= deadline - Date.now()) throw cooldownError || statusError(429, remainingCooldown);
-        if (remainingCooldown) await wait(remainingCooldown, controller.signal);
+        const delay = Math.max(remainingCooldown, nextRequestAt - Date.now(), 0);
+        if (delay >= deadline - Date.now()) throw new RpcError('TIMEOUT', 'Время проверки RPC истекло до следующего запроса.');
+        if (delay) await wait(delay, controller.signal);
         if (controller.signal.aborted) throw abortError(controller.signal);
         const attemptController = new AbortController();
         const abortAttempt = () => attemptController.abort(abortError(controller.signal));
@@ -126,6 +129,7 @@ export function makeReadFetch(fetchImpl = globalThis.fetch, configuration = {}) 
         const attemptTimer = setTimeout(() => attemptController.abort(new RpcError('ATTEMPT_TIMEOUT', 'RPC: превышено время ожидания ответа.')), Math.min(config.attemptTimeoutMs, Math.max(1, deadline - Date.now())));
         let failure, retryMs = null;
         try {
+          nextRequestAt = Date.now() + config.minIntervalMs;
           const response = await abortable(Promise.resolve().then(() => fetchImpl(endpoint, {
             ...options, signal: attemptController.signal, method: 'POST',
             credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',

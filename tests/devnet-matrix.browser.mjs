@@ -7,7 +7,8 @@ import path from 'node:path';
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { settings as S } from '../devnet/settings.mjs';
 
-const { chromium } = await import(process.env.COOLBEARS_PLAYWRIGHT || 'playwright');
+const playwright = await import(process.env.COOLBEARS_PLAYWRIGHT || 'playwright');
+const engine = process.env.COOLBEARS_ENGINE || 'chromium';
 const output = process.env.COOLBEARS_BROWSER_OUTPUT || 'build/browser-matrix';
 await mkdir(output, { recursive: true });
 const fixture = JSON.parse(await readFile('tests/fixtures/devnet-rpc.json', 'utf8'));
@@ -18,9 +19,9 @@ const customRpc = 'https://custom-rpc.example/devnet?api-key=matrix-public-fixtu
 const mobileUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 const iphoneUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const ipadUA = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
-const browser = await chromium.launch({
+const browser = await playwright[engine].launch({
   executablePath: process.env.COOLBEARS_CHROMIUM || undefined,
-  headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'],
+  headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [],
 });
 const cases = [];
 let totalRpcWrites = 0;
@@ -29,7 +30,7 @@ let complete = false;
 async function makeHarness(options = {}) {
   const context = await browser.newContext({
     viewport: options.viewport || { width: 390, height: 844 },
-    isMobile: options.mobile ?? false, hasTouch: options.mobile ?? false,
+    ...(engine === 'firefox' ? {} : { isMobile: options.mobile ?? false }), hasTouch: options.mobile ?? false,
     ...(options.userAgent ? { userAgent: options.userAgent } : {}),
     acceptDownloads: true,
   });
@@ -49,7 +50,7 @@ async function makeHarness(options = {}) {
       try { return route.fulfill({ contentType: type, body: await readFile(path.join('public-site', name)) }); }
       catch { return route.fulfill({ status: 404, body: 'Fixture file not found' }); }
     }
-    if (url.hostname === 'phantom.app' || url.hostname === 'solflare.com') {
+    if (['phantom.app', 'solflare.com', 'backpack.app'].includes(url.hostname)) {
       h.links.push(request.url());
       return route.fulfill({ contentType: 'text/html', body: '<title>Wallet app link fixture</title>' });
     }
@@ -290,8 +291,8 @@ try {
   await scenario('late Wallet Standard Backpack registration connects and receives explicit Devnet', { provider: null }, async h => {
     assert.equal(await h.page.locator('#other-wallets').isVisible(), false);
     await h.page.evaluate(() => window.matrix.register('Backpack'));
-    await h.page.locator('#other-wallets').waitFor({ state: 'visible' });
-    await h.page.locator('#wallet-choice').selectOption({ label: 'Backpack' }); await h.connect('connect-other');
+    await h.page.waitForFunction(() => document.querySelector('#backpack'));
+    await h.connect('backpack');
     await h.page.locator('#mint').click(); await h.status(/Подпись отменена/);
     assert.equal(await h.page.evaluate(() => window.matrix.standardRequestVerified), true);
     assert.equal(h.walletCalls, 1);
@@ -307,7 +308,7 @@ try {
     await h.connect('solflare'); await h.page.locator('#mint').click(); await h.status(/Подпись отменена/);
     assert.equal(h.walletCalls, 1); assert.equal(await h.page.evaluate(() => window.matrix.journalVerified), true);
   });
-  for (const [name, id, host] of [['Phantom', 'phantom', 'phantom.app'], ['Solflare', 'solflare', 'solflare.com']]) await scenario(`Android Chrome ${name} button opens its in-app browser link`, { provider: null, mobile: true, userAgent: mobileUA }, async h => {
+  for (const [name, id, host] of [['Phantom', 'phantom', 'phantom.app'], ['Solflare', 'solflare', 'solflare.com'], ['Backpack', 'backpack', 'backpack.app']]) await scenario(`Android Chrome ${name} button opens its in-app browser link`, { provider: null, mobile: true, userAgent: mobileUA }, async h => {
     await h.page.locator(`#${id}`).click();
     await h.page.waitForURL(url => url.hostname === host);
     assert.equal(h.links.length, 1);
@@ -358,13 +359,13 @@ try {
   complete = true;
 } finally {
   const report = {
-    checkedAt: new Date().toISOString(), engine: 'Chromium', deterministicFixtures: true,
+    checkedAt: new Date().toISOString(), engine, deterministicFixtures: true,
     realWallets: false, realTransactionsSent: 0, rpcTransactionSubmissionRequests: totalRpcWrites,
-    physicalDevicesTested: false, browsersNotExecuted: ['Safari/WebKit', 'Firefox'],
-    limitations: ['Viewport, touch, and user-agent profiles run in Chromium; they do not execute Android, iOS, or wallet-app internals.', 'RPC and wallet results are deterministic fixtures; provider uptime and live wallet approval screens are outside this test.', 'No guarantee of absence of all defects is possible.'],
+    physicalDevicesTested: false, browsersNotExecuted: ['chromium', 'firefox', 'webkit'].filter(name => name !== engine),
+    limitations: ['Viewport and user-agent profiles do not execute Android, iOS, or wallet-app internals. Firefox uses viewport and touch without isMobile emulation.', 'RPC and wallet results are deterministic fixtures; provider uptime and live wallet approval screens are outside this test.', 'No guarantee of absence of all defects is possible.'],
     passed: complete && cases.length > 0 && cases.every(item => item.passed), cases,
   };
-  await writeFile('operator/reports/browser-matrix.json', JSON.stringify(report, null, 2) + '\n');
+  await writeFile(path.join(output, 'browser-matrix.json'), JSON.stringify(report, null, 2) + '\n');
   await browser.close();
-  console.log(JSON.stringify({ passed: report.passed, scenarios: cases.length, report: 'operator/reports/browser-matrix.json' }));
+  console.log(JSON.stringify({ passed: report.passed, scenarios: cases.length, report: path.join(output, 'browser-matrix.json') }));
 }

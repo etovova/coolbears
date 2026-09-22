@@ -1,0 +1,238 @@
+{
+  "checkedAt": "2026-09-22T00:37:17.755Z",
+  "engine": "chromium",
+  "deterministicFixtures": true,
+  "realWallets": false,
+  "realTransactionsSent": 0,
+  "rpcTransactionSubmissionRequests": 0,
+  "physicalDevicesTested": false,
+  "browsersNotExecuted": [
+    "firefox",
+    "webkit"
+  ],
+  "limitations": [
+    "Viewport and user-agent profiles do not execute Android, iOS, or wallet-app internals. Firefox uses viewport and touch without isMobile emulation.",
+    "RPC and wallet results are deterministic fixtures; provider uptime and live wallet approval screens are outside this test.",
+    "No guarantee of absence of all defects is possible."
+  ],
+  "passed": true,
+  "cases": [
+    {
+      "name": "layout and connection: phone-320",
+      "passed": true,
+      "durationMs": 1187,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 2
+    },
+    {
+      "name": "layout and connection: phone-390",
+      "passed": true,
+      "durationMs": 1104,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 2
+    },
+    {
+      "name": "layout and connection: tablet-768",
+      "passed": true,
+      "durationMs": 1116,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 2
+    },
+    {
+      "name": "layout and connection: desktop-1440",
+      "passed": true,
+      "durationMs": 1125,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 2
+    },
+    {
+      "name": "429 recovers after a bounded retry",
+      "passed": true,
+      "durationMs": 1976,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 3
+    },
+    {
+      "name": "persistent 429 blocks mint without repeated unbounded calls",
+      "passed": true,
+      "durationMs": 3756,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 3
+    },
+    {
+      "name": "a fresh 429 invalidates earlier ready state",
+      "passed": true,
+      "durationMs": 4323,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 5
+    },
+    {
+      "name": "offline failure remains recoverable without a wallet prompt",
+      "passed": true,
+      "durationMs": 8012,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 5
+    },
+    {
+      "name": "wrong genesis blocks a Mainnet endpoint before transaction preparation",
+      "passed": true,
+      "durationMs": 951,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 1
+    },
+    {
+      "name": "insufficient stops before signing",
+      "passed": true,
+      "durationMs": 1743,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 5
+    },
+    {
+      "name": "simulation-error stops before signing",
+      "passed": true,
+      "durationMs": 2228,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 7
+    },
+    {
+      "name": "wrong owner cannot open a signing request",
+      "passed": true,
+      "durationMs": 723,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "wallet rejection preserves a durable journal and allows a later attempt",
+      "passed": true,
+      "durationMs": 2226,
+      "mockedWalletCalls": 1,
+      "rpcReadAndSimulationRequests": 7
+    },
+    {
+      "name": "double click produces one wallet request",
+      "passed": true,
+      "durationMs": 2228,
+      "mockedWalletCalls": 1,
+      "rpcReadAndSimulationRequests": 7
+    },
+    {
+      "name": "account change disables mint until a fresh connection",
+      "passed": true,
+      "durationMs": 967,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 2
+    },
+    {
+      "name": "unknown result survives reload and recovers finalized without resending",
+      "passed": true,
+      "durationMs": 7393,
+      "mockedWalletCalls": 1,
+      "rpcReadAndSimulationRequests": 16
+    },
+    {
+      "name": "late wallet signature after an accelerated timeout remains recoverable",
+      "passed": true,
+      "durationMs": 10507,
+      "mockedWalletCalls": 1,
+      "rpcReadAndSimulationRequests": 15
+    },
+    {
+      "name": "corrupt storage blocks signing",
+      "passed": true,
+      "durationMs": 669,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "blocked storage blocks signing",
+      "passed": true,
+      "durationMs": 651,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "storage quota failure blocks wallet prompt",
+      "passed": true,
+      "durationMs": 2220,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 7
+    },
+    {
+      "name": "a second tab holding the mint lock prevents a duplicate prompt",
+      "passed": true,
+      "durationMs": 1200,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 2
+    },
+    {
+      "name": "late Wallet Standard Backpack registration connects and receives explicit Devnet",
+      "passed": true,
+      "durationMs": 2213,
+      "mockedWalletCalls": 1,
+      "rpcReadAndSimulationRequests": 7
+    },
+    {
+      "name": "unsupported legacy transaction wallet is not offered",
+      "passed": true,
+      "durationMs": 644,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "injected Solflare connects and follows the same guarded signing flow",
+      "passed": true,
+      "durationMs": 2191,
+      "mockedWalletCalls": 1,
+      "rpcReadAndSimulationRequests": 7
+    },
+    {
+      "name": "Android Chrome Phantom button opens its in-app browser link",
+      "passed": true,
+      "durationMs": 704,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "Android Chrome Solflare button opens its in-app browser link",
+      "passed": true,
+      "durationMs": 691,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "Android Chrome Backpack button opens its in-app browser link",
+      "passed": true,
+      "durationMs": 715,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "desktop without a wallet shows a connection instruction",
+      "passed": true,
+      "durationMs": 717,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    },
+    {
+      "name": "custom RPC passes genesis verification without persisting endpoint credentials",
+      "passed": true,
+      "durationMs": 2437,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 6
+    },
+    {
+      "name": "custom RPC rejects wrong chain and public reset restores a usable endpoint",
+      "passed": true,
+      "durationMs": 1544,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 5
+    },
+    {
+      "name": "custom RPC refuses non-HTTPS, credentials and fragments before network access",
+      "passed": true,
+      "durationMs": 852,
+      "mockedWalletCalls": 0,
+      "rpcReadAndSimulationRequests": 0
+    }
+  ]
+}

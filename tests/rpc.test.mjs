@@ -7,7 +7,7 @@ import { settings as S } from '../devnet/settings.mjs';
 
 const request = (method = 'getGenesisHash', id = 1, extra = {}) => ({ method: 'POST', body: JSON.stringify({ jsonrpc: '2.0', id, method, params: [] }), ...extra });
 const response = (options, result = S.genesis) => new Response(JSON.stringify({ jsonrpc: '2.0', id: JSON.parse(options.body).id, result }));
-const fast = { totalTimeoutMs: 500, attemptTimeoutMs: 200, baseDelayMs: 5, maxDelayMs: 20 };
+const fast = { totalTimeoutMs: 500, attemptTimeoutMs: 200, baseDelayMs: 5, maxDelayMs: 20, minIntervalMs: 0 };
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 test('endpoint configuration accepts HTTPS provider keys without exposing invalid input', () => {

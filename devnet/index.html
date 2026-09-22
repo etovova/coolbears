@@ -20,7 +20,7 @@
         <p class="price">0,5 Devnet SOL <span>+ комиссии сети</span></p>
         <p class="note">Получатель тестового платежа — этот же кошелёк. Публичные продажи закрыты.</p>
         <p class="note">Перед подписью выбери Devnet в настройках кошелька.</p>
-        <div class="wallets"><button id="phantom" type="button">Подключить Phantom</button><button id="solflare" type="button">Solflare</button></div>
+        <div class="wallets"><button id="phantom" type="button">Подключить Phantom</button><button id="solflare" type="button">Solflare</button><button id="backpack" type="button">Backpack</button></div>
         <div id="other-wallets" class="other-wallets" hidden><label for="wallet-choice">Другой доступный кошелёк</label><select id="wallet-choice"></select><button id="connect-other" type="button">Подключить</button></div>
         <p id="wallet" class="address">Кошелёк не подключён</p>
         <button id="mint" type="button" class="primary" disabled>Выпустить тестовый NFT</button>
@@ -28,12 +28,12 @@
         <p id="status" role="status" aria-live="polite">Подключи кошелёк. Перед подписью страница проверит Devnet и симуляцию минта.</p>
         <noscript>Для подключения кошелька включи JavaScript.</noscript>
         <div id="result" hidden><strong id="saved"></strong><a id="asset" target="_blank" rel="noopener noreferrer"></a><a id="signature" target="_blank" rel="noopener noreferrer" hidden>Транзакция в Solana Explorer</a></div>
-        <div id="mobile-links"><a id="open-phantom">Открыть в приложении Phantom ↗</a><a id="open-solflare">Открыть в Solflare ↗</a></div>
+        <div id="mobile-links"><a id="open-phantom">Открыть в приложении Phantom ↗</a><a id="open-solflare">Открыть в Solflare ↗</a><a id="open-backpack">Открыть в Backpack ↗</a></div>
         <details id="rpc-settings"><summary>Настроить подключение к Devnet</summary><p class="note">Если общий сервер занят, можно использовать свой HTTPS RPC для Solana Devnet. Адрес действует до перезагрузки страницы.</p><form id="rpc-form"><label for="rpc-endpoint">Адрес Devnet RPC</label><input id="rpc-endpoint" type="password" autocomplete="off" spellcheck="false" placeholder="https://…" aria-describedby="rpc-note"><p id="rpc-note" class="note">Нужен адрес RPC-провайдера, например Helius. Это не приватный ключ кошелька.</p><div class="wallets"><button id="rpc-apply" type="submit">Применить и проверить</button><button id="rpc-reset" type="button">Общий RPC</button></div></form><p id="rpc-current" class="note">Используется общий Devnet RPC.</p></details>
         <button id="download" type="button" class="text-button">Скачать результат проверки</button>
       </div>
     </section>
   </main>
-  <script type="module" src="app.js?v=devnet-20260922-1"></script>
+  <script type="module" src="app.js?v=devnet-20260922-2"></script>
 </body>
 </html>
