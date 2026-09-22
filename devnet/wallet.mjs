@@ -164,3 +164,55 @@ export async function connectWallet(selection, changed = () => {}, scope = globa
     };
   } catch (error) { off(); throw error; }
 }
+
+// This separate, explicit route only asks Phantom to sign. It never sends a
+// transaction and is never an automatic fallback from Wallet Standard.
+export function hasPhantomSigner(scope = globalThis) {
+  const provider = scope.phantom?.solana;
+  return typeof provider?.connect === 'function' && typeof provider.signTransaction === 'function' &&
+    typeof provider.on === 'function' &&
+    (typeof provider.removeListener === 'function' || typeof provider.off === 'function');
+}
+
+export async function connectPhantomSigner(changed = () => {}, scope = globalThis, { signal, timeoutMs = 60000 } = {}) {
+  requireValue(Number.isFinite(timeoutMs) && timeoutMs > 0, 'Неверное время ожидания кошелька');
+  requireValue(hasPhantomSigner(scope), 'Этот Phantom не поддерживает отдельную подпись транзакции');
+  const provider = scope.phantom.solana;
+  let active = false;
+  const cleanup = [];
+  const off = () => { active = false; for (const stop of cleanup.splice(0)) stop(); };
+  const invalidate = () => { if (active) { off(); changed(); } };
+
+  try {
+    const result = await waitForConnection(() => provider.connect(), { signal, timeoutMs });
+    if (signal?.aborted) throw new DOMException('Подключение кошелька отменено', 'AbortError');
+    requireValue(scope.phantom?.solana === provider && hasPhantomSigner(scope), 'Phantom изменился. Подключись снова.');
+    const address = (result?.publicKey || provider.publicKey)?.toString();
+    requireValue(addressIsValid(address), 'Кошелёк не вернул адрес');
+    requireValue(provider.publicKey?.toString() === address, 'Кошелёк сменил аккаунт. Подключись снова.');
+    const remove = typeof provider.removeListener === 'function' ? provider.removeListener : provider.off;
+    for (const event of ['accountChanged', 'disconnect']) {
+      provider.on(event, invalidate);
+      cleanup.push(() => remove.call(provider, event, invalidate));
+    }
+    active = true;
+    return {
+      id: 'injected:phantom:sign-only', name: 'Phantom', transport: 'injected', route: 'custom-rpc', address, off,
+      async sign(bytes) {
+        requireValue(active && scope.phantom?.solana === provider && hasPhantomSigner(scope) && provider.publicKey?.toString() === address, 'Кошелёк сменил аккаунт. Подключись снова.');
+        requireValue(bytes instanceof Uint8Array, 'Неверные данные транзакции для подписи');
+        const transaction = VersionedTransaction.deserialize(new Uint8Array(bytes));
+        requireValue(transaction.version === 0, 'Нужна транзакция Solana версии 0');
+        const signed = await provider.signTransaction(transaction);
+        // Return late results even after account invalidation: the caller must
+        // retain them for the journal, validate the unchanged message and every
+        // signature, then decide separately whether any broadcast is allowed.
+        requireValue(signed?.version === 0 && typeof signed.serialize === 'function', 'Phantom не вернул транзакцию версии 0');
+        const serialized = signed.serialize();
+        requireValue(serialized instanceof Uint8Array, 'Phantom вернул неверные данные транзакции');
+        requireValue(VersionedTransaction.deserialize(serialized).version === 0, 'Phantom не вернул транзакцию версии 0');
+        return new Uint8Array(serialized);
+      },
+    };
+  } catch (error) { off(); throw error; }
+}

@@ -6,7 +6,7 @@ import { deserializeCandyMachine, deserializeCandyGuard, mintV1, mplCandyMachine
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import { settings as S } from './settings.mjs';
 import { makeReadFetch, safeRpcError, validateRpcEndpoint } from './rpc.mjs';
-import { mergeWalletAttempt } from './diagnostics.mjs';
+import { mergeWalletAttempt, mergeSubmission } from './diagnostics.mjs';
 export { makeReadFetch } from './rpc.mjs';
 
 export function requireValue(condition, message) { if (!condition) throw Error(message); }
@@ -229,8 +229,10 @@ export async function settleOperation(client, operation, { timeoutMs = 40000, in
 export function mergeOperationEvidence(incoming, saved) {
   if (!saved || saved.asset !== incoming.asset) return incoming;
   const walletAttempt = mergeWalletAttempt(incoming.walletAttempt, saved.walletAttempt);
+  const submission = mergeSubmission(incoming.submission, saved.submission);
   if (walletAttempt) incoming = { ...incoming, walletAttempt };
-  if (saved.stage === 'verified') return walletAttempt ? { ...saved, walletAttempt } : saved;
+  if (submission) incoming = { ...incoming, submission };
+  if (saved.stage === 'verified') return walletAttempt || submission ? { ...saved, ...(walletAttempt ? { walletAttempt } : {}), ...(submission ? { submission } : {}) } : saved;
   if (saved.signature && !incoming.signature) return {
     ...incoming, signature: saved.signature,
     stage: ['cancelled', 'expired', 'failed'].includes(incoming.stage) ? 'unknown' : incoming.stage,

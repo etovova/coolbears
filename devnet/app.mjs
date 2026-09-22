@@ -1,8 +1,10 @@
 import { settings as S } from './settings.mjs';
 import { createClient, readState, prepareMint, readOperation, saveOperation, mayStart, withMintLock, settleOperation, assetUrl, signatureUrl, requireValue, boundedWalletCall, mergeOperationEvidence, validateOperation } from './core.mjs';
-import { connectWallet, getAvailableWallets, subscribeWallets, walletConnectionAction } from './wallet.mjs';
+import { connectWallet, getAvailableWallets, subscribeWallets, walletConnectionAction, hasPhantomSigner, connectPhantomSigner } from './wallet.mjs';
 import { validateRpcEndpoint } from './rpc.mjs';
-import { walletErrorDetails, publicWalletAttempt, publicPreparation } from './diagnostics.mjs';
+import { walletErrorDetails, publicWalletAttempt, publicPreparation, publicSubmission } from './diagnostics.mjs';
+import { signAndSubmit } from './submission.mjs';
+import { validateSubmissionEndpoint } from './sender.mjs';
 import { phantomBrowseUrl, solflareBrowseUrl, backpackBrowseUrl } from '../wallet-core.mjs';
 
 const $ = id => document.getElementById(id);
@@ -20,13 +22,14 @@ let busy = false;
 let ready = false;
 let operation = null;
 let storageError = false;
+const canSubmitCustom = () => { try { validateSubmissionEndpoint(endpoint); return true; } catch { return false; } };
 const message = text => { $('status').textContent = text; };
-async function runNetwork(callback) {
+async function runNetwork(callback, timeoutMs = 90000) {
   const controller = new AbortController();
   networkController = controller;
-  const timeout = setTimeout(() => controller.abort(), 90000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try { return await callback(client); }
-  catch (error) { if (controller.signal.aborted) throw Error('Проверка Devnet не завершилась за 90 секунд. Журнал сохранён; можно проверить результат позже.'); throw error; }
+  catch (error) { if (controller.signal.aborted) throw Error(`Проверка Devnet не завершилась за ${Math.ceil(timeoutMs / 1000)} секунд. Журнал сохранён; можно проверить результат позже.`); throw error; }
   finally { clearTimeout(timeout); controller.abort(); if (networkController === controller) networkController = null; }
 }
 function updateWalletOptions() {
@@ -54,6 +57,11 @@ function render() {
   $('rpc-apply').disabled = busy;
   $('rpc-reset').disabled = busy;
   $('rpc-endpoint').disabled = busy;
+  $('phantom-rpc-option').hidden = !canSubmitCustom() || !hasPhantomSigner();
+  $('phantom-rpc').disabled = busy || storageError;
+  $('phantom-rpc').textContent = wallet?.route === 'custom-rpc' ? 'Phantom: свой RPC выбран' : 'Phantom: отправлять через свой RPC';
+  $('wallet-route').hidden = !wallet;
+  $('wallet-route').textContent = wallet?.route === 'custom-rpc' ? 'Подпись: Phantom. Отправка: свой Devnet RPC.' : 'Подпись и отправка: приложение кошелька.';
   $('phantom').textContent = wallet?.name === 'Phantom' ? 'Phantom подключён' : walletConnectionAction('Phantom', window, location.origin + '/devnet/').type === 'browse' ? 'Открыть Phantom' : 'Подключить Phantom';
   $('solflare').textContent = wallet?.name === 'Solflare' ? 'Solflare подключён' : 'Solflare';
   $('backpack').textContent = wallet?.name === 'Backpack' ? 'Backpack подключён' : 'Backpack';
@@ -127,19 +135,21 @@ async function check() {
     message(ready ? wallet?.address === S.owner ? 'Кошелёк подключён. Devnet доступен. Можно выпустить один тестовый NFT.' : 'Devnet доступен. Подключи FNyt…CW6y и выпусти один тестовый NFT.' : 'Оба тестовых NFT уже выпущены.');
   });
 }
-async function connect(name) {
+async function connect(name, customRpc = false) {
+  if (customRpc) requireValue(canSubmitCustom() && hasPhantomSigner(), 'Сначала настрой свой Devnet RPC и открой страницу внутри Phantom.');
   const action = walletConnectionAction(name, window, location.origin + '/devnet/');
-  if (action.type === 'browse') { message('Открываю страницу в приложении кошелька…'); location.assign(action.url); return; }
-  if ((wallet?.name === name || wallet?.id === name) && wallet.address === S.owner) return check();
+  if (!customRpc && action.type === 'browse') { message('Открываю страницу в приложении кошелька…'); location.assign(action.url); return; }
+  if ((wallet?.name === name || wallet?.id === name) && wallet.address === S.owner && (wallet.route === 'custom-rpc') === customRpc) return check();
   const generation = ++walletGeneration;
   wallet?.off(); wallet = null;
   ready = false;
   message(`Подключение ${name}…`);
-  const connected = await connectWallet(name, () => {
+  const changed = () => {
     if (walletGeneration !== generation) return;
     ++walletGeneration; wallet?.off(); wallet = null; ready = false;
     message('Аккаунт кошелька изменился. Подключись снова.'); render();
-  });
+  };
+  const connected = customRpc ? await connectPhantomSigner(changed) : await connectWallet(name, changed);
   if (walletGeneration !== generation) { connected.off(); throw Error('Аккаунт кошелька изменился. Подключись снова.'); }
   wallet = connected;
   requireValue(wallet.address === S.owner, 'Выбери в кошельке адрес FNyt…CW6y. Этот тест доступен только ему.');
@@ -149,20 +159,27 @@ async function connect(name) {
 $('phantom').onclick = () => action(() => connect('Phantom'));
 $('solflare').onclick = () => action(() => connect('Solflare'));
 $('backpack').onclick = () => action(() => connect('Backpack'));
+$('phantom-rpc').onclick = () => action(() => connect('Phantom', true));
 $('connect-other').onclick = () => action(() => connect($('wallet-choice').value));
+function changeEndpoint(next) {
+  if (endpoint === next) return;
+  endpoint = next; client = newClient();
+  // A selected sign-only session is bound to the endpoint chosen at connection.
+  if (wallet?.route === 'custom-rpc') { ++walletGeneration; wallet.off(); wallet = null; }
+}
 $('rpc-form').onsubmit = event => {
   event.preventDefault();
   action(async () => {
     const next = validateRpcEndpoint($('rpc-endpoint').value.trim());
     $('rpc-endpoint').value = '';
-    if (endpoint !== next) { endpoint = next; client = newClient(); }
+    changeEndpoint(next);
     ready = false;
     $('rpc-current').textContent = endpoint === publicEndpoint ? 'Используется общий Devnet RPC.' : 'Используется свой Devnet RPC до перезагрузки страницы.';
     await check();
   });
 };
 $('rpc-reset').onclick = () => action(async () => {
-  if (endpoint !== publicEndpoint) { endpoint = publicEndpoint; client = newClient(); }
+  changeEndpoint(publicEndpoint);
   $('rpc-endpoint').value = ''; ready = false;
   $('rpc-current').textContent = 'Используется общий Devnet RPC.';
   await check();
@@ -172,20 +189,43 @@ $('mint').onclick = () => action(() => withMintLock(navigator.locks, async () =>
   loadSaved(); requireValue(!storageError && mayStart(operation), 'Сначала проверь сохранённую операцию');
   requireValue(wallet?.address === S.owner, 'Подключи FNyt…CW6y');
   const selectedWallet = wallet;
+  const selectedEndpoint = endpoint;
+  if (selectedWallet.route === 'custom-rpc') validateSubmissionEndpoint(selectedEndpoint);
+  const generation = walletGeneration;
+  const isActive = () => wallet === selectedWallet && walletGeneration === generation && endpoint === selectedEndpoint;
   message('Проверяю условия и симулирую минт…');
   const prepared = await runNetwork(client => prepareMint(client, selectedWallet.address));
-  requireValue(wallet === selectedWallet, 'Кошелёк изменился во время подготовки');
+  requireValue(isActive(), 'Кошелёк изменился во время подготовки');
   // Public recovery coordinates are durable BEFORE the wallet prompt.
   if (operation) localStorage.setItem(`${S.storageKey}:history:${operation.asset}`, JSON.stringify(operation));
   const walletName = selectedWallet.name.toLowerCase();
   persist({ ...prepared.operation, walletAttempt: {
     wallet: ['phantom', 'solflare', 'backpack'].includes(walletName) ? walletName : 'other',
     transport: selectedWallet.transport, requestedAt: new Date().toISOString(), outcome: 'pending',
+    method: selectedWallet.route === 'custom-rpc' ? 'signTransaction' : 'signAndSendTransaction',
   } });
   message('Подтверди один тестовый минт в кошельке. Сеть: Devnet.');
   // A wallet prompt can outlive this page. Never clear pending on timeout.
   const waiting = setTimeout(() => message('Ожидаю ответа кошелька. Если окно закрылось, после возвращения нажми «Проверить результат».'), 25000);
   try {
+    if (selectedWallet.route === 'custom-rpc') {
+      await signAndSubmit({
+        prepared, wallet: selectedWallet, endpoint: selectedEndpoint, isActive,
+        readSaved: () => readOperation(localStorage),
+        persist: value => {
+          persist(value);
+          if (value.walletAttempt?.outcome !== 'pending') clearTimeout(waiting);
+          if (isActive() && value.submission?.state === 'sending') message('Подпись проверена. Отправляю транзакцию через свой Devnet RPC…');
+        },
+        checkFresh: () => runNetwork(async client => {
+          requireValue(await client.rpc('getGenesisHash') === S.genesis, 'Требуется Solana Devnet');
+          const height = await client.rpc('getBlockHeight', [{ commitment: 'confirmed' }]);
+          requireValue(Number.isSafeInteger(height) && height >= 0 && prepared.operation.lastValidBlockHeight - height >= 10, 'Срок подписанной транзакции заканчивается. Отправка не выполнялась.');
+          const valid = await client.rpc('isBlockhashValid', [prepared.operation.blockhash, { commitment: 'confirmed' }]);
+          requireValue(valid?.value === true, 'Срок подписанной транзакции истёк. Отправка не выполнялась.');
+        }, 20000),
+      });
+    } else {
     const pending = Promise.resolve().then(() => selectedWallet.send(prepared.bytes)).then(signature => {
       // A response after the visible timeout still belongs to this saved asset.
       const saved = readOperation(localStorage);
@@ -207,13 +247,14 @@ $('mint').onclick = () => action(() => withMintLock(navigator.locks, async () =>
       throw error;
     });
     await boundedWalletCall(pending);
+    }
   } catch (error) {
     const rejected = walletErrorDetails(error).errorCategory === 'user-rejected';
     if (error?.code === 'WALLET_TIMEOUT') persist({ ...operation, stage: 'unknown', walletAttempt: {
       ...operation.walletAttempt, timeoutAt: new Date().toISOString(),
     } });
     if (rejected) { report(operation); return; }
-    message(error?.code === 'WALLET_TIMEOUT' ? 'Кошелёк пока не ответил. Проверяю сохранённый адрес NFT…' : 'Кошелёк сообщил об ошибке. Проверяю сохранённый адрес NFT…');
+    message(error?.code === 'WALLET_TIMEOUT' ? 'Кошелёк пока не ответил. Проверяю сохранённый адрес NFT…' : selectedWallet.route === 'custom-rpc' ? error.message : 'Кошелёк сообщил об ошибке. Проверяю сохранённый адрес NFT…');
   } finally { clearTimeout(waiting); }
   await recover();
 }));
@@ -228,8 +269,10 @@ function diagnosticText() {
       publicOperation = Object.fromEntries(['version', 'cluster', 'owner', 'machine', 'collection', 'asset', 'blockhash', 'lastValidBlockHeight', 'stage', 'signature'].map(key => [key, saved[key]]));
       const walletAttempt = publicWalletAttempt(saved.walletAttempt);
       const preparation = publicPreparation(saved.preparation);
+      const submission = publicSubmission(saved.submission);
       if (walletAttempt) publicOperation.walletAttempt = walletAttempt;
       if (preparation) publicOperation.preparation = preparation;
+      if (submission) publicOperation.submission = submission;
     } catch { unreadable = true; }
   }
   const httpStatus = /RPC HTTP (\d{3}):/.exec($('status').textContent)?.[1];
@@ -238,10 +281,11 @@ function diagnosticText() {
   const status = httpStatus ? `RPC HTTP ${httpStatus}` : unreadable ? 'Не удалось прочитать сохранённую операцию' : busy ? 'Проверка выполняется' : ready ? 'Devnet доступен' : 'См. состояние операции и сообщение на странице';
   return JSON.stringify({
     exportedAt: new Date().toISOString(), page: location.origin + '/devnet/',
-    appVersion: 'devnet-20260922-5', operation: publicOperation, storageError: unreadable,
+    appVersion: 'devnet-20260922-6', operation: publicOperation, storageError: unreadable,
     rpc: endpoint === publicEndpoint ? 'public-devnet' : 'custom-devnet',
     rpcProvider: endpoint === publicEndpoint ? 'solana-public' : new URL(endpoint).hostname === 'devnet.helius-rpc.com' ? 'helius' : 'other',
     walletConnected: Boolean(wallet), ownerConnected: wallet?.address === S.owner,
+    walletRoute: wallet ? wallet.route === 'custom-rpc' ? 'custom-rpc' : 'wallet' : 'none',
     busy, ready, status,
   }, null, 2);
 }
@@ -274,6 +318,7 @@ if (location.protocol === 'https:') {
   $('open-backpack').href = backpackBrowseUrl(location.origin + '/devnet/');
 } else { $('mobile-links').hidden = true; }
 window.addEventListener('storage', event => { if (event.key === S.storageKey && !busy) { loadSaved(); render(); } });
+window.addEventListener('pagehide', () => { ++walletGeneration; wallet?.off(); wallet = null; ready = false; render(); });
 loadSaved(); render();
 updateWalletOptions();
 subscribeWallets(updateWalletOptions);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { walletErrorDetails, publicWalletAttempt, mergeWalletAttempt, publicPreparation } from '../devnet/diagnostics.mjs';
+import { walletErrorDetails, publicWalletAttempt, mergeWalletAttempt, publicPreparation, publicSubmission, mergeSubmission } from '../devnet/diagnostics.mjs';
 
 const requestedAt = '2026-09-22T08:09:00.000Z';
 const responseAt = '2026-09-22T08:09:03.000Z';
@@ -37,4 +37,24 @@ test('preparation diagnostics whitelist valid timing and block counts', () => {
   const preparation = { startedAt: requestedAt, readyAt: responseAt, elapsedMs: 3000, remainingBlocks: 140, attempt: 1 };
   assert.deepEqual(publicPreparation({ ...preparation, endpoint: 'secret' }), preparation);
   for (const change of [{ startedAt: 'secret' }, { remainingBlocks: -1 }, { elapsedMs: NaN }, { attempt: 3 }]) assert.equal(publicPreparation({ ...preparation, ...change }), null);
+});
+
+test('sign-only and submission diagnostics distinguish a signature from broadcast without exporting secrets', () => {
+  const signed = { ...attempt, method: 'signTransaction', outcome: 'signed', responseAt };
+  assert.deepEqual(publicWalletAttempt(signed), signed);
+  const submission = { route: 'custom-rpc', state: 'unknown', updatedAt: responseAt, errorCategory: 'HTTP', httpStatus: 429 };
+  assert.deepEqual(publicSubmission({ ...submission, endpoint: 'secret', message: 'secret', signedBytes: 'secret', errorCode: 'secret' }), submission);
+  assert.equal(publicSubmission({ ...submission, route: 'secret' }), null);
+  assert.equal(publicSubmission({ ...submission, state: 'secret' }), null);
+  assert.equal(publicSubmission({ ...submission, updatedAt: 'secret' }), null);
+});
+
+test('stale snapshots cannot erase an attempted or accepted submission', () => {
+  const submission = { route: 'custom-rpc', state: 'unknown', updatedAt: responseAt };
+  const earlier = { ...submission, state: 'not-sent', updatedAt: requestedAt };
+  assert.deepEqual(mergeSubmission(earlier, submission), submission);
+  assert.deepEqual(mergeSubmission(null, submission), submission);
+  assert.deepEqual(mergeSubmission(submission, earlier), submission);
+  const accepted = { ...submission, state: 'accepted' };
+  assert.deepEqual(mergeSubmission(submission, accepted), accepted);
 });

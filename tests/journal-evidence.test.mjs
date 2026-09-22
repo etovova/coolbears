@@ -30,3 +30,12 @@ test('late wallet error survives a recovery snapshot that started before the rep
   assert.equal(merged.stage, 'expired');
   assert.deepEqual(merged.walletAttempt, walletAttempt);
 });
+
+test('a signature saved before custom RPC broadcast and submission evidence survive stale recovery', () => {
+  const submission = { route: 'custom-rpc', state: 'sending', updatedAt: '2026-09-22T10:00:00.000Z' };
+  const saved = { asset: 'same', stage: 'unknown', signature: 'known-before-send', submission };
+  const merged = mergeOperationEvidence({ asset: 'same', stage: 'expired', signature: null }, saved);
+  assert.equal(merged.signature, saved.signature);
+  assert.equal(mayStart(merged), false);
+  assert.deepEqual(merged.submission, submission);
+});

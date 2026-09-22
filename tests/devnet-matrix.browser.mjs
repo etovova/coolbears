@@ -49,6 +49,7 @@ async function makeHarness(options = {}) {
   page.on('pageerror', error => h.errors.push(error.message));
   await page.exposeFunction('matrixWalletCall', () => { h.walletCalls++; });
   await page.exposeFunction('matrixRpcMode', mode => { h.mode = mode; });
+  await page.exposeFunction('matrixCustomRpcMode', mode => { h.customMode = mode; });
   await context.route('**/*', async route => {
     const request = route.request();
     const url = new URL(request.url());
@@ -70,7 +71,10 @@ async function makeHarness(options = {}) {
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST', 'access-control-allow-headers': '*' } });
     const rpc = request.postDataJSON();
     h.requests.push({ method: rpc.method, custom: url.hostname === 'custom-rpc.example' });
-    if (rpc.method === 'sendTransaction') totalRpcWrites++;
+    if (rpc.method === 'sendTransaction') {
+      totalRpcWrites++;
+      return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, error: { code: -32600, message: 'Negative wallet fixture must never submit' } }) });
+    }
     const mode = url.hostname === 'custom-rpc.example' ? h.customMode : h.mode;
     if (mode === 'offline') return route.abort('internetdisconnected');
     if (mode === '429' || (mode === '429-once' && h.retryCount++ === 0)) {
@@ -99,12 +103,12 @@ async function makeHarness(options = {}) {
     assert.notEqual(result, undefined, `Missing RPC fixture: ${rpc.method}`);
     return route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': origin }, body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result }) });
   });
-  await page.addInitScript(({ owner, key, sig, signatureBytes, ownerBytes, providerName, storage, ownerOverride, shortWalletDeadline, untrustedWalletMessage }) => {
+  await page.addInitScript(({ owner, key, sig, signatureBytes, ownerBytes, providerName, storage, ownerOverride, shortWalletDeadline, untrustedWalletMessage, signOnly, noDefaultSend }) => {
     if (shortWalletDeadline) {
       const schedule = window.setTimeout.bind(window);
       window.setTimeout = (callback, delay, ...args) => schedule(callback, delay === 60000 ? 150 : delay, ...args);
     }
-    window.matrix = { walletCalls: 0, connectCalls: 0, walletMode: 'reject', journalVerified: false, options: null, change: null };
+    window.matrix = { walletCalls: 0, signOnlyCalls: 0, injectedSendCalls: 0, standardSendCalls: 0, connectCalls: 0, walletMode: 'reject', signMode: 'reject', journalVerified: false, options: null, change: null };
     if (storage === 'corrupt') localStorage.setItem(key, '{invalid-json');
     if (storage === 'blocked') Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('Blocked fixture storage', 'SecurityError'); } });
     if (storage === 'quota') Storage.prototype.setItem = () => { throw new DOMException('Full fixture storage', 'QuotaExceededError'); };
@@ -115,7 +119,7 @@ async function makeHarness(options = {}) {
       async connect() { window.matrix.connectCalls++; return { publicKey: this.publicKey }; },
       on(name, handler) { listeners[name] = handler; }, removeListener(name) { delete listeners[name]; },
       async signAndSendTransaction(transaction, options) {
-        window.matrix.walletCalls++; await window.matrixWalletCall();
+        window.matrix.walletCalls++; window.matrix.injectedSendCalls++; await window.matrixWalletCall();
         const saved = JSON.parse(localStorage.getItem(key));
         if (!saved?.asset || saved.stage !== 'wallet-pending') throw Error('Journal not persisted before wallet prompt');
         if (saved.walletAttempt?.wallet !== 'phantom' && saved.walletAttempt?.wallet !== 'solflare') throw Error('Wallet attempt identity not persisted before wallet prompt');
@@ -137,6 +141,22 @@ async function makeHarness(options = {}) {
         return { signature: sig };
       },
     };
+    if (signOnly) provider.signTransaction = async transaction => {
+      window.matrix.walletCalls++; window.matrix.signOnlyCalls++; await window.matrixWalletCall();
+      const saved = JSON.parse(localStorage.getItem(key));
+      if (!saved?.asset || saved.stage !== 'wallet-pending' || saved.walletAttempt?.method !== 'signTransaction' || saved.walletAttempt?.outcome !== 'pending') throw Error('Sign-only journal not persisted before wallet prompt');
+      if (transaction.version !== 0 || !transaction.signatures.some(bytes => bytes.some(byte => byte !== 0))) throw Error('Invalid sign-only partial transaction');
+      window.matrix.signOnlyJournalVerified = true;
+      if (window.matrix.signMode === 'hold') return new Promise(() => {});
+      if (window.matrix.signMode === 'reject') throw Object.assign(Error('Rejected'), { code: 4001 });
+      // Invalid responses and errors will be followed by read-only expiry proof.
+      // This fixture never creates an owner signature or submits a transaction.
+      await window.matrixCustomRpcMode('expired');
+      if (window.matrix.signMode === 'error') throw Object.assign(Error(untrustedWalletMessage), { code: -32603 });
+      if (window.matrix.signMode === 'modified') transaction.message.recentBlockhash = '11111111111111111111111111111111';
+      return transaction;
+    };
+    if (noDefaultSend) delete provider.signAndSendTransaction;
     window.matrix.change = () => { provider.publicKey = { toString: () => '11111111111111111111111111111111' }; listeners.accountChanged?.(provider.publicKey); };
     if (providerName === 'Phantom') window.phantom = { solana: provider };
     if (providerName === 'Solflare') window.solflare = provider;
@@ -148,7 +168,7 @@ async function makeHarness(options = {}) {
           'standard:connect': { version: '1.0.0', async connect() { window.matrix.connectCalls++; return { accounts: wallet.accounts }; } },
           'standard:events': { version: '1.0.0', on(event, listener) { window.matrix.standardChange = listener; return () => { window.matrix.standardChange = null; }; } },
           'solana:signAndSendTransaction': { version: '1.0.0', supportedTransactionVersions: versions, async signAndSendTransaction(input) {
-            await window.matrixWalletCall(); window.matrix.walletCalls++;
+            await window.matrixWalletCall(); window.matrix.walletCalls++; window.matrix.standardSendCalls++;
             const saved = JSON.parse(localStorage.getItem(key));
             if (!saved?.asset || saved.stage !== 'wallet-pending') throw Error('Standard wallet missing journal');
             if (input.chain !== 'solana:devnet' || input.account.address !== owner || !(input.transaction instanceof Uint8Array) || input.options.skipPreflight !== false) throw Error('Invalid Wallet Standard request');
@@ -161,7 +181,7 @@ async function makeHarness(options = {}) {
       window.dispatchEvent(new CustomEvent('wallet-standard:register-wallet', { detail: ({ register }) => register(wallet) }));
       return wallet;
     };
-  }, { owner: S.owner, key: S.storageKey, sig: signature, signatureBytes: Array.from(base58.serialize(signature)), ownerBytes: Array.from(base58.serialize(S.owner)), providerName: options.provider === undefined ? 'Phantom' : options.provider, storage: options.storage, ownerOverride: options.owner, shortWalletDeadline: options.shortWalletDeadline, untrustedWalletMessage });
+  }, { owner: S.owner, key: S.storageKey, sig: signature, signatureBytes: Array.from(base58.serialize(signature)), ownerBytes: Array.from(base58.serialize(S.owner)), providerName: options.provider === undefined ? 'Phantom' : options.provider, storage: options.storage, ownerOverride: options.owner, shortWalletDeadline: options.shortWalletDeadline, untrustedWalletMessage, signOnly: options.signOnly, noDefaultSend: options.noDefaultSend });
   await page.goto(`${origin}/devnet/`, { waitUntil: 'networkidle' });
   h.status = async pattern => page.waitForFunction(source => new RegExp(source).test(document.querySelector('#status').textContent), pattern.source, { timeout: 15000 });
   h.connect = async (id = 'phantom') => { await page.locator(`#${id}`).click(); await page.waitForFunction(() => !document.querySelector('#mint').disabled); };
@@ -175,7 +195,7 @@ async function scenario(name, options, body) {
   try {
     await body(h);
     assert.deepEqual(h.errors, [], `${name}: unexpected page errors or external requests`);
-    assert.equal(totalRpcWrites, 0, 'Application must not submit RPC transactions');
+    assert.equal(totalRpcWrites, 0, 'These negative wallet fixtures must not submit RPC transactions');
     cases.push({ name, passed: true, durationMs: Date.now() - started, mockedWalletCalls: h.walletCalls, rpcReadAndSimulationRequests: h.requests.length });
     console.log(`PASS ${name}`);
   } catch (error) {
@@ -246,7 +266,7 @@ async function openDiagnosticReport(h) {
   assert.equal(text.includes('matrix-untrusted-wallet-message'), false, 'Raw wallet errors must not leak into the report');
   const report = JSON.parse(text);
   assert.equal(report.page, `${origin}/devnet/`);
-  assert.equal(report.appVersion, 'devnet-20260922-5');
+  assert.equal(report.appVersion, 'devnet-20260922-6');
   assert.equal(Number.isNaN(Date.parse(report.exportedAt)), false);
   return { text, report };
 }
@@ -273,6 +293,20 @@ function assertWalletAttempt(attempt, outcome, { timedOut = false } = {}) {
     assert.equal(attempt.errorCategory, 'user-rejected');
     assert.equal(attempt.errorCode, 4001);
   }
+}
+
+async function selectCustomRpc(h) {
+  await h.page.locator('#rpc-settings').evaluate(node => { node.open = true; });
+  await h.page.locator('#rpc-endpoint').fill(customRpc);
+  await h.page.locator('#rpc-apply').click();
+  await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+}
+
+async function selectPhantomRpc(h) {
+  await selectCustomRpc(h);
+  assert.equal(await h.page.locator('#phantom-rpc').isVisible(), true);
+  await h.connect('phantom-rpc');
+  assert.match(await h.page.locator('#wallet-route').textContent(), /RPC/i);
 }
 
 try {
@@ -595,6 +629,123 @@ try {
     }
     assert.equal(h.walletCalls, 0);
   });
+  await scenario('explicit Phantom RPC route coexists with the default Wallet Standard route', { signOnly: true }, async h => {
+    await h.page.locator('#rpc-settings').evaluate(node => { node.open = true; });
+    assert.equal(await h.page.locator('#phantom-rpc').isVisible(), false, 'Sign-only send must be unavailable on public RPC');
+    await h.page.evaluate(() => window.matrix.register('Phantom'));
+    await selectCustomRpc(h);
+    await h.connect('phantom');
+    await h.page.locator('#mint').click(); await h.status(/Подпись отменена/);
+    assert.deepEqual(await h.page.evaluate(() => ({ standard: window.matrix.standardSendCalls, injectedSend: window.matrix.injectedSendCalls, signOnly: window.matrix.signOnlyCalls })), { standard: 1, injectedSend: 0, signOnly: 0 });
+
+    await h.connect('phantom-rpc');
+    assert.match(await h.page.locator('#wallet-route').textContent(), /RPC/i);
+    await h.page.locator('#mint').click(); await h.status(/Подпись отменена/);
+    const rejected = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(rejected.stage, 'cancelled'); assert.equal(rejected.signature, null);
+    assertWalletAttempt(rejected.walletAttempt, 'rejected');
+    assert.equal(rejected.walletAttempt.method, 'signTransaction');
+    assert.equal(await h.page.evaluate(() => window.matrix.signOnlyJournalVerified), true);
+    const { report } = await openDiagnosticReport(h);
+    assert.equal(report.walletRoute, 'custom-rpc');
+    assert.equal(report.operation.submission, undefined);
+    assert.equal(report.operation.walletAttempt.method, 'signTransaction');
+    assert.deepEqual(await h.page.evaluate(() => ({ standard: window.matrix.standardSendCalls, injectedSend: window.matrix.injectedSendCalls, signOnly: window.matrix.signOnlyCalls })), { standard: 1, injectedSend: 0, signOnly: 1 });
+
+    await h.connect('phantom');
+    await h.page.locator('#mint').click(); await h.status(/Подпись отменена/);
+    assert.deepEqual(await h.page.evaluate(() => ({ standard: window.matrix.standardSendCalls, injectedSend: window.matrix.injectedSendCalls, signOnly: window.matrix.signOnlyCalls })), { standard: 2, injectedSend: 0, signOnly: 1 });
+    assert.equal(h.walletCalls, 3);
+    assert.equal(h.requests.some(item => item.method === 'sendTransaction'), false);
+  });
+  await scenario('Phantom RPC accepts a sign-only provider and resetting RPC invalidates that route', { signOnly: true, noDefaultSend: true }, async h => {
+    await selectPhantomRpc(h);
+    assert.equal(await h.page.locator('#wallet').textContent(), S.owner);
+    assert.equal(h.walletCalls, 0, 'Selecting the route must not request a signature');
+    await h.page.locator('#rpc-reset').click();
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    assert.equal(await h.page.locator('#phantom-rpc').isVisible(), false);
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+    assert.match(await h.page.locator('#wallet').textContent(), /не подключ[её]н/);
+    const { report } = await openDiagnosticReport(h);
+    assert.equal(report.walletRoute, 'none'); assert.equal(report.rpc, 'public-devnet');
+    assert.equal(report.operation, null); assert.equal(h.walletCalls, 0);
+  });
+  await scenario('Phantom RPC simulated BFCache return requires reconnection and restores account-change handling', { signOnly: true }, async h => {
+    await selectPhantomRpc(h);
+    const connects = await h.page.evaluate(() => window.matrix.connectCalls);
+    const requests = h.requests.length;
+    await h.page.evaluate(() => {
+      window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+      window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+    });
+    assert.match(await h.page.locator('#wallet').textContent(), /не подключ[её]н/);
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+    assert.equal(await h.page.evaluate(() => window.matrix.connectCalls), connects, 'Returning from cache must not reconnect automatically');
+    assert.equal(h.requests.length, requests, 'Returning from cache must not automatically resume RPC work');
+    const { report } = await openDiagnosticReport(h);
+    assert.equal(report.walletRoute, 'none');
+    assert.equal(report.walletConnected, false);
+
+    await h.connect('phantom-rpc');
+    assert.equal(await h.page.evaluate(() => window.matrix.connectCalls), connects + 1);
+    assert.equal(await h.page.locator('#wallet').textContent(), S.owner);
+    await h.page.evaluate(() => window.matrix.change()); await h.status(/Аккаунт кошелька изменился/);
+    assert.match(await h.page.locator('#wallet').textContent(), /не подключ[её]н/);
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+    assert.equal(h.walletCalls, 0);
+  });
+  await scenario('Phantom RPC route stays unavailable without an injected signing capability', {}, async h => {
+    await selectCustomRpc(h);
+    assert.equal(await h.page.locator('#phantom-rpc').isVisible(), false);
+    assert.equal(h.walletCalls, 0);
+  });
+  for (const mode of ['error', 'unsigned', 'modified']) {
+    await scenario(`Phantom RPC ${mode} response cannot reach transaction submission`, { signOnly: true }, async h => {
+      await selectPhantomRpc(h);
+      await h.page.evaluate(mode => { window.matrix.signMode = mode; }, mode);
+      await h.page.locator('#mint').click();
+      await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+      const saved = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+      assert.equal(saved.signature, null);
+      assert.equal(saved.walletAttempt.method, 'signTransaction');
+      assert.equal(saved.walletAttempt.outcome, 'error');
+      assert.equal(saved.submission, undefined);
+      if (mode === 'error') assertWalletAttempt(saved.walletAttempt, 'error');
+      assert.equal(await h.page.evaluate(() => window.matrix.signOnlyJournalVerified), true);
+      assert.deepEqual(await h.page.evaluate(() => ({ standard: window.matrix.standardSendCalls, injectedSend: window.matrix.injectedSendCalls, signOnly: window.matrix.signOnlyCalls })), { standard: 0, injectedSend: 0, signOnly: 1 });
+      assert.equal(h.requests.some(item => item.method === 'sendTransaction'), false);
+      const { report } = await openDiagnosticReport(h);
+      assert.equal(report.walletRoute, 'custom-rpc'); assert.equal(report.rpc, 'custom-devnet');
+      assert.equal(report.operation.signature, null); assert.equal(report.operation.submission, undefined);
+      assert.equal(report.operation.walletAttempt.method, 'signTransaction');
+      assert.equal(report.operation.walletAttempt.outcome, 'error');
+      assert.equal(h.walletCalls, 1);
+    });
+  }
+  await scenario('Phantom RPC pending signature survives reload without signing or submitting again', { signOnly: true }, async h => {
+    await selectPhantomRpc(h);
+    await h.page.evaluate(() => { window.matrix.signMode = 'hold'; });
+    await h.page.locator('#mint').click();
+    await h.page.waitForFunction(() => window.matrix.signOnlyJournalVerified === true);
+    const savedText = await h.page.evaluate(key => localStorage.getItem(key), S.storageKey);
+    const pending = JSON.parse(savedText);
+    assert.equal(pending.stage, 'wallet-pending'); assert.equal(pending.signature, null);
+    assert.equal(pending.walletAttempt.method, 'signTransaction');
+    assertWalletAttempt(pending.walletAttempt, 'pending');
+    const requests = h.requests.length;
+    await h.page.reload({ waitUntil: 'networkidle' });
+    assert.equal(h.requests.length, requests, 'Reload must not restart the selected RPC flow');
+    assert.equal(h.walletCalls, 1, 'Reload must not reopen the sign-only wallet prompt');
+    assert.equal(await h.page.evaluate(key => localStorage.getItem(key), S.storageKey), savedText);
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+    assert.equal(await h.page.locator('#phantom-rpc').isVisible(), false);
+    const { report } = await openDiagnosticReport(h);
+    assert.equal(report.walletRoute, 'none'); assert.equal(report.rpc, 'public-devnet');
+    assert.equal(report.operation.asset, pending.asset);
+    assert.deepEqual(report.operation.walletAttempt, pending.walletAttempt);
+    assert.equal(report.operation.submission, undefined);
+  });
   for (const clipboard of ['reject', 'absent', 'success']) {
     await scenario(`inline diagnostic report preserves a pending journal: clipboard ${clipboard}`, {}, async h => {
       const pending = {
@@ -659,7 +810,7 @@ try {
     checkedAt: new Date().toISOString(), engine, scenarioFilter: scenarioFilter?.source ?? null, deterministicFixtures: true,
     realWallets: false, realTransactionsSent: 0, rpcTransactionSubmissionRequests: totalRpcWrites,
     physicalDevicesTested: false, browsersNotExecuted: ['chromium', 'firefox', 'webkit'].filter(name => name !== engine),
-    limitations: ['Viewport and user-agent profiles do not execute Android, iOS, or wallet-app internals. Firefox uses viewport and touch without isMobile emulation.', 'RPC and wallet results are deterministic fixtures; provider uptime and live wallet approval screens are outside this test.', 'No guarantee of absence of all defects is possible.'],
+    limitations: ['Viewport and user-agent profiles do not execute Android, iOS, or wallet-app internals. Firefox uses viewport and touch without isMobile emulation.', 'RPC and wallet results are deterministic fixtures; provider uptime and live wallet approval screens are outside this test.', 'Sign-only browser cases exercise rejection and invalid responses, not a cryptographically valid owner signature or successful RPC submission.', 'No guarantee of absence of all defects is possible.'],
     passed: complete && cases.length > 0 && cases.every(item => item.passed), cases,
   };
   await writeFile(path.join(output, 'browser-matrix.json'), JSON.stringify(report, null, 2) + '\n');
