@@ -9,7 +9,8 @@
     "verify": "node scripts/verify-static.mjs",
     "test:devnet": "node --test tests/*.test.mjs",
     "build:rpc": "wrangler deploy --config rpc-proxy/wrangler.jsonc --dry-run --outdir ../build/rpc-proxy",
-    "test:rpc-runtime": "node tests/rpc-proxy.runtime.mjs"
+    "test:rpc-runtime": "node tests/rpc-proxy.runtime.mjs",
+    "check:site-rpc": "node scripts/check-site-rpc.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "1.10.0",
