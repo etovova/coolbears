@@ -126,7 +126,12 @@ export function makeReadFetch(fetchImpl = globalThis.fetch, configuration = {}) 
         const attemptController = new AbortController();
         const abortAttempt = () => attemptController.abort(abortError(controller.signal));
         controller.signal.addEventListener('abort', abortAttempt, { once: true });
-        const attemptTimer = setTimeout(() => attemptController.abort(new RpcError('ATTEMPT_TIMEOUT', 'RPC: превышено время ожидания ответа.')), Math.min(config.attemptTimeoutMs, Math.max(1, deadline - Date.now())));
+        const remainingMs = Math.max(1, deadline - Date.now());
+        // The clipped attempt timer can fire just before the overall timer.
+        // Exhausting that remaining budget is still the overall deadline and
+        // must not be reported or retried as an ordinary attempt timeout.
+        const timeoutCode = remainingMs <= config.attemptTimeoutMs ? 'TIMEOUT' : 'ATTEMPT_TIMEOUT';
+        const attemptTimer = setTimeout(() => attemptController.abort(new RpcError(timeoutCode, 'RPC: превышено время ожидания ответа.')), Math.min(config.attemptTimeoutMs, remainingMs));
         let failure, retryMs = null;
         try {
           nextRequestAt = Date.now() + config.minIntervalMs;

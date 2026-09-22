@@ -104,6 +104,22 @@ test('deadline bounds a fetch implementation that ignores abort', async () => {
   assert.ok(Date.now() - before < 250); assert.equal(calls, 1);
 });
 
+test('a clipped attempt deadline is TIMEOUT even before the outer timer fires', async t => {
+  const realNow = Date.now;
+  let offset = 0, calls = 0, retries = 0;
+  t.mock.method(Date, 'now', () => realNow() + offset);
+  const read = makeReadFetch(() => { calls++; return new Promise(() => {}); }, {
+    ...fast, totalTimeoutMs: 100, attemptTimeoutMs: 500, onRetry: () => { retries++; },
+  });
+  const pending = read(S.rpc, request());
+  // Advance the wall clock after queueing, before the request starts. The
+  // remaining budget then ends before the original outer timer callback.
+  offset = 50;
+  await assert.rejects(pending, error => error.code === 'TIMEOUT');
+  assert.equal(calls, 1);
+  assert.equal(retries, 0);
+});
+
 test('deadline covers a stalled response body, and attempt timeout can recover', async () => {
   let calls = 0;
   const read = makeReadFetch(async (_url, options) => {
