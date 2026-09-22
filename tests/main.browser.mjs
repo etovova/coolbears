@@ -142,6 +142,9 @@ try {
     // Exercise lazy loading by visiting the artwork, as a scrolling visitor does.
     for (const image of await page.locator('img').all()) {
       await image.scrollIntoViewIfNeeded();
+      // Lazy loading starts asynchronously after the scroll. Firefox/WebKit
+      // can reject decode() while that initial image request is still changing.
+      await page.waitForFunction(node => node.complete && node.naturalWidth > 0, await image.elementHandle(), { timeout: 15000 });
       await image.evaluate(node => node.decode());
     }
     assert.equal(await page.locator('img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0)), true);
