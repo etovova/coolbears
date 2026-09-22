@@ -1,11 +1,12 @@
 import { settings as S } from './settings.mjs';
-import { createClient, readState, prepareMint, readOperation, saveOperation, mayStart, withMintLock, settleOperation, assetUrl, signatureUrl, requireValue, boundedWalletCall, mergeOperationEvidence } from './core.mjs';
+import { createClient, readState, prepareMint, readOperation, saveOperation, mayStart, withMintLock, settleOperation, assetUrl, signatureUrl, requireValue, boundedWalletCall, mergeOperationEvidence, validateOperation } from './core.mjs';
 import { connectWallet, getAvailableWallets, subscribeWallets, walletConnectionAction } from './wallet.mjs';
 import { validateRpcEndpoint } from './rpc.mjs';
 import { phantomBrowseUrl, solflareBrowseUrl, backpackBrowseUrl } from '../wallet-core.mjs';
 
 const $ = id => document.getElementById(id);
-let endpoint = S.rpc;
+const publicEndpoint = validateRpcEndpoint(S.rpc);
+let endpoint = publicEndpoint;
 let networkController = null;
 const newClient = () => createClient(globalThis.fetch, {
   endpoint, getSignal: () => networkController?.signal,
@@ -67,7 +68,7 @@ function render() {
 }
 function loadSaved() {
   try { operation = readOperation(localStorage); }
-  catch { storageError = true; message('Сохранённую операцию не удалось прочитать. Скачай журнал для проверки.'); }
+  catch { storageError = true; message('Сохранённую операцию не удалось прочитать. Открой «Показать результат проверки».'); }
 }
 function persist(value) {
   const saved = readOperation(localStorage);
@@ -155,12 +156,12 @@ $('rpc-form').onsubmit = event => {
     $('rpc-endpoint').value = '';
     if (endpoint !== next) { endpoint = next; client = newClient(); }
     ready = false;
-    $('rpc-current').textContent = 'Используется свой Devnet RPC до перезагрузки страницы.';
+    $('rpc-current').textContent = endpoint === publicEndpoint ? 'Используется общий Devnet RPC.' : 'Используется свой Devnet RPC до перезагрузки страницы.';
     await check();
   });
 };
 $('rpc-reset').onclick = () => action(async () => {
-  if (endpoint !== S.rpc) { endpoint = S.rpc; client = newClient(); }
+  if (endpoint !== publicEndpoint) { endpoint = publicEndpoint; client = newClient(); }
   $('rpc-endpoint').value = ''; ready = false;
   $('rpc-current').textContent = 'Используется общий Devnet RPC.';
   await check();
@@ -196,11 +197,50 @@ $('mint').onclick = () => action(() => withMintLock(navigator.locks, async () =>
   } finally { clearTimeout(waiting); }
   await recover();
 }));
+function diagnosticText() {
+  let saved = operation, unreadable = storageError, publicOperation = null;
+  try { saved = readOperation(localStorage) || saved; } catch { unreadable = true; }
+  // Export only validated public recovery coordinates, never raw storage or
+  // arbitrary extra fields. A corrupt journal remains untouched in the browser.
+  if (saved) {
+    try {
+      validateOperation(saved);
+      publicOperation = Object.fromEntries(['version', 'cluster', 'owner', 'machine', 'collection', 'asset', 'blockhash', 'lastValidBlockHeight', 'stage', 'signature'].map(key => [key, saved[key]]));
+    } catch { unreadable = true; }
+  }
+  const httpStatus = /RPC HTTP (\d{3}):/.exec($('status').textContent)?.[1];
+  // Wallet error messages can contain arbitrary text. Diagnostics use fixed
+  // labels instead of copying those messages or a provider URL/API key.
+  const status = httpStatus ? `RPC HTTP ${httpStatus}` : unreadable ? 'Не удалось прочитать сохранённую операцию' : busy ? 'Проверка выполняется' : ready ? 'Devnet доступен' : 'См. состояние операции и сообщение на странице';
+  return JSON.stringify({
+    exportedAt: new Date().toISOString(), page: location.origin + '/devnet/',
+    appVersion: 'devnet-20260922-4', operation: publicOperation, storageError: unreadable,
+    rpc: endpoint === publicEndpoint ? 'public-devnet' : 'custom-devnet',
+    rpcProvider: endpoint === publicEndpoint ? 'solana-public' : new URL(endpoint).hostname === 'devnet.helius-rpc.com' ? 'helius' : 'other',
+    walletConnected: Boolean(wallet), ownerConnected: wallet?.address === S.owner,
+    busy, ready, status,
+  }, null, 2);
+}
+function showDiagnostic() {
+  $('report-text').value = diagnosticText();
+  $('report-copy-status').textContent = '';
+}
+$('diagnostic-report').ontoggle = () => { if ($('diagnostic-report').open) showDiagnostic(); };
+$('copy-report').onclick = async () => {
+  const text = $('report-text').value;
+  try {
+    if (!navigator.clipboard?.writeText) throw Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(text);
+    $('report-copy-status').textContent = 'Отчёт скопирован. Вставь его в чат.';
+  } catch {
+    $('report-text').focus(); $('report-text').select();
+    $('report-text').setSelectionRange(0, text.length);
+    $('report-copy-status').textContent = 'Автокопирование недоступно. Текст выделен: скопируй его вручную или пришли скриншот отчёта.';
+  }
+};
 $('download').onclick = () => {
-  let stored = null;
-  try { stored = localStorage.getItem(S.storageKey); } catch { /* Export the in-memory recovery record when storage is blocked. */ }
-  const record = { exportedAt: new Date().toISOString(), page: location.origin + location.pathname, operation: operation || stored, storageError, rpc: endpoint === S.rpc ? 'public-devnet' : 'custom-devnet', status: $('status').textContent };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(record, null, 2)], { type: 'application/json' }));
+  showDiagnostic(); $('diagnostic-report').open = true;
+  const url = URL.createObjectURL(new Blob([$('report-text').value], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = 'CoolBears-Devnet-result.json'; link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 };

@@ -169,6 +169,70 @@ async function scenario(name, options, body) {
   } finally { await h.context.close(); }
 }
 
+async function prepareDiagnosticChecks(h, clipboard, pending = null) {
+  if (pending) {
+    await h.page.evaluate(({ key, pending }) => localStorage.setItem(key, JSON.stringify(pending)), { key: S.storageKey, pending });
+    await h.page.reload({ waitUntil: 'networkidle' });
+  }
+  let downloads = 0;
+  h.page.on('download', () => { downloads++; });
+  await h.page.evaluate(clipboard => {
+    window.matrixClipboardWrites = [];
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: clipboard === 'absent' ? undefined : {
+        async writeText(text) {
+          window.matrixClipboardWrites.push(text);
+          if (clipboard === 'reject') throw new DOMException('Clipboard rejected by fixture', 'NotAllowedError');
+        },
+      },
+    });
+    window.matrixStorageMutations = [];
+    for (const name of ['setItem', 'removeItem', 'clear']) {
+      const original = Storage.prototype[name];
+      Storage.prototype[name] = function (...args) {
+        window.matrixStorageMutations.push(name);
+        return original.apply(this, args);
+      };
+    }
+  }, clipboard);
+  return async () => {
+    const before = {
+      requests: h.requests.length, walletCalls: h.walletCalls,
+      state: await h.page.evaluate(key => ({
+        journal: localStorage.getItem(key), connectCalls: window.matrix.connectCalls,
+        storage: JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
+        mutations: window.matrixStorageMutations.length,
+      }), S.storageKey),
+    };
+    return async () => {
+      assert.equal(h.requests.length, before.requests, 'Viewing or copying the report must not contact RPC');
+      assert.equal(h.walletCalls, before.walletCalls, 'Viewing or copying must not request a signature');
+      assert.equal(downloads, 0, 'Inline report and clipboard fallback must not start a download');
+      assert.deepEqual(await h.page.evaluate(key => ({
+        journal: localStorage.getItem(key), connectCalls: window.matrix.connectCalls,
+        storage: JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
+        mutations: window.matrixStorageMutations.length,
+      }), S.storageKey), before.state, 'The report must preserve the pending journal and avoid storage writes');
+    };
+  };
+}
+
+async function openDiagnosticReport(h) {
+  await h.page.locator('#diagnostic-report summary').click();
+  await h.page.waitForFunction(() => document.querySelector('#report-text')?.value.length > 0);
+  assert.equal(await h.page.locator('#report-text').isVisible(), true);
+  assert.equal(await h.page.locator('#report-text').evaluate(node => node.readOnly), true);
+  const text = await h.page.locator('#report-text').inputValue();
+  assert.equal(text.includes('matrix-public-fixture-key'), false, 'The report must not contain an RPC API key');
+  assert.equal(text.includes(customRpc), false, 'The report must not contain the full RPC endpoint');
+  assert.equal(text.includes('matrix-secret-extra'), false, 'Unrecognized journal properties must not leak into the report');
+  const report = JSON.parse(text);
+  assert.equal(report.page, `${origin}/devnet/`);
+  assert.equal(Number.isNaN(Date.parse(report.exportedAt)), false);
+  return { text, report };
+}
+
 try {
   for (const profile of [
     { name: 'phone-320', width: 320, height: 740, mobile: true, userAgent: mobileUA },
@@ -400,6 +464,64 @@ try {
       assert.equal(h.requests.length, 0, endpoint);
     }
     assert.equal(h.walletCalls, 0);
+  });
+  for (const clipboard of ['reject', 'absent', 'success']) {
+    await scenario(`inline diagnostic report preserves a pending journal: clipboard ${clipboard}`, {}, async h => {
+      const pending = {
+        version: 1, cluster: 'devnet', machine: S.machine, collection: S.collection, owner: S.owner,
+        asset: 'J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57',
+        blockhash: fixture.getLatestBlockhash.value.blockhash,
+        lastValidBlockHeight: fixture.getLatestBlockhash.value.lastValidBlockHeight,
+        stage: 'unknown', signature: null, createdAt: '2026-09-22T00:00:00.000Z',
+      };
+      const stored = clipboard === 'reject' ? { ...pending, debugEndpoint: customRpc, privateNote: 'matrix-secret-extra' } : pending;
+      const checkpoint = await prepareDiagnosticChecks(h, clipboard, stored);
+      if (clipboard === 'reject') {
+        h.customMode = '429';
+        await h.page.locator('#rpc-settings').evaluate(node => { node.open = true; });
+        await h.page.locator('#rpc-endpoint').fill(customRpc);
+        await h.page.locator('#rpc-apply').click(); await h.status(/429/);
+        await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+        assert.equal(await h.page.locator('#mint').isDisabled(), true);
+      }
+      const unchanged = await checkpoint();
+      const { text, report } = await openDiagnosticReport(h);
+      assert.equal(report.storageError, false);
+      assert.equal(report.rpc, clipboard === 'reject' ? 'custom-devnet' : 'public-devnet');
+      assert.equal(report.rpcProvider, clipboard === 'reject' ? 'other' : 'solana-public');
+      for (const key of ['cluster', 'machine', 'collection', 'owner', 'asset', 'blockhash', 'lastValidBlockHeight', 'stage', 'signature']) {
+        assert.deepEqual(report.operation[key], pending[key], `Recovery coordinate ${key} must remain readable`);
+      }
+      assert.equal('debugEndpoint' in report.operation, false);
+      assert.equal('privateNote' in report.operation, false);
+      if (clipboard === 'reject') assert.match(report.status, /429/);
+      await unchanged();
+      await h.page.locator('#copy-report').click();
+      if (clipboard === 'success') {
+        await h.page.waitForFunction(() => window.matrixClipboardWrites.length === 1);
+        assert.deepEqual(await h.page.evaluate(() => window.matrixClipboardWrites), [text]);
+      } else {
+        await h.page.waitForFunction(() => /выдел|вручную/i.test(document.querySelector('#report-copy-status').textContent));
+        assert.deepEqual(await h.page.locator('#report-text').evaluate(node => ({ start: node.selectionStart, end: node.selectionEnd, focused: document.activeElement === node })), { start: 0, end: text.length, focused: true });
+        assert.deepEqual(await h.page.evaluate(() => window.matrixClipboardWrites), clipboard === 'reject' ? [text] : []);
+      }
+      assert.equal(await h.page.locator('#report-text').inputValue(), text, 'Copying must preserve the visible report');
+      await unchanged();
+    });
+  }
+  await scenario('inline diagnostic report recognizes a manually pasted public RPC', {}, async h => {
+    const checkpoint = await prepareDiagnosticChecks(h, 'success');
+    await h.page.locator('#rpc-settings').evaluate(node => { node.open = true; });
+    await h.page.locator('#rpc-endpoint').fill(S.rpc);
+    await h.page.locator('#rpc-apply').click();
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    assert.match(await h.page.locator('#rpc-current').textContent(), /общий/i);
+    const unchanged = await checkpoint();
+    const { report } = await openDiagnosticReport(h);
+    assert.equal(report.rpc, 'public-devnet');
+    assert.equal(report.rpcProvider, 'solana-public');
+    assert.equal(report.operation, null);
+    await unchanged();
   });
   complete = true;
 } finally {
