@@ -1,6 +1,6 @@
 // Offline deployment journal. No wallet, RPC, signing or submission capability.
 // The caller supplies a trusted, policy-reviewed plan; normalized finalized
-// receipts are a future read adapter's responsibility, not authenticated here.
+// receipts are the trusted read adapter's responsibility, not authenticated here.
 import { createHash, randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, readdir, link, unlink, rmdir } from 'node:fs/promises';
