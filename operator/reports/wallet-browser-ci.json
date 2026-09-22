@@ -1,0 +1,525 @@
+{
+  "checkedAt": "2026-09-22T06:06:17.062Z",
+  "repository": "etovova/coolbears",
+  "codeCommit": "12dc7f1f3737ca20a8e71121100e4edd0b85da92",
+  "codeTree": "dfd51de227aeeb9a2ed6e40d1d18d4e8f94cda56",
+  "workflowRunId": 35692949539,
+  "workflowUrl": "https://github.com/etovova/coolbears/actions/runs/35692949539",
+  "conclusion": "success",
+  "engines": [
+    {
+      "jobId": 106633632777,
+      "engine": "chromium",
+      "main": {
+        "checkedAt": "2026-09-22T06:01:29.852Z",
+        "engine": "chromium",
+        "physicalDevices": false,
+        "realWallets": false,
+        "realTransactionsSent": 0,
+        "source": "staged site",
+        "cases": [
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPhone SE",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPhone 13",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "Pixel 7",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPad Pro 11",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": false,
+            "touchEmulation": false
+          },
+          {
+            "name": "storage unavailable preserves calculator, language and wallet picker",
+            "device": "Pixel 7",
+            "storage": "denied"
+          },
+          {
+            "name": "storage unavailable preserves calculator, language and wallet picker",
+            "device": "Pixel 7",
+            "storage": "full"
+          },
+          {
+            "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+            "device": "Desktop Chrome",
+            "storage": "normal"
+          },
+          {
+            "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+            "device": "Pixel 7",
+            "storage": "normal"
+          },
+          {
+            "name": "cancelled connection is retryable and repeated clicks cannot duplicate a pending connection",
+            "device": "Desktop Chrome",
+            "storage": "normal"
+          },
+          {
+            "name": "unresponsive wallet releases UI after deadline; late reply is ignored and reconnect works",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "clockAdvanced": true
+          },
+          {
+            "name": "stalled wallet-module download releases loading state",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "clockAdvanced": true
+          }
+        ],
+        "pageErrors": [],
+        "networkWrites": 0
+      },
+      "devnet": {
+        "passed": true,
+        "scenarios": 31,
+        "report": "build/devnet-chromium/browser-matrix.json",
+        "caseNames": [
+          "layout and connection: phone-320",
+          "layout and connection: phone-390",
+          "layout and connection: tablet-768",
+          "layout and connection: desktop-1440",
+          "429 recovers after a bounded retry",
+          "persistent 429 blocks mint without repeated unbounded calls",
+          "a fresh 429 invalidates earlier ready state",
+          "offline failure remains recoverable without a wallet prompt",
+          "wrong genesis blocks a Mainnet endpoint before transaction preparation",
+          "insufficient stops before signing",
+          "simulation-error stops before signing",
+          "wrong owner cannot open a signing request",
+          "wallet rejection preserves a durable journal and allows a later attempt",
+          "double click produces one wallet request",
+          "account change disables mint until a fresh connection",
+          "unknown result survives reload and recovers finalized without resending",
+          "late wallet signature after an accelerated timeout remains recoverable",
+          "corrupt storage blocks signing",
+          "blocked storage blocks signing",
+          "storage quota failure blocks wallet prompt",
+          "a second tab holding the mint lock prevents a duplicate prompt",
+          "late Wallet Standard Backpack registration connects and receives explicit Devnet",
+          "unsupported legacy transaction wallet is not offered",
+          "injected Solflare connects and follows the same guarded signing flow",
+          "Android Chrome Phantom button opens its in-app browser link",
+          "Android Chrome Solflare button opens its in-app browser link",
+          "Android Chrome Backpack button opens its in-app browser link",
+          "desktop without a wallet shows a connection instruction",
+          "custom RPC passes genesis verification without persisting endpoint credentials",
+          "custom RPC rejects wrong chain and public reset restores a usable endpoint",
+          "custom RPC refuses non-HTTPS, credentials and fragments before network access"
+        ]
+      },
+      "unitTests": 61,
+      "unitPassed": true,
+      "node": "24.19.0",
+      "playwright": "1.62.1"
+    },
+    {
+      "jobId": 106633632904,
+      "engine": "firefox",
+      "main": {
+        "checkedAt": "2026-09-22T06:01:16.988Z",
+        "engine": "firefox",
+        "physicalDevices": false,
+        "realWallets": false,
+        "realTransactionsSent": 0,
+        "source": "staged site",
+        "cases": [
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPhone SE",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPhone 13",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "Pixel 7",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPad Pro 11",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": false,
+            "touchEmulation": false
+          },
+          {
+            "name": "storage unavailable preserves calculator, language and wallet picker",
+            "device": "Pixel 7",
+            "storage": "denied"
+          },
+          {
+            "name": "storage unavailable preserves calculator, language and wallet picker",
+            "device": "Pixel 7",
+            "storage": "full"
+          },
+          {
+            "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+            "device": "Desktop Chrome",
+            "storage": "normal"
+          },
+          {
+            "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+            "device": "Pixel 7",
+            "storage": "normal"
+          },
+          {
+            "name": "cancelled connection is retryable and repeated clicks cannot duplicate a pending connection",
+            "device": "Desktop Chrome",
+            "storage": "normal"
+          },
+          {
+            "name": "unresponsive wallet releases UI after deadline; late reply is ignored and reconnect works",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "clockAdvanced": true
+          },
+          {
+            "name": "stalled wallet-module download releases loading state",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "clockAdvanced": true
+          }
+        ],
+        "pageErrors": [],
+        "networkWrites": 0
+      },
+      "devnet": {
+        "passed": true,
+        "scenarios": 31,
+        "report": "build/devnet-firefox/browser-matrix.json",
+        "caseNames": [
+          "layout and connection: phone-320",
+          "layout and connection: phone-390",
+          "layout and connection: tablet-768",
+          "layout and connection: desktop-1440",
+          "429 recovers after a bounded retry",
+          "persistent 429 blocks mint without repeated unbounded calls",
+          "a fresh 429 invalidates earlier ready state",
+          "offline failure remains recoverable without a wallet prompt",
+          "wrong genesis blocks a Mainnet endpoint before transaction preparation",
+          "insufficient stops before signing",
+          "simulation-error stops before signing",
+          "wrong owner cannot open a signing request",
+          "wallet rejection preserves a durable journal and allows a later attempt",
+          "double click produces one wallet request",
+          "account change disables mint until a fresh connection",
+          "unknown result survives reload and recovers finalized without resending",
+          "late wallet signature after an accelerated timeout remains recoverable",
+          "corrupt storage blocks signing",
+          "blocked storage blocks signing",
+          "storage quota failure blocks wallet prompt",
+          "a second tab holding the mint lock prevents a duplicate prompt",
+          "late Wallet Standard Backpack registration connects and receives explicit Devnet",
+          "unsupported legacy transaction wallet is not offered",
+          "injected Solflare connects and follows the same guarded signing flow",
+          "Android Chrome Phantom button opens its in-app browser link",
+          "Android Chrome Solflare button opens its in-app browser link",
+          "Android Chrome Backpack button opens its in-app browser link",
+          "desktop without a wallet shows a connection instruction",
+          "custom RPC passes genesis verification without persisting endpoint credentials",
+          "custom RPC rejects wrong chain and public reset restores a usable endpoint",
+          "custom RPC refuses non-HTTPS, credentials and fragments before network access"
+        ]
+      },
+      "unitTests": 61,
+      "unitPassed": true,
+      "node": "24.19.0",
+      "playwright": "1.62.1"
+    },
+    {
+      "jobId": 106633632714,
+      "engine": "webkit",
+      "main": {
+        "checkedAt": "2026-09-22T06:01:31.658Z",
+        "engine": "webkit",
+        "physicalDevices": false,
+        "realWallets": false,
+        "realTransactionsSent": 0,
+        "source": "staged site",
+        "cases": [
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPhone SE",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPhone 13",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "Pixel 7",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "iPad Pro 11",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": true,
+            "touchEmulation": true
+          },
+          {
+            "name": "three languages, quantity boundaries, closed mint and wallet links",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "languages": [
+              "en",
+              "ru",
+              "zh"
+            ],
+            "mobileUserAgent": false,
+            "touchEmulation": false
+          },
+          {
+            "name": "storage unavailable preserves calculator, language and wallet picker",
+            "device": "Pixel 7",
+            "storage": "denied"
+          },
+          {
+            "name": "storage unavailable preserves calculator, language and wallet picker",
+            "device": "Pixel 7",
+            "storage": "full"
+          },
+          {
+            "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+            "device": "Desktop Chrome",
+            "storage": "normal"
+          },
+          {
+            "name": "connect, account change, explicit disconnect, reconnect and provider disconnect",
+            "device": "Pixel 7",
+            "storage": "normal"
+          },
+          {
+            "name": "cancelled connection is retryable and repeated clicks cannot duplicate a pending connection",
+            "device": "Desktop Chrome",
+            "storage": "normal"
+          },
+          {
+            "name": "unresponsive wallet releases UI after deadline; late reply is ignored and reconnect works",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "clockAdvanced": true
+          },
+          {
+            "name": "stalled wallet-module download releases loading state",
+            "device": "Desktop Chrome",
+            "storage": "normal",
+            "clockAdvanced": true
+          }
+        ],
+        "pageErrors": [],
+        "networkWrites": 0
+      },
+      "devnet": {
+        "passed": true,
+        "scenarios": 31,
+        "report": "build/devnet-webkit/browser-matrix.json",
+        "caseNames": [
+          "layout and connection: phone-320",
+          "layout and connection: phone-390",
+          "layout and connection: tablet-768",
+          "layout and connection: desktop-1440",
+          "429 recovers after a bounded retry",
+          "persistent 429 blocks mint without repeated unbounded calls",
+          "a fresh 429 invalidates earlier ready state",
+          "offline failure remains recoverable without a wallet prompt",
+          "wrong genesis blocks a Mainnet endpoint before transaction preparation",
+          "insufficient stops before signing",
+          "simulation-error stops before signing",
+          "wrong owner cannot open a signing request",
+          "wallet rejection preserves a durable journal and allows a later attempt",
+          "double click produces one wallet request",
+          "account change disables mint until a fresh connection",
+          "unknown result survives reload and recovers finalized without resending",
+          "late wallet signature after an accelerated timeout remains recoverable",
+          "corrupt storage blocks signing",
+          "blocked storage blocks signing",
+          "storage quota failure blocks wallet prompt",
+          "a second tab holding the mint lock prevents a duplicate prompt",
+          "late Wallet Standard Backpack registration connects and receives explicit Devnet",
+          "unsupported legacy transaction wallet is not offered",
+          "injected Solflare connects and follows the same guarded signing flow",
+          "Android Chrome Phantom button opens its in-app browser link",
+          "Android Chrome Solflare button opens its in-app browser link",
+          "Android Chrome Backpack button opens its in-app browser link",
+          "desktop without a wallet shows a connection instruction",
+          "custom RPC passes genesis verification without persisting endpoint credentials",
+          "custom RPC rejects wrong chain and public reset restores a usable endpoint",
+          "custom RPC refuses non-HTTPS, credentials and fragments before network access"
+        ]
+      },
+      "unitTests": 61,
+      "unitPassed": true,
+      "node": "24.19.0",
+      "playwright": "1.62.1"
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 10679716715,
+      "name": "wallet-tests-firefox",
+      "sha256": "sha256:1b89e8d14af97ecdb74286fdeabde7d2ba81d071770560b8dfedf94e97e967ea",
+      "sizeBytes": 23665358
+    },
+    {
+      "id": 10679043665,
+      "name": "wallet-tests-chromium",
+      "sha256": "sha256:773360e09f122cad90a957cd96f06b5740ea785d3cdb8fd19146f9eb919003f1",
+      "sizeBytes": 18887198
+    },
+    {
+      "id": 10678833683,
+      "name": "wallet-tests-webkit",
+      "sha256": "sha256:109786adbbb50cda4c9aabbba61c949d5d17d4e8b38538d4ea1a0c7975af21d3",
+      "sizeBytes": 18499424
+    }
+  ],
+  "operatorTests": {
+    "passed": 22,
+    "scope": "local unit/integration fixtures; no blockchain submissions"
+  },
+  "history": [
+    {
+      "runId": 35692260793,
+      "result": "Workflow validation failed before jobs",
+      "resolution": "Set Playwright path through GITHUB_ENV after runner starts; runner context is unavailable in job-level env"
+    },
+    {
+      "runId": 35692395627,
+      "result": "Devnet 31/31 in every engine; Chromium main 12/12; Firefox/WebKit main image decode ran before lazy loading finished",
+      "resolution": "Wait for load completion before decode; retain image assertions"
+    },
+    {
+      "runId": 35692637046,
+      "result": "Chromium and Firefox passed; WebKit runner found an RPC timeout classification race in unit tests before browser setup",
+      "resolution": "Classify an attempt capped by the remaining overall deadline as TIMEOUT; add clock-advance regression test"
+    }
+  ],
+  "limitations": [
+    "RPC and wallets in browser scenarios are simulated.",
+    "Device descriptors exercise viewport, user agent and touch options, not physical Android/iOS or wallet apps.",
+    "WebKit on Linux is not the released Safari browser on an iPhone.",
+    "No wallet owner signature or blockchain submission performed.",
+    "Dedicated RPC remains unconfigured; public Devnet rate limits and uptime are not guaranteed.",
+    "Public sales remain closed; Mainnet purchase is not enabled or verified."
+  ]
+}
