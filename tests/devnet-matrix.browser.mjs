@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { base58 } from '@metaplex-foundation/umi/serializers';
+import { getCandyMachineAccountDataSerializer } from '@metaplex-foundation/mpl-core-candy-machine';
 import { settings as S } from '../devnet/settings.mjs';
 
 const playwright = await import(process.env.COOLBEARS_PLAYWRIGHT || 'playwright');
@@ -13,6 +14,12 @@ const output = process.env.COOLBEARS_BROWSER_OUTPUT || 'build/browser-matrix';
 await mkdir(output, { recursive: true });
 const fixture = JSON.parse(await readFile('tests/fixtures/devnet-rpc.json', 'utf8'));
 const assetFixture = JSON.parse(await readFile('tests/fixtures/devnet-existing-asset.json', 'utf8'));
+const exhaustedAccounts = structuredClone(fixture.getMultipleAccounts);
+const machineBytes = Buffer.from(exhaustedAccounts.value[0].data[0], 'base64');
+const machineSerializer = getCandyMachineAccountDataSerializer();
+const [machine] = machineSerializer.deserialize(machineBytes);
+machineBytes.set(machineSerializer.serialize({ ...machine, itemsRedeemed: 2n }));
+exhaustedAccounts.value[0].data[0] = machineBytes.toString('base64');
 const signature = '3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7';
 const origin = 'https://coolbears-nfts.com';
 const customRpc = 'https://custom-rpc.example/devnet?api-key=matrix-public-fixture-key';
@@ -24,6 +31,7 @@ const browser = await playwright[engine].launch({
   headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [],
 });
 const cases = [];
+const scenarioFilter = process.env.COOLBEARS_SCENARIO_FILTER ? new RegExp(process.env.COOLBEARS_SCENARIO_FILTER) : null;
 let totalRpcWrites = 0;
 let complete = false;
 
@@ -67,15 +75,21 @@ async function makeHarness(options = {}) {
     if (mode === '429' || (mode === '429-once' && h.retryCount++ === 0)) {
       return route.fulfill({ status: 429, headers: { 'retry-after': '0', 'access-control-allow-origin': origin }, body: '{}' });
     }
+    if (rpc.method === 'getMultipleAccounts' && (mode.startsWith('expired') || mode === 'failed')) {
+      h.stageBeforeReadiness = await page.evaluate(key => JSON.parse(localStorage.getItem(key)).stage, S.storageKey);
+      if (mode === 'expired-refresh-error') return route.fulfill({ status: 403, headers: { 'access-control-allow-origin': origin }, body: '{}' });
+    }
     let result = structuredClone(fixture[rpc.method]);
+    if (rpc.method === 'getMultipleAccounts' && mode === 'expired-exhausted') result = structuredClone(exhaustedAccounts);
     if (rpc.method === 'getGenesisHash' && mode === 'wrong-genesis') result = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
     if (rpc.method === 'getBalance' && mode === 'insufficient') result.value = 100;
     if (rpc.method === 'simulateTransaction') result = { context: { slot: 502145500 }, value: { err: mode === 'simulation-error' ? { InstructionError: [1, { Custom: 6033 }] } : null, logs: [], unitsConsumed: 57949 } };
     if (rpc.method === 'getSignaturesForAddress') result = mode === 'finalized' ? [{ signature, err: null }] : [];
     if (rpc.method === 'getSignatureStatuses') result = { context: { slot: 502145500 }, value: [mode === 'finalized' ? { slot: 502145500, confirmationStatus: 'finalized', err: null } : null] };
+    if (rpc.method === 'getSignatureStatuses' && mode === 'failed') result.value[0] = { slot: 502145500, confirmationStatus: 'finalized', err: { InstructionError: [1, 'Custom'] } };
     if (rpc.method === 'getAccountInfo') result = mode === 'finalized' ? assetFixture : { context: { slot: 502145500 }, value: null };
-    if (rpc.method === 'isBlockhashValid') result = { context: { slot: 502145500 }, value: true };
-    if (rpc.method === 'getBlockHeight') result = fixture.getLatestBlockhash.value.lastValidBlockHeight - 5;
+    if (rpc.method === 'isBlockhashValid') result = { context: { slot: 502145500 }, value: !mode.startsWith('expired') };
+    if (rpc.method === 'getBlockHeight') result = fixture.getLatestBlockhash.value.lastValidBlockHeight + (mode.startsWith('expired') ? 1 : -5);
     assert.notEqual(result, undefined, `Missing RPC fixture: ${rpc.method}`);
     return route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': origin }, body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result }) });
   });
@@ -139,6 +153,7 @@ async function makeHarness(options = {}) {
 }
 
 async function scenario(name, options, body) {
+  if (scenarioFilter && !scenarioFilter.test(name)) return;
   const started = Date.now();
   const h = await makeHarness(options);
   try {
@@ -252,6 +267,36 @@ try {
     assert.equal(recovered.asset, pending.asset); assert.equal(recovered.signature, signature); assert.equal(recovered.stage, 'verified');
     assert.equal(await h.page.locator('#mint').isDisabled(), true); assert.equal(h.walletCalls, 1);
   });
+  for (const mode of ['expired', 'expired-exhausted', 'expired-refresh-error', 'failed']) {
+    await scenario(`terminal recovery refreshes readiness after reload: ${mode}`, { mode }, async h => {
+      const saved = {
+        version: 1, cluster: 'devnet', machine: S.machine, collection: S.collection, owner: S.owner,
+        asset: 'J3kTD8CvWZgrKjW3EQ9UceYXVqvBRHJEQDK4PrE5xx57',
+        blockhash: fixture.getLatestBlockhash.value.blockhash,
+        lastValidBlockHeight: fixture.getLatestBlockhash.value.lastValidBlockHeight,
+        stage: 'unknown', signature: mode === 'failed' ? signature : null,
+      };
+      await h.page.evaluate(({ key, saved }) => localStorage.setItem(key, JSON.stringify(saved)), { key: S.storageKey, saved });
+      await h.page.reload({ waitUntil: 'networkidle' });
+      assert.equal(h.requests.length, 0, 'Reload must not automatically recover or contact a wallet');
+      await h.page.locator('#phantom').click();
+      await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+      const recovered = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+      const terminal = mode === 'failed' ? 'failed' : 'expired';
+      assert.equal(recovered.stage, terminal);
+      assert.equal(recovered.asset, saved.asset);
+      assert.equal(h.stageBeforeReadiness, terminal, 'Persist terminal proof before the next RPC check');
+      assert.equal(await h.page.locator('#wallet').textContent(), S.owner);
+      assert.equal(await h.page.locator('#mint').isDisabled(), !['expired', 'failed'].includes(mode));
+      const status = await h.page.locator('#status').textContent();
+      if (mode === 'expired-exhausted') {
+        assert.match(status, /Оба тестовых NFT уже выпущены/);
+        assert.doesNotMatch(status, /Можно начать новую попытку/);
+      } else if (mode === 'expired-refresh-error') assert.match(status, /403/);
+      else assert.match(status, /Можно начать новую попытку/);
+      assert.equal(h.walletCalls, 0, 'Recovery must never request a signature or submit another mint');
+    });
+  }
   await scenario('late wallet signature after an accelerated timeout remains recoverable', { shortWalletDeadline: true }, async h => {
     await h.connect(); await h.page.evaluate(() => { window.matrix.walletMode = 'hold'; });
     await h.page.locator('#mint').click();
@@ -359,7 +404,7 @@ try {
   complete = true;
 } finally {
   const report = {
-    checkedAt: new Date().toISOString(), engine, deterministicFixtures: true,
+    checkedAt: new Date().toISOString(), engine, scenarioFilter: scenarioFilter?.source ?? null, deterministicFixtures: true,
     realWallets: false, realTransactionsSent: 0, rpcTransactionSubmissionRequests: totalRpcWrites,
     physicalDevicesTested: false, browsersNotExecuted: ['chromium', 'firefox', 'webkit'].filter(name => name !== engine),
     limitations: ['Viewport and user-agent profiles do not execute Android, iOS, or wallet-app internals. Firefox uses viewport and touch without isMobile emulation.', 'RPC and wallet results are deterministic fixtures; provider uptime and live wallet approval screens are outside this test.', 'No guarantee of absence of all defects is possible.'],

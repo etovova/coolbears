@@ -78,7 +78,7 @@ function report(value) {
   const texts = {
     verified: 'NFT выпущен и проверен: владелец, коллекция и метаданные совпадают.',
     failed: 'Транзакция завершилась ошибкой. NFT не создан.',
-    expired: 'Срок транзакции истёк. Проверено: этот NFT не создан. Можно начать новую попытку.',
+    expired: 'Срок транзакции истёк. Проверено: этот NFT не создан.',
     cancelled: 'Подпись отменена в кошельке.',
   };
   message(texts[value.stage] || 'Результат пока не подтверждён. Нажми «Проверить результат» — это не отправляет новую транзакцию.');
@@ -91,9 +91,28 @@ async function action(callback) {
   finally { busy = false; render(); }
 }
 async function recover() {
+  ready = false;
   message('Проверяю сохранённую операцию в Devnet…');
-  const result = await runNetwork(client => settleOperation(client, operation, { onProgress: persist }));
-  persist(result); report(operation);
+  await runNetwork(async client => {
+    const result = await settleOperation(client, operation, { onProgress: persist });
+    // Save the terminal proof before the readiness check, which can fail on its
+    // own. Both checks share the same deadline; neither signs nor resubmits.
+    persist(result);
+    if (['expired', 'failed'].includes(operation.stage) && mayStart(operation)) {
+      const state = await readState(client);
+      // A late wallet response may have added stronger evidence while reading.
+      if (mayStart(operation)) {
+        ready = state.machine.itemsRedeemed === 1n;
+        report(operation);
+        const next = ready
+          ? wallet?.address === S.owner ? 'Можно начать новую попытку.' : 'Подключи FNyt…CW6y для новой попытки.'
+          : 'Оба тестовых NFT уже выпущены.';
+        message(`${$('status').textContent} ${next}`);
+        return;
+      }
+    }
+    report(operation);
+  });
 }
 async function check() {
   await withMintLock(navigator.locks, async () => {
