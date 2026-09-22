@@ -93,18 +93,20 @@ async function makeHarness(options = {}) {
       h.links.push(request.url());
       return route.fulfill({ contentType: 'text/html', body: '<title>Wallet app link fixture</title>' });
     }
-    if (request.url() !== new URL(S.rpc).href && url.hostname !== 'custom-rpc.example' && request.url() !== siteRpc) {
+    const productionRpc = Boolean(options.productionBundle && S.siteRpc && request.url() === S.siteRpc);
+    const usesSiteRpc = request.url() === siteRpc || productionRpc;
+    if (request.url() !== new URL(S.rpc).href && url.hostname !== 'custom-rpc.example' && !usesSiteRpc) {
       h.errors.push(`Unexpected external request to ${url.origin}`);
       return route.abort('blockedbyclient');
     }
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST', 'access-control-allow-headers': '*' } });
     const rpc = request.postDataJSON();
-    h.requests.push({ method: rpc.method, custom: url.hostname === 'custom-rpc.example', site: request.url() === siteRpc });
+    h.requests.push({ method: rpc.method, custom: url.hostname === 'custom-rpc.example', site: usesSiteRpc, productionRpc });
     if (rpc.method === 'sendTransaction') {
       totalRpcWrites++;
       return route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, error: { code: -32600, message: 'Negative wallet fixture must never submit' } }) });
     }
-    const mode = request.url() === siteRpc ? h.siteMode : url.hostname === 'custom-rpc.example' ? h.customMode : h.mode;
+    const mode = usesSiteRpc ? h.siteMode : url.hostname === 'custom-rpc.example' ? h.customMode : h.mode;
     if (mode === 'offline') return route.abort('internetdisconnected');
     if (mode === '429' || (mode === '429-once' && h.retryCount++ === 0)) {
       return route.fulfill({ status: 429, headers: { 'retry-after': '0', 'access-control-allow-origin': origin }, body: '{}' });
@@ -225,7 +227,7 @@ async function scenario(name, options, body) {
     await body(h);
     assert.deepEqual(h.errors, [], `${name}: unexpected page errors or external requests`);
     assert.equal(totalRpcWrites, 0, 'These negative wallet fixtures must not submit RPC transactions');
-    cases.push({ name, passed: true, durationMs: Date.now() - started, mockedWalletCalls: h.walletCalls, rpcReadAndSimulationRequests: h.requests.length, appSource: options.productionBundle ? 'staged production bundle' : 'source with fixture siteRpc', configuredSiteRpc: Boolean(options.siteRpc) });
+    cases.push({ name, passed: true, durationMs: Date.now() - started, mockedWalletCalls: h.walletCalls, rpcReadAndSimulationRequests: h.requests.length, appSource: options.productionBundle ? 'staged production bundle' : 'source with fixture siteRpc', configuredSiteRpc: Boolean(options.productionBundle ? S.siteRpc : options.siteRpc) });
     console.log(`PASS ${name}`);
   } catch (error) {
     cases.push({ name, passed: false, error: error.message, status: await h.page.locator('#status').textContent().catch(() => null), pageErrors: h.errors });
@@ -284,8 +286,10 @@ async function prepareDiagnosticChecks(h, clipboard, pending = null) {
 }
 
 async function openDiagnosticReport(h) {
+  const previous = await h.page.locator('#report-text').inputValue();
+  if (await h.page.locator('#diagnostic-report').evaluate(node => node.open)) await h.page.locator('#diagnostic-report summary').click();
   await h.page.locator('#diagnostic-report summary').click();
-  await h.page.waitForFunction(() => document.querySelector('#report-text')?.value.length > 0);
+  await h.page.waitForFunction(previous => { const value = document.querySelector('#report-text')?.value; return value?.length > 0 && value !== previous; }, previous);
   assert.equal(await h.page.locator('#report-text').isVisible(), true);
   assert.equal(await h.page.locator('#report-text').evaluate(node => node.readOnly), true);
   const text = await h.page.locator('#report-text').inputValue();
@@ -353,14 +357,54 @@ async function seedSavedOperation(h, stage) {
 }
 
 try {
-  await scenario('staged production bundle starts without automatic wallet or RPC activity', { productionBundle: true }, async h => {
+  await scenario('staged production bundle uses its configured RPC and recovers without resubmission', { productionBundle: true, signOnly: true }, async h => {
+    assert.equal(Boolean(S.siteRpc), true, 'This production build must include the deployed site RPC');
     assert.equal(await h.page.locator('#mint').isDisabled(), true);
     assert.equal(h.requests.length, 0); assert.equal(h.walletCalls, 0);
     const { report } = await openDiagnosticReport(h);
-    assert.equal(report.rpc, S.siteRpc ? 'site-devnet' : 'public-devnet');
-    assert.equal(report.rpcProvider, S.siteRpc ? 'site' : 'solana-public');
+    assert.equal(report.rpc, 'site-devnet');
+    assert.equal(report.rpcProvider, 'site');
     assert.equal(report.walletRoute, 'none');
     assert.equal(report.configurationError, false);
+
+    await h.connect();
+    assert.match(await h.page.locator('#wallet-route').textContent(), /RPC сайта/);
+    assert.equal(h.requests.length > 0 && h.requests.every(item => item.productionRpc), true, 'The built client must read from the exact committed deployment URL');
+    assert.equal(await h.page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+    await h.page.screenshot({ path: path.join(output, 'built-client-mobile.png'), fullPage: true });
+    await h.page.locator('#mint').click(); await h.status(/Подпись отменена/);
+    assert.deepEqual(await h.page.evaluate(() => ({ standard: window.matrix.standardSendCalls, injectedSend: window.matrix.injectedSendCalls, signOnly: window.matrix.signOnlyCalls })), { standard: 0, injectedSend: 0, signOnly: 1 });
+    const rejectedText = await h.page.evaluate(key => localStorage.getItem(key), S.storageKey);
+    assert.equal(JSON.parse(rejectedText).walletAttempt.method, 'signTransaction');
+    const beforeReload = h.requests.length;
+    await h.page.reload({ waitUntil: 'networkidle' });
+    assert.equal(h.requests.length, beforeReload, 'Reload must not reconnect, sign or poll');
+    assert.equal(await h.page.evaluate(key => localStorage.getItem(key), S.storageKey), rejectedText);
+    const reloaded = await openDiagnosticReport(h);
+    assert.equal(reloaded.report.rpc, 'site-devnet');
+    assert.equal(reloaded.report.walletRoute, 'none');
+
+    const { saved } = await seedSavedOperation(h, 'unknown');
+    const beforeRecovery = h.requests.length;
+    h.siteMode = 'finalized'; await h.page.locator('#check').click();
+    await h.status(/NFT выпущен и проверен/);
+    const recovered = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(recovered.asset, saved.asset); assert.equal(recovered.signature, signature); assert.equal(recovered.stage, 'verified');
+    assert.equal(h.requests.slice(beforeRecovery).length > 0 && h.requests.slice(beforeRecovery).every(item => item.productionRpc), true);
+    assert.equal(h.walletCalls, 1, 'Read-only recovery must not request another signature');
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+
+    const beforeVerifiedReload = h.requests.length;
+    await h.page.reload({ waitUntil: 'networkidle' });
+    assert.equal(h.requests.length, beforeVerifiedReload);
+    await h.page.locator('#phantom').click();
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+    const verified = await openDiagnosticReport(h);
+    assert.equal(verified.report.rpc, 'site-devnet'); assert.equal(verified.report.walletRoute, 'custom-rpc');
+    assert.equal(verified.report.operation.asset, saved.asset); assert.equal(verified.report.operation.stage, 'verified');
+    assert.equal(h.requests.every(item => item.productionRpc), true);
+    assert.equal(h.walletCalls, 1); assert.equal(totalRpcWrites, 0);
   });
   for (const profile of [
     { name: 'phone-320', width: 320, height: 740, mobile: true, userAgent: mobileUA },

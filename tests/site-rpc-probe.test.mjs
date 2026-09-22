@@ -64,6 +64,7 @@ test('credential-bearing and nonpublic endpoints fail before any request and sta
 test('preflight must succeed and permit exact site origin, POST, content-type and solana-client', async () => {
   for (const response of [
     new Response(null, { status: 403, headers: preflightHeaders }),
+    new Response(null, { status: 429, headers: { ...preflightHeaders, 'retry-after': '2' } }),
     new Response(null, { status: 204, headers: { ...preflightHeaders, 'access-control-allow-origin': '*' } }),
     new Response(null, { status: 204, headers: { ...preflightHeaders, 'access-control-allow-origin': 'https://other.com' } }),
     new Response(null, { status: 204, headers: { ...preflightHeaders, 'access-control-allow-methods': 'GET' } }),
@@ -72,21 +73,83 @@ test('preflight must succeed and permit exact site origin, POST, content-type an
   ]) {
     let calls = 0;
     await assert.rejects(checkSiteRpc({ endpoint, fetchImpl: async () => { calls++; return response; } }),
-      error => error.code === (response.status === 403 ? 'HTTP' : 'CORS'));
+      error => error.code === (response.status >= 400 ? 'HTTP' : 'CORS'));
     assert.equal(calls, 1);
   }
 });
 
 test('POST CORS requires exact origin and retry-after exposure even though Node does not enforce CORS', async () => {
-  for (const headers of [{ 'access-control-expose-headers': 'retry-after' }, { 'access-control-allow-origin': origin }]) {
+  for (const status of [200, 429]) for (const headers of [{ 'access-control-expose-headers': 'retry-after' }, { 'access-control-allow-origin': origin }]) {
     const h = harness(); let calls = 0;
     await assert.rejects(checkSiteRpc({ endpoint, fetchImpl: async (url, options) => {
       calls++;
       if (options.method === 'OPTIONS') return h.fetchImpl(url, options);
-      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: S.genesis }), { headers });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: S.genesis }), { status, headers });
     } }), { code: 'CORS' });
     assert.equal(calls, 2);
   }
+});
+
+test('cold-start retries respect Retry-After for both allowed reads and preserve their exact requests', async () => {
+  const h = harness(), reads = [], attempts = new Map();
+  const result = await checkSiteRpc({ endpoint, fetchImpl: async (url, options) => {
+    if (options.method === 'OPTIONS') return h.fetchImpl(url, options);
+    const rpc = JSON.parse(options.body);
+    assert.ok(['getGenesisHash', 'getMultipleAccounts'].includes(rpc.method));
+    reads.push({ method: rpc.method, body: options.body, at: Date.now() });
+    const count = (attempts.get(rpc.method) || 0) + 1;
+    attempts.set(rpc.method, count);
+    return count === 1
+      ? new Response('PRIVATE_TEST_SECRET', { status: 429, headers: { ...cors, 'retry-after': '2' } })
+      : h.fetchImpl(url, options);
+  } });
+  assert.equal(result.readOnlyReady, true);
+  assert.equal(result.httpRequests, 5);
+  assert.deepEqual(reads.map(read => read.method), ['getGenesisHash', 'getGenesisHash', 'getMultipleAccounts', 'getMultipleAccounts']);
+  for (const start of [0, 2]) {
+    assert.equal(reads[start].body, reads[start + 1].body);
+    assert.ok(reads[start + 1].at - reads[start].at >= 1990, 'Never retry before the two-second server cooldown');
+  }
+  assert.equal(h.calls.filter(call => call.method === 'OPTIONS').length, 1);
+});
+
+test('persistent rate limiting stops after three read attempts without exporting response contents', async () => {
+  const h = harness(), reads = [];
+  await assert.rejects(checkSiteRpc({ endpoint, fetchImpl: async (url, options) => {
+    if (options.method === 'OPTIONS') return h.fetchImpl(url, options);
+    reads.push(options.body);
+    return new Response('PRIVATE_TEST_SECRET', { status: 429, headers: { ...cors, 'retry-after': '1' } });
+  } }), error => error.code === 'HTTP' && !String(error).includes('PRIVATE_TEST_SECRET'));
+  assert.equal(reads.length, 3);
+  assert.ok(reads.every(body => body === reads[0] && JSON.parse(body).method === 'getGenesisHash'));
+  assert.equal(h.calls.length, 1, 'Only the single preflight used the success fixture');
+});
+
+test('a Retry-After beyond the remaining deadline is not shortened or retried early', async () => {
+  const h = harness(); let reads = 0;
+  await assert.rejects(checkSiteRpc({ endpoint, timeoutMs: 500, fetchImpl: async (url, options) => {
+    if (options.method === 'OPTIONS') return h.fetchImpl(url, options);
+    reads++;
+    return new Response(null, { status: 429, headers: { ...cors, 'retry-after': '3600' } });
+  } }), { code: 'HTTP' });
+  assert.equal(reads, 1);
+});
+
+test('retry waits and a later stalled read share one probe deadline', async () => {
+  const h = harness(); let reads = 0, lastSignal;
+  const before = Date.now();
+  await assert.rejects(checkSiteRpc({ endpoint, timeoutMs: 1600, fetchImpl: async (url, options) => {
+    if (options.method === 'OPTIONS') return h.fetchImpl(url, options);
+    lastSignal = options.signal; reads++;
+    const rpc = JSON.parse(options.body);
+    if (reads === 1) return new Response(null, { status: 429, headers: { ...cors, 'retry-after': '1' } });
+    if (rpc.method === 'getGenesisHash') return h.fetchImpl(url, options);
+    assert.equal(rpc.method, 'getMultipleAccounts');
+    return never();
+  } }), { code: 'TIMEOUT' });
+  assert.equal(reads, 3);
+  assert.equal(lastSignal.aborted, true);
+  assert.ok(Date.now() - before < 2500, 'Retrying must not reset the overall deadline');
 });
 
 test('wrong genesis prevents the finalized account request', async () => {
@@ -128,7 +191,7 @@ test('network, HTTP and provider/schema failures never export raw messages or ke
     await assert.rejects(checkSiteRpc({ endpoint, fetchImpl: async (url, options) => {
       if (options.method === 'OPTIONS') return h.fetchImpl(url, options);
       if (mode === 'network') throw Error('PRIVATE_TEST_SECRET');
-      if (mode === 'http') return new Response('PRIVATE_TEST_SECRET', { status: 429, headers: cors });
+      if (mode === 'http') return new Response('PRIVATE_TEST_SECRET', { status: 401, headers: cors });
       const request = JSON.parse(options.body);
       if (mode === 'schema' && request.method === 'getGenesisHash') return h.fetchImpl(url, options);
       return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id,

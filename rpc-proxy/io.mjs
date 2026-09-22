@@ -13,7 +13,11 @@ export function errorResponse(failure, id = null, cors = true) {
   if (error.retryAfter) headers['retry-after'] = String(error.retryAfter);
   return new Response(JSON.stringify({ jsonrpc: '2.0', id, error: {
     code: error.rpcCode ?? -32098, message: 'CoolBears Devnet RPC request unavailable.',
-    data: { category: error.category },
+    data: {
+      category: error.category,
+      ...(error.category === 'UPSTREAM_HTTP' && Number.isInteger(error.upstreamStatus) && error.upstreamStatus >= 300 && error.upstreamStatus <= 599
+        ? { upstreamStatus: error.upstreamStatus } : {}),
+    },
   } }), { status: error.status, headers });
 }
 export function validateHttp(request) {

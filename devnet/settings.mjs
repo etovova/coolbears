@@ -12,7 +12,7 @@ export const settings = Object.freeze({
   rpc: 'https://api.devnet.solana.com',
   // Public site-managed relay only: https://<public-host>/rpc, never an API key.
   // Leave blank until that relay has been deployed and checked against Devnet.
-  siteRpc: '',
+  siteRpc: 'https://coolbears-devnet-rpc.yauheni84.workers.dev/rpc',
   genesis: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
   owner: 'FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y',
   collection: 'FzzvNApx9E2Z6mvnu1DhHDsE1B1Q8kHQ8w4ZU4tQ8QmH',

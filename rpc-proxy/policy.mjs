@@ -22,10 +22,11 @@ export const ALLOWED_METHODS = Object.freeze([
 ]);
 
 export class ProxyError extends Error {
-  constructor(category, status = 400, { retryAfter, rpcCode } = {}) {
+  constructor(category, status = 400, { retryAfter, rpcCode, upstreamStatus } = {}) {
     super('CoolBears Devnet RPC request unavailable.'); this.name = 'ProxyError';
     this.category = category; this.status = status;
     if (Number.isSafeInteger(retryAfter) && retryAfter > 0) this.retryAfter = retryAfter;
+    if (category === 'UPSTREAM_HTTP' && Number.isInteger(upstreamStatus) && upstreamStatus >= 300 && upstreamStatus <= 599) this.upstreamStatus = upstreamStatus;
     if ([-32700, -32600, -32601, -32602, -32603, -32000, -32001, -32002, -32003, -32004, -32005, -32006, -32007, -32008, -32009, -32010, -32011, -32012, -32013, -32014, -32015, -32016].includes(rpcCode)) this.rpcCode = rpcCode;
   }
 }
