@@ -31,7 +31,7 @@ await page.route('https://api.devnet.solana.com/**', async route => {
   if (request.method === 'getSignatureStatuses') result = { context: { slot: 500000000 }, value: [mode === 'finalized' ? { slot: 500000000, confirmationStatus: 'finalized', err: null } : null] };
   if (request.method === 'getAccountInfo') result = mode === 'finalized' ? assetFixture : { context: { slot: 500000000 }, value: null };
   if (request.method === 'isBlockhashValid') result = { context: { slot: 500000000 }, value: true };
-  if (request.method === 'getBlockHeight') result = fixtures.getLatestBlockhash.value.lastValidBlockHeight - 5;
+  if (request.method === 'getBlockHeight') result = fixtures.getLatestBlockhash.value.lastValidBlockHeight - 140;
   assert.notEqual(result, undefined, request.method);
   return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 });

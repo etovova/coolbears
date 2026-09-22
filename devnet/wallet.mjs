@@ -127,7 +127,7 @@ export async function connectWallet(selection, changed = () => {}, scope = globa
       cleanup.push(stop, registry.on('unregister', (...wallets) => { if (wallets.includes(standard)) invalidate(); }));
       active = true;
       return {
-        id: selected.id, name: selected.name, address: account.address, off,
+        id: selected.id, name: selected.name, transport: 'standard', address: account.address, off,
         async send(bytes) {
           requireValue(active && registry.get().includes(standard) && compatible(standard), 'Кошелёк изменился. Подключись снова.');
           const current = standard.accounts?.find(item => item.address === account.address && usableAccount(item));
@@ -154,7 +154,7 @@ export async function connectWallet(selection, changed = () => {}, scope = globa
     }
     active = true;
     return {
-      id: selected.id, name: selected.name, address, off,
+      id: selected.id, name: selected.name, transport: 'injected', address, off,
       async send(bytes) {
         requireValue(active && provider.publicKey?.toString() === address, 'Кошелёк сменил аккаунт');
         const result = await provider.signAndSendTransaction(VersionedTransaction.deserialize(bytes), OPTIONS);

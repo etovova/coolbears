@@ -23,6 +23,7 @@ exhaustedAccounts.value[0].data[0] = machineBytes.toString('base64');
 const signature = '3rE7YDBzisnu164zPYLWs2PNuEGPZy6spQ1eG36Ez5YuTTKPKySDexqDyawZ2uF93Ri4C4hVoCgkrF7iv158KKQ7';
 const origin = 'https://coolbears-nfts.com';
 const customRpc = 'https://custom-rpc.example/devnet?api-key=matrix-public-fixture-key';
+const untrustedWalletMessage = `matrix-untrusted-wallet-message <b>matrix-secret-extra</b> ${customRpc}`;
 const mobileUA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36';
 const iphoneUA = 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
 const ipadUA = 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1';
@@ -84,16 +85,21 @@ async function makeHarness(options = {}) {
     if (rpc.method === 'getGenesisHash' && mode === 'wrong-genesis') result = '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
     if (rpc.method === 'getBalance' && mode === 'insufficient') result.value = 100;
     if (rpc.method === 'simulateTransaction') result = { context: { slot: 502145500 }, value: { err: mode === 'simulation-error' ? { InstructionError: [1, { Custom: 6033 }] } : null, logs: [], unitsConsumed: 57949 } };
-    if (rpc.method === 'getSignaturesForAddress') result = mode === 'finalized' ? [{ signature, err: null }] : [];
+    if (rpc.method === 'getSignaturesForAddress') result = ['finalized', 'signature-before-outage'].includes(mode) ? [{ signature, err: null }] : [];
     if (rpc.method === 'getSignatureStatuses') result = { context: { slot: 502145500 }, value: [mode === 'finalized' ? { slot: 502145500, confirmationStatus: 'finalized', err: null } : null] };
     if (rpc.method === 'getSignatureStatuses' && mode === 'failed') result.value[0] = { slot: 502145500, confirmationStatus: 'finalized', err: { InstructionError: [1, 'Custom'] } };
-    if (rpc.method === 'getAccountInfo') result = mode === 'finalized' ? assetFixture : { context: { slot: 502145500 }, value: null };
+    if (rpc.method === 'getAccountInfo') {
+      result = ['finalized', 'signature-before-outage'].includes(mode) ? assetFixture : { context: { slot: 502145500 }, value: null };
+      // Simulate lagging signature-status lookup, then loss of connectivity.
+      // Recovery must durably retain the signature before the next poll fails.
+      if (mode === 'signature-before-outage') h.mode = 'offline';
+    }
     if (rpc.method === 'isBlockhashValid') result = { context: { slot: 502145500 }, value: !mode.startsWith('expired') };
-    if (rpc.method === 'getBlockHeight') result = fixture.getLatestBlockhash.value.lastValidBlockHeight + (mode.startsWith('expired') ? 1 : -5);
+    if (rpc.method === 'getBlockHeight') result = fixture.getLatestBlockhash.value.lastValidBlockHeight + (mode.startsWith('expired') ? 1 : mode === 'stale-blockhash' ? -99 : -140);
     assert.notEqual(result, undefined, `Missing RPC fixture: ${rpc.method}`);
     return route.fulfill({ contentType: 'application/json', headers: { 'access-control-allow-origin': origin }, body: JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result }) });
   });
-  await page.addInitScript(({ owner, key, sig, signatureBytes, ownerBytes, providerName, storage, ownerOverride, shortWalletDeadline }) => {
+  await page.addInitScript(({ owner, key, sig, signatureBytes, ownerBytes, providerName, storage, ownerOverride, shortWalletDeadline, untrustedWalletMessage }) => {
     if (shortWalletDeadline) {
       const schedule = window.setTimeout.bind(window);
       window.setTimeout = (callback, delay, ...args) => schedule(callback, delay === 60000 ? 150 : delay, ...args);
@@ -112,11 +118,21 @@ async function makeHarness(options = {}) {
         window.matrix.walletCalls++; await window.matrixWalletCall();
         const saved = JSON.parse(localStorage.getItem(key));
         if (!saved?.asset || saved.stage !== 'wallet-pending') throw Error('Journal not persisted before wallet prompt');
+        if (saved.walletAttempt?.wallet !== 'phantom' && saved.walletAttempt?.wallet !== 'solflare') throw Error('Wallet attempt identity not persisted before wallet prompt');
+        if (saved.walletAttempt.transport !== 'injected' || saved.walletAttempt.outcome !== 'pending' || !Number.isFinite(Date.parse(saved.walletAttempt.requestedAt))) throw Error('Pending wallet attempt not persisted before wallet prompt');
         if (transaction.version !== 0 || !transaction.signatures.some(bytes => bytes.some(byte => byte !== 0)) || options.skipPreflight !== false) throw Error('Invalid partial transaction');
         window.matrix.journalVerified = true;
         window.matrix.options = options;
-        if (window.matrix.walletMode === 'hold') return new Promise((resolve, reject) => { window.matrix.rejectWallet = () => reject(Object.assign(Error('Rejected'), { code: 4001 })); window.matrix.resolveWallet = () => resolve({ signature: sig }); });
+        if (window.matrix.walletMode === 'hold') return new Promise((resolve, reject) => {
+          window.matrix.rejectWallet = () => reject(Object.assign(Error('Rejected'), { code: 4001 }));
+          window.matrix.failWallet = () => reject(Object.assign(Error(untrustedWalletMessage), { code: -32603, data: { message: untrustedWalletMessage } }));
+          window.matrix.resolveWallet = () => resolve({ signature: sig });
+        });
         if (window.matrix.walletMode === 'reject') throw Object.assign(Error('Rejected'), { code: 4001 });
+        if (window.matrix.walletMode === 'error') {
+          await window.matrixRpcMode('expired');
+          throw Object.assign(Error(untrustedWalletMessage), { code: -32603, data: { message: untrustedWalletMessage } });
+        }
         if (window.matrix.walletMode === 'unknown') { await window.matrixRpcMode('offline'); throw Error('Wallet disconnected'); }
         return { signature: sig };
       },
@@ -145,7 +161,7 @@ async function makeHarness(options = {}) {
       window.dispatchEvent(new CustomEvent('wallet-standard:register-wallet', { detail: ({ register }) => register(wallet) }));
       return wallet;
     };
-  }, { owner: S.owner, key: S.storageKey, sig: signature, signatureBytes: Array.from(base58.serialize(signature)), ownerBytes: Array.from(base58.serialize(S.owner)), providerName: options.provider === undefined ? 'Phantom' : options.provider, storage: options.storage, ownerOverride: options.owner, shortWalletDeadline: options.shortWalletDeadline });
+  }, { owner: S.owner, key: S.storageKey, sig: signature, signatureBytes: Array.from(base58.serialize(signature)), ownerBytes: Array.from(base58.serialize(S.owner)), providerName: options.provider === undefined ? 'Phantom' : options.provider, storage: options.storage, ownerOverride: options.owner, shortWalletDeadline: options.shortWalletDeadline, untrustedWalletMessage });
   await page.goto(`${origin}/devnet/`, { waitUntil: 'networkidle' });
   h.status = async pattern => page.waitForFunction(source => new RegExp(source).test(document.querySelector('#status').textContent), pattern.source, { timeout: 15000 });
   h.connect = async (id = 'phantom') => { await page.locator(`#${id}`).click(); await page.waitForFunction(() => !document.querySelector('#mint').disabled); };
@@ -227,10 +243,36 @@ async function openDiagnosticReport(h) {
   assert.equal(text.includes('matrix-public-fixture-key'), false, 'The report must not contain an RPC API key');
   assert.equal(text.includes(customRpc), false, 'The report must not contain the full RPC endpoint');
   assert.equal(text.includes('matrix-secret-extra'), false, 'Unrecognized journal properties must not leak into the report');
+  assert.equal(text.includes('matrix-untrusted-wallet-message'), false, 'Raw wallet errors must not leak into the report');
   const report = JSON.parse(text);
   assert.equal(report.page, `${origin}/devnet/`);
+  assert.equal(report.appVersion, 'devnet-20260922-5');
   assert.equal(Number.isNaN(Date.parse(report.exportedAt)), false);
   return { text, report };
+}
+
+function assertWalletAttempt(attempt, outcome, { timedOut = false } = {}) {
+  assert.equal(attempt.wallet, 'phantom');
+  assert.equal(attempt.transport, 'injected');
+  assert.equal(attempt.outcome, outcome);
+  assert.equal(Number.isNaN(Date.parse(attempt.requestedAt)), false);
+  if (timedOut) {
+    assert.equal(Number.isNaN(Date.parse(attempt.timeoutAt)), false);
+    assert.equal(Date.parse(attempt.timeoutAt) >= Date.parse(attempt.requestedAt), true);
+  } else assert.equal(attempt.timeoutAt, undefined);
+  if (outcome === 'pending') assert.equal(attempt.responseAt, undefined);
+  else {
+    assert.equal(Number.isNaN(Date.parse(attempt.responseAt)), false);
+    assert.equal(Date.parse(attempt.responseAt) >= Date.parse(attempt.requestedAt), true);
+  }
+  if (outcome === 'error') {
+    assert.equal(attempt.errorCategory, 'wallet-error');
+    assert.equal(attempt.errorCode, -32603);
+  }
+  if (outcome === 'rejected') {
+    assert.equal(attempt.errorCategory, 'user-rejected');
+    assert.equal(attempt.errorCode, 4001);
+  }
 }
 
 try {
@@ -292,6 +334,15 @@ try {
       assert.equal(await h.page.evaluate(key => localStorage.getItem(key), S.storageKey), null);
     });
   }
+  await scenario('stale blockhash stops before any wallet request or journal is created', {}, async h => {
+    await h.connect(); h.mode = 'stale-blockhash';
+    await h.page.locator('#mint').click(); await h.status(/Подпись не запрашивалась/);
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    assert.equal(h.walletCalls, 0);
+    assert.equal(await h.page.evaluate(key => localStorage.getItem(key), S.storageKey), null);
+    assert.equal(h.requests.filter(item => item.method === 'getBlockHeight').length, 2, 'Only one bounded fresh preparation is allowed');
+    assert.equal(h.requests.some(item => item.method === 'getSignaturesForAddress'), false);
+  });
   await scenario('wrong owner cannot open a signing request', { owner: S.laboratory }, async h => {
     await h.page.locator('#phantom').click(); await h.status(/FNyt/);
     assert.equal(await h.page.locator('#mint').isDisabled(), true);
@@ -331,6 +382,30 @@ try {
     assert.equal(recovered.asset, pending.asset); assert.equal(recovered.signature, signature); assert.equal(recovered.stage, 'verified');
     assert.equal(await h.page.locator('#mint').isDisabled(), true); assert.equal(h.walletCalls, 1);
   });
+  await scenario('non-4001 wallet error survives expired recovery and reload without leaking raw text', {}, async h => {
+    await h.connect(); await h.page.evaluate(() => { window.matrix.walletMode = 'error'; });
+    await h.page.locator('#mint').click();
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    const savedText = await h.page.evaluate(key => localStorage.getItem(key), S.storageKey);
+    const expired = JSON.parse(savedText);
+    assert.equal(expired.stage, 'expired');
+    assert.equal(expired.signature, null);
+    assertWalletAttempt(expired.walletAttempt, 'error');
+    assert.equal(savedText.includes(untrustedWalletMessage), false);
+    assert.equal(savedText.includes('matrix-public-fixture-key'), false);
+    const first = await openDiagnosticReport(h);
+    assert.equal(first.report.operation.stage, 'expired');
+    assert.deepEqual(first.report.operation.walletAttempt, expired.walletAttempt);
+    const requests = h.requests.length;
+    await h.page.reload({ waitUntil: 'networkidle' });
+    assert.equal(h.requests.length, requests, 'Reload must not resubmit or automatically check the failed wallet attempt');
+    assert.equal(await h.page.evaluate(key => localStorage.getItem(key), S.storageKey), savedText);
+    const reloaded = await openDiagnosticReport(h);
+    assert.deepEqual(reloaded.report.operation.walletAttempt, expired.walletAttempt);
+    assert.equal(reloaded.report.operation.asset, expired.asset);
+    assert.equal(reloaded.report.operation.stage, 'expired');
+    assert.equal(h.walletCalls, 1);
+  });
   for (const mode of ['expired', 'expired-exhausted', 'expired-refresh-error', 'failed']) {
     await scenario(`terminal recovery refreshes readiness after reload: ${mode}`, { mode }, async h => {
       const saved = {
@@ -369,11 +444,66 @@ try {
     await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
     const unknown = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
     assert.equal(unknown.stage, 'unknown'); assert.equal(unknown.signature, null);
+    assertWalletAttempt(unknown.walletAttempt, 'pending', { timedOut: true });
     await h.page.evaluate(() => window.matrix.resolveWallet());
     await h.page.waitForFunction(({ key, signature }) => JSON.parse(localStorage.getItem(key)).signature === signature, { key: S.storageKey, signature });
     h.mode = 'finalized'; await h.page.locator('#check').click(); await h.status(/NFT выпущен и проверен/);
     const recovered = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
     assert.equal(recovered.asset, unknown.asset); assert.equal(recovered.signature, signature); assert.equal(recovered.stage, 'verified');
+    assertWalletAttempt(recovered.walletAttempt, 'submitted', { timedOut: true });
+    assert.equal(recovered.walletAttempt.timeoutAt, unknown.walletAttempt.timeoutAt);
+    const { report } = await openDiagnosticReport(h);
+    assert.deepEqual(report.operation.walletAttempt, recovered.walletAttempt);
+    assert.equal(h.walletCalls, 1);
+  });
+  await scenario('late wallet error after an accelerated timeout remains in the expired diagnostic report', { shortWalletDeadline: true }, async h => {
+    await h.connect(); await h.page.evaluate(() => { window.matrix.walletMode = 'hold'; });
+    await h.page.locator('#mint').click();
+    await h.page.waitForFunction(() => typeof window.matrix.failWallet === 'function');
+    h.mode = 'offline';
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    const unknown = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(unknown.stage, 'unknown'); assert.equal(unknown.signature, null);
+    assertWalletAttempt(unknown.walletAttempt, 'pending', { timedOut: true });
+    await h.page.evaluate(() => window.matrix.failWallet());
+    await h.page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).walletAttempt?.outcome === 'error', S.storageKey);
+    h.mode = 'expired'; await h.page.locator('#check').click();
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    const expired = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(expired.asset, unknown.asset); assert.equal(expired.signature, null); assert.equal(expired.stage, 'expired');
+    assertWalletAttempt(expired.walletAttempt, 'error', { timedOut: true });
+    assert.equal(expired.walletAttempt.timeoutAt, unknown.walletAttempt.timeoutAt);
+    const { report } = await openDiagnosticReport(h);
+    assert.deepEqual(report.operation.walletAttempt, expired.walletAttempt);
+    assert.equal(report.operation.stage, 'expired');
+    assert.equal(h.walletCalls, 1);
+  });
+  await scenario('late wallet rejection cannot cancel a signature already found by recovery', { shortWalletDeadline: true }, async h => {
+    await h.connect(); await h.page.evaluate(() => { window.matrix.walletMode = 'hold'; });
+    await h.page.locator('#mint').click();
+    await h.page.waitForFunction(() => typeof window.matrix.rejectWallet === 'function');
+    h.mode = 'offline';
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled);
+    const timedOut = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(timedOut.stage, 'unknown'); assert.equal(timedOut.signature, null);
+    assertWalletAttempt(timedOut.walletAttempt, 'pending', { timedOut: true });
+
+    h.mode = 'signature-before-outage'; await h.page.locator('#check').click();
+    await h.page.waitForFunction(() => !document.querySelector('#check').disabled, undefined, { timeout: 20000 });
+    const discovered = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(discovered.asset, timedOut.asset); assert.equal(discovered.signature, signature); assert.equal(discovered.stage, 'unknown');
+    assert.equal(h.requests.some(item => item.method === 'getSignaturesForAddress'), true);
+
+    await h.page.evaluate(() => window.matrix.rejectWallet());
+    await h.page.waitForFunction(key => JSON.parse(localStorage.getItem(key)).walletAttempt?.outcome === 'rejected', S.storageKey);
+    const rejected = await h.page.evaluate(key => JSON.parse(localStorage.getItem(key)), S.storageKey);
+    assert.equal(rejected.asset, discovered.asset); assert.equal(rejected.signature, signature); assert.equal(rejected.stage, 'unknown');
+    assertWalletAttempt(rejected.walletAttempt, 'rejected', { timedOut: true });
+    assert.equal(rejected.walletAttempt.timeoutAt, timedOut.walletAttempt.timeoutAt);
+    assert.equal(await h.page.locator('#mint').isDisabled(), true);
+    const { report } = await openDiagnosticReport(h);
+    assert.equal(report.operation.stage, 'unknown'); assert.equal(report.operation.signature, signature);
+    assert.deepEqual(report.operation.walletAttempt, rejected.walletAttempt);
     assert.equal(h.walletCalls, 1);
   });
   for (const storage of ['corrupt', 'blocked']) await scenario(`${storage} storage blocks signing`, { storage }, async h => {

@@ -30,7 +30,7 @@ test('browser transport cannot submit or change RPC, and supports explicit singl
 test('unresponsive RPC and wallet calls return bounded errors', async () => {
   const fetch = makeReadFetch((_url, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => reject(Error('abort')))), 8);
   await assert.rejects(fetch(S.rpc, { body: JSON.stringify({ method: 'getGenesisHash' }) }), /RPC/);
-  await assert.rejects(boundedWalletCall(new Promise(() => {}), 8), /Кошелёк/);
+  await assert.rejects(boundedWalletCall(new Promise(() => {}), 8), { code: 'WALLET_TIMEOUT' });
 });
 test('changed price, treasury, royalty and hidden extra guards stop signing', () => {
   assert.doesNotThrow(() => assertState(state()));
@@ -106,7 +106,7 @@ test('browser builder parses real account fixtures and signs only the generated 
   const methods = [];
   const client = createClient(async (_url, options) => {
     const request = JSON.parse(options.body); methods.push(request.method);
-    const result = request.method === 'simulateTransaction' ? { value: { err: null, logs: [] } } : fixtures[request.method];
+    const result = request.method === 'simulateTransaction' ? { value: { err: null, logs: [] } } : request.method === 'getBlockHeight' ? fixtures.getLatestBlockhash.value.lastValidBlockHeight - 140 : fixtures[request.method];
     assert.notEqual(result, undefined, request.method);
     return new Response(JSON.stringify({ id: request.id, jsonrpc: '2.0', result }));
   });
@@ -119,7 +119,120 @@ test('browser builder parses real account fixtures and signs only the generated 
   assert.ok(assetIndex > 0);
   assert.ok(tx.signatures[assetIndex].some(byte => byte !== 0));
   assert.ok(client.umi.eddsa.verify(tx.message.serialize(), tx.signatures[assetIndex], prepared.operation.asset));
+  assert.equal(prepared.operation.preparation.remainingBlocks, 140);
+  assert.equal(prepared.operation.preparation.attempt, 1);
   assert.ok(!methods.includes('sendTransaction'));
+});
+
+async function preparationFixture({ remaining = () => 140, advance = () => {}, simulationError = null } = {}) {
+  const fixtures = JSON.parse(await readFile(new URL('./fixtures/devnet-rpc.json', import.meta.url), 'utf8'));
+  const calls = [], simulations = [];
+  const hashes = [fixtures.getLatestBlockhash.value.blockhash, S.machine];
+  let passes = 0;
+  const client = createClient(async (_url, options) => {
+    const request = JSON.parse(options.body); calls.push(request);
+    let result = fixtures[request.method];
+    if (request.method === 'getLatestBlockhash') {
+      passes++;
+      result = { ...fixtures.getLatestBlockhash, value: { ...fixtures.getLatestBlockhash.value, blockhash: hashes[passes - 1] } };
+    }
+    if (request.method === 'simulateTransaction') {
+      simulations.push(new Uint8Array(Buffer.from(request.params[0], 'base64')));
+      result = { value: { err: simulationError, logs: [] } };
+    }
+    if (request.method === 'getBlockHeight') result = fixtures.getLatestBlockhash.value.lastValidBlockHeight - remaining(passes);
+    advance(request.method, passes);
+    assert.notEqual(result, undefined, request.method);
+    return new Response(JSON.stringify({ id: request.id, jsonrpc: '2.0', result }));
+  }, { minIntervalMs: 0 });
+  return { client, calls, simulations, get passes() { return passes; } };
+}
+
+test('preparation refreshes a stale hash once, retains its asset and returns exactly simulated bytes', async () => {
+  const fixture = await preparationFixture({ remaining: pass => pass === 1 ? 99 : 140 });
+  const prepared = await prepareMint(fixture.client, S.owner);
+  assert.equal(fixture.passes, 2);
+  assert.equal(fixture.simulations.length, 2);
+  assert.deepEqual(prepared.bytes, fixture.simulations[1]);
+  const transactions = fixture.simulations.map(bytes => VersionedTransaction.deserialize(bytes));
+  assert.notEqual(transactions[0].message.recentBlockhash, transactions[1].message.recentBlockhash);
+  for (const tx of transactions) {
+    const assetIndex = tx.message.staticAccountKeys.findIndex(key => key.toBase58() === prepared.operation.asset);
+    assert.ok(assetIndex > 0, 'Both passes retain the same generated asset');
+    assert.equal(tx.signatures[0].some(Boolean), false, 'The wallet owner has not signed');
+    assert.ok(fixture.client.umi.eddsa.verify(tx.message.serialize(), tx.signatures[assetIndex], prepared.operation.asset));
+  }
+  assert.equal(prepared.operation.preparation.attempt, 2);
+  assert.equal(prepared.operation.preparation.remainingBlocks, 140);
+  assert.ok(fixture.calls.filter(call => call.method === 'getBlockHeight').every(call => call.params[0].commitment === 'confirmed'));
+  assert.ok(fixture.calls.every(call => !call.method.startsWith('send')));
+});
+
+test('preparation accepts the inclusive 100-block and 15000ms boundaries', async t => {
+  let clock = 0;
+  t.mock.method(performance, 'now', () => clock);
+  const fixture = await preparationFixture({ remaining: () => 100, advance: method => { if (method === 'getBlockHeight') clock += 15000; } });
+  const prepared = await prepareMint(fixture.client, S.owner);
+  assert.equal(fixture.passes, 1);
+  assert.deepEqual(prepared.bytes, fixture.simulations[0]);
+  assert.equal(prepared.operation.preparation.elapsedMs, 15000);
+  assert.equal(prepared.operation.preparation.remainingBlocks, 100);
+  assert.ok(Number.isFinite(Date.parse(prepared.operation.preparation.startedAt)));
+  assert.ok(Number.isFinite(Date.parse(prepared.operation.preparation.readyAt)));
+});
+
+test('slow blockhash, simulation or final height response refreshes preparation before returning', async t => {
+  for (const delayed of ['getLatestBlockhash', 'simulateTransaction', 'getBlockHeight']) {
+    await t.test(delayed, async t => {
+      let clock = 0;
+      t.mock.method(performance, 'now', () => clock);
+      const fixture = await preparationFixture({ advance: (method, pass) => { if (method === delayed && pass === 1) clock += 15001; } });
+      const prepared = await prepareMint(fixture.client, S.owner);
+      assert.equal(fixture.passes, 2);
+      assert.equal(prepared.operation.preparation.attempt, 2);
+      assert.equal(prepared.operation.preparation.elapsedMs, 0);
+      assert.deepEqual(prepared.bytes, fixture.simulations[1]);
+    });
+  }
+});
+
+test('two stale or slow preparation passes stop without returning signing bytes', async t => {
+  for (const mode of ['stale', 'slow']) {
+    await t.test(mode, async t => {
+      let clock = 0;
+      t.mock.method(performance, 'now', () => clock);
+      const fixture = await preparationFixture({ remaining: () => mode === 'stale' ? 99 : 140, advance: method => { if (mode === 'slow' && method === 'getBlockHeight') clock += 15001; } });
+      await assert.rejects(prepareMint(fixture.client, S.owner), { code: 'PREPARATION_STALE' });
+      assert.equal(fixture.passes, 2);
+      assert.equal(fixture.simulations.length, 2);
+      assert.ok(fixture.calls.every(call => !call.method.startsWith('send')));
+    });
+  }
+});
+
+test('malformed current or expiry height stops preparation before it can reach a wallet', async () => {
+  for (const height of [null, '123', 1.5, -1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    const fixture = await preparationFixture();
+    const rpc = fixture.client.rpc;
+    fixture.client.rpc = (method, params) => method === 'getBlockHeight' ? Promise.resolve(height) : rpc(method, params);
+    await assert.rejects(prepareMint(fixture.client, S.owner), /некорректную высоту/);
+    assert.equal(fixture.passes, 1);
+  }
+  for (const height of [null, '123', 0, -1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    const fixture = await preparationFixture();
+    const latest = await fixture.client.umi.rpc.getLatestBlockhash({ commitment: 'confirmed' });
+    fixture.client.umi.rpc.getLatestBlockhash = async () => ({ ...latest, lastValidBlockHeight: height });
+    await assert.rejects(prepareMint(fixture.client, S.owner), /некорректный срок/);
+    assert.equal(fixture.simulations.length, 0);
+  }
+});
+
+test('a simulation failure is not retried as freshness trouble', async () => {
+  const fixture = await preparationFixture({ simulationError: { InstructionError: [1, { Custom: 6033 }] } });
+  await assert.rejects(prepareMint(fixture.client, S.owner), /Симуляция минта/);
+  assert.equal(fixture.passes, 1);
+  assert.equal(fixture.simulations.length, 1);
+  assert.equal(fixture.calls.some(call => call.method === 'getBlockHeight'), false);
 });
 
 test('finalized recovery decodes a Core asset and verifies its owner and metadata', async () => {

@@ -6,6 +6,7 @@ import { deserializeCandyMachine, deserializeCandyGuard, mintV1, mplCandyMachine
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import { settings as S } from './settings.mjs';
 import { makeReadFetch, safeRpcError, validateRpcEndpoint } from './rpc.mjs';
+import { mergeWalletAttempt } from './diagnostics.mjs';
 export { makeReadFetch } from './rpc.mjs';
 
 export function requireValue(condition, message) { if (!condition) throw Error(message); }
@@ -86,26 +87,44 @@ export async function prepareMint(client, owner) {
   const umi = client.umi;
   umi.use(signerIdentity(createNoopSigner(publicKey(owner))));
   const asset = generateSigner(umi);
-  const blockhash = await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' });
-  const transaction = await setComputeUnitLimit(umi, { units: 300000 }).add(mintV1(umi, {
+  const builder = setComputeUnitLimit(umi, { units: 300000 }).add(mintV1(umi, {
     candyMachine: publicKey(S.machine), candyGuard: publicKey(S.guard),
     collection: publicKey(S.collection), asset, owner: publicKey(owner),
     mintArgs: { solPayment: { destination: publicKey(S.owner) } },
-  })).setBlockhash(blockhash).buildAndSign(umi);
-  const bytes = umi.transactions.serialize(transaction);
-  const encoded = base64.deserialize(bytes)[0];
-  const simulation = await client.rpc('simulateTransaction', [encoded, { encoding: 'base64', sigVerify: false, commitment: 'confirmed' }]);
-  requireValue(simulation.value?.err === null, `Симуляция минта: ${JSON.stringify(simulation.value?.err)}`);
-  return {
-    bytes,
-    operation: {
-      version: 1, cluster: 'devnet', machine: S.machine, collection: S.collection,
-      owner, asset: asset.publicKey, blockhash: blockhash.blockhash,
-      lastValidBlockHeight: Number(blockhash.lastValidBlockHeight),
-      stage: 'wallet-pending', signature: null, createdAt: new Date().toISOString(),
-    },
-    simulation: simulation.value,
-  };
+  }));
+  // Slow simulation responses can consume a blockhash's lifetime before the
+  // wallet even opens. Refresh at most once, retaining the same asset signer.
+  // Each pass signs only that asset and simulates the exact bytes it may return.
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    const started = performance.now();
+    const startedAt = new Date().toISOString();
+    const blockhash = await umi.rpc.getLatestBlockhash({ commitment: 'confirmed' });
+    const lastValidBlockHeight = Number(blockhash.lastValidBlockHeight);
+    requireValue(['number', 'bigint'].includes(typeof blockhash.lastValidBlockHeight) && Number.isSafeInteger(lastValidBlockHeight) && lastValidBlockHeight > 0, 'RPC вернул некорректный срок транзакции. Подпись не запрашивалась.');
+    const transaction = await builder.setBlockhash(blockhash).buildAndSign(umi);
+    const bytes = umi.transactions.serialize(transaction);
+    const encoded = base64.deserialize(bytes)[0];
+    const simulation = await client.rpc('simulateTransaction', [encoded, { encoding: 'base64', sigVerify: false, commitment: 'confirmed' }]);
+    requireValue(simulation.value?.err === null, `Симуляция минта: ${JSON.stringify(simulation.value?.err)}`);
+    const height = await client.rpc('getBlockHeight', [{ commitment: 'confirmed' }]);
+    requireValue(Number.isSafeInteger(height) && height >= 0, 'RPC вернул некорректную высоту блока. Подпись не запрашивалась.');
+    const elapsed = performance.now() - started;
+    requireValue(Number.isFinite(elapsed) && elapsed >= 0, 'Не удалось проверить время подготовки. Подпись не запрашивалась.');
+    const remainingBlocks = lastValidBlockHeight - height;
+    if (remainingBlocks < 100 || elapsed > 15000) continue;
+    const readyAt = new Date().toISOString();
+    return {
+      bytes,
+      operation: {
+        version: 1, cluster: 'devnet', machine: S.machine, collection: S.collection,
+        owner, asset: asset.publicKey, blockhash: blockhash.blockhash, lastValidBlockHeight,
+        stage: 'wallet-pending', signature: null, createdAt: readyAt,
+        preparation: { startedAt, readyAt, elapsedMs: Math.ceil(elapsed), remainingBlocks, attempt },
+      },
+      simulation: simulation.value,
+    };
+  }
+  throw Object.assign(Error('Подготовка заняла слишком много времени или срок транзакции уже близок к завершению. Подпись не запрашивалась. Проверь подключение к Devnet.'), { code: 'PREPARATION_STALE' });
 }
 
 export function validateOperation(operation) {
@@ -125,7 +144,7 @@ export function saveOperation(storage, operation) {
   storage.setItem(S.storageKey, text);
   requireValue(storage.getItem(S.storageKey) === text, 'Браузер не сохранил операцию. Подпись не запрашивается.');
 }
-export function mayStart(operation) { return !operation || ['cancelled', 'expired', 'failed'].includes(operation.stage); }
+export function mayStart(operation) { return !operation || ['expired', 'failed'].includes(operation.stage) || (operation.stage === 'cancelled' && !operation.signature); }
 export async function withMintLock(locks, callback) {
   requireValue(typeof locks?.request === 'function', 'Открой страницу в обновлённом браузере Phantom');
   return locks.request(S.storageKey, { ifAvailable: true }, lock => {
@@ -138,7 +157,7 @@ export async function boundedWalletCall(promise, timeoutMs = 60000) {
   let timer;
   try {
     return await Promise.race([promise, new Promise((_, reject) => {
-      timer = setTimeout(() => reject(Error('Кошелёк пока не ответил. Проверь результат сохранённой операции.')), timeoutMs);
+      timer = setTimeout(() => reject(Object.assign(Error('Кошелёк пока не ответил. Проверь результат сохранённой операции.'), { code: 'WALLET_TIMEOUT' })), timeoutMs);
     })]);
   } finally { clearTimeout(timer); }
 }
@@ -209,7 +228,9 @@ export async function settleOperation(client, operation, { timeoutMs = 40000, in
 // Never replace stronger durable evidence with the older in-flight snapshot.
 export function mergeOperationEvidence(incoming, saved) {
   if (!saved || saved.asset !== incoming.asset) return incoming;
-  if (saved.stage === 'verified') return saved;
+  const walletAttempt = mergeWalletAttempt(incoming.walletAttempt, saved.walletAttempt);
+  if (walletAttempt) incoming = { ...incoming, walletAttempt };
+  if (saved.stage === 'verified') return walletAttempt ? { ...saved, walletAttempt } : saved;
   if (saved.signature && !incoming.signature) return {
     ...incoming, signature: saved.signature,
     stage: ['cancelled', 'expired', 'failed'].includes(incoming.stage) ? 'unknown' : incoming.stage,

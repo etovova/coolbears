@@ -2,6 +2,7 @@ import { settings as S } from './settings.mjs';
 import { createClient, readState, prepareMint, readOperation, saveOperation, mayStart, withMintLock, settleOperation, assetUrl, signatureUrl, requireValue, boundedWalletCall, mergeOperationEvidence, validateOperation } from './core.mjs';
 import { connectWallet, getAvailableWallets, subscribeWallets, walletConnectionAction } from './wallet.mjs';
 import { validateRpcEndpoint } from './rpc.mjs';
+import { walletErrorDetails, publicWalletAttempt, publicPreparation } from './diagnostics.mjs';
 import { phantomBrowseUrl, solflareBrowseUrl, backpackBrowseUrl } from '../wallet-core.mjs';
 
 const $ = id => document.getElementById(id);
@@ -176,24 +177,43 @@ $('mint').onclick = () => action(() => withMintLock(navigator.locks, async () =>
   requireValue(wallet === selectedWallet, 'Кошелёк изменился во время подготовки');
   // Public recovery coordinates are durable BEFORE the wallet prompt.
   if (operation) localStorage.setItem(`${S.storageKey}:history:${operation.asset}`, JSON.stringify(operation));
-  persist(prepared.operation);
+  const walletName = selectedWallet.name.toLowerCase();
+  persist({ ...prepared.operation, walletAttempt: {
+    wallet: ['phantom', 'solflare', 'backpack'].includes(walletName) ? walletName : 'other',
+    transport: selectedWallet.transport, requestedAt: new Date().toISOString(), outcome: 'pending',
+  } });
   message('Подтверди один тестовый минт в кошельке. Сеть: Devnet.');
   // A wallet prompt can outlive this page. Never clear pending on timeout.
   const waiting = setTimeout(() => message('Ожидаю ответа кошелька. Если окно закрылось, после возвращения нажми «Проверить результат».'), 25000);
   try {
-    const pending = selectedWallet.send(prepared.bytes).then(signature => {
+    const pending = Promise.resolve().then(() => selectedWallet.send(prepared.bytes)).then(signature => {
       // A response after the visible timeout still belongs to this saved asset.
       const saved = readOperation(localStorage);
-      if (saved?.asset === prepared.operation.asset) persist({ ...saved, signature, stage: saved.stage === 'verified' ? 'verified' : 'submitted' });
+      if (saved?.asset === prepared.operation.asset) persist({ ...saved, signature, stage: saved.stage === 'verified' ? 'verified' : 'submitted',
+        walletAttempt: { ...saved.walletAttempt, outcome: 'submitted', responseAt: new Date().toISOString() },
+      });
       return signature;
+    }, error => {
+      // A late error is useful evidence too. Never retain the raw message,
+      // which can contain credentials, or overwrite a different attempt.
+      const saved = readOperation(localStorage);
+      if (saved?.asset === prepared.operation.asset) {
+        const details = walletErrorDetails(error);
+        const rejected = details.errorCategory === 'user-rejected';
+        persist({ ...saved, stage: saved.stage === 'verified' ? 'verified' : rejected && !saved.signature ? 'cancelled' : 'unknown',
+          walletAttempt: { ...saved.walletAttempt, outcome: rejected ? 'rejected' : 'error', responseAt: new Date().toISOString(), ...details },
+        });
+      }
+      throw error;
     });
-    const signature = await boundedWalletCall(pending);
-    persist({ ...operation, signature, stage: 'submitted' });
+    await boundedWalletCall(pending);
   } catch (error) {
-    const rejected = error.code === 4001 || error.cause?.code === 4001;
-    persist({ ...operation, stage: rejected ? 'cancelled' : 'unknown' });
+    const rejected = walletErrorDetails(error).errorCategory === 'user-rejected';
+    if (error?.code === 'WALLET_TIMEOUT') persist({ ...operation, stage: 'unknown', walletAttempt: {
+      ...operation.walletAttempt, timeoutAt: new Date().toISOString(),
+    } });
     if (rejected) { report(operation); return; }
-    message('Ответ кошелька не получен. Проверяю сохранённый адрес NFT…');
+    message(error?.code === 'WALLET_TIMEOUT' ? 'Кошелёк пока не ответил. Проверяю сохранённый адрес NFT…' : 'Кошелёк сообщил об ошибке. Проверяю сохранённый адрес NFT…');
   } finally { clearTimeout(waiting); }
   await recover();
 }));
@@ -206,6 +226,10 @@ function diagnosticText() {
     try {
       validateOperation(saved);
       publicOperation = Object.fromEntries(['version', 'cluster', 'owner', 'machine', 'collection', 'asset', 'blockhash', 'lastValidBlockHeight', 'stage', 'signature'].map(key => [key, saved[key]]));
+      const walletAttempt = publicWalletAttempt(saved.walletAttempt);
+      const preparation = publicPreparation(saved.preparation);
+      if (walletAttempt) publicOperation.walletAttempt = walletAttempt;
+      if (preparation) publicOperation.preparation = preparation;
     } catch { unreadable = true; }
   }
   const httpStatus = /RPC HTTP (\d{3}):/.exec($('status').textContent)?.[1];
@@ -214,7 +238,7 @@ function diagnosticText() {
   const status = httpStatus ? `RPC HTTP ${httpStatus}` : unreadable ? 'Не удалось прочитать сохранённую операцию' : busy ? 'Проверка выполняется' : ready ? 'Devnet доступен' : 'См. состояние операции и сообщение на странице';
   return JSON.stringify({
     exportedAt: new Date().toISOString(), page: location.origin + '/devnet/',
-    appVersion: 'devnet-20260922-4', operation: publicOperation, storageError: unreadable,
+    appVersion: 'devnet-20260922-5', operation: publicOperation, storageError: unreadable,
     rpc: endpoint === publicEndpoint ? 'public-devnet' : 'custom-devnet',
     rpcProvider: endpoint === publicEndpoint ? 'solana-public' : new URL(endpoint).hostname === 'devnet.helius-rpc.com' ? 'helius' : 'other',
     walletConnected: Boolean(wallet), ownerConnected: wallet?.address === S.owner,
