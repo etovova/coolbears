@@ -7,7 +7,9 @@
     "build:site": "node scripts/stage-site.mjs",
     "build:wallet": "node scripts/build-wallet.mjs",
     "verify": "node scripts/verify-static.mjs",
-    "test:devnet": "node --test tests/*.test.mjs"
+    "test:devnet": "node --test tests/*.test.mjs",
+    "build:rpc": "wrangler deploy --config rpc-proxy/wrangler.jsonc --dry-run --outdir ../build/rpc-proxy",
+    "test:rpc-runtime": "node tests/rpc-proxy.runtime.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "1.10.0",
@@ -24,5 +26,9 @@
   "overrides": {
     "bn.js@^4.0.0": "4.12.5",
     "uuid@<11.1.1": "11.1.1"
+  },
+  "devDependencies": {
+    "miniflare": "5.20260921.0-alpha",
+    "wrangler": "4.136.2"
   }
 }

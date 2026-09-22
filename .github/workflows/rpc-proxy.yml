@@ -1,0 +1,30 @@
+name: Devnet RPC proxy validation
+on:
+  push:
+    branches: [main, 'rpc-wallet-additions-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  proxy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_SEND_METRICS: 'false'
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npm run test:devnet
+      - run: npm run build:rpc
+      - run: npm run test:rpc-runtime
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: rpc-proxy-validation
+          path: build/rpc-proxy-runtime.json
+          if-no-files-found: warn
