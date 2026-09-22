@@ -71,7 +71,9 @@
     }
   };
 
-  let lang = localStorage.getItem('coolbears_lang') || 'en';
+  // Language persistence is optional; blocked storage must not disable the site.
+  let lang = 'en';
+  try { lang = localStorage.getItem('coolbears_lang') || 'en'; } catch {}
   if (!tr[lang]) lang = 'en';
   let connected = false;
   let wallet = null;
@@ -95,7 +97,7 @@
 
   function apply(l) {
     lang = tr[l] ? l : 'en';
-    localStorage.setItem('coolbears_lang', lang);
+    try { localStorage.setItem('coolbears_lang', lang); } catch {}
     document.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
     $$('[data-i18n]').forEach(el => { el.innerHTML = t(el.dataset.i18n); });
     $$('.bear-lang').forEach(btn => {
@@ -142,6 +144,15 @@
   }
 
   let openingWallet = false;
+  async function loadWalletUI() {
+    let timer;
+    try {
+      return await Promise.race([
+        import('./wallet-ui.mjs?v=wallet-reliability-20260922'),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(t('walletFailed'))), 15000); })
+      ]);
+    } finally { clearTimeout(timer); }
+  }
   const walletStatus = document.createElement('div');
   walletStatus.id = 'walletStatus';
   walletStatus.setAttribute('role', 'status');
@@ -168,7 +179,7 @@
     walletBtn?.setAttribute('aria-busy', 'true');
     try {
       if (!wallet) {
-        const { createWalletUI } = await import('./wallet-ui.mjs?v=wallet-standard-20260920');
+        const { createWalletUI } = await loadWalletUI();
         wallet = createWalletUI({
           language: () => lang,
           onChange: address => {

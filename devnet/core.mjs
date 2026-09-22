@@ -5,6 +5,8 @@ import { deserializeAssetV1, deserializeCollectionV1, mplCore } from '@metaplex-
 import { deserializeCandyMachine, deserializeCandyGuard, mintV1, mplCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
 import { setComputeUnitLimit } from '@metaplex-foundation/mpl-toolbox';
 import { settings as S } from './settings.mjs';
+import { makeReadFetch, safeRpcError, validateRpcEndpoint } from './rpc.mjs';
+export { makeReadFetch } from './rpc.mjs';
 
 export function requireValue(condition, message) { if (!condition) throw Error(message); }
 export const assetUrl = address => `https://core.metaplex.com/explorer/${address}?env=devnet`;
@@ -12,45 +14,33 @@ export const signatureUrl = signature => `https://explorer.solana.com/tx/${signa
 const validAddress = value => typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value);
 export const isSignature = value => typeof value === 'string' && /^[1-9A-HJ-NP-Za-km-z]{64,88}$/.test(value);
 
-// Reads and simulations only. The wallet owns signing AND submission.
-export function makeReadFetch(fetchImpl = globalThis.fetch, timeoutMs = 25000) {
-  return async (url, options = {}) => {
-    requireValue(String(url) === S.rpc, 'Unexpected RPC endpoint');
-    const request = JSON.parse(options.body);
-    requireValue(!Array.isArray(request) && typeof request.method === 'string', 'Invalid RPC request');
-    requireValue(/^(get[A-Z]|isBlockhashValid$|simulateTransaction$)/.test(request.method), 'Read-only RPC');
-    const controller = new AbortController();
-    const abort = () => controller.abort();
-    options.signal?.addEventListener('abort', abort, { once: true });
-    if (options.signal?.aborted) controller.abort();
-    const timer = setTimeout(abort, timeoutMs);
-    try {
-      const response = await fetchImpl(url, { ...options, signal: controller.signal });
-      requireValue(response.ok, `RPC HTTP ${response.status}. Повтори проверку позже.`);
-      // Consume the body under the same deadline, then return a replayable response.
-      const text = await response.text();
-      return new Response(text, { status: response.status, headers: response.headers });
-    } catch (error) {
-      if (controller.signal.aborted) throw Error(`RPC не ответил за ${Math.ceil(timeoutMs / 1000)} секунд. Повтори проверку результата позже.`);
-      throw error;
-    } finally {
-      clearTimeout(timer);
-      options.signal?.removeEventListener('abort', abort);
-    }
-  };
-}
-
-export function createClient(fetchImpl = globalThis.fetch) {
-  const readFetch = makeReadFetch(fetchImpl);
-  const umi = createUmi(S.rpc, { commitment: 'confirmed', disableRetryOnRateLimit: true, fetch: readFetch })
-    .use(mplCore()).use(mplCandyMachine());
+export function createClient(fetchImpl = globalThis.fetch, configuration = {}) {
+  const endpoint = validateRpcEndpoint(configuration.endpoint ?? S.rpc);
+  const readFetch = makeReadFetch(fetchImpl, { ...configuration, endpoint });
+  let umi;
+  try {
+    umi = createUmi(endpoint, { commitment: 'confirmed', disableRetryOnRateLimit: true, fetch: readFetch })
+      .use(mplCore()).use(mplCandyMachine());
+  } catch (error) { throw safeRpcError(error); }
+  umi.rpc = new Proxy(umi.rpc, {
+    get(target, key) {
+      const value = Reflect.get(target, key);
+      if (typeof value !== 'function') return value;
+      return (...args) => {
+        try {
+          const result = Reflect.apply(value, target, args);
+          return result?.then ? result.catch(error => { throw safeRpcError(error); }) : result;
+        } catch (error) { throw safeRpcError(error); }
+      };
+    },
+  });
   async function rpc(method, params = []) {
-    const response = await readFetch(S.rpc, {
+    const response = await readFetch(endpoint, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
     });
     const data = await response.json();
-    requireValue(data.id === 1 && !data.error && 'result' in data, `RPC: ${data.error?.message || 'invalid response'}`);
+    requireValue(data.id === 1 && !data.error && 'result' in data, 'RPC: invalid response');
     return data.result;
   }
   return { umi, rpc };
@@ -213,4 +203,16 @@ export async function settleOperation(client, operation, { timeoutMs = 40000, in
     await new Promise(resolve => setTimeout(resolve, intervalMs));
   } while (Date.now() < deadline);
   return operation;
+}
+
+// Recovery may finish after the wallet has already delivered a late signature.
+// Never replace stronger durable evidence with the older in-flight snapshot.
+export function mergeOperationEvidence(incoming, saved) {
+  if (!saved || saved.asset !== incoming.asset) return incoming;
+  if (saved.stage === 'verified') return saved;
+  if (saved.signature && !incoming.signature) return {
+    ...incoming, signature: saved.signature,
+    stage: ['cancelled', 'expired', 'failed'].includes(incoming.stage) ? 'unknown' : incoming.stage,
+  };
+  return incoming;
 }

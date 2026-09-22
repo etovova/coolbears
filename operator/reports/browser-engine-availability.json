@@ -1,0 +1,31 @@
+{
+  "checkedOn": "2026-09-22",
+  "scope": "Availability of additional real browser engines for main-site and Devnet smoke checks",
+  "playwrightVersion": "1.62.1",
+  "installationPolicy": "One official installer invocation per missing engine, connection timeout 12000 ms, overall command cap 50 seconds. No repeated optional installs after failure.",
+  "engines": [
+    {
+      "engine": "firefox",
+      "requestedVersion": "153.0",
+      "playwrightBuild": "1538",
+      "available": false,
+      "result": "Official CDN request timed out; installer switched to its Microsoft mirror, then failed with Unable to update lock within the stale threshold. No Firefox executable was installed.",
+      "installerExitCode": 1,
+      "browserSmokeTestsRun": 0
+    },
+    {
+      "engine": "webkit",
+      "requestedVersion": "26.5",
+      "playwrightBuild": "2336",
+      "available": false,
+      "result": "Official CDN request timed out; the official Microsoft mirror downloaded WebKit successfully. Installer later failed updating its lock during the FFmpeg step. A direct headless launch of the downloaded WebKit executable failed because libgstreamer-1.0.so.0 is unavailable.",
+      "installerExitCode": 1,
+      "browserExitCode": 127,
+      "browserSmokeTestsRun": 0
+    }
+  ],
+  "coverageLimit": "Chromium viewport and touch emulation must not be reported as actual Firefox, Safari, iOS, Android wallet-app, or physical-device coverage. Neither additional engine completed a page test in this environment.",
+  "applicationChanges": 0,
+  "realWalletApprovals": 0,
+  "blockchainTransactionsSent": 0
+}

@@ -36,10 +36,20 @@ export function getWalletOptions(scope, pageUrl, mobile, standard = []) {
 }
 
 // This controller requests only a public address. Signing is a separate action.
-export function createWalletSession(onChange = () => {}) {
+export async function walletDeadline(promise, timeoutMs = 60000) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('Wallet did not respond. Please try again.'), { code: 'WALLET_TIMEOUT' })), timeoutMs);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+export function createWalletSession(onChange = () => {}, { timeoutMs = 60000 } = {}) {
   let provider = null;
   let address = '';
   let listeners = [];
+  let attempt = 0;
   const setAddress = key => { address = key?.toString() || ''; onChange(address); };
   function detach() {
     for (const [event, handler] of listeners) provider?.removeListener?.(event, handler);
@@ -50,7 +60,9 @@ export function createWalletSession(onChange = () => {}) {
     get provider() { return provider; },
     async connect(nextProvider) {
       if (!nextProvider?.connect) throw new Error('Solana wallet unavailable');
-      const result = await nextProvider.connect();
+      const currentAttempt = ++attempt;
+      const result = await walletDeadline(Promise.resolve().then(() => nextProvider.connect()), timeoutMs);
+      if (currentAttempt !== attempt) throw new DOMException('Wallet connection was replaced', 'AbortError');
       const key = result?.publicKey || nextProvider.publicKey;
       if (!key) throw new Error('Wallet did not return an address');
       detach();
@@ -66,8 +78,12 @@ export function createWalletSession(onChange = () => {}) {
       return address;
     },
     async disconnect() {
+      const currentAttempt = ++attempt;
       if (!provider) { setAddress(null); return; }
-      await provider.disconnect();
+      const selectedProvider = provider;
+      await walletDeadline(Promise.resolve().then(() => selectedProvider.disconnect()), timeoutMs);
+      // A late response from an older provider must not clear a new connection.
+      if (currentAttempt !== attempt || provider !== selectedProvider) return;
       detach();
       provider = null;
       setAddress(null);

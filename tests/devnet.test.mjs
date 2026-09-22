@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { VersionedTransaction } from '@solana/web3.js';
+import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { createClient, prepareMint, makeReadFetch, assertState, assertAsset, readOperation, saveOperation, mayStart, inspectOperation, withMintLock, boundedWalletCall } from '../devnet/core.mjs';
 import { settings as S } from '../devnet/settings.mjs';
 import { getWallets } from '@wallet-standard/app';
@@ -18,9 +18,9 @@ const state = () => ({
 });
 const storage = () => { const map = new Map(); return { getItem: key => map.get(key) ?? null, setItem: (key, value) => map.set(key, value) }; };
 
-test('browser transport cannot submit or change RPC, and does not retry 429', async () => {
+test('browser transport cannot submit or change RPC, and supports explicit single-attempt checks', async () => {
   let calls = 0;
-  const fetch = makeReadFetch(async () => { calls++; return new Response('{}', { status: 429 }); });
+  const fetch = makeReadFetch(async () => { calls++; return new Response('{}', { status: 429 }); }, { maxAttempts: 1 });
   await assert.rejects(fetch(S.rpc, { body: JSON.stringify({ method: 'sendTransaction' }) }), /Read-only/);
   await assert.rejects(fetch('https://api.mainnet-beta.solana.com', { body: '{}' }), /Unexpected/);
   assert.equal(calls, 0);
@@ -138,7 +138,7 @@ test('finalized recovery decodes a Core asset and verifies its owner and metadat
 });
 
 test('Wallet Standard explicitly submits to solana:devnet and detects an account switch', async () => {
-  const account = { address: S.owner, publicKey: new Uint8Array(32), chains: ['solana:devnet'], features: ['solana:signAndSendTransaction'] };
+  const account = { address: S.owner, publicKey: new PublicKey(S.owner).toBytes(), chains: ['solana:devnet'], features: ['solana:signAndSendTransaction'] };
   let sent = 0;
   const standard = { name: 'Phantom', version: '1.0.0', icon: 'data:image/svg+xml;base64,', chains: ['solana:devnet'], accounts: [account], features: {
     'standard:connect': { version: '1.0.0', connect: async () => ({ accounts: [account] }) },

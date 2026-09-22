@@ -1,4 +1,4 @@
-import { getWalletOptions, createWalletSession } from './wallet-core.mjs?v=wallet-standard-20260920';
+import { getWalletOptions, createWalletSession, walletDeadline } from './wallet-core.mjs?v=wallet-reliability-20260922';
 
 const text = {
   en: { title: 'Connect wallet', open: 'Open in {wallet}', install: 'Install {wallet}', close: 'Close' },
@@ -16,7 +16,7 @@ export function createWalletUI({ language = () => 'en', onChange = () => {}, dis
     document.head.append(style);
   }
   let standard;
-  const discovery = discover().then(module => { standard = module; return module; }).catch(() => null);
+  const discovery = walletDeadline(Promise.resolve().then(discover), 15000).then(module => { standard = module; return module; }).catch(() => null);
   function choose(wallets, mobile) {
     return new Promise((resolve, reject) => {
       const t = text[language()] || text.en;

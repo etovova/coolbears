@@ -1,0 +1,59 @@
+{
+  "checkedAt": "2026-09-22T00:25:47.601197+00:00",
+  "rootTests": 58,
+  "operatorTests": 22,
+  "devnetBrowserScenarios": 30,
+  "mainBrowserScenarios": 12,
+  "existingDevnetBrowserAssertions": 10,
+  "actualDevnetSimulation": {
+    "positiveError": null,
+    "unauthorizedError": 6033,
+    "ownerSignatureVerified": false,
+    "transactionsSent": 0
+  },
+  "actualBrowserRpcRead": {
+    "checkedAt": "2026-09-22T00:23:50.852Z",
+    "elapsedMs": 17968,
+    "status": "Devnet доступен. Подключи FNyt…CW6y и выпусти один тестовый NFT.",
+    "success": true,
+    "origin": "https://coolbears-nfts.com",
+    "app": "locally staged exact bundle routed at live origin",
+    "rpcMocked": false,
+    "methods": [
+      "getGenesisHash",
+      "getMultipleAccounts"
+    ],
+    "transactionsSent": 0,
+    "walletConnected": false,
+    "physicalDevice": false,
+    "headlessProxyCAException": true,
+    "pageErrors": []
+  },
+  "dependencyAudit": {
+    "high": 0,
+    "critical": 0,
+    "moderate": 8,
+    "scope": "root npm audit; transitive stream-json filters advisory; current jayson imports StreamValues and Verifier, no filter imports found; not a security guarantee"
+  },
+  "files": {
+    "index.html": "a6660ce673c1cbc8514c6b9e5d0771de48f79e144e81055b07129fd8c78453fc",
+    "app.js": "52c82e456a29a521a527da9f1343cd42e8dbce583fd0a8f7c1e9f991d881fbd3",
+    "wallet-core.mjs": "90e23aa93e4456ea6765e7c273a8fa4ce242f061ab4a7211124625e429763d24",
+    "wallet-ui.mjs": "db79f7e3ea002ed25c4cf93efecfbba7aa31342041c389610d8fc3f17cbf7740",
+    "wallet-standard.js": "9cf41c7e42536486150a2a04c4a2e1e2474f925294edb416e7c963c01b26a372",
+    "devnet/index.html": "29d5ef1e6f31f770601c8586b34ae5a05a0fbe592e4cc1210c0a6f7d86ef9972",
+    "devnet/app.js": "27442861bc83165a27eb5efa7ceb5df0370abc3f087824f4be9bf02333fd5a46",
+    "devnet/style.css": "2a1cbf22f069d5e71bae824185ca5f357fb3bbe59248d13e3b026c3ec4e9e3e4"
+  },
+  "salesOpen": false,
+  "realTransactionsSentThisWork": 0,
+  "physicalWalletMintVerified": false,
+  "dedicatedRpcConfigured": false,
+  "limitations": [
+    "Physical Phantom screenshot proves address connection and HTTP429 only; it does not prove owner mint.",
+    "Chromium UA/touch emulation is not a physical iOS/Android wallet test.",
+    "Firefox/WebKit page tests unavailable; see browser-engine-availability.json.",
+    "Public RPC may still rate limit; user/provider-specific endpoint is required for reliable deployment.",
+    "Mainnet, production9999 mint, batch50 and Magic Eden indexing remain separate incomplete stages."
+  ]
+}

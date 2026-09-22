@@ -1,4 +1,12 @@
 // This is the existing two-item Devnet laboratory, not the production collection.
+export const rpcPolicy = Object.freeze({
+  totalTimeoutMs: 45000,
+  attemptTimeoutMs: 25000,
+  maxAttempts: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 8000,
+  maxPending: 8,
+});
 export const settings = Object.freeze({
   rpc: 'https://api.devnet.solana.com',
   genesis: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
