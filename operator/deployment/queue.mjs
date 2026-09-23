@@ -35,6 +35,7 @@ export function deploymentQueueStatus(snapshot) {
     progress: { totalSteps: snapshot.steps.length, verifiedSteps,
       remainingSteps: snapshot.steps.length - verifiedSteps, currentStepNumber: index < 0 ? null : index + 1 },
     next: { action, stepId: next.stepId ?? null, attempt: attempt?.number ?? null,
+      ...(attempt?.groupId ? { groupId: attempt.groupId } : {}),
       state: attempt?.state ?? (action === 'complete' ? 'complete' : 'unprepared'),
       walletResponseMissing: action === 'recover-wallet-response', commands },
     freshChainCheck: false, readyToSubmit: false, readyToOpenSales: false, salesOpen: false,

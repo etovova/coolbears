@@ -3,6 +3,7 @@ import { open } from 'node:fs/promises';
 import { readDeploymentBundle } from '../vault-store.mjs';
 import { nextDeploymentAction } from '../journal.mjs';
 import { readDeploymentQueue, queueBinding } from '../queue.mjs';
+import { prepareDeploymentGroup } from '../group.mjs';
 import { createSigningSession } from './session.mjs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,12 +15,13 @@ async function responseFile(filename) {
   let file;
   try {
     file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
-    const stat = await file.stat(); if (!stat.isFile() || stat.size > 16384) throw Error();
-    const buffer = Buffer.alloc(16385); let size = 0;
+    const stat = await file.stat(); if (!stat.isFile() || stat.size > 32768) throw Error();
+    const buffer = Buffer.alloc(32769); let size = 0;
     while (size < buffer.length) { const read = await file.read(buffer, size, buffer.length - size); if (!read.bytesRead) break; size += read.bytesRead; }
-    if (size > 16384) throw Error();
+    if (size > 32768) throw Error();
     const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, size)));
-    if (value?.status !== 'signed' || typeof value.requestId !== 'string' || typeof value.transactionBase64 !== 'string') throw Error();
+    if (value?.status !== 'signed' || typeof value.requestId !== 'string'
+      || (value.groupId ? !Array.isArray(value.transactionBase64s) : typeof value.transactionBase64 !== 'string')) throw Error();
     return value;
   } finally { await file?.close(); }
 }
@@ -27,8 +29,8 @@ export async function runOwnerConsole(args, { input = process.stdin, output = pr
   let passphrase;
   try {
     const [command, directory, suppliedStep, ...extra] = args;
-    const needsStep = ['prepare', 'prepare-retry', 'import-response'].includes(command);
-    if (!['status', 'prepare-next', 'prepare', 'prepare-retry', 'serve', 'import-response'].includes(command)
+    const needsStep = ['prepare', 'prepare-retry', 'prepare-group', 'import-response'].includes(command);
+    if (!['status', 'prepare-next', 'prepare-group', 'prepare', 'prepare-retry', 'serve', 'import-response'].includes(command)
       || !directory || extra.length || (needsStep ? !suppliedStep : suppliedStep !== undefined)) throw Error();
     if (command === 'status') {
       output.write(JSON.stringify(await readDeploymentQueue(directory), null, 2) + '\n'); return 0;
@@ -36,11 +38,16 @@ export async function runOwnerConsole(args, { input = process.stdin, output = pr
     if (command === 'import-response') {
       const response = await responseFile(suppliedStep);
       const session = await createSigningSession({ directory });
-      const result = await session.accept(response.requestId, response.transactionBase64);
+      const result = await session.accept(response.requestId, response.groupId ? response.transactionBase64s : response.transactionBase64);
       output.write(JSON.stringify(result) + '\n'); return 0;
     }
     const endpoint = env.COOLBEARS_RPC_URL;
     const fetchImpl = env.COOLBEARS_OPERATOR_RPC_TOKEN === undefined ? undefined : createGatewayFetch({ endpoint, token: env.COOLBEARS_OPERATOR_RPC_TOKEN });
+    if (command === 'prepare-group') {
+      if (!/^[2-4]$/.test(suppliedStep)) throw Error();
+      const result = await prepareDeploymentGroup({ directory, count: Number(suppliedStep), endpoint, fetchImpl });
+      output.write(JSON.stringify(result) + '\n'); return 0;
+    }
     if (['prepare', 'prepare-retry', 'prepare-next'].includes(command)) {
       // A pending request is resumed, never silently replaced or re-signed.
       const bundle = await readDeploymentBundle(directory), action = nextDeploymentAction(bundle.snapshot);

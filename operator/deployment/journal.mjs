@@ -8,6 +8,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import { VersionedTransaction } from '@solana/web3.js';
 import { createSigningRequest, verifySigningResponse } from './signing.mjs';
+import { validateSigningGroup, signingGroupId, verifySigningGroupResponse } from './group-signing.mjs';
 
 const ACTIVE = new Set(['wallet-pending', 'signed', 'send-claimed', 'accepted', 'unknown']);
 const RETRYABLE = new Set(['cancelled', 'failed', 'expired']);
@@ -65,11 +66,69 @@ function validateManifest(manifest) {
 }
 
 export function nextDeploymentAction(snapshot) {
-  const active = snapshot.steps.find(step => ACTIVE.has(last(step)?.state));
-  if (active) return { type: 'reconcile', stepId: active.id, attempt: last(active).number };
   const pending = snapshot.steps.find(step => last(step)?.state !== 'verified');
   if (!pending) return { type: 'complete', readyToOpenSales: false };
+  if (ACTIVE.has(last(pending)?.state)) return { type: 'reconcile', stepId: pending.id, attempt: last(pending).number };
   return { type: last(pending) ? 'retry-review' : 'prepare', stepId: pending.id };
+}
+
+function preparedAttempt(snapshot, step, definition, request) {
+  const expected = createSigningRequest({ deploymentId: snapshot.manifest.id, stepId: step.id,
+    attempt: step.attempts.length + 1, cluster: snapshot.manifest.cluster, owner: snapshot.manifest.owner,
+    transactionBase64: request?.transactionBase64, lastValidBlockHeight: request?.lastValidBlockHeight });
+  assert.deepEqual(request, expected, 'REQUEST_BINDING_MISMATCH');
+  requireThat(!step.attempts.some(previous => previous.signed && previous.request.blockhash === request.blockhash), 'RETRY_REQUIRES_NEW_BLOCKHASH');
+  const template = decode(definition.transactionBase64), prepared = decode(request.transactionBase64);
+  prepared.message.recentBlockhash = template.message.recentBlockhash;
+  requireThat(Buffer.from(prepared.message.serialize()).equals(Buffer.from(template.message.serialize())), 'REQUEST_INTENT_MISMATCH');
+  return { number: expected.attempt, state: 'wallet-pending', request: structuredClone(request), signed: null, proof: null };
+}
+
+export function deploymentGroupAttempts(snapshot, groupId) {
+  requireThat(typeof groupId === 'string' && /^[a-f0-9]{64}$/.test(groupId), 'INVALID_GROUP_ID');
+  const entries = snapshot.steps.flatMap(step => step.attempts.filter(attempt => attempt.groupId === groupId)
+    .map(attempt => ({ step, attempt })));
+  requireThat(signingGroupId(entries.map(entry => entry.attempt.request)) === groupId, 'GROUP_BINDING_MISMATCH');
+  return entries;
+}
+
+function applyGroupEvent(snapshot, event) {
+  if (event.type === 'prepare-group') {
+    exact(event, 'type stepId groupId requests');
+    const requests = validateSigningGroup(event.requests), action = nextDeploymentAction(snapshot);
+    requireThat(snapshot.manifest.cluster === 'devnet' && action.type === 'prepare' && action.stepId === event.stepId
+      && requests[0].stepId === event.stepId && signingGroupId(requests) === event.groupId, 'GROUP_NOT_READY');
+    const index = snapshot.steps.findIndex(step => step.id === event.stepId);
+    requireThat(index >= 3, 'GROUP_INSERT_ONLY');
+    const prepared = requests.map((request, offset) => {
+      const step = snapshot.steps[index + offset], definition = snapshot.manifest.steps[index + offset];
+      requireThat(step && step.id === request.stepId && step.attempts.length === 0
+        && definition.requiredSigners.length === 1 && definition.expected.configLines?.length > 0, 'GROUP_NOT_READY');
+      return { ...preparedAttempt(snapshot, step, definition, request), groupId: event.groupId };
+    });
+    for (const [offset, attempt] of prepared.entries()) snapshot.steps[index + offset].attempts.push(attempt);
+  } else {
+    const signed = event.type === 'signed-group';
+    exact(event, `type stepId groupId ${signed ? 'transactionBase64s' : 'claimId'}`);
+    const entries = deploymentGroupAttempts(snapshot, event.groupId);
+    requireThat(entries[0].step.id === event.stepId && entries.every(({ step, attempt }) => last(step) === attempt), 'GROUP_CHANGED');
+    requireThat(nextDeploymentAction(snapshot).stepId === event.stepId, 'GROUP_NOT_CURRENT');
+    if (signed) {
+      const verified = verifySigningGroupResponse(entries.map(x => x.attempt.request), event.transactionBase64s);
+      requireThat(entries.every(x => ['wallet-pending', 'unknown'].includes(x.attempt.state)
+        && !x.attempt.signed && x.attempt.walletClaim === entries[0].attempt.walletClaim)
+        && !!entries[0].attempt.walletClaim, 'GROUP_SIGNATURE_NOT_EXPECTED');
+      entries.forEach(({ attempt }, i) => { attempt.signed = verified[i]; if (attempt.state !== 'unknown') attempt.state = 'signed'; });
+    } else {
+      requireThat(typeof event.claimId === 'string' && /^[a-f0-9]{64}$/.test(event.claimId)
+        && entries.every(x => x.attempt.state === 'wallet-pending' && !x.attempt.signed), 'GROUP_WALLET_NOT_READY');
+      const requesting = event.type === 'request-wallet-group';
+      requireThat(entries.every(x => requesting ? !x.attempt.walletClaim : x.attempt.walletClaim === event.claimId), 'GROUP_CLAIM_MISMATCH');
+      entries.forEach(({ attempt }) => { attempt.walletClaim = requesting ? event.claimId : null; });
+    }
+  }
+  snapshot.revision++;
+  return snapshot;
 }
 
 function validateProof(snapshot, definition, attempt, proof) {
@@ -98,6 +157,7 @@ function applyEvent(snapshot, event) {
   // Replay owns this object; avoid cloning the full 9,999-line plan per event.
   const next = snapshot;
   requireThat(event && id(event.stepId), 'INVALID_EVENT');
+  if (['prepare-group', 'request-wallet-group', 'wallet-declined-group', 'signed-group'].includes(event.type)) return applyGroupEvent(next, event);
   const step = next.steps.find(value => value.id === event.stepId);
   const definition = next.manifest.steps.find(value => value.id === event.stepId);
   requireThat(step && definition, 'UNKNOWN_STEP');
@@ -108,25 +168,14 @@ function applyEvent(snapshot, event) {
     const action = nextDeploymentAction(next);
     requireThat(['prepare', 'retry-review'].includes(action.type) && action.stepId === step.id, 'STEP_NOT_READY');
     if (attempt) requireThat(event.retry === true && RETRYABLE.has(attempt.state), 'EXPLICIT_RETRY_REQUIRED');
-    const request = event.request;
-    // Re-derive all fields; requests are trusted only when also bound to this manifest.
-    const expectedRequest = createSigningRequest({ deploymentId: next.manifest.id, stepId: step.id,
-      attempt: step.attempts.length + 1, cluster: next.manifest.cluster, owner: next.manifest.owner,
-      transactionBase64: request?.transactionBase64, lastValidBlockHeight: request?.lastValidBlockHeight });
-    assert.deepEqual(request, expectedRequest, 'REQUEST_BINDING_MISMATCH');
-    requireThat(!step.attempts.some(previous => previous.signed && previous.request.blockhash === request.blockhash), 'RETRY_REQUIRES_NEW_BLOCKHASH');
-    const template = decode(definition.transactionBase64), prepared = decode(request.transactionBase64);
-    // A fresh blockhash is required in real execution. It may change; every
-    // other message byte (including payer, accounts and instructions) is fixed.
-    prepared.message.recentBlockhash = template.message.recentBlockhash;
-    requireThat(Buffer.from(prepared.message.serialize()).equals(Buffer.from(template.message.serialize())), 'REQUEST_INTENT_MISMATCH');
-    step.attempts.push({ number: expectedRequest.attempt, state: 'wallet-pending', request: structuredClone(request), signed: null, proof: null });
+    step.attempts.push(preparedAttempt(next, step, definition, event.request));
   } else {
     const fields = { 'request-wallet': 'claimId', 'wallet-declined': 'claimId', signed: 'transactionBase64', 'claim-send': '', accepted: '', unknown: '', cancelled: '', reconcile: 'proof' };
     requireThat(Object.hasOwn(fields, event.type), 'UNKNOWN_EVENT');
     exact(event, `type stepId attempt${fields[event.type] ? ` ${fields[event.type]}` : ''}`);
     requireThat(attempt && event.attempt === attempt.number, 'STALE_ATTEMPT');
     requireThat(ACTIVE.has(attempt.state), 'ATTEMPT_TERMINAL');
+    if (attempt.groupId) requireThat(!['request-wallet', 'wallet-declined', 'signed', 'cancelled'].includes(event.type), 'GROUP_EVENT_REQUIRED');
     switch (event.type) {
       case 'request-wallet':
         requireThat(attempt.state === 'wallet-pending' && !attempt.signed && !attempt.walletClaim
@@ -147,6 +196,7 @@ function applyEvent(snapshot, event) {
         break;
       }
       case 'claim-send':
+        requireThat(nextDeploymentAction(next).stepId === step.id, 'STEP_NOT_CURRENT');
         requireThat(attempt.state === 'signed', 'SEND_NOT_ALLOWED');
         attempt.state = 'send-claimed'; break;
       case 'accepted':
