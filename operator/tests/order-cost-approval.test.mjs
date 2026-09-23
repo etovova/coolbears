@@ -5,6 +5,7 @@ import approved from '../../metadata/policy.json' with {type:'json'};
 import {buyerGatewayFixture} from './fixtures/buyer-gateway.mjs';
 import {createCostQuote,validateCostQuote,validateCostApproval,enforceCostCeiling,lamports,costQuoteKey} from '../orders/cost-approval.mjs';
 import {createBuyerSubmissionTransport} from '../orders/gateway/submission-client.mjs';
+import {createBuyerWalletClient} from '../orders/wallet-client.mjs';
 import {createBuyerSender} from '../orders/sender.mjs';
 const f=await buyerGatewayFixture({syntheticOwner:true});approved.owner=f.policy.owner;
 const {makeBuyerGateway}=await import('../orders/gateway/worker.mjs');
@@ -95,4 +96,16 @@ test('submission HTTP acknowledgment remains bound to approved quote and cap',as
   }});
   await assert.rejects(transport.send(signed,approval),/COST_RESPONSE/);
   const before=f.calls.length;assert.equal((await h.call('send',signed,approval)).status,409);assert.equal(f.calls.length,before);
+});
+
+test('missing/null cost options fail with the correct state before any check or wallet call',async()=>{
+  const input=f.input('null-options');let calls=0,saved=null;
+  const account={address:f.policy.owner,publicKey:f.owner.publicKey.toBytes(),chains:['solana:devnet'],features:['solana:signTransaction']};
+  const wallet={chains:['solana:devnet'],accounts:[account],features:{'standard:connect':{connect:async()=>({accounts:[account]})},
+    'standard:events':{on:()=>()=>{}},'solana:signTransaction':{supportedTransactionVersions:[0],signTransaction:()=>{calls++;throw Error('forbidden');}}}};
+  const storage={read:async()=>input.order,readAssetSigning:async()=>({status:'asset-partial-saved',claim:input.claim,request:input.request}),readBuyerResponse:async()=>saved};
+  const client=createBuyerWalletClient({storage,scope:input.order,checkPrepared:async()=>{calls++;throw Error('forbidden');},storageManager:{persisted:async()=>true}});
+  await client.load();await client.connect(wallet);
+  await assert.rejects(client.signOnly(null),/COST_APPROVAL_REQUIRED/);await assert.rejects(client.signOnly(),/COST_APPROVAL_REQUIRED/);
+  saved={status:'wallet-response-unknown'};await client.load();await assert.rejects(client.signOnly(null),/NOT_READY/);assert.equal(calls,0);
 });

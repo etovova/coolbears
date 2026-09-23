@@ -110,8 +110,10 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
         costQuote=structuredClone(expected);return structuredClone(expected);
       }finally{busy=false;notify();}
     },
-    async signOnly({authorizeCost=false,quoteId,maxTotalLamports}={}) {
-      need(state().canRequestSignature, 'NOT_READY'); busy = true;
+    async signOnly(options) {
+      need(state().canRequestSignature, 'NOT_READY');
+      const {authorizeCost=false,quoteId,maxTotalLamports}=options??{};
+      busy = true;
       const approvedQuote=costQuote&&structuredClone(costQuote);
       const selected = wallet, selectedAccount = account, generation = epoch;
       const stableWallet = () => need(!disposed && selected === wallet && epoch === generation
