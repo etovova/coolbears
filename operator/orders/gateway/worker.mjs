@@ -5,6 +5,7 @@ import { createOrderModel } from '../journal-model.mjs';
 import { createOrderPlanner } from '../transaction-model.mjs';
 import { createAccountVerifier } from '../../deployment/accounts-model.mjs';
 import { createOrderChecker } from '../preflight-model.mjs';
+import {createCostQuote,costQuoteKey,validateCostApproval,enforceCostCeiling} from '../cost-approval.mjs';
 import { anchorKey, validateBlockhashAnchor } from '../blockhash-anchor.mjs';
 import { preparationFor, validatePreparation } from '../preparation.mjs';
 import { validateAssetRequest } from '../signing.mjs';
@@ -77,12 +78,12 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       });
     }
     async fetch(request){
-      let own=false,reserved=false,settled=false,infra;
+      let own=false,reserved=false,settled=false,infra,sendBudgetReport;
       const started=performance.now(),route=new URL(request.url).pathname.split('/').at(-1);
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
@@ -109,10 +110,15 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(['check','send'].includes(route)){
           try{validateBlockhashAnchor(savedPreparation?.anchor,claim);}catch{throw new BuyerCheckError('BLOCKHASH_ANCHOR_REQUIRED',409);}
         }
+        if(route==='send'){
+          try{validateCostApproval(body.costApproval,submission,{now:Date.now()});}
+          catch(e){throw new BuyerCheckError(/^COST_[A-Z_]+$/.test(e.message)?e.message:'COST_APPROVAL_INVALID',409);}
+          need(JSON.stringify(await this.storage.get(costQuoteKey(body.costApproval.quote.quoteId)))===JSON.stringify(body.costApproval.quote),'COST_QUOTE_NOT_SAVED',409);
+        }
         await this.reserveCheck();reserved=true;
         if(route==='send')await this.storage.transaction(async tx=>{
           need(await tx.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
-          await tx.put(sendKey,{version:1,signature:signed.signature,transactionSha256:signedBytesId(signed.transactionBase64)});
+          await tx.put(sendKey,{version:1,signature:signed.signature,transactionSha256:signedBytesId(signed.transactionBase64),costApproval:structuredClone(body.costApproval)});
         });
         const endpoint=new URL('https://devnet.helius-rpc.com/');endpoint.searchParams.set('api-key',this.env.BUYER_HELIUS_API_KEY);
         const fetchImpl=async(url,init)=>{
@@ -121,9 +127,10 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
               if(rpc.method==='sendTransaction'){
                 need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
                 const consumed=await this.storage.get(sendKey);
-                need(consumed?.signature===signed.signature&&consumed?.transactionSha256===signedBytesId(rpc.params[0]),'SEND_CLAIM',503);
+                need(consumed?.signature===signed.signature&&consumed?.transactionSha256===signedBytesId(rpc.params[0])&&JSON.stringify(consumed.costApproval)===JSON.stringify(body.costApproval),'SEND_CLAIM',503);
               }
               await this.reserveRpc(rpc.method);need(!init.signal.aborted,'RPC_TIMEOUT',504);
+              if(rpc.method==='sendTransaction'){try{enforceCostCeiling(body.costApproval,submission,sendBudgetReport);}catch{settled=true;throw new BuyerCheckError('COST_APPROVAL_EXPIRED',409);}}
               const response=await this.fetchImpl(url,{...init,redirect:'manual'});
               if([429,503].includes(response.status)){
                 const seconds=retryAfter(response.headers.get('retry-after'),this.clock());
@@ -160,19 +167,28 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         settled=['wallet-check-passed','submission-check-passed'].includes(report.status)||(report.status==='blocked'&&!report.code?.startsWith('RPC_'));
         if(infra)throw infra;
         if(route==='send'&&report.status==='submission-check-passed'){
-          settled=false;
+          settled=false;sendBudgetReport=report;
+          try{enforceCostCeiling(body.costApproval,submission,report);}catch(e){settled=true;throw new BuyerCheckError(/^COST_[A-Z_]+$/.test(e.message)?e.message:'COST_APPROVAL_INVALID',409);}
           need(report.simulationMode==='signed'&&report.candidate.transactionBase64===signed.transactionBase64,'SIGNED_CHECK',409);
           const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:15000,maxResponseBytes:16384,
             submission:{transactionBase64:signed.transactionBase64,minContextSlot:report.checkedSlot}});
           await assertCluster(rpc,'devnet');
           need(performance.now()-started<30000&&Date.now()<report.expiresAt,'CHECK_TOO_OLD',409);
+          try{enforceCostCeiling(body.costApproval,submission,report);}catch{settled=true;throw new BuyerCheckError('COST_APPROVAL_EXPIRED',409);}
           await rpc.call('sendTransaction',[signed.transactionBase64,{encoding:'base64',skipPreflight:false,preflightCommitment:'confirmed',maxRetries:0,minContextSlot:report.checkedSlot}]);
           settled=true;
           return reply(200,{version:1,nonce:body.nonce,report:{...submissionBinding(submission),status:'accepted',cluster:'devnet',
-            chainVerified:false,readyToSubmit:false,salesOpen:false,networkRequests:report.networkRequests+rpc.requests}});
+            chainVerified:false,readyToSubmit:false,salesOpen:false,networkRequests:report.networkRequests+rpc.requests,
+            costQuoteId:body.costApproval.quote.quoteId,maxTotalLamports:body.costApproval.maxTotalLamports,checkedTotalLamports:report.budget.nextItemKnownMinimumLamports}});
         }
         if(report.status!=='wallet-check-passed')return reply(409,{version:1,nonce:body.nonce,report});
-        return reply(200,{version:1,nonce:body.nonce,report});
+        settled=false;
+        const costQuote=createCostQuote({order,claim,request:partial},report),quoteKey=costQuoteKey(costQuote.quoteId);
+        await this.storage.transaction(async tx=>{const previous=await tx.get(quoteKey);
+          need(previous===undefined||JSON.stringify(previous)===JSON.stringify(costQuote),'COST_QUOTE_CONFLICT',503);await tx.put(quoteKey,costQuote);});
+        need(JSON.stringify(await this.storage.get(quoteKey))===JSON.stringify(costQuote),'COST_QUOTE_NOT_SAVED',503);
+        settled=true;
+        return reply(200,{version:1,nonce:body.nonce,report:{...report,costQuote}});
       }catch(error){return failure(infra??error);}
       finally{
         if(own){

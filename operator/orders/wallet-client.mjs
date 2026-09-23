@@ -4,6 +4,7 @@ import { PublicKey } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
+import {checkedBudget,createCostQuote,validateCostApproval,enforceCostCeiling} from './cost-approval.mjs';
 const feature = 'solana:signTransaction', chain = 'solana:devnet';
 const need = (ok, code) => { if (!ok) throw Error(code); };
 const hash = value => bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(value))));
@@ -40,15 +41,16 @@ export function validateWalletCheck(report, order, request, now = Date.now()) {
     && Number.isSafeInteger(report.checkedAt) && Number.isSafeInteger(report.expiresAt)
     && report.checkedAt <= now && report.expiresAt > now && report.expiresAt - report.checkedAt <= 20000,
   'PREFLIGHT_BLOCKED');
+  checkedBudget(report,order);
 }
 export function createBuyerWalletClient({ storage, scope, checkPrepared,
   storageManager = globalThis.navigator?.storage, onChange = () => {}, walletTimeoutMs = 120000 } = {}) {
   need(storage && typeof checkPrepared === 'function' && Number.isSafeInteger(walletTimeoutMs)
     && walletTimeoutMs >= 20 && walletTimeoutMs <= 180000, 'CLIENT_CONFIGURATION');
   scope = structuredClone(scope); need(scope.cluster === 'devnet', 'DEVNET_ONLY');
-  let wallet, account, off, order, partial, saved, memory, busy = false, epoch = 0, disposed = false;
+  let wallet, account, off, order, partial, saved, memory, costQuote, busy = false, epoch = 0, disposed = false;
   const notify = () => { try { onChange(); } catch {} };
-  const changed = () => { epoch++; account = null; notify(); };
+  const changed = () => { epoch++; account = null; costQuote = null; notify(); };
   async function persistent() {
     need(typeof storageManager?.persisted === 'function', 'PERSISTENT_STORAGE_REQUIRED');
     need(await bounded(storageManager.persisted(), 5000, 'STORAGE_UNAVAILABLE') === true, 'PERSISTENT_STORAGE_REQUIRED');
@@ -93,8 +95,24 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
       } finally { busy = false; notify(); }
       return state();
     },
-    async signOnly() {
+    async quoteCost() {
+      need(state().canRequestSignature,'NOT_READY');busy=true;costQuote=null;
+      const generation=epoch;
+      try{
+        await persistent();await load();need(!saved&&order.revision===1&&!order.paused&&partial?.status==='asset-partial-saved','NOT_READY');
+        const before=structuredClone(order),bundle=structuredClone(partial),started=performance.now();
+        const report=await bounded(checkPrepared({order:before,claim:bundle.claim,request:bundle.request}),35000,'PREFLIGHT_TIMEOUT');
+        validateWalletCheck(report,before,bundle.request);
+        need(!disposed&&epoch===generation&&account&&performance.now()-started<=30000,'WALLET_CHANGED');
+        const expected=createCostQuote({order:before,...bundle},report);
+        need(JSON.stringify(report.costQuote)===JSON.stringify(expected),'COST_QUOTE_INVALID');
+        need(hash(await storage.read(scope))===hash(before),'STALE_REVISION');
+        costQuote=structuredClone(expected);return structuredClone(expected);
+      }finally{busy=false;notify();}
+    },
+    async signOnly({authorizeCost=false,quoteId,maxTotalLamports}={}) {
       need(state().canRequestSignature, 'NOT_READY'); busy = true;
+      const approvedQuote=costQuote&&structuredClone(costQuote);
       const selected = wallet, selectedAccount = account, generation = epoch;
       const stableWallet = () => need(!disposed && selected === wallet && epoch === generation
         && account === selectedAccount && accountFor(selected, scope.buyer) === selectedAccount
@@ -104,19 +122,25 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
         need(!saved && order.revision === 1 && !order.paused && partial?.status === 'asset-partial-saved', 'NOT_READY');
         const before = structuredClone(order), bundle = structuredClone(partial);
         validateAssetRequest(before, bundle.claim, bundle.request); stableWallet();
+        need(authorizeCost===true&&approvedQuote&&quoteId===approvedQuote.quoteId,'COST_APPROVAL_REQUIRED');
+        const approval={version:1,quote:approvedQuote,maxTotalLamports,approvedAt:Date.now()};
+        const costInput={order:before,claim:bundle.claim,request:bundle.request};
+        validateCostApproval(approval,costInput,{now:Date.now()});
         const started = performance.now();
         const report = await bounded(checkPrepared({order:structuredClone(before),claim:bundle.claim,request:bundle.request}), 35000, 'PREFLIGHT_TIMEOUT');
         validateWalletCheck(report, before, bundle.request);
         need(performance.now() - started <= 30000, 'PREFLIGHT_BLOCKED');
+        enforceCostCeiling(approval,costInput,report);
         const checked = performance.now(), remaining = report.expiresAt - Date.now();
         stableWallet();
-        const claimed = await storage.claimBuyerWallet(scope, {orderRevision:before.revision,requestId:buyerRequestId(bundle.request)});
-        saved = claimed; need(claimed.status === 'wallet-response-unknown', 'SAVE_UNCONFIRMED');
+        const claimed = await storage.claimBuyerWallet(scope, {orderRevision:before.revision,requestId:buyerRequestId(bundle.request),costApproval:approval});
+        saved = claimed; need(claimed.status === 'wallet-response-unknown'&&JSON.stringify(claimed.claim.costApproval)===JSON.stringify(approval), 'SAVE_UNCONFIRMED');
+        costQuote=null;
         await persistent(); stableWallet();
         need(Date.now() < report.expiresAt && performance.now() - checked < remaining, 'PREFLIGHT_BLOCKED');
         // Claim is committed/read back. No await between final wallet checks and call.
         const work = Promise.resolve().then(() => {
-          stableWallet();
+          stableWallet();validateCostApproval(approval,costInput,{now:Date.now()});
           need(Date.now() < report.expiresAt && performance.now() - checked < remaining, 'PREFLIGHT_BLOCKED');
           try { return Promise.resolve(selected.features[feature].signTransaction({account:selectedAccount,chain,
             transaction:Uint8Array.from(Buffer.from(bundle.request.transactionBase64,'base64'))}))
@@ -142,6 +166,6 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
       try { if (memory) return await saveMemory(); await load(); return saved; }
       finally { busy = false; notify(); }
     },
-    dispose() { disposed = true; epoch++; off?.(); wallet = null; account = null; notify(); },
+    dispose() { disposed = true; costQuote=null; epoch++; off?.(); wallet = null; account = null; notify(); },
   });
 }

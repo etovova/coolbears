@@ -9,8 +9,8 @@ import { validateWalletCheck } from '../orders/wallet-client.mjs';
 const origin='https://buyer.test',endpoint=origin+'/api/buyer/check',f=await buyerGatewayFixture();
 const env={BUYER_HELIUS_API_KEY:'fixture-secret-42'},nonce='a'.repeat(64),input=f.input();
 function harness(extra={}){
-  let now=Date.now(),value,fail=false;
-  const storage={async get(k){return structuredClone(k.startsWith('buyer-blockhash:')?f.preparations.get(k):value);},async put(k,v){if(fail)throw Error('storage unavailable');value=structuredClone(v);},
+  let now=Date.now(),value,fail=false;const quotes=new Map();
+  const storage={async get(k){return structuredClone(k.startsWith('buyer-blockhash:')?f.preparations.get(k):k.startsWith('buyer-cost:')?quotes.get(k):value);},async put(k,v){if(fail)throw Error('storage unavailable');if(k.startsWith('buyer-cost:'))quotes.set(k,structuredClone(v));else value=structuredClone(v);},
     async transaction(fn){const previous=structuredClone(value);try{return await fn(this);}catch(e){value=previous;throw e;}}};
   const {BuyerCheckGate}=makeBuyerGateway(f.config(origin));
   const create=(e=extra)=>new BuyerCheckGate({storage},{...env,...e},{clock:()=>now,pause:async ms=>{now+=ms;},

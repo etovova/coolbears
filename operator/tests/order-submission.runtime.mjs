@@ -7,16 +7,22 @@ import {buyerGatewayFixture} from './fixtures/buyer-gateway.mjs';
 import {buyerGatewayRuntime} from './fixtures/buyer-gateway-runtime.mjs';
 const fixture=await buyerGatewayFixture({syntheticOwner:true}),origin='https://buyer-send-runtime.test';
 const persist=await mkdtemp(path.join(tmpdir(),'coolbears-buyer-send-runtime-'));
-let runtime=await buyerGatewayRuntime({fixture,origin,persist});const cases=[];
-const dispatch=(route,input)=>runtime.dispatch(origin+'/api/buyer/'+route,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:1,nonce:'a'.repeat(64),...input})});
-const prepare=async input=>{const order=fixture.model.createOrder({...input.order,available:9999,assets:input.order.items.map(i=>i.asset)});const r=await dispatch('prepare',{order});assert.equal(r.status,200,await r.clone().text());await spaced();};
+let runtime=await buyerGatewayRuntime({fixture,origin,persist});const cases=[],approvals=new Map();
+const dispatch=(route,input)=>runtime.dispatch(origin+'/api/buyer/'+route,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:1,nonce:'a'.repeat(64),...input,...(route==='send'?{costApproval:approvals.get(input.order.id)}:{})})});
+const prepare=async input=>{
+  const order=fixture.model.createOrder({...input.order,available:9999,assets:input.order.items.map(i=>i.asset)});
+  const r=await dispatch('prepare',{order});assert.equal(r.status,200,await r.clone().text());await spaced();
+  const partial=fixture.input(input.order.id),checked=await dispatch('check',partial);assert.equal(checked.status,200,await checked.clone().text());
+  const quote=(await checked.json()).report.costQuote;approvals.set(input.order.id,{version:1,quote,maxTotalLamports:quote.budget.totalLamports,approvedAt:Date.now()});await spaced();
+};
 const spaced=()=>new Promise(r=>setTimeout(r,250));
 try{
   await runtime.start();const first=fixture.signedInput('runtime-success');
   assert.equal((await dispatch('send',first)).status,403);assert.equal(fixture.calls.length,0);
   cases.push('production-default factory rejects submission before upstream');
   await runtime.stop();runtime=await buyerGatewayRuntime({fixture,origin,persist,allowSubmission:true});await runtime.start();
-  await prepare(first);
+  await prepare(first);await runtime.stop();await runtime.start();
+  cases.push('server-issued cost quote survives full SQLite restart before send');
   const sent=await dispatch('send',first),accepted=await sent.json();assert.equal(sent.status,200,JSON.stringify(accepted));assert.equal(accepted.report.status,'accepted');
   assert.equal(fixture.calls.filter(c=>c.method==='sendTransaction').length,1);cases.push('explicit test opt-in runs signed check and sends exact bytes once');
   await runtime.stop();await runtime.start({BUYER_HELIUS_API_KEY:'rotated-secret-42'});
@@ -26,6 +32,11 @@ try{
   const recovered=await dispatch('recover',first),proof=await recovered.json();assert.equal(recovered.status,200);assert.equal(proof.report.status,'verified',JSON.stringify(proof));
   assert.equal(proof.report.proof.signature,accepted.report.signature);assert.equal(fixture.calls.filter(c=>c.method==='sendTransaction').length,1);
   cases.push('read-only recovery verifies finalized exact receipt and Core asset through workerd');
+  await spaced();const capped=fixture.signedInput('runtime-cost-ceiling');await prepare(capped);fixture.setMode('fee-rise');
+  const costBlocked=await dispatch('send',capped);assert.equal(costBlocked.status,409);assert.equal((await costBlocked.json()).code,'COST_LIMIT_EXCEEDED');
+  fixture.setMode('normal');await runtime.stop();await runtime.start();
+  assert.equal((await dispatch('send',capped)).status,409);assert.equal(fixture.calls.filter(c=>c.method==='sendTransaction').length,1);
+  cases.push('fresh fee above saved ceiling blocks send and cannot release its permanent claim after restart');
   await spaced();const lost=fixture.signedInput('runtime-lost');await prepare(lost);fixture.setMode('send-lost');const failed=await dispatch('send',lost);assert.ok(failed.status>=400);assert.ok(!(await failed.text()).includes('fixture-secret-42'));
   const charged=fixture.calls.length;await runtime.stop();await runtime.start();fixture.setMode('normal');
   assert.equal((await dispatch('send',lost)).status,409);assert.equal((await dispatch('recover',lost)).status,429);assert.equal(fixture.calls.length,charged);

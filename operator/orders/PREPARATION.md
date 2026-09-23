@@ -1,3 +1,8 @@
+**PR45:** [согласие на расчёт и предел расходов](COST_APPROVAL.md) сохраняется до вызова
+кошелька; свежие расходы проверяются перед подписью и отправкой. Это предел
+приложения по RPC/simulation, а не on-chain гарантия окончательного списания.
+Старые evidence остаются доступны для recovery. Ниже — история этапов.
+
 # Closed Devnet preparation, blockhash provenance and mint costs
 
 PR44 extends PR43. Sales remain closed, price 0.2 SOL. The generated gateway

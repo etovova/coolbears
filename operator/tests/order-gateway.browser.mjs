@@ -48,19 +48,21 @@ async function setup(id,buyer=fixture.owner){
     const prepared=scope.buyer===owner?(await prepareThroughGateway({order})).candidate:candidate(order,block);
     await store.prepareAssetSigning(scope,prepared);},{scope,block,owner:fixture.policy.owner});
   await spaced();
-  await open(scope,buyer.secretKey);return scope;
+  await open(scope,buyer.secretKey);
+  if(scope.buyer===fixture.policy.owner){await page.evaluate(()=>approveFixtureCost());await spaced();}
+  return scope;
 }
-const failure=()=>page.evaluate(()=>code(client.signOnly()));
+const failure=()=>page.evaluate(()=>code(client.signOnly(window.costConsent)));
 const count=()=>page.evaluate(()=>walletCalls);
 const spaced=()=>new Promise(r=>setTimeout(r,250));
 try{
   await runtime.start();await launch();const good=await setup('https-success');
-  const result=await page.evaluate(()=>client.signOnly());assert.equal(result.status,'buyer-response-saved');assert.equal(result.readyToSubmit,false);
-  assert.equal(await count(),1);assert.equal(fixture.calls.length,13);
+  const result=await page.evaluate(()=>client.signOnly(window.costConsent));assert.equal(result.status,'buyer-response-saved');assert.equal(result.readyToSubmit,false);
+  assert.equal(await count(),1);assert.equal(fixture.calls.length,23);
   const order=await page.evaluate(s=>store.read(s),good);assert.equal(order.revision,3);assert.equal(order.items[0].attempts[0].state,'unknown');
   report.cases.push('real HTTPS checker verifies account state and exact bytes before one sign-only wallet call; response commits to IndexedDB');
   await context.close();context=null;await runtime.stop();await runtime.start();await launch();await open(good);
-  assert.deepEqual(await page.evaluate(()=>client.recover()),result);assert.equal(await failure(),'NOT_READY');assert.equal(await count(),0);assert.equal(fixture.calls.length,13);
+  assert.deepEqual(await page.evaluate(()=>client.recover()),result);assert.equal(await failure(),'NOT_READY');assert.equal(await count(),0);assert.equal(fixture.calls.length,23);
   report.cases.push('full browser and workerd restart preserve signed evidence without another RPC or wallet invocation');
   const unfinished={...base,id:'prepare-before-browser-crash'};
   const prepared=await page.evaluate(async scope=>{const order=await store.create({...scope,quantity:1,available:9999});return prepareThroughGateway({order});},unfinished);
@@ -70,9 +72,13 @@ try{
   assert.equal(restored.restored,true);assert.deepEqual(restored.candidate,prepared.candidate);assert.equal(fixture.calls.length,afterPreparation);
   const fresh=await page.evaluate(s=>store.read(s),unfinished);assert.equal(fresh.revision,0);assert.equal(fresh.items[0].attempts.length,0);
   report.cases.push('browser plus SQLite restart between preparation and asset signing restores the original hash without RPC or new signatures');
+  const capped=await setup('https-cost-ceiling');fixture.setMode('fee-rise');
+  assert.equal(await failure(),'COST_LIMIT_EXCEEDED');assert.equal(await count(),0);fixture.setMode('normal');
+  assert.equal((await page.evaluate(s=>store.read(s),capped)).revision,1);
+  report.cases.push('fresh HTTPS quote exceeding explicit approved cap blocks wallet before any durable claim or signature');
   await setup('altered-http-response');alter=true;await spaced();assert.notEqual(await failure(),'UNEXPECTED_SUCCESS');alter=false;assert.equal(await count(),0);
   report.cases.push('altered HTTPS response cannot authorize a wallet call');
-  const ordinary=await setup('closed-ordinary',fixture.key('ordinary'));const before=fixture.calls.length;assert.equal(await failure(),'CHECK_HTTP');assert.equal(await count(),0);assert.equal(fixture.calls.length,before);
+  const ordinary=await setup('closed-ordinary',fixture.key('ordinary'));const before=fixture.calls.length;assert.equal(await page.evaluate(()=>code(client.quoteCost())),'CHECK_HTTP');assert.equal(await count(),0);assert.equal(fixture.calls.length,before);
   report.cases.push('ordinary buyer remains blocked by closed profile before upstream');
   const changed=await setup('changed-local-order');await spaced();fixture.setMode('hold');let entered;const ready=new Promise(r=>entered=r);fixture.onRequest(()=>entered());
   const pending=failure();await Promise.race([ready,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('fixture upstream was not reached')),10000);ready.finally(()=>clearTimeout(timer));})]);

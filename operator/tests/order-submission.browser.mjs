@@ -49,13 +49,15 @@ async function setup(id,buyer=fixture.owner){
     const prepared=scope.buyer===owner?(await prepareThroughGateway({order})).candidate:candidate(order,block);
     await store.prepareAssetSigning(scope,prepared);},{scope,block,owner:fixture.policy.owner});
   await spaced();
-  await open(scope,buyer.secretKey);return scope;
+  await open(scope,buyer.secretKey);
+  if(scope.buyer===fixture.policy.owner){await page.evaluate(()=>approveFixtureCost());await spaced();}
+  return scope;
 }
 const failure=()=>page.evaluate(()=>code(sender.sendOnce({authorizeDevnetSend:true})));
 const send=()=>page.evaluate(()=>sender.sendOnce({authorizeDevnetSend:true}));
 const recover=()=>page.evaluate(()=>sender.recover());
 const sends=()=>fixture.calls.filter(c=>c.method==='sendTransaction').length;
-async function signed(id){await spaced();const scope=await setup(id);await page.evaluate(()=>client.signOnly());await page.evaluate(s=>openSender(s),scope);await spaced();return scope;}
+async function signed(id){await spaced();const scope=await setup(id);await page.evaluate(()=>client.signOnly(window.costConsent));await page.evaluate(s=>openSender(s),scope);await spaced();return scope;}
 const count=()=>page.evaluate(()=>walletCalls);
 const spaced=()=>new Promise(r=>setTimeout(r,250));
 try{
