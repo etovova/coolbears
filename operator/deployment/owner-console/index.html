@@ -2,6 +2,7 @@
 <main><div class="tag">COOLBEARS · DEVNET · ЛОКАЛЬНО</div><h1>Подпись владельца</h1>
 <p>Проверьте текущую операцию. Подпись будет сохранена в журнале; отправка в сеть выполняется отдельным этапом.</p>
 <p id="progressText">Прогресс выпуска загружается…</p><progress id="progress" value="0" max="1" aria-label="Подтверждённые операции"></progress>
+<p id="groupInfo" hidden></p>
 <dl><dt>Выпуск</dt><dd id="deploymentId">—</dd><dt>Операция</dt><dd id="stepId">—</dd><dt>Кошелёк владельца</dt><dd id="owner">—</dd><dt>Контрольная сумма запроса</dt><dd id="messageSha256">—</dd></dl>
 <label for="wallets">Кошелёк</label><div class="row"><select id="wallets"></select><button id="connect" disabled>Подключить</button></div><p id="connected">Кошелёк не подключён</p>
 <button id="sign" class="primary" disabled>Проверить и подписать</button><button id="recover" hidden>Сохранить готовую подпись</button>

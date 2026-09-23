@@ -12,6 +12,12 @@
 `cli.mjs prepare-next <bundle>`. Команда не выбирает retry и не продолжает
 занятую попытку. Полный порядок и привязка выбора к журналу — [QUEUE.md](../QUEUE.md).
 
+Для 2–4 следующих ещё не начатых insert-операций есть
+`cli.mjs prepare-group <bundle> <count>`. Начальные операции выполняются
+поодиночке. Группа подписывается одним вызовом Wallet Standard и сохраняется
+атомарно; отправка каждой операции отдельная. Порядок и ограничения —
+[GROUPS.md](../GROUPS.md).
+
 Нужны Node 24.19, закреплённые зависимости корня/`operator`, существующий реальный
 bundle и отдельный приватный Devnet RPC. Реальные bundle и endpoint ещё не
 созданы этим изменением. Сначала завершаются custody и настройка gateway из PR31.
@@ -84,7 +90,7 @@ node operator/deployment/owner-console/cli.mjs import-response private/DEPLOYMEN
 - HTTP Host/Origin/Fetch Metadata проверяются до доступа к bundle; каждый API
   защищён случайным 256-bit capability. Нет wildcard CORS, iframe, внешних скриптов,
   передачи RPC-ключа в браузер или API чтения vault.
-- POST JSON ограничен 4 KiB/4 s. Сервер отдаёт только три встроенных статических
+- POST JSON ограничен 4 KiB/4 s, ответ группы — 8 KiB/4 s. Сервер отдаёт только три встроенных статических
   ресурса и фиксированные API; пути filesystem из URL не используются.
 - Это локальная POSIX-система для desktop extension wallet, не удалённая панель
   и не готовый мобильный deeplink. Телефон не может подключиться к loopback
@@ -97,6 +103,8 @@ node operator/deployment/owner-console/cli.mjs import-response private/DEPLOYMEN
   а не число подписей или RPC acknowledgments; это не свежая проверка сети.
 - Журнал с новыми событиями `request-wallet`/`wallet-declined` нужно читать кодом
   PR32 или новее. Старый код не должен перезаписывать такую историю.
+- Групповые события требуют PR37 или новее. Неполный ответ кошелька не сохраняет
+  отдельные подписи и не освобождает разрешение на повтор.
 
 Проверки: `deployment-owner-console.test.mjs` (реальный loopback HTTP, журнал и
 синтетический кошелёк), `deployment-owner-console.browser.mjs` (Chromium, настоящие

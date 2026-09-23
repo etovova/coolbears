@@ -6,12 +6,14 @@ import { simulateDeploymentStep } from '../simulation.mjs';
 import { acceptDeploymentSigningResponse } from '../handoff.mjs';
 import { validateSigningRequest, verifySigningResponse } from '../signing.mjs';
 import { deploymentQueueStatus } from '../queue.mjs';
+import { createGroupSigningSession } from './group-session.mjs';
 const need = (value, code) => { if (!value) throw Object.assign(Error('Signing session unavailable.'), { code }); };
 export async function createSigningSession({ directory, endpoint, fetchImpl, timeoutMs } = {}) {
   const first = await readDeploymentBundle(directory), snapshot = first.snapshot;
   need(snapshot.manifest.cluster === 'devnet', 'CLUSTER');
   const action = nextDeploymentAction(snapshot);
   const initial = snapshot.steps.find(step => step.id === action.stepId)?.attempts.at(-1);
+  if (initial?.groupId) return createGroupSigningSession({ directory, groupId: initial.groupId, endpoint, fetchImpl, timeoutMs });
   need(initial && ['wallet-pending', 'signed', 'unknown'].includes(initial.state), 'NO_PENDING_REQUEST');
   const request = structuredClone(initial.request);
   validateSigningRequest(request);

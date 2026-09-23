@@ -7,13 +7,13 @@ const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-sr
 const HEADERS = { 'cache-control': 'no-store', 'content-security-policy': CSP, 'x-frame-options': 'DENY',
   'referrer-policy': 'no-referrer', 'x-content-type-options': 'nosniff', 'cross-origin-resource-policy': 'same-origin' };
 const need = (value, code) => { if (!value) throw Object.assign(Error('Request unavailable.'), { code }); };
-async function readBody(req) {
+async function readBody(req, limit = 4096) {
   need(!req.headers['content-encoding'] && req.headers['content-type'] === 'application/json', 'BODY');
-  if (req.headers['content-length'] !== undefined) need(/^\d+$/.test(req.headers['content-length']) && +req.headers['content-length'] <= 4096, 'BODY');
+  if (req.headers['content-length'] !== undefined) need(/^\d+$/.test(req.headers['content-length']) && +req.headers['content-length'] <= limit, 'BODY');
   const parts = []; let size = 0, timer;
   try {
     return await Promise.race([(async () => {
-      for await (const chunk of req) { size += chunk.length; need(size <= 4096, 'BODY'); parts.push(chunk); }
+      for await (const chunk of req) { size += chunk.length; need(size <= limit, 'BODY'); parts.push(chunk); }
       return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(parts)));
     })(), new Promise((_, reject) => { timer = setTimeout(() => { reject(Object.assign(Error(), { code: 'BODY' })); req.destroy(); }, 4000); })]);
   } finally { clearTimeout(timer); }
@@ -46,10 +46,11 @@ export async function startSigningConsole({ directory, endpoint, fetchImpl, time
       need(typeof auth === 'string' && auth.length < 150 && timingSafeEqual(tokenHash, digest(auth)), 'AUTH');
       if (req.method === 'GET' && req.url === '/api/state') return reply(200, await session.state());
       need(req.method === 'POST' && req.headers.origin === origin, 'ORIGIN');
-      const body = await readBody(req);
+      const body = await readBody(req, req.url === '/api/group-signature' ? 8192 : 4096);
       if (req.url === '/api/check') { need(exact(body, ['requestId']), 'BODY'); return reply(200, await session.check(body.requestId)); }
       if (req.url === '/api/decline') { need(exact(body, ['requestId', 'claimId']), 'BODY'); return reply(200, await session.decline(body.requestId, body.claimId)); }
       if (req.url === '/api/signature') { need(exact(body, ['requestId', 'transactionBase64']), 'BODY'); return reply(200, await session.accept(body.requestId, body.transactionBase64)); }
+      if (req.url === '/api/group-signature') { need(exact(body, ['requestId', 'transactionBase64s']), 'BODY'); return reply(200, await session.accept(body.requestId, body.transactionBase64s)); }
       need(false, 'ROUTE');
     } catch (error) {
       const allowed = ['AUTH', 'ORIGIN', 'ROUTE', 'BODY', 'REQUEST_CHANGED', 'BUSY', 'PREFLIGHT_BLOCKED', 'ALREADY_HANDLED', 'SIGNED_BYTES_CHANGED'];

@@ -14,6 +14,11 @@ const messages = {
 function render() {
   if (!client) return;
   const state = client.state();
+  $('groupInfo').hidden = !state.groupId;
+  if (state.groupId) $('groupInfo').textContent = `Группа: ${state.groupSize} операции. `
+    + state.groupStates.map(item => `${item.stepId}: ${item.state}`).join('; ')
+    + '. Отправка каждой операции выполняется отдельно по порядку.';
+  $('sign').textContent = state.groupId ? `Проверить и подписать группу (${state.groupSize})` : 'Проверить и подписать';
   if (state.progress) {
     $('progress').max = state.progress.totalSteps; $('progress').value = state.progress.verifiedSteps;
     $('progressText').textContent = `Подтверждено операций: ${state.progress.verifiedSteps} из ${state.progress.totalSteps}. Подпись сама по себе не означает завершение операции.`;
