@@ -1,0 +1,39 @@
+{
+  "checkedAt": "2026-09-23T12:24:04.872022+00:00",
+  "passed": true,
+  "scope": "private Devnet gateway candidate; not deployed",
+  "operatorTests": {
+    "total": 282,
+    "passed": 281,
+    "failed": 0,
+    "skipped": 1,
+    "skipReason": "existing filesystem UID-change test unavailable in this environment"
+  },
+  "runtime": {
+    "passed": true,
+    "engine": "workerd",
+    "miniflare": "5.20260921.0-alpha",
+    "storage": "SQLite",
+    "cases": 6,
+    "upstreamRequests": 7,
+    "bundleBytes": 744000,
+    "bundleSha256": "c555d44f8692627c5757f128d18e5f52970c01b0c299e7c948f19afe6f497aa8",
+    "outboundNetwork": "intercepted fixtures only",
+    "cloudflareDeployed": false,
+    "liveDevnet": false,
+    "transactionsSent": 0
+  },
+  "fullBudgetIntegration": {
+    "messages": 1431,
+    "windows": 15,
+    "time": "virtual paced clock",
+    "journalWrites": 0
+  },
+  "liveRpcRequests": 0,
+  "ownerSignatures": 0,
+  "transactionsSent": 0,
+  "cloudflareChanges": 0,
+  "existingLabRpcChanged": false,
+  "salesOpen": false,
+  "ci": "Run separately on the draft pull request; local results above are not CI proof."
+}

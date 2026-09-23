@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../../node_modules/wrangler/config-schema.json",
+  "name": "coolbears-deployment-rpc",
+  "main": "private/entry.mjs",
+  "compatibility_date": "2026-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "vars": { "DAILY_CREDIT_CAP": "5000", "DAILY_SIMULATION_CAP": "2000" },
+  "durable_objects": { "bindings": [{ "name": "DEPLOYMENT_GATE", "class_name": "DeploymentGate" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DeploymentGate"] }],
+  "observability": { "enabled": false }
+}

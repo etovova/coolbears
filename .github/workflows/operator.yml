@@ -106,3 +106,24 @@ jobs:
           path: build/devnet-cost-preview.json
           retention-days: 14
           if-no-files-found: warn
+
+  gateway-runtime:
+    name: Private deployment gateway in workerd
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            operator/package-lock.json
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run --prefix operator setup
+      - run: node operator/tests/deployment-gateway.runtime.mjs

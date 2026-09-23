@@ -81,7 +81,7 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
     const startedAt = performance.now();
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: baseline.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 120000, recoverySignatures: baseline.steps.flatMap(step => step.attempts)
+      totalTimeoutMs: 600000, recoverySignatures: baseline.steps.flatMap(step => step.attempts)
         .filter(attempt => attempt.signed && ['verified', 'failed'].includes(attempt.state))
         .map(attempt => attempt.signed.signature) });
     const genesisHash = await assertCluster(rpc, plan.cluster);
@@ -112,13 +112,22 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
     if (receiptSlot > accountSlot) accountSlot = await checkDeploymentState(rpc, plan, completedIndex, receiptSlot);
     phase = 'blockhash';
     const blockResult = await rpc.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: accountSlot }]);
-    const quoteStartSlot = rpcContext(blockResult, accountSlot);
-    const { blockhash, lastValidBlockHeight } = blockResult.value ?? {};
+    let quoteStartSlot = rpcContext(blockResult, accountSlot);
+    let { blockhash, lastValidBlockHeight } = blockResult.value ?? {};
     need(typeof blockhash === 'string' && Number.isSafeInteger(lastValidBlockHeight) && lastValidBlockHeight > 0, 'INVALID_LATEST_BLOCKHASH');
     phase = 'fees';
-    // Quote EVERY canonical message, including the different final insertion.
-    // A shared blockhash is a quote snapshot only, not a queue to sign/send.
-    const steps = await mapBounded(plan.steps, concurrency, async (step, index) => {
+    // Quote every message in bounded windows. A paced private gateway needs
+    // several minutes; a single blockhash cannot span that entire estimate.
+    const steps = [], quoteWindows = [];
+    for (let offset = 0; offset < plan.steps.length; offset += 100) {
+      if (offset) {
+        const fresh = await rpc.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: quoteStartSlot }]);
+        quoteStartSlot = rpcContext(fresh, quoteStartSlot);
+        ({ blockhash, lastValidBlockHeight } = fresh.value ?? {});
+        need(typeof blockhash === 'string' && Number.isSafeInteger(lastValidBlockHeight) && lastValidBlockHeight > 0, 'INVALID_LATEST_BLOCKHASH');
+      }
+      const window = await mapBounded(plan.steps.slice(offset, offset + 100), concurrency, async (step, windowIndex) => {
+      const index = offset + windowIndex;
       const tx = VersionedTransaction.deserialize(Buffer.from(step.transactionBase64, 'base64'));
       tx.message.recentBlockhash = blockhash;
       const bytes = tx.message.serialize();
@@ -133,6 +142,16 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
         networkFeeLamports: fee.toString(), accountRentLamports: accountRent.toString(), protocolLamports: protocol.toString(),
         estimatedLamports: (fee + accountRent + protocol).toString() };
     });
+      const minimum = Math.max(quoteStartSlot, ...window.map(step => step.quoteSlot));
+      const valid = await rpc.call('isBlockhashValid', [blockhash, { commitment: 'confirmed', minContextSlot: minimum }]);
+      const checkedSlot = rpcContext(valid, minimum);
+      need(valid.value === true, 'BUDGET_BLOCKHASH_EXPIRED');
+      const height = await rpc.call('getBlockHeight', [{ commitment: 'confirmed', minContextSlot: checkedSlot }]);
+      need(Number.isSafeInteger(height) && height >= 0 && height < lastValidBlockHeight, 'BUDGET_BLOCK_HEIGHT_EXPIRED');
+      quoteWindows.push({ firstStep: offset, count: window.length, blockhash, lastValidBlockHeight,
+        quoteStartSlot, checkedSlot, checkedHeight: height });
+      steps.push(...window); quoteStartSlot = checkedSlot;
+    }
     const maxQuoteSlot = Math.max(quoteStartSlot, ...steps.map(step => step.quoteSlot));
     phase = 'balance';
     const balanceResult = await rpc.call('getBalance', [plan.roles.owner, { commitment: 'finalized', minContextSlot: accountSlot }]);
@@ -145,7 +164,7 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
     need(Number.isSafeInteger(height) && height >= 0 && height < lastValidBlockHeight, 'BUDGET_BLOCK_HEIGHT_EXPIRED');
     phase = 'journal';
     await assertJournalUnchanged(directory, baseline);
-    need(performance.now() - startedAt <= 120000, 'BUDGET_QUOTE_TOO_OLD');
+    need(performance.now() - startedAt <= 600000, 'BUDGET_QUOTE_TOO_OLD');
     const remaining = steps.filter(step => !step.alreadyVerified);
     const baseTotal = sum(steps.map(step => step.estimatedLamports));
     const remainingTotal = sum(remaining.map(step => step.estimatedLamports));
@@ -156,7 +175,7 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
     const assumptions = [...model.assumptions, ...(unverifiedSpent.length ? ['some-past-attempt-costs-unverified'] : [])];
     return { status: 'budget-estimated', ...snapshotBinding(baseline, remaining[0]?.stepId ?? null),
       cluster: plan.cluster, genesisHash, checkedAt: new Date().toISOString(), accountSlot, checkedSlot, balanceSlot,
-      blockhash, lastValidBlockHeight, model, rentQuotes, rentItems, steps,
+      blockhash, lastValidBlockHeight, quoteWindows, quoteDurationMs: Math.ceil(performance.now() - startedAt), model, rentQuotes, rentItems, steps,
       estimates: {
         networkFeesLamports: sum(steps.map(step => step.networkFeeLamports)).toString(),
         accountRentLamports: sum(rentItems.map(item => item.lamports)).toString(),
