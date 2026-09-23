@@ -216,3 +216,16 @@ test('a later hanging call receives only the remaining shared budget', async () 
   assert.ok(performance.now() - start < 200);
   assert.equal(calls, 2); assert.equal(rpc.requests, 2); assert.equal(lastSignal.aborted, true);
 });
+
+test('optional simulated account return is bounded to one canonical address and preserves no-blockhash-replacement policy',async()=>{
+  let calls=0;const rpc=createDeploymentRpc({endpoint,allowSimulation:true,fetchImpl:async(_u,i)=>{calls++;return reply(JSON.parse(i.body),null);}});
+  const config={encoding:'base64',commitment:'confirmed',minContextSlot:0,sigVerify:false,replaceRecentBlockhash:false};
+  const address='11111111111111111111111111111111';
+  for(const accounts of [null,{}, {encoding:'jsonParsed',addresses:[address]}, {encoding:'base64',addresses:[address,address]},
+    {encoding:'base64',addresses:[]},{encoding:'base64',addresses:['bad']},{encoding:'base64',addresses:[address],extra:true}]){
+    await assert.rejects(rpc.call('simulateTransaction',['AAAA',{...config,accounts}]),safeFailure('PARAMS'));
+  }
+  assert.equal(calls,0);
+  assert.equal(await rpc.call('simulateTransaction',['AAAA',{...config,accounts:{encoding:'base64',addresses:[address]}}]),null);
+  assert.equal(calls,1);
+});

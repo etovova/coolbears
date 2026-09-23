@@ -22,7 +22,7 @@ const report={passed:false,engine:'chromium',transport:'HTTPS to local workerd w
   realWallets:false,physicalPhones:false,liveRpc:false,persistencePermission:'fixture only',transactionsSent:0,cases:[],pageErrors:[],externalRequests:0};
 const server=createServer({key:await readFile(path.join(parent,'key.pem')),cert:await readFile(path.join(parent,'cert.pem'))},async(req,res)=>{
   try{
-    if(['/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(req.url)){
+    if(['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(req.url)){
       const parts=[];for await(const chunk of req)parts.push(chunk);
       const response=await runtime.dispatch(origin+req.url,{method:req.method,headers:req.headers,body:Buffer.concat(parts)});
       let body=await response.text();if(alter&&response.status===200){const value=JSON.parse(body);value.report.orderSha256='0'.repeat(64);body=JSON.stringify(value);}
@@ -44,7 +44,11 @@ async function launch(){
 async function open(scope,secret=fixture.owner.secretKey){return page.evaluate(({scope,secret})=>openGatewayClient(scope,secret),{scope,secret:[...secret]});}
 async function setup(id,buyer=fixture.owner){
   const scope={...base,id,buyer:buyer.publicKey.toBase58()};
-  await page.evaluate(async({scope,block})=>{window.auditScope=scope;const order=await store.create({...scope,quantity:1,available:9999});await store.prepareAssetSigning(scope,candidate(order,block));},{scope,block});
+  await spaced();
+  await page.evaluate(async({scope,block,owner})=>{window.auditScope=scope;const order=await store.create({...scope,quantity:1,available:9999});
+    const prepared=scope.buyer===owner?(await prepareThroughGateway({order})).candidate:candidate(order,block);
+    await store.prepareAssetSigning(scope,prepared);},{scope,block,owner:fixture.policy.owner});
+  await spaced();
   await open(scope,buyer.secretKey);return scope;
 }
 const failure=()=>page.evaluate(()=>code(sender.sendOnce({authorizeDevnetSend:true})));

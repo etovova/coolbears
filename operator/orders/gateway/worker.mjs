@@ -5,6 +5,8 @@ import { createOrderModel } from '../journal-model.mjs';
 import { createOrderPlanner } from '../transaction-model.mjs';
 import { createAccountVerifier } from '../../deployment/accounts-model.mjs';
 import { createOrderChecker } from '../preflight-model.mjs';
+import { anchorKey, validateBlockhashAnchor } from '../blockhash-anchor.mjs';
+import { preparationFor, validatePreparation } from '../preparation.mjs';
 import { validateAssetRequest } from '../signing.mjs';
 import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../submission.mjs';
 import { recoverBuyerOrder } from '../recovery.mjs';
@@ -15,7 +17,7 @@ const checker=createOrderChecker(policy,{...model,...planner,...createAccountVer
 const KEY='buyer-check-budget:v1',GLOBAL='buyer-check-global-v1',HOLD=45000,INTERVAL=200;
 const METHODS=new Set(['getGenesisHash','getMultipleAccounts','getBalance','getFeeForMessage',
   'getMinimumBalanceForRentExemption','simulateTransaction','isBlockhashValid','getBlockHeight',
-  'getSignatureStatuses','getTransaction']);
+  'getSignatureStatuses','getTransaction','getLatestBlockhash']);
 const HEADERS={'content-type':'application/json; charset=utf-8','cache-control':'no-store',
   'x-content-type-options':'nosniff','cross-origin-resource-policy':'same-origin','referrer-policy':'no-referrer'};
 const integer=n=>Number.isSafeInteger(n)&&n>=0;
@@ -33,7 +35,7 @@ export function validateBuyerGatewayConfig(input){
   return structuredClone(input);
 }
 function authorize(request,config,env){
-  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
   need(request.method==='POST','METHOD',405);
   need(request.headers.get('origin')===config.origin&&!request.headers.has('cookie')&&!request.headers.has('authorization')
     &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
@@ -80,23 +82,32 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='check'?'version nonce order claim request':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
         const submission={order,claim,request:partial,response:body.response};
         let signed;
         try{
-          if(route!=='check')signed=validateBuyerSubmission(submission);
+          if(route==='prepare'){model.validateOrder(order);need(order.revision===0&&!order.paused&&order.items.every(i=>i.attempts.length===0),'REQUEST',400);}
+          else if(route!=='check')signed=validateBuyerSubmission(submission);
           else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
           need(order.revision===1&&!order.paused&&order.items[0].attempts.length===1&&order.items[0].attempts[0].state==='wallet-pending'
             &&order.items.slice(1).every(item=>!item.attempts.length),'REQUEST',400);}
         }catch{throw new BuyerCheckError('REQUEST',400);}
         // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
-        const sendKey='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,claim.asset]));
+        const sendKey='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset]));
         if(route==='send'){
           need(!order.paused,'ORDER_PAUSED',409);
           need(await this.storage.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
+        }
+        const blockKey=anchorKey(order),savedPreparation=route==='recover'?undefined:await this.storage.get(blockKey);
+        if(route==='prepare'&&savedPreparation!==undefined){
+          try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
+          return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
+        }
+        if(['check','send'].includes(route)){
+          try{validateBlockhashAnchor(savedPreparation?.anchor,claim);}catch{throw new BuyerCheckError('BLOCKHASH_ANCHOR_REQUIRED',409);}
         }
         await this.reserveCheck();reserved=true;
         if(route==='send')await this.storage.transaction(async tx=>{
@@ -122,13 +133,29 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
               return response;
             }catch(error){infra=error instanceof BuyerCheckError?error:new BuyerCheckError('UPSTREAM_UNAVAILABLE',503);throw error;}
           };
+        if(route==='prepare'){
+          const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000});
+          await assertCluster(rpc,'devnet');
+          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed'}]);
+          need(integer(latest?.context?.slot),'RPC_CONTEXT',503);
+          const record=preparationFor(order,latest.value,latest.context.slot);
+          const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
+          need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
+          need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+          await this.storage.transaction(async tx=>{
+            need(await tx.get(blockKey)===undefined,'PREPARATION_CONFLICT',409);await tx.put(blockKey,record);
+          });
+          need(JSON.stringify(await this.storage.get(blockKey))===JSON.stringify(record),'PREPARATION_UNCONFIRMED',503);
+          settled=true;
+          return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...record,restored:false,readyToSign:false,readyToSubmit:false,salesOpen:false}});
+        }
         if(route==='recover'){
           const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl});
           settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
           return reply(200,{version:1,nonce:body.nonce,report});
         }
         const report=await checker[route==='send'?'checkSignedOrder':'checkPreparedOrder']({readOrder:()=>structuredClone(order),
-          claim,request:partial,response:body.response,endpoint:endpoint.href,timeoutMs:12000,fetchImpl});
+          claim,request:partial,response:body.response,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,timeoutMs:12000,fetchImpl});
         // Keep the crash hold after uncertain transport/timeout or storage failure.
         settled=['wallet-check-passed','submission-check-passed'].includes(report.status)||(report.status==='blocked'&&!report.code?.startsWith('RPC_'));
         if(infra)throw infra;
@@ -146,7 +173,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         }
         if(report.status!=='wallet-check-passed')return reply(409,{version:1,nonce:body.nonce,report});
         return reply(200,{version:1,nonce:body.nonce,report});
-      }catch(error){return failure(error);}
+      }catch(error){return failure(infra??error);}
       finally{
         if(own){
           try{if(reserved&&settled)await this.storage.transaction(async tx=>{const v=ledger(await tx.get(KEY),this.clock());v.holdUntil=0;await tx.put(KEY,v);});}

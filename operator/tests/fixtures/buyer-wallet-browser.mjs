@@ -38,7 +38,7 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
     const report={status:'wallet-check-passed',mode:'closed-devnet-sign-only-check',cluster:'devnet',orderId:order.id,
       orderRevision:order.revision,orderSha256:bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(order)))),
       requestId:buyerRequestId(request),candidate:{...request},quantity:order.quantity,itemIndex:0,
-      networkVerified:true,guardPriceVerified:true,blockhashVerified:true,simulationVerified:true,simulationMode:'unsigned',
+      networkVerified:true,guardPriceVerified:true,blockhashVerified:true,blockhashProvenanceVerified:true,budget:{complete:true,scope:'next-item-current-template'},simulationVerified:true,simulationMode:'unsigned',
       checkedSlot:600,checkedAt:now,expiresAt:now+20000,readyToSign:true,readyToSubmit:false,salesOpen:false};
     if(window.checkMode==='expired')report.expiresAt=now-1;
     if(window.checkMode==='altered')report.candidate.messageSha256='0'.repeat(64);

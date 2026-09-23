@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buyerGatewayFixture } from './fixtures/buyer-gateway.mjs';
+import {anchorKey} from '../orders/blockhash-anchor.mjs';
 import { makeBuyerGateway } from '../orders/gateway/worker.mjs';
 import { createBuyerCheckClient } from '../orders/gateway/client.mjs';
 import { readJson } from '../orders/gateway/http.mjs';
@@ -9,7 +10,7 @@ const origin='https://buyer.test',endpoint=origin+'/api/buyer/check',f=await buy
 const env={BUYER_HELIUS_API_KEY:'fixture-secret-42'},nonce='a'.repeat(64),input=f.input();
 function harness(extra={}){
   let now=Date.now(),value,fail=false;
-  const storage={async get(){return structuredClone(value);},async put(k,v){if(fail)throw Error('storage unavailable');value=structuredClone(v);},
+  const storage={async get(k){return structuredClone(k.startsWith('buyer-blockhash:')?f.preparations.get(k):value);},async put(k,v){if(fail)throw Error('storage unavailable');value=structuredClone(v);},
     async transaction(fn){const previous=structuredClone(value);try{return await fn(this);}catch(e){value=previous;throw e;}}};
   const {BuyerCheckGate}=makeBuyerGateway(f.config(origin));
   const create=(e=extra)=>new BuyerCheckGate({storage},{...env,...e},{clock:()=>now,pause:async ms=>{now+=ms;},
@@ -25,7 +26,7 @@ test('real checker preserves exact partial for quantity 1 and 50 through fixed t
     assert.equal(response.status,200,JSON.stringify(body));validateWalletCheck(body.report,value.order,value.request);
     assert.equal(body.report.candidate.transactionBase64,value.request.transactionBase64);
     assert.equal(body.report.networkRequests,10);assert.equal(body.report.transactionsSent,0);
-    assert.equal(body.report.budget.complete,false);assert.equal(body.report.salesOpen,false);
+    assert.equal(body.report.budget.complete,true);assert.equal(body.report.salesOpen,false);
     assert.deepEqual(h.ledger(),{version:1,day:h.ledger().day,checks:1,rpc:10,simulations:1,nextAt:h.ledger().nextAt,holdUntil:0,cooldownUntil:0});
     assert.equal(f.calls.length-start,10);assert.ok(!f.calls.slice(start).some(c=>/send|LatestBlockhash/.test(c.method)));
   }

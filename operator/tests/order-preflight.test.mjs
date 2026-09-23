@@ -20,6 +20,9 @@ import { prepareAssetClaim, finalizeAssetRequest } from '../orders/signing.mjs';
 import { buildOrderTransactions } from '../orders/transactions.mjs';
 import { ed25519 } from '@noble/curves/ed25519';
 import { validateWalletCheck } from '../orders/wallet-client.mjs';
+import {baseAssetBytes} from '../orders/mint-cost.mjs';
+import {preparationFor} from '../orders/preparation.mjs';
+import {MPL_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-core';
 import { runOrderCheck } from '../orders/check.mjs';
 
 const address = label => {
@@ -68,7 +71,7 @@ function harness({ quantity = 1, buyer = policy.owner, redeemed = 0, transform, 
     const value = prepareAssetClaim(saved,{orderRevision:0,itemIndex:0,...block,transactionBase64});
     saved = value.order;
     const message = VersionedTransaction.deserialize(Buffer.from(transactionBase64,'base64')).message.serialize();
-    signing = {claim:value.claim,request:finalizeAssetRequest(saved,value.claim,ed25519.sign(message,asset.secretKey.slice(0,32)))};
+    signing = {blockhashAnchor:preparationFor(order(1,{buyer,assets:[asset.publicKey.toBase58()]}),block,600).anchor,claim:value.claim,request:finalizeAssetRequest(saved,value.claim,ed25519.sign(message,asset.secretKey.slice(0,32)))};
   }
   const base = accounts(redeemed), calls = [];
   const readOrder = () => { reads++; if (reads > 1 && revise) saved = revise(saved); return structuredClone(saved); };
@@ -83,7 +86,7 @@ function harness({ quantity = 1, buyer = policy.owner, redeemed = 0, transform, 
       getLatestBlockhash: { context: { slot: 600 }, value: { blockhash, lastValidBlockHeight: 2000 } },
       getFeeForMessage: { context: { slot: 600 }, value: 10000 },
       getMinimumBalanceForRentExemption: 1999999,
-      simulateTransaction: { context: { slot: 600 }, value: { err: null, unitsConsumed: 99999 } },
+      simulateTransaction: { context: { slot: 600 }, value: { err: null, unitsConsumed: 99999, accounts:[{owner:MPL_CORE_PROGRAM_ID,executable:false,lamports:3499999,data:[Buffer.from(baseAssetBytes(policy,saved)).toString('base64'),'base64']}] } },
       isBlockhashValid: { context: { slot: 600 }, value: true }, getBlockHeight: 1800,
     }[call.method];
     assert.notEqual(result, undefined, call.method);
@@ -98,8 +101,8 @@ for (const quantity of [1, 50]) test(`fresh ${quantity}-item order validates a f
   const report = await h.run(); assert.equal(report.status, 'preflight-passed', JSON.stringify(report));
   assert.equal(report.itemsRemaining, 9992); assert.equal(report.quantity, quantity);
   assert.equal(report.budget.orderItemPriceLamports, String(200000000n * BigInt(quantity)));
-  assert.equal(report.budget.nextItemKnownMinimumLamports, '202009999'); assert.equal(report.budget.baseAssetBytes, 158);
-  assert.equal(report.budget.complete, false); assert.equal(report.budget.protocolChargesLamports, null);
+  assert.equal(report.budget.nextItemKnownMinimumLamports, '203509999'); assert.equal(report.budget.baseAssetBytes, 158);
+  assert.equal(report.budget.complete, true); assert.equal(report.budget.protocolChargesLamports, '1500000');
   assert.equal(report.budget.fullOrderTotalLamports, null);
   const sim = h.calls.filter(x => x.method === 'simulateTransaction'); assert.equal(sim.length, 1);
   assert.equal(sim[0].params[0], report.candidate.transactionBase64);
@@ -228,7 +231,7 @@ test('prepared sign-only check uses saved partial bytes and hash; never refreshe
   assert.equal(report.status,'wallet-check-passed',JSON.stringify(report));
   validateWalletCheck(report,before,h.signing.request);
   assert.equal(report.readyToSign,true);assert.equal(report.readyToSubmit,false);assert.equal(report.salesOpen,false);
-  assert.equal(report.budget.complete,false);assert.equal(report.signaturesCreated+report.journalWrites+report.transactionsSent,0);
+  assert.equal(report.budget.complete,true);assert.equal(report.signaturesCreated+report.journalWrites+report.transactionsSent,0);
   assert.equal(h.calls.some(c=>c.method==='getLatestBlockhash'),false);
   assert.equal(h.calls.find(c=>c.method==='simulateTransaction').params[0],h.signing.request.transactionBase64);
   assert.deepEqual(h.initial(),before);
@@ -259,4 +262,36 @@ test('wallet check rejects forged bindings, missing network checks and expired/f
     r=>r.expiresAt=r.checkedAt+20001]) {
     const changed=structuredClone(report);edit(changed);assert.throws(()=>validateWalletCheck(changed,h.initial(),h.signing.request),/PREFLIGHT_BLOCKED/);
   }
+});
+
+test('complete first-item quote includes Core charge; the full quantity is explicitly a projection',async()=>{
+  const h=harness({quantity:50}),report=await h.run();
+  assert.equal(report.budget.scope,'next-item-current-template');assert.equal(report.budget.priorityFeeLamports,'0');
+  assert.equal(report.budget.projectedOrderTotalLamports,String(203509999n*50n));assert.equal(report.budget.projectionOnly,true);
+  const poor=harness({transform:(call,r)=>call.method==='getBalance'?{...r,value:202009999}:r});
+  assert.equal((await poor.run()).code,'INSUFFICIENT_BALANCE');assert.equal(poor.calls.some(c=>c.method==='simulateTransaction'),false);
+});
+test('missing, changed or unsupported simulated asset costs never grant signing',async()=>{
+  for(const change of [v=>v.accounts=null,v=>v.accounts=[],v=>v.accounts[0]=null,
+    v=>v.accounts[0].lamports--,v=>v.accounts[0].lamports++,v=>v.accounts[0].owner=policy.owner,
+    v=>v.accounts[0].executable=true,v=>v.accounts[0].data[0]+='AAAA',
+    v=>{v.accounts[0].data[0]=Buffer.from(baseAssetBytes(policy,order(),'0000')).toString('base64');}]){
+    const h=harness({prepared:true,transform:(call,r)=>{if(call.method==='simulateTransaction')change(r.value);return r;}});
+    const report=await h.run();assert.equal(report.code,'MINT_COST_UNVERIFIED');assert.equal(report.readyToSign,false);
+  }
+});
+test('prepared checker refuses missing provenance before RPC and rejects downgraded wallet grants',async()=>{
+  const h=harness({prepared:true}),{blockhashAnchor,...signing}=h.signing;
+  const blocked=await checkPreparedOrder({readOrder:h.readOrder,endpoint,...signing,fetchImpl:()=>assert.fail('RPC forbidden')});
+  assert.equal(blocked.code,'BLOCKHASH_ANCHOR_REQUIRED');assert.equal(blocked.networkRequests,0);
+  const report=await h.run();
+  for(const mutate of [r=>delete r.blockhashProvenanceVerified,r=>r.budget.complete=false,r=>r.budget.scope='whole-order']){
+    const value=structuredClone(report);mutate(value);assert.throws(()=>validateWalletCheck(value,h.initial(),h.signing.request));
+  }
+});
+
+test('a confirmed RPC response older than the original blockhash source cannot support a wallet check',async()=>{
+  const h=harness({prepared:true});h.signing.blockhashAnchor.sourceSlot=700;
+  const report=await h.run();assert.equal(report.code,'RPC_CONTEXT');assert.equal(report.readyToSign,false);
+  assert.equal(h.calls.find(c=>c.method==='getFeeForMessage').params[1].minContextSlot,700);
 });

@@ -19,7 +19,7 @@ function signedInput(id='send-case'){
 }
 function harness({enabled=true}={}){
   const values=new Map();let now=Date.now(),failSendClaim=false;
-  const storage={async get(k){return structuredClone(values.get(k));},async put(k,v){if(failSendClaim&&k.startsWith('buyer-send:'))throw Error('disk');values.set(k,structuredClone(v));},async transaction(fn){return fn(this);}};
+  const storage={async get(k){return structuredClone(values.get(k)??(k.startsWith('buyer-blockhash:')?f.preparations.get(k):undefined));},async put(k,v){if(failSendClaim&&k.startsWith('buyer-send:'))throw Error('disk');values.set(k,structuredClone(v));},async transaction(fn){return fn(this);}};
   const create=(settings={})=>new(makeBuyerGateway(f.config(origin),{allowSubmission:enabled}).BuyerCheckGate)({storage},{...env,...settings},{clock:()=>now,pause:async ms=>{now+=ms;},fetchImpl:(url,init)=>f.upstream(new Request(url,init))});
   let gate=create();
   return{values,dispatch:(route,input,headers={})=>gate.fetch(new Request(origin+'/api/buyer/'+route,{method:'POST',headers:{origin,'content-type':'application/json',...headers},body:JSON.stringify({version:1,nonce,...input})})),
