@@ -10,6 +10,7 @@ import { assertCluster, DeploymentRpcError } from './rpc.mjs';
 import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 import { expectedAccountAddresses, verifyExpectedAccounts } from './accounts.mjs';
 import { verifyFinalizedReceipt, verifyFinalizedFailedTransaction } from './receipt.mjs';
+import { validExpiryEvidence } from './expiry.mjs';
 
 const PROGRAMS = [MPL_CORE_PROGRAM_ID, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID];
 const ACTIVE = new Set(['wallet-pending', 'signed', 'send-claimed', 'accepted', 'unknown']);
@@ -207,6 +208,45 @@ export async function reconcileFailedDeploymentStep({ directory, stepId, endpoin
       messageSha256: receipt.messageSha256, signature: receipt.signature, commitment: 'finalized',
       slot: receipt.slot, readSlot, expectedSha256: sha256Json(step.expected), executionFailed: true, effectsAbsent: true };
     return { status: 'failed-verified', ...binding(snapshot, stepId), cluster: plan.cluster, genesisHash, proof,
+      networkRequests: rpc.requests, transactionsSent: 0, journalWrites: 0, readyToSubmit: false, salesOpen: false };
+  } catch (error) { return blocked(error, phase, rpc, 'unknown'); }
+}
+
+// The trusted gateway has independently checked bounded payer history and the
+// saved hash anchor. Recheck expiry, absence and predecessor effects locally.
+export async function reconcileExpiredDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, evidence } = {}) {
+  let rpc, phase = 'journal';
+  try {
+    const { snapshot, plan, index, step, attempt } = await target(directory, stepId);
+    requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
+    requireThat(validExpiryEvidence(evidence) && evidence.blockhash === attempt.request.blockhash
+      && evidence.lastValidBlockHeight === attempt.request.lastValidBlockHeight, 'EXPIRY_EVIDENCE_MISMATCH');
+    phase = 'network';
+    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
+      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature] });
+    const startedAt = performance.now();
+    const genesisHash = await assertCluster(rpc, plan.cluster);
+    phase = 'expiry';
+    const valid = await rpc.call('isBlockhashValid', [attempt.request.blockhash, { commitment: 'finalized', minContextSlot: evidence.slot }]);
+    const slot = context(valid, evidence.slot);
+    requireThat(valid.value === false, 'EXPIRY_NOT_FINALIZED');
+    const height = await rpc.call('getBlockHeight', [{ commitment: 'finalized', minContextSlot: slot }]);
+    requireThat(integer(height) && height >= evidence.blockHeight && height > attempt.request.lastValidBlockHeight, 'EXPIRY_NOT_FINALIZED');
+    phase = 'receipt';
+    const status = await rpc.call('getSignatureStatuses', [[attempt.signed.signature], { searchTransactionHistory: true }]);
+    context(status, slot);
+    requireThat(Array.isArray(status.value) && status.value.length === 1 && status.value[0] === null, 'EXPIRY_TRANSACTION_OBSERVED');
+    const transaction = await rpc.call('getTransaction', [attempt.signed.signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }]);
+    requireThat(transaction === null, 'EXPIRY_TRANSACTION_OBSERVED');
+    phase = 'accounts';
+    const readSlot = await checkState(rpc, plan, index - 1, slot);
+    await unchanged(directory, snapshot);
+    requireThat(performance.now() - startedAt <= 30000, 'READ_CHECK_TOO_OLD');
+    const proof = { kind: 'expired', manifestSha256: snapshot.manifestSha256, stepId, attempt: attempt.number,
+      messageSha256: attempt.signed.messageSha256, signature: attempt.signed.signature, commitment: 'finalized', slot, readSlot,
+      expectedSha256: sha256Json(step.expected), blockhashValid: false, blockHeight: height,
+      signatureAbsent: true, effectsAbsent: true, addressHistoryChecked: true };
+    return { status: 'expired-verified', ...binding(snapshot, stepId), cluster: plan.cluster, genesisHash, proof,
       networkRequests: rpc.requests, transactionsSent: 0, journalWrites: 0, readyToSubmit: false, salesOpen: false };
   } catch (error) { return blocked(error, phase, rpc, 'unknown'); }
 }

@@ -90,8 +90,9 @@ export function createRequestValidator(input, { allowSubmission = false } = {}) 
       case 'getMultipleAccounts':
         need(params.length === 2 && JSON.stringify(first) === JSON.stringify(accounts) && config(second, 'finalized', true)); break;
       case 'getBalance': need(params.length === 2 && first === policy.owner && config(second, 'finalized')); break;
-      case 'getLatestBlockhash': case 'getBlockHeight': need(params.length === 1 && config(first, 'confirmed')); break;
-      case 'isBlockhashValid': need(params.length === 2 && address(first) && config(second, 'confirmed')); break;
+      case 'getLatestBlockhash': need(params.length === 1 && config(first, 'confirmed')); break;
+      case 'getBlockHeight': need(params.length === 1 && (config(first, 'confirmed') || config(first, 'finalized'))); break;
+      case 'isBlockhashValid': need(params.length === 2 && address(first) && (config(second, 'confirmed') || config(second, 'finalized'))); break;
       case 'getMinimumBalanceForRentExemption':
         need(params.length === 2 && sizes.has(first) && exact(second, ['commitment']) && second.commitment === 'finalized'); break;
       case 'getFeeForMessage':

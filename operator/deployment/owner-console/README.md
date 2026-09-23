@@ -101,10 +101,11 @@ DOM/IndexedDB и подменённый Wallet Standard), прежние signing
 [Phantom SignTransaction](https://docs.phantom.com/phantom-deeplinks/provider-methods/signtransaction),
 локальные типы `@solana/wallet-standard-features/lib/types/signTransaction.d.ts`.
 
-## Явный повтор PR34
+## Явный повтор PR34–35
 
-После сохранённого `failed` из `send-cli.mjs review-failure` используется
+После сохранённого `failed` из `send-cli.mjs review-failure` или `expired` из
+`send-cli.mjs review-expiry` используется
 `cli.mjs prepare-retry <bundle> <step>`. Это отдельная ручная команда с новым
 preflight, новым blockhash и вводом пароля в TTY. Подключение и подпись снова
 выполняются явно; отправку панель не делает. Обычный `prepare` повтор не начинает.
-Полный порядок и границы — [RETRY.md](../RETRY.md).
+Полный порядок и границы — [RETRY.md](../RETRY.md) и [EXPIRY.md](../EXPIRY.md).

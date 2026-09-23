@@ -82,9 +82,9 @@ async function readBody(response, signal, limit, expiresAt) {
   }
 }
 
-export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission, failedRetry } = {}) {
+export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission, failedRetry, expiredRetry, allowExpiryReads = false } = {}) {
   const url = endpointUrl(endpoint);
-  if (typeof allowSimulation !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
+  if (typeof allowSimulation !== 'boolean' || typeof allowExpiryReads !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
     || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 16 * 1024 * 1024
     || (totalTimeoutMs !== undefined && (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 1 || totalTimeoutMs > 600000))) throw fail('CONFIGURATION');
   let grant = null;
@@ -102,6 +102,14 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       retryGrant = inspectSignedDeploymentTransaction(failedRetry.transactionBase64);
     } catch { throw fail('CONFIGURATION'); }
   }
+  let expiryGrant = null, expiryReviewed = false;
+  if (expiredRetry !== undefined) {
+    try {
+      if (submission !== undefined || failedRetry !== undefined || !object(expiredRetry)
+        || Object.keys(expiredRetry).join(',') !== 'transactionBase64') throw Error();
+      expiryGrant = inspectSignedDeploymentTransaction(expiredRetry.transactionBase64);
+    } catch { throw fail('CONFIGURATION'); }
+  }
   const startedAt = performance.now();
   let devnetChecked = false, submitted = false;
   let requests = 0;
@@ -109,8 +117,14 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
     get requests() { return requests; },
     async call(method, params = []) {
       if (typeof method !== 'string' || !(METHODS.has(method) || (allowSimulation && method === 'simulateTransaction')
-        || (grant && method === 'sendTransaction') || (retryGrant && method === 'coolbears_authorizeFailedRetry'))) throw fail('METHOD');
+        || (grant && method === 'sendTransaction') || (retryGrant && method === 'coolbears_authorizeFailedRetry')
+        || (expiryGrant && method === 'coolbears_authorizeExpiredRetry')
+        || (allowExpiryReads && ['getBlock', 'getFirstAvailableBlock', 'getSignaturesForAddress'].includes(method)))) throw fail('METHOD');
       if (!Array.isArray(params)) throw fail('PARAMS');
+      if (method === 'coolbears_authorizeExpiredRetry') {
+        if (expiryReviewed || !devnetChecked) throw fail('METHOD');
+        if (params.length !== 1 || params[0] !== expiryGrant.transactionBase64) throw fail('PARAMS');
+      }
       if (method === 'coolbears_authorizeFailedRetry') {
         if (retryReviewed || !devnetChecked) throw fail('METHOD');
         if (params.length !== 1 || params[0] !== retryGrant.transactionBase64) throw fail('PARAMS');
@@ -148,6 +162,7 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       requests = id;
       if (method === 'sendTransaction') submitted = true; // Consume before I/O, including ambiguous failures.
       if (method === 'coolbears_authorizeFailedRetry') retryReviewed = true;
+      if (method === 'coolbears_authorizeExpiredRetry') expiryReviewed = true;
       if (method === 'getGenesisHash') devnetChecked = false;
       const controller = new AbortController();
       const expiresAt = performance.now() + callTimeoutMs;

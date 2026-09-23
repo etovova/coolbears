@@ -3,7 +3,8 @@
 PR32 добавил [локальную панель подписи владельца](owner-console/README.md).
 PR33 добавляет отдельный [отправитель одной попытки и восстановление](SENDING.md).
 Описанные ниже read-only API сами не отправляют; новые возможности доступны
-через отдельные команды с явным Devnet opt-in. Реальная настройка ещё нужна.
+через отдельные команды с явным Devnet opt-in. Реальная настройка ещё нужна. Ручной повтор описан в [RETRY.md](RETRY.md)
+для finalized failure и [EXPIRY.md](EXPIRY.md) для подтверждённого истечения.
 
 Модуль строит неподписанный план полного выпуска, проверяет обмен подписываемыми байтами и сохраняет локальный журнал отдельных попыток. Отдельный read-only адаптер проверяет сеть, accounts и finalized-результат через явно указанный RPC. Добавлены зашифрованное хранение трёх новых account signers и сохранение запроса/ответа подписи владельца. Добавлены полный модельный расчёт затрат и unsigned/signed-симуляция текущего exact message. Функции плана и чтения сами не вызывают кошелёк или отправку; отдельные интерфейсы PR32–33 описаны выше. См. [бюджет и симуляцию](BUDGET.md). Продажи остаются закрытыми; готовность к Mainnet не заявляется.
 
@@ -96,7 +97,9 @@ Preflight для ещё неподготовленной попытки полу
 
 Все deployment-owned accounts читаются одним `getMultipleAccounts` при finalized. SDK-декодирование проверяет program owner, discriminator, размер и ожидаемые поля: owner/authority, royalties, закрытый guard и все уже загруженные config lines. Счётчики коллекции должны быть нулевыми до reserve и равны единице после него. После создания машины в коллекции допускается только служебный UpdateDelegate, выведенный для этой машины; произвольный delegate не принимается. На этапе deployment `itemsRedeemed` должен оставаться нулём. Расхождение счётчика, bitmap, пропуск или подмена любой ранее загруженной строки блокируют продолжение.
 
-Receipt verifier повторно проверяет все подписи и требует равенства полного serialized transaction из `getTransaction` сохранённым байтам. Нужны finalized status, `err=null`, совпадающие slots и version; затем accounts с `minContextSlot` не ниже transaction slot. Только после повторного чтения неизменившегося журнала возвращается `proof.kind=verified`. Для сохранения вызывающий код обязан использовать возвращённую `expectedRevision`; helper сам ничего не записывает. Любой null, RPC error, недостаточная finality или несовпадение оставляет результат `unknown`. Адаптер пока **не выдаёт failed/expired proof** и не разрешает автоматический повтор.
+Receipt verifier повторно проверяет все подписи и требует равенства полного serialized transaction из `getTransaction` сохранённым байтам. Нужны finalized status, `err=null`, совпадающие slots и version; затем accounts с `minContextSlot` не ниже transaction slot. Только после повторного чтения неизменившегося журнала возвращается `proof.kind=verified`. Для сохранения вызывающий код обязан использовать возвращённую `expectedRevision`; helper сам ничего не записывает. Любой null, RPC error, недостаточная finality или несовпадение оставляет результат `unknown`. Этот метод не выдаёт failed/expired proof. Для них добавлены отдельные
+`reconcileFailedDeploymentStep` и `reconcileExpiredDeploymentStep`, вызываемые
+явными review-командами; автоматического повтора нет.
 
 Проверенные официальные RPC-контракты: [getMultipleAccounts](https://solana.com/docs/rpc/http/getmultipleaccounts), [getFeeForMessage](https://solana.com/docs/rpc/http/getfeeformessage), [rent](https://solana.com/docs/rpc/http/getminimumbalanceforrentexemption), [isBlockhashValid](https://solana.com/docs/rpc/http/isblockhashvalid), [getTransaction](https://solana.com/docs/rpc/http/gettransaction).
 

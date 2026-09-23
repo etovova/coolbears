@@ -113,4 +113,9 @@ compile-time opt-in добавляет проверку всех подписе�
 с независимой серверной проверкой receipt и сохранением всей истории.
 Метод `coolbears_authorizeFailedRetry` доступен только при `allowSubmission`;
 он не передаётся upstream. Подтверждённый failed допускает одну новую подпись,
-не удаляя предыдущий claim. Expiry/отсутствие результата по-прежнему блокируют повтор.
+не удаляя предыдущий claim. Для истечения PR35 добавляет отдельный метод `coolbears_authorizeExpiredRetry`
+и [проверку истории payer](../EXPIRY.md). Gateway заранее сохраняет первый ответ
+`getLatestBlockhash` как неизменяемый anchor. Без anchor и достаточной finalized
+истории повтор блокируется. Исторические RPC доступны только внутри этой
+серверной проверки: клиент не получает произвольный scan endpoint. SQLite
+сохраняет все anchors, claims, proofs и signatures без очистки.
