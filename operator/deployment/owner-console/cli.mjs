@@ -2,6 +2,7 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { readDeploymentBundle } from '../vault-store.mjs';
 import { nextDeploymentAction } from '../journal.mjs';
+import { readDeploymentQueue, queueBinding } from '../queue.mjs';
 import { createSigningSession } from './session.mjs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -25,25 +26,33 @@ async function responseFile(filename) {
 export async function runOwnerConsole(args, { input = process.stdin, output = process.stdout, errorOutput = process.stderr, env = process.env } = {}) {
   let passphrase;
   try {
-    const [command, directory, stepId, ...extra] = args;
-    if (!['prepare', 'prepare-retry', 'serve', 'import-response'].includes(command) || !directory || extra.length || (command !== 'serve' ? !stepId : stepId !== undefined)) throw Error();
+    const [command, directory, suppliedStep, ...extra] = args;
+    const needsStep = ['prepare', 'prepare-retry', 'import-response'].includes(command);
+    if (!['status', 'prepare-next', 'prepare', 'prepare-retry', 'serve', 'import-response'].includes(command)
+      || !directory || extra.length || (needsStep ? !suppliedStep : suppliedStep !== undefined)) throw Error();
+    if (command === 'status') {
+      output.write(JSON.stringify(await readDeploymentQueue(directory), null, 2) + '\n'); return 0;
+    }
     if (command === 'import-response') {
-      const response = await responseFile(stepId);
+      const response = await responseFile(suppliedStep);
       const session = await createSigningSession({ directory });
       const result = await session.accept(response.requestId, response.transactionBase64);
       output.write(JSON.stringify(result) + '\n'); return 0;
     }
     const endpoint = env.COOLBEARS_RPC_URL;
     const fetchImpl = env.COOLBEARS_OPERATOR_RPC_TOKEN === undefined ? undefined : createGatewayFetch({ endpoint, token: env.COOLBEARS_OPERATOR_RPC_TOKEN });
-    if (command === 'prepare' || command === 'prepare-retry') {
+    if (['prepare', 'prepare-retry', 'prepare-next'].includes(command)) {
       // A pending request is resumed, never silently replaced or re-signed.
       const bundle = await readDeploymentBundle(directory), action = nextDeploymentAction(bundle.snapshot);
+      const stepId = command === 'prepare-next' ? action.stepId : suppliedStep;
       const retry = command === 'prepare-retry';
-      if (action.type !== (retry ? 'retry-review' : 'prepare') || action.stepId !== stepId) {
+      if (bundle.snapshot.manifest.cluster !== 'devnet'
+        || action.type !== (retry ? 'retry-review' : 'prepare') || action.stepId !== stepId) {
         errorOutput.write('This step cannot be prepared. Resume the existing request or reconcile its outcome.\n'); return 1;
       }
+      const expectedBinding = queueBinding(bundle.snapshot);
       passphrase = await readPassphrase({ input, output: errorOutput });
-      const result = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl, retry });
+      const result = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl, retry, expectedBinding });
       output.write(JSON.stringify({ status: 'request-saved', stepId, ...result.binding, ownerSignatureCreated: false, transactionsSent: 0 }) + '\n');
       return 0;
     }

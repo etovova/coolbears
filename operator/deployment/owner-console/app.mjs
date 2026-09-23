@@ -14,6 +14,10 @@ const messages = {
 function render() {
   if (!client) return;
   const state = client.state();
+  if (state.progress) {
+    $('progress').max = state.progress.totalSteps; $('progress').value = state.progress.verifiedSteps;
+    $('progressText').textContent = `Подтверждено операций: ${state.progress.verifiedSteps} из ${state.progress.totalSteps}. Подпись сама по себе не означает завершение операции.`;
+  }
   for (const name of ['deploymentId', 'stepId', 'owner', 'messageSha256']) $(name).textContent = state[name] ?? '—';
   $('sign').disabled = uiBusy || !state.canSign;
   $('recover').hidden = !state.canRecover; $('recover').disabled = uiBusy;
@@ -21,7 +25,11 @@ function render() {
   $('connect').disabled = uiBusy || wallets.length === 0 || state.signed;
   $('wallets').disabled = uiBusy; $('reload').disabled = uiBusy;
   $('connected').textContent = state.connected ? `Подключён: ${state.walletName}` : 'Кошелёк не подключён';
-  if (state.signed) $('status').textContent = 'Подпись сохранена в журнале. Отправка в сеть не выполнялась.';
+  if (state.state === 'verified') $('status').textContent = 'Операция подтверждена и записана в журнал. Следующий шаг подготавливается отдельно.';
+  else if (state.state === 'accepted') $('status').textContent = 'Отправка принята RPC. Требуется проверка окончательного результата.';
+  else if (['send-claimed', 'unknown'].includes(state.state)) $('status').textContent = 'Результат операции требует проверки. Повторная подпись и отправка заблокированы.';
+  else if (['failed', 'expired', 'cancelled'].includes(state.state)) $('status').textContent = 'Попытка закрыта. Новый запрос подготавливается отдельной командой повтора.';
+  else if (state.signed) $('status').textContent = 'Подпись сохранена в журнале. Отправка выполняется отдельной командой.';
   else if (state.canRecover) $('status').textContent = 'Ответ кошелька сохранён. Можно повторить его запись в журнал без новой подписи.';
   else if (state.walletRequested || ['wallet-pending', 'unknown'].includes(state.localStatus)) $('status').textContent = 'Запрос уже передан кошельку, результат не сохранён. Повторная подпись заблокирована.';
 }
