@@ -1,3 +1,6 @@
+import { compileDeploymentRpcPolicy } from '../deployment/compile-rpc-policy.mjs';
+import { makeGateway } from '../deployment/gateway/worker.mjs';
+import { createGatewayFetch } from '../deployment/gateway/client.mjs';
 // Real SDK bytes, local journals and real TEST-key signatures. Every network
 // response, rent rate and balance is synthetic; never report these as live SOL.
 import test, { before, after } from 'node:test';
@@ -301,4 +304,39 @@ test('simulation opt-in cannot enable broadcasts or message-changing flags', asy
   for (const extra of [{ replaceRecentBlockhash: true }, { logs: true }, { sigVerify: 'false' }, { minContextSlot: -1 }]) {
     await assert.rejects(rpc.call('simulateTransaction', ['AA==', { ...config, ...extra }]), error => error.code === 'PARAMS');
   }
+});
+
+
+test('full budget crosses 15 paced gateway windows with fresh hashes and unchanged journal', async t => {
+  const h = await harness(t), before = await h.snapshot();
+  let window = 0, currentHash, now = 1800000000000;
+  const rpc = fixture({ override: {
+    getLatestBlockhash: value => {
+      currentHash = Keypair.fromSeed(createHash('sha256').update(`budget-window-${++window}`).digest()).publicKey.toBase58();
+      return { ...value, value: { ...value.value, blockhash: currentHash } };
+    },
+    getFeeForMessage: (value, request) => {
+      assert.equal(VersionedMessage.deserialize(Buffer.from(request.params[0], 'base64')).recentBlockhash, currentHash);
+      return value;
+    },
+    isBlockhashValid: (value, request) => { assert.equal(request.params[0], currentHash); return value; },
+  } });
+  const values = new Map(), storage = { async get(key) { return structuredClone(values.get(key)); },
+    async put(key, value) { values.set(key, structuredClone(value)); }, async transaction(fn) { return fn(this); } };
+  const compiled = await compileDeploymentRpcPolicy(before.manifest);
+  const { worker, DeploymentGate } = makeGateway(compiled), token = 'B'.repeat(43);
+  const env = { OPERATOR_RPC_TOKEN: token, HELIUS_API_KEY: 'budget-fixture-only' };
+  const gate = new DeploymentGate({ storage }, env, { clock: () => now, pause: async ms => { now += ms; },
+    fetchImpl: (_url, init) => rpc.fetchImpl(endpoint, init) });
+  env.DEPLOYMENT_GATE = { idFromName: name => name, get: () => gate };
+  const gatewayEndpoint = 'https://budget-operator.test/rpc';
+  const fetchImpl = createGatewayFetch({ endpoint: gatewayEndpoint, token,
+    fetchImpl: (url, init) => worker.fetch(new Request(url, init), env) });
+  const result = await quoteDeploymentBudget({ directory: h.directory, endpoint: gatewayEndpoint, fetchImpl });
+  safe(result); assert.equal(result.status, 'budget-estimated');
+  assert.equal(result.quoteWindows.length, 15); assert.equal(new Set(result.quoteWindows.map(item => item.blockhash)).size, 15);
+  assert.equal(result.quoteWindows.reduce((sum, item) => sum + item.count, 0), 1431);
+  assert.equal(rpc.fees.length, 1431); assert.ok(now - 1800000000000 > 280000);
+  assert.equal([...values.values()][0].used, rpc.calls.length);
+  assert.deepEqual(await h.snapshot(), before);
 });

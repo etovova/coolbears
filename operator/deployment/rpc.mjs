@@ -85,7 +85,7 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
   const url = endpointUrl(endpoint);
   if (typeof allowSimulation !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
     || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 16 * 1024 * 1024
-    || (totalTimeoutMs !== undefined && (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 1 || totalTimeoutMs > 120000))) throw fail('CONFIGURATION');
+    || (totalTimeoutMs !== undefined && (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 1 || totalTimeoutMs > 600000))) throw fail('CONFIGURATION');
   const startedAt = performance.now();
   let requests = 0;
   return Object.freeze({

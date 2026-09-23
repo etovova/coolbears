@@ -54,7 +54,7 @@ test('endpoint and size/deadline configuration fail closed without reflecting in
   }
   for (const options of [{ timeoutMs: 0 }, { timeoutMs: 60001 }, { timeoutMs: 0.5 }, { timeoutMs: Infinity },
     { maxResponseBytes: 0 }, { maxResponseBytes: 16 * 1024 * 1024 + 1 }, { maxResponseBytes: NaN }, { fetchImpl: null },
-    { totalTimeoutMs: 0 }, { totalTimeoutMs: 120001 }, { totalTimeoutMs: 0.5 }, { totalTimeoutMs: null }]) {
+    { totalTimeoutMs: 0 }, { totalTimeoutMs: 600001 }, { totalTimeoutMs: 0.5 }, { totalTimeoutMs: null }]) {
     assert.throws(() => createDeploymentRpc({ endpoint, ...options }), safeFailure('CONFIGURATION'));
   }
 });
