@@ -1,0 +1,105 @@
+{
+  "kind": "offline-manifest-scoped-deployment-rpc",
+  "checkedAt": "2026-09-23T11:41:24.459993+00:00",
+  "baseCommit": "1722abf22deb33ce33225a59df43847bc33fac3a",
+  "branch": "deployment-rpc-policy-20260923",
+  "network": "devnet-only",
+  "mainnetAllowed": false,
+  "salesOpen": false,
+  "priceSol": 0.2,
+  "liveRpcRequests": 0,
+  "transactionsSent": 0,
+  "providerPlanChanged": false,
+  "deployedWorkerChanged": false,
+  "newEndpointDeployed": false,
+  "productionKeysCreated": false,
+  "canonicalMessageTemplates": 1431,
+  "machineBytes": 871827,
+  "responseLimitBytes": 4194304,
+  "localValidation": {
+    "suite": {
+      "tests": 271,
+      "passed": 270,
+      "skipped": 1,
+      "failed": 0,
+      "durationMs": 132113.966443
+    },
+    "additionalHistoricalFeeRegression": {
+      "tests": 1,
+      "passed": 1,
+      "failed": 0
+    },
+    "skipReason": "Existing ownership-change test requires a different system UID"
+  },
+  "initialRegression": "The first integration run excluded finalized failed attempts from recovery reads; corrected to include all verified/failed signed attempts from journal history. Both the existing and additional historical-fee regressions passed.",
+  "dns": {
+    "checkedAt": "2026-09-23T11:28:30.239754+00:00",
+    "dns": [
+      {
+        "resolver": "dns.google",
+        "status": 0,
+        "answers": [
+          {
+            "name": "coolbears-nfts.com.",
+            "type": 1,
+            "TTL": 300,
+            "data": "172.67.213.209"
+          },
+          {
+            "name": "coolbears-nfts.com.",
+            "type": 1,
+            "TTL": 300,
+            "data": "104.21.67.50"
+          }
+        ]
+      },
+      {
+        "resolver": "cloudflare-dns.com",
+        "status": 0,
+        "answers": [
+          {
+            "name": "coolbears-nfts.com",
+            "type": 1,
+            "TTL": 600,
+            "data": "185.199.108.153"
+          },
+          {
+            "name": "coolbears-nfts.com",
+            "type": 1,
+            "TTL": 600,
+            "data": "185.199.110.153"
+          },
+          {
+            "name": "coolbears-nfts.com",
+            "type": 1,
+            "TTL": 600,
+            "data": "185.199.111.153"
+          },
+          {
+            "name": "coolbears-nfts.com",
+            "type": 1,
+            "TTL": 600,
+            "data": "185.199.109.153"
+          }
+        ]
+      }
+    ],
+    "https": [
+      {
+        "url": "https://coolbears-nfts.com/",
+        "status": 200,
+        "finalUrl": "https://coolbears-nfts.com/",
+        "server": "GitHub.com",
+        "cfRay": null
+      },
+      {
+        "url": "https://www.coolbears-nfts.com/",
+        "status": 200,
+        "finalUrl": "https://coolbears-nfts.com/",
+        "server": "GitHub.com",
+        "cfRay": null
+      }
+    ]
+  },
+  "ci": "pending at source commit; final CI status belongs to the continuation checkpoint"
+}

@@ -7,7 +7,8 @@ import { buildDeploymentCostModel } from './cost-model.mjs';
 import { readDeploymentJournal } from './journal.mjs';
 import { verifySigningResponse } from './signing.mjs';
 import { verifyFinalizedReceipt } from './receipt.mjs';
-import { createDeploymentRpc, assertCluster } from './rpc.mjs';
+import { assertCluster } from './rpc.mjs';
+import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 import { rpcContext, rpcAmount, snapshotBinding, assertJournalUnchanged, checkDeploymentState,
   requireDeploymentCheck as need, blockedDeploymentReport } from './read.mjs';
 
@@ -79,7 +80,10 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
     while (latest[completedIndex + 1]?.state === 'verified') completedIndex++;
     const startedAt = performance.now();
     phase = 'network';
-    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 120000 });
+    rpc = await createScopedDeploymentRpc({ manifest: baseline.manifest, endpoint, fetchImpl, timeoutMs,
+      totalTimeoutMs: 120000, recoverySignatures: baseline.steps.flatMap(step => step.attempts)
+        .filter(attempt => attempt.signed && ['verified', 'failed'].includes(attempt.state))
+        .map(attempt => attempt.signed.signature) });
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'accounts';
     let accountSlot = await checkDeploymentState(rpc, plan, completedIndex);
