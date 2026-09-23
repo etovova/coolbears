@@ -154,9 +154,13 @@ jobs:
           node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - run: node operator/tests/deployment-owner-console.browser.mjs
+      - name: Buyer custody in real IndexedDB across browser restarts
+        run: node operator/tests/order-storage.browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: private-owner-console-browser
-          path: operator/build/owner-console-chromium/
+          path: |
+            operator/build/owner-console-chromium/
+            operator/build/buyer-storage-chromium/
           retention-days: 14
