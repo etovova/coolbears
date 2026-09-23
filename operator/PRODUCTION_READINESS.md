@@ -1,3 +1,9 @@
+**PR43:** добавлены [одноразовая отправка и finalized recovery](orders/SUBMISSION.md)
+первого подписанного Devnet-item. Browser/SQLite claims записываются до I/O;
+потеря ответа разрешает только проверку сети. Отправка по умолчанию выключена,
+endpoint не опубликован, полный бюджет и production UI ещё не готовы.
+Ниже сохранены описания прежних этапов.
+
 # CoolBears: подготовка полного выпуска
 
 **PR42:** добавлен кандидат [buyer check gateway](orders/gateway/README.md) и

@@ -1,0 +1,33 @@
+// Real workerd + persisted SQLite; all signatures/transactions are disposable fixtures.
+import assert from 'node:assert/strict';
+import {mkdtemp,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {buyerGatewayFixture} from './fixtures/buyer-gateway.mjs';
+import {buyerGatewayRuntime} from './fixtures/buyer-gateway-runtime.mjs';
+const fixture=await buyerGatewayFixture({syntheticOwner:true}),origin='https://buyer-send-runtime.test';
+const persist=await mkdtemp(path.join(tmpdir(),'coolbears-buyer-send-runtime-'));
+let runtime=await buyerGatewayRuntime({fixture,origin,persist});const cases=[];
+const dispatch=(route,input)=>runtime.dispatch(origin+'/api/buyer/'+route,{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:1,nonce:'a'.repeat(64),...input})});
+const spaced=()=>new Promise(r=>setTimeout(r,250));
+try{
+  await runtime.start();const first=fixture.signedInput('runtime-success');
+  assert.equal((await dispatch('send',first)).status,403);assert.equal(fixture.calls.length,0);
+  cases.push('production-default factory rejects submission before upstream');
+  await runtime.stop();runtime=await buyerGatewayRuntime({fixture,origin,persist,allowSubmission:true});await runtime.start();
+  const sent=await dispatch('send',first),accepted=await sent.json();assert.equal(sent.status,200,JSON.stringify(accepted));assert.equal(accepted.report.status,'accepted');
+  assert.equal(fixture.calls.filter(c=>c.method==='sendTransaction').length,1);cases.push('explicit test opt-in runs signed check and sends exact bytes once');
+  await runtime.stop();await runtime.start({BUYER_HELIUS_API_KEY:'rotated-secret-42'});
+  const before=fixture.calls.length;assert.equal((await dispatch('send',first)).status,409);assert.equal(fixture.calls.length,before);
+  cases.push('SQLite permanent claim survives full runtime restart and secret rotation');
+  await runtime.stop();await runtime.start();await spaced();
+  const recovered=await dispatch('recover',first),proof=await recovered.json();assert.equal(recovered.status,200);assert.equal(proof.report.status,'verified',JSON.stringify(proof));
+  assert.equal(proof.report.proof.signature,accepted.report.signature);assert.equal(fixture.calls.filter(c=>c.method==='sendTransaction').length,1);
+  cases.push('read-only recovery verifies finalized exact receipt and Core asset through workerd');
+  await spaced();const lost=fixture.signedInput('runtime-lost');fixture.setMode('send-lost');const failed=await dispatch('send',lost);assert.ok(failed.status>=400);assert.ok(!(await failed.text()).includes('fixture-secret-42'));
+  const charged=fixture.calls.length;await runtime.stop();await runtime.start();fixture.setMode('normal');
+  assert.equal((await dispatch('send',lost)).status,409);assert.equal((await dispatch('recover',lost)).status,429);assert.equal(fixture.calls.length,charged);
+  cases.push('lost upstream reply retains permanent send claim and bounded uncertainty hold after restart');
+  assert.deepEqual(runtime.errors,[]);assert.equal((await runtime.ids()).length,1);
+  console.log(JSON.stringify({passed:true,cases,upstreamCalls:fixture.calls.length,fixtureSubmissions:fixture.calls.filter(c=>c.method==='sendTransaction').length,transactionsSent:0,liveRpc:false},null,2));
+}finally{await runtime.stop();await rm(persist,{recursive:true,force:true});}

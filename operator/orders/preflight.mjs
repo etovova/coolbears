@@ -4,4 +4,4 @@ import { validateOrder } from './journal.mjs';
 import { buildOrderTransactions } from './transactions.mjs';
 import { verifyOrderAccounts } from '../deployment/accounts.mjs';
 import { createOrderChecker } from './preflight-model.mjs';
-export const { preflightOrder, checkPreparedOrder } = createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts });
+export const { preflightOrder, checkPreparedOrder, checkSignedOrder } = createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts });

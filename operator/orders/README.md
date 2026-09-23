@@ -1,3 +1,9 @@
+**PR43:** добавлены [одноразовая отправка и finalized recovery](SUBMISSION.md)
+первого подписанного Devnet-item. Browser/SQLite claims записываются до I/O;
+потеря ответа разрешает только проверку сети. Отправка по умолчанию выключена,
+endpoint не опубликован, полный бюджет и production UI ещё не готовы.
+Ниже сохранены описания прежних этапов.
+
 [Частичная подпись asset](SIGNING.md) теперь связывает первый item нового
 
 **PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
