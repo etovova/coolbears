@@ -9,7 +9,7 @@ import { policy } from '../prepare.mjs';
 import { createDeploymentSignerVault } from '../deployment/vault.mjs';
 import { createDeploymentBundle } from '../deployment/vault-store.mjs';
 import { prepareDeploymentSigning } from '../deployment/handoff.mjs';
-import { readDeploymentJournal } from '../deployment/journal.mjs';
+import { readDeploymentJournal, appendDeploymentEvent } from '../deployment/journal.mjs';
 import { startSigningConsole } from '../deployment/owner-console/server.mjs';
 import { GENESIS_HASHES } from '../deployment/rpc.mjs';
 const playwright = await import(process.env.COOLBEARS_PLAYWRIGHT || 'playwright');
@@ -82,7 +82,7 @@ async function open(name, { storageDenied = false } = {}) {
   }, { address: owner.publicKey.toBase58(), publicKey: Array.from(owner.publicKey.toBytes()), storageDenied });
   await page.goto(server.url);
   await page.waitForFunction(() => document.getElementById('deploymentId').textContent !== '—');
-  return { page, calls, expire: () => { expired = true; }, snapshot: () => readDeploymentJournal(journalDirectory),
+  return { page, calls, journalDirectory, expire: () => { expired = true; }, snapshot: () => readDeploymentJournal(journalDirectory),
     async done(label) { report.cases.push(label); await context.close(); context = null; await server.close(); server = null; } };
 }
 async function ready(h) {
@@ -91,6 +91,7 @@ async function ready(h) {
 }
 try {
   let h = await open('saved'); await ready(h);
+  assert.match(await h.page.locator('#progressText').textContent(), /0 из 1431/);
   await h.page.screenshot({ path: path.join(output, 'ready-desktop.png'), fullPage: true });
   await h.page.setViewportSize({ width: 390, height: 844 });
   assert.equal(await h.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -100,7 +101,17 @@ try {
   assert.equal((await h.snapshot()).revision, 3); assert.equal(signingCalls, 1);
   await h.page.reload(); await h.page.getByRole('status').filter({ hasText: 'Подпись сохранена в журнале' }).waitFor();
   assert.equal(await h.page.getByRole('button', { name: 'Проверить и подписать', exact: true }).isDisabled(), true);
-  assert.equal(signingCalls, 1); await h.done('sign-only, exact journal bytes, desktop/mobile layout and reload');
+  assert.equal(signingCalls, 1);
+  assert.equal(await h.page.locator('#progress').getAttribute('value'), '0');
+  // Fixture-only journal events exercise the UI after an external sender has
+  // advanced the pinned request. No network submission is made by this test.
+  await appendDeploymentEvent(h.journalDirectory, { type: 'claim-send', stepId: 'collection-create', attempt: 1 }, { expectedRevision: 3 });
+  await appendDeploymentEvent(h.journalDirectory, { type: 'accepted', stepId: 'collection-create', attempt: 1 }, { expectedRevision: 4 });
+  await h.page.reload(); await h.page.getByRole('status').filter({ hasText: 'Отправка принята RPC' }).waitFor();
+  assert.equal(await h.page.locator('#progress').getAttribute('value'), '0');
+  assert.equal(signingCalls, 1);
+  assert.equal(await h.page.getByRole('button', { name: 'Проверить и подписать', exact: true }).isDisabled(), true);
+  await h.done('sign-only, progress, accepted reload, desktop/mobile layout; no second wallet invocation');
 
   h = await open('lost-ack'); await ready(h); let dropped = false;
   await h.page.route('**/api/signature', async route => {

@@ -18,6 +18,7 @@ import { createDeploymentRpc, GENESIS_HASHES } from '../deployment/rpc.mjs';
 import { compileDeploymentRpcPolicy } from '../deployment/compile-rpc-policy.mjs';
 import { makeGateway } from '../deployment/gateway/worker.mjs';
 import { createGatewayFetch } from '../deployment/gateway/client.mjs';
+import { readDeploymentQueue } from '../deployment/queue.mjs';
 const key = n => Keypair.fromSeed(createHash('sha256').update(`sender-fixture-${n}`).digest());
 const owner = key('owner'), passphrase = Buffer.from('sender-fixture-private-password');
 const endpoint = 'https://sender.test/rpc', stepId = 'collection-create';
@@ -94,6 +95,10 @@ test('one exact saved transaction: fresh simulation, durable claim, matching ack
     }
   } });
   const result = await send(h, rpc); assert.equal(result.status, 'accepted', JSON.stringify(result));
+  const acceptedQueue = await readDeploymentQueue(h.directory);
+  assert.equal(acceptedQueue.progress.verifiedSteps, 0);
+  assert.equal(acceptedQueue.next.action, 'reconcile');
+  assert.equal(acceptedQueue.next.stepId, stepId);
   assert.equal(result.chainVerified, false); assert.equal(result.transactionsSent, null); assert.equal(result.submissionAttempts, 1);
   const simulation = rpc.calls.find(call => call.method === 'simulateTransaction');
   assert.equal(simulation.params[0], signed.transactionBase64); assert.equal(simulation.params[1].sigVerify, true);
@@ -105,6 +110,13 @@ test('one exact saved transaction: fresh simulation, durable claim, matching ack
   assert.equal((await send(h, missing)).status, 'blocked');
   const recovered = await resume(h, upstream({ completed: true }));
   assert.equal(recovered.status, 'verified', JSON.stringify(recovered)); assert.equal(recovered.journalWrites, 1); assert.equal(recovered.salesOpen, false);
+  const recoveredQueue = await readDeploymentQueue(h.directory);
+  assert.equal(recoveredQueue.progress.verifiedSteps, 1);
+  assert.equal(recoveredQueue.progress.remainingSteps, 1430);
+  assert.equal(recoveredQueue.progress.currentStepNumber, 2);
+  assert.equal(recoveredQueue.next.action, 'prepare');
+  assert.equal(recoveredQueue.next.stepId, fixture.manifest.steps[1].id);
+  assert.equal(recoveredQueue.readyToOpenSales, false);
   const repeatRpc = upstream(), repeat = await resume(h, repeatRpc);
   assert.equal(repeat.status, 'already-recorded'); assert.equal(repeatRpc.calls.length, 0); assert.equal((await h.snapshot()).revision, 5);
 });

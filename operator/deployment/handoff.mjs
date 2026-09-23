@@ -62,14 +62,21 @@ function preflightMatches(report, snapshot, stepId) {
 export async function prepareDeploymentSigning(input) {
   let signer, ownedPassphrase;
   try {
-    const args = options(input, ['directory', 'stepId', 'passphrase', 'endpoint', 'fetchImpl', 'timeoutMs', 'retry'],
+    const args = options(input, ['directory', 'stepId', 'passphrase', 'endpoint', 'fetchImpl', 'timeoutMs', 'retry', 'expectedBinding'],
       ['directory', 'stepId', 'passphrase', 'endpoint']);
+    const fields = ['deploymentId', 'manifestSha256', 'expectedRevision', 'expectedHeadHash'];
+    const expected = args.expectedBinding === undefined ? null : options(args.expectedBinding, fields, fields);
     const retry = args.retry ?? false;
     need(typeof retry === 'boolean', 'INVALID_INPUT');
     need(args.passphrase instanceof Uint8Array && args.passphrase.length >= 16 && args.passphrase.length <= 1024, 'INVALID_INPUT');
     ownedPassphrase = new Uint8Array(args.passphrase);
     const bundle = await readDeploymentBundle(args.directory);
     const baseline = bundle.snapshot, action = nextDeploymentAction(baseline);
+    // Pin selection before the owner enters a password. A newer retry of the
+    // same step must not inherit an old CLI selection after a concurrent edit.
+    if (expected) need(expected.deploymentId === baseline.manifest.id
+      && expected.manifestSha256 === baseline.manifestSha256 && expected.expectedRevision === baseline.revision
+      && expected.expectedHeadHash === baseline.headHash, 'JOURNAL_CHANGED');
     need(action.stepId === args.stepId, 'STEP_NOT_CURRENT');
     need(action.type === 'prepare' || action.type === 'retry-review', 'RECONCILIATION_REQUIRED');
     need(action.type !== 'retry-review' || retry, 'EXPLICIT_RETRY_REQUIRED');

@@ -5,6 +5,7 @@ import { nextDeploymentAction, sha256Json, appendDeploymentEvent } from '../jour
 import { simulateDeploymentStep } from '../simulation.mjs';
 import { acceptDeploymentSigningResponse } from '../handoff.mjs';
 import { validateSigningRequest, verifySigningResponse } from '../signing.mjs';
+import { deploymentQueueStatus } from '../queue.mjs';
 const need = (value, code) => { if (!value) throw Object.assign(Error('Signing session unavailable.'), { code }); };
 export async function createSigningSession({ directory, endpoint, fetchImpl, timeoutMs } = {}) {
   const first = await readDeploymentBundle(directory), snapshot = first.snapshot;
@@ -23,13 +24,14 @@ export async function createSigningSession({ directory, endpoint, fetchImpl, tim
       && sha256Json(attempt.request) === requestId, 'REQUEST_CHANGED');
     return { snapshot: saved, attempt, journalDirectory: bundle.journalDirectory };
   }
-  const stateOf = attempt => ({ requestId, manifestSha256, deploymentId: request.deploymentId,
+  const stateOf = (attempt, saved) => ({ requestId, manifestSha256, deploymentId: request.deploymentId,
     stepId: request.stepId, attempt: request.attempt, owner: request.owner, cluster: 'devnet',
     messageSha256: request.messageSha256, state: attempt.state, signed: !!attempt.signed, walletRequested: !!attempt.walletClaim,
     ...(attempt.signed ? { signature: attempt.signed.signature } : {}),
+    progress: deploymentQueueStatus(saved).progress,
     readyToSubmit: false, salesOpen: false, transactionsSent: 0 });
   return Object.freeze({
-    async state() { return stateOf((await current()).attempt); },
+    async state() { const value = await current(); return stateOf(value.attempt, value.snapshot); },
     async check(id) {
       need(id === requestId, 'REQUEST_CHANGED'); need(!busy, 'BUSY'); busy = true;
       try {
@@ -48,7 +50,7 @@ export async function createSigningSession({ directory, endpoint, fetchImpl, tim
           { type: 'request-wallet', stepId: request.stepId, attempt: request.attempt, claimId }, { expectedRevision: after.snapshot.revision });
         const claimed = saved.steps.find(step => step.id === request.stepId).attempts.at(-1);
         need(claimed.walletClaim === claimId, 'SAVE_UNCONFIRMED');
-        return { ...stateOf(claimed), claimId, request: structuredClone(request), simulationVerified: true,
+        return { ...stateOf(claimed, saved), claimId, request: structuredClone(request), simulationVerified: true,
           checkedSlot: report.checkedSlot, expiresAt: Date.now() + 20000 };
       } finally { busy = false; }
     },
@@ -59,7 +61,8 @@ export async function createSigningSession({ directory, endpoint, fetchImpl, tim
         need(before.attempt.state === 'wallet-pending' && !before.attempt.signed && before.attempt.walletClaim === claimId, 'ALREADY_HANDLED');
         await appendDeploymentEvent(before.journalDirectory,
           { type: 'wallet-declined', stepId: request.stepId, attempt: request.attempt, claimId }, { expectedRevision: before.snapshot.revision });
-        return { ...stateOf((await current()).attempt), status: 'declined' };
+        const value = await current();
+        return { ...stateOf(value.attempt, value.snapshot), status: 'declined' };
       } finally { busy = false; }
     },
     async accept(id, transactionBase64) {
@@ -70,11 +73,12 @@ export async function createSigningSession({ directory, endpoint, fetchImpl, tim
         // A lost HTTP acknowledgment must never require another wallet signature.
         if (before.attempt.signed) {
           need(before.attempt.signed.transactionBase64 === transactionBase64, 'SIGNED_BYTES_CHANGED');
-          return { ...stateOf(before.attempt), status: 'saved', alreadySaved: true };
+          return { ...stateOf(before.attempt, before.snapshot), status: 'saved', alreadySaved: true };
         }
         need(['wallet-pending', 'unknown'].includes(before.attempt.state), 'ALREADY_HANDLED');
         await acceptDeploymentSigningResponse({ directory, request, response: { transactionBase64 } });
-        return { ...stateOf((await current()).attempt), status: 'saved', alreadySaved: false };
+        const value = await current();
+        return { ...stateOf(value.attempt, value.snapshot), status: 'saved', alreadySaved: false };
       } finally { busy = false; }
     },
   });
