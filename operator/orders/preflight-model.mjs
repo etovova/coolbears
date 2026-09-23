@@ -6,7 +6,7 @@ import { none } from '@metaplex-foundation/umi';
 import { Key, MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
 import { MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID } from '@metaplex-foundation/mpl-core-candy-machine';
 import { getAssetV1AccountDataSerializer } from '../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
-import { validateAssetRequest, buyerRequestId } from './signing.mjs';
+import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deployment/rpc.mjs';
 
 export function createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts }) {
@@ -34,7 +34,8 @@ async function readState(rpc, order, minimum = 0) {
 function preflightOrder(options) { return checkOrder(options); }
 // Internal trusted adapter for a sign-only closed Devnet session, not a purchase grant.
 function checkPreparedOrder(options) { return checkOrder(options, true); }
-async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request } = {}, prepared = false) {
+function checkSignedOrder(options) { return checkOrder(options, true, true); }
+async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request, response } = {}, prepared = false, signedMode = false) {
   let rpc, phase = 'order';
   const started = performance.now();
   try {
@@ -44,8 +45,12 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     if (prepared) {
       claim = structuredClone(claim); request = structuredClone(request);
       validateAssetRequest(order, claim, request);
-      need(order.revision === 1 && !order.paused && order.items[0].attempts.length === 1
-        && order.items[0].attempts[0].state === 'wallet-pending' && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
+      need(!order.paused && order.items[0].attempts.length === 1 && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
+      if (signedMode) {
+        response = verifyBuyerSigningResponse(order, claim, request, structuredClone(response));
+        need(order.revision >= 3 && order.items[0].attempts[0].state === 'unknown'
+          && order.items[0].attempts[0].signature === response.signature, 'SAVED_RESPONSE_REQUIRED');
+      } else need(order.revision === 1 && order.items[0].attempts[0].state === 'wallet-pending', 'PREPARED_ORDER_REQUIRED');
     } else need(order.revision === 0 && !order.paused && order.items.every(item => item.attempts.length === 0), 'FRESH_ORDER_REQUIRED');
     need([order.buyer, ...order.items.map(item => item.asset)].every(address => PublicKey.isOnCurve(new PublicKey(address).toBytes())), 'UNSIGNABLE_ADDRESS');
     rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true });
@@ -63,7 +68,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
       const planned = buildOrderTransactions(order, latest.value); template = planned.templates[0];
       need(template?.itemIndex === 0 && planned.templates.length === order.quantity, 'ORDER_TEMPLATE');
     }
-    const encoded = prepared ? request.transactionBase64 : Buffer.from(template.unsignedBytes).toString('base64');
+    const encoded = signedMode ? response.transactionBase64 : prepared ? request.transactionBase64 : Buffer.from(template.unsignedBytes).toString('base64');
     const tx = VersionedTransaction.deserialize(Buffer.from(encoded, 'base64'));
     phase = 'cost';
     const feeResult = await rpc.call('getFeeForMessage', [Buffer.from(tx.message.serialize()).toString('base64'),
@@ -80,7 +85,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     need(funds >= knownMinimum, 'INSUFFICIENT_BALANCE');
     phase = 'simulation';
     const simulation = await rpc.call('simulateTransaction', [encoded, { encoding: 'base64', commitment: 'confirmed',
-      minContextSlot: slot, sigVerify: false, replaceRecentBlockhash: false }]);
+      minContextSlot: slot, sigVerify: signedMode, replaceRecentBlockhash: false }]);
     slot = context(simulation, slot);
     need(simulation.value?.err === null && simulation.value.replacementBlockhash == null
       && Number.isSafeInteger(simulation.value.unitsConsumed) && simulation.value.unitsConsumed >= 0
@@ -100,13 +105,13 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     need(hash(validateOrder(await readOrder())) === orderSha256, 'ORDER_CHANGED');
     need(performance.now() - started <= 30000, 'PREFLIGHT_TOO_OLD');
     const checkedAt = Date.now();
-    return { status: prepared ? 'wallet-check-passed' : 'preflight-passed',
-      mode: prepared ? 'closed-devnet-sign-only-check' : 'closed-devnet-order-preview',
+    return { status: signedMode ? 'submission-check-passed' : prepared ? 'wallet-check-passed' : 'preflight-passed',
+      mode: signedMode ? 'closed-devnet-send-check' : prepared ? 'closed-devnet-sign-only-check' : 'closed-devnet-order-preview',
       ...(prepared ? { requestId: buyerRequestId(request), checkedAt, expiresAt: checkedAt + 20000 } : {}), orderId: order.id,
       orderRevision: order.revision, orderSha256, itemIndex: 0, quantity: order.quantity,
       itemsRemaining: final.itemsRemaining, checkedSlot: slot, accountSlot: final.slot,
       cluster: 'devnet', networkVerified: true, guardPriceVerified: true, blockhashVerified: true,
-      simulationVerified: true, simulationMode: 'unsigned', remainingBlocks: template.lastValidBlockHeight - height,
+      simulationVerified: true, simulationMode: signedMode ? 'signed' : 'unsigned', remainingBlocks: template.lastValidBlockHeight - height,
       candidate: { asset: template.asset, transactionBase64: encoded, messageSha256: template.messageSha256,
         blockhash: template.blockhash, lastValidBlockHeight: template.lastValidBlockHeight },
       budget: { complete: false, unitPriceLamports: order.unitPriceLamports, orderItemPriceLamports: order.totalPriceLamports,
@@ -114,7 +119,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
         nextItemKnownMinimumLamports: knownMinimum.toString(), protocolChargesLamports: null,
         fullOrderTotalLamports: null, balanceLamports: String(latestBalance.value) },
       networkRequests: rpc.requests, signaturesCreated: 0, journalWrites: 0, transactionsSent: 0,
-      readyToSign: prepared, readyToSubmit: false, salesOpen: false };
+      readyToSign: prepared && !signedMode, readyToSubmit: false, salesOpen: false };
   } catch (error) {
     const code = error instanceof DeploymentRpcError ? `RPC_${error.code}`
       : error?.code === 'EXPECTED_ACCOUNT_STATE_MISMATCH' ? 'ACCOUNT_STATE_MISMATCH'
@@ -125,5 +130,5 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
   }
 }
 
-return { preflightOrder, checkPreparedOrder };
+return { preflightOrder, checkPreparedOrder, checkSignedOrder };
 }

@@ -7,8 +7,12 @@ import { policy as nodePolicy } from '../../prepare.mjs';
 import { buildDeploymentPlan } from '../../deployment/plan.mjs';
 import { createOrderModel } from '../../orders/journal-model.mjs';
 import { createOrderPlanner } from '../../orders/transaction-model.mjs';
-import { prepareAssetClaim, finalizeAssetRequest } from '../../orders/signing.mjs';
+import { prepareAssetClaim, finalizeAssetRequest, verifyBuyerSigningResponse } from '../../orders/signing.mjs';
 import { insertionAccounts } from './group-accounts.mjs';
+import { none } from '@metaplex-foundation/umi';
+import { Key, MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
+import { getAssetV1AccountDataSerializer } from '../../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
+import { inspectSignedDeploymentTransaction } from '../../deployment/signing.mjs';
 import { GENESIS_HASHES } from '../../deployment/rpc.mjs';
 const key=label=>Keypair.fromSeed(createHash('sha256').update('buyer-gateway:'+label).digest());
 export async function buyerGatewayFixture({syntheticOwner=false}={}){
@@ -21,9 +25,14 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     full=insertionAccounts({steps:plan.steps},9999);
   }finally{[approved.owner,nodePolicy.owner]=previous;}
   const model=createOrderModel(policy),planner=createOrderPlanner(model),calls=[];
-  let mode='normal',wait,entered;
+  let mode='normal',wait,entered;const submitted=new Map();
+  function receipt(bytes){
+    const signed=inspectSignedDeploymentTransaction(bytes),tx=VersionedTransaction.deserialize(Buffer.from(bytes,'base64'));
+    const asset=tx.message.staticAccountKeys[1].toBase58();
+    submitted.set(signed.signature,{bytes,asset,buyer:tx.message.staticAccountKeys[0].toBase58()});return signed.signature;
+  }
   function input(id='gateway-fixture',quantity=1,buyer=policy.owner){
-    const assets=Array.from({length:quantity},(_,n)=>key('asset-'+n));
+    const assets=Array.from({length:quantity},(_,n)=>key('asset-'+id+'-'+n));
     const order=model.createOrder({id,cluster:'devnet',buyer,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard,
       quantity,available:9999,assets:assets.map(k=>k.publicKey.toBase58())});
     const block={blockhash:key('hash').publicKey.toBase58(),lastValidBlockHeight:2000};
@@ -35,6 +44,17 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       return{order:prepared.order,claim:prepared.claim,request:finalizeAssetRequest(prepared.order,prepared.claim,signature)};
     }finally{approved.owner=old;}
   }
+  function signedInput(id='signed-fixture'){
+    const value=input(id),old=approved.owner;approved.owner=policy.owner;
+    try{
+      value.order=model.transitionOrder(value.order,{type:'unknown',revision:1,index:0,attempt:1});
+      const tx=VersionedTransaction.deserialize(Buffer.from(value.request.transactionBase64,'base64'));tx.sign([owner]);
+      const response={transactionBase64:Buffer.from(tx.serialize()).toString('base64')};
+      const signed=verifyBuyerSigningResponse(value.order,value.claim,value.request,response);
+      value.order=model.transitionOrder(value.order,{type:'signature',revision:2,index:0,attempt:1,signature:signed.signature,messageSha256:signed.messageSha256});
+      return{...value,response};
+    }finally{approved.owner=old;}
+  }
   async function upstream(request,ResponseType=Response){
     const url=new URL(request.url);if(url.origin!=='https://devnet.helius-rpc.com'||url.searchParams.get('api-key')!=='fixture-secret-42')throw Error('unexpected upstream');
     if(request.headers.has('cookie')||request.headers.has('authorization')||request.headers.has('origin'))throw Error('forwarded browser header');
@@ -42,6 +62,30 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     if(mode==='hold')await new Promise(resolve=>{wait=resolve;});
     if(mode==='429')return new ResponseType('fixture-secret-42',{status:429,headers:{'retry-after':'1'}});
     if(mode==='redirect')return new ResponseType('',{status:302,headers:{location:'https://forbidden.test/?secret=fixture-secret-42'}});
+    if(call.method==='sendTransaction'){
+      if(call.params[1].skipPreflight!==false||call.params[1].maxRetries!==0)throw Error('unsafe send fixture');
+      const signature=receipt(call.params[0]);
+      if(mode==='send-lost')throw Error('fixture-secret-42 lost acknowledgment');
+      return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:mode==='send-wrong'?'wrong-signature':signature}),{headers:{'content-type':'application/json'}});
+    }
+    const found=submitted.get(call.params?.[0]?.[0])??submitted.get(call.params?.[0]);
+    if(['getSignatureStatuses','getTransaction'].includes(call.method)){
+      const failed=mode==='failed'?{InstructionError:[0,{Custom:1}]}:null;
+      let result=call.method==='getSignatureStatuses'?{context:{slot:700},value:[found&&mode!=='missing'?{
+        slot:650,confirmationStatus:mode==='pending'?'confirmed':'finalized',confirmations:mode==='pending'?2:null,err:failed}:null]}:
+        found&&mode!=='missing'?{slot:650,version:0,transaction:[mode==='wrong-bytes'?'AAAA':found.bytes,'base64'],meta:{err:failed}}:null;
+      return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result}),{headers:{'content-type':'application/json'}});
+    }
+    if(call.method==='getMultipleAccounts'&&call.params[0].length===1){
+      const value=[...submitted.values()].find(v=>v.asset===call.params[0][0]);let account=null;
+      if(value&&mode!=='absent-asset'){
+        const data=getAssetV1AccountDataSerializer().serialize({key:Key.AssetV1,owner:mode==='wrong-owner'?key('stranger').publicKey.toBase58():value.buyer,
+          updateAuthority:{__kind:'Collection',fields:[mode==='wrong-collection'?key('stranger').publicKey.toBase58():plan.roles.collection]},seq:none(),
+          name:policy.hiddenName.replace('{index:04d}','0001'),uri:mode==='wrong-uri'?'https://foreign.test/1':policy.website+'/metadata/hidden/0001.json'});
+        account={owner:MPL_CORE_PROGRAM_ID,executable:false,lamports:2000000,data:[Buffer.from(data).toString('base64'),'base64']};
+      }
+      return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:{context:{slot:mode==='old-account'?600:700},value:[account]}}),{headers:{'content-type':'application/json'}});
+    }
     const quantity=call.method==='getMultipleAccounts'?call.params[0].length-6:1;
     const results={getGenesisHash:mode==='genesis'?GENESIS_HASHES['mainnet-beta']:GENESIS_HASHES.devnet,
       getMultipleAccounts:{context:{slot:600},value:[...full.slice(0,3),full[5],full[6],full[3],...Array(quantity).fill(null)]},
@@ -51,7 +95,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     if(!Object.hasOwn(results,call.method))throw Error('forbidden RPC '+call.method);
     return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:results[call.method]}),{headers:{'content-type':'application/json'}});
   }
-  return{policy,owner,plan,full,model,planner,key,input,calls,upstream,setMode:value=>{mode=value;},
+  return{policy,owner,plan,full,model,planner,key,input,signedInput,calls,upstream,receipt,submitted,setMode:value=>{mode=value;},
     onRequest:callback=>{entered=callback;},release:()=>wait?.(),
     config:origin=>({version:1,cluster:'devnet',origin,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard})};
 }

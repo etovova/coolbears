@@ -1,4 +1,4 @@
-// Separate closed Devnet check service. No arbitrary RPC, signing or submission.
+// Separate closed Devnet service. Submission is disabled unless explicitly built in.
 import policy from '../../../metadata/policy.json' with {type:'json'};
 import { PublicKey } from '@solana/web3.js';
 import { createOrderModel } from '../journal-model.mjs';
@@ -6,12 +6,16 @@ import { createOrderPlanner } from '../transaction-model.mjs';
 import { createAccountVerifier } from '../../deployment/accounts-model.mjs';
 import { createOrderChecker } from '../preflight-model.mjs';
 import { validateAssetRequest } from '../signing.mjs';
+import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../submission.mjs';
+import { recoverBuyerOrder } from '../recovery.mjs';
+import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
 import { BuyerCheckError, need, exact, readJson } from './http.mjs';
 const model=createOrderModel(policy),planner=createOrderPlanner(model);
 const checker=createOrderChecker(policy,{...model,...planner,...createAccountVerifier(policy)});
 const KEY='buyer-check-budget:v1',GLOBAL='buyer-check-global-v1',HOLD=45000,INTERVAL=200;
 const METHODS=new Set(['getGenesisHash','getMultipleAccounts','getBalance','getFeeForMessage',
-  'getMinimumBalanceForRentExemption','simulateTransaction','isBlockhashValid','getBlockHeight']);
+  'getMinimumBalanceForRentExemption','simulateTransaction','isBlockhashValid','getBlockHeight',
+  'getSignatureStatuses','getTransaction']);
 const HEADERS={'content-type':'application/json; charset=utf-8','cache-control':'no-store',
   'x-content-type-options':'nosniff','cross-origin-resource-policy':'same-origin','referrer-policy':'no-referrer'};
 const integer=n=>Number.isSafeInteger(n)&&n>=0;
@@ -29,7 +33,7 @@ export function validateBuyerGatewayConfig(input){
   return structuredClone(input);
 }
 function authorize(request,config,env){
-  const u=new URL(request.url);need(u.origin===config.origin&&u.pathname==='/api/buyer/check'&&!u.search&&!u.hash,'ROUTE',404);
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
   need(request.method==='POST','METHOD',405);
   need(request.headers.get('origin')===config.origin&&!request.headers.has('cookie')&&!request.headers.has('authorization')
     &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
@@ -43,7 +47,8 @@ function ledger(value,now){
   return day>value.day?{...value,day,checks:0,rpc:0,simulations:0}:{...value};
 }
 function retryAfter(value,now){const s=typeof value==='string'&&/^\d+$/.test(value)?+value:Math.ceil((Date.parse(value)-now)/1000);return Number.isFinite(s)?Math.max(1,Math.min(300,s)):5;}
-export function makeBuyerGateway(input){
+export function makeBuyerGateway(input,{allowSubmission=false}={}){
+  need(typeof allowSubmission==='boolean','CONFIGURATION',503);
   const config=validateBuyerGatewayConfig(input);
   class BuyerCheckGate{
     constructor(state,env,{fetchImpl=(...args)=>globalThis.fetch(...args),clock=Date.now,pause=ms=>new Promise(r=>setTimeout(r,ms))}={}){
@@ -71,23 +76,42 @@ export function makeBuyerGateway(input){
     }
     async fetch(request){
       let own=false,reserved=false,settled=false,infra;
+      const started=performance.now(),route=new URL(request.url).pathname.split('/').at(-1);
       try{
-        authorize(request,config,this.env);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
+        authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,'version nonce order claim request')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='check'?'version nonce order claim request':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
-        try{validateAssetRequest(order,claim,partial);model.validateOrder(order);
+        const submission={order,claim,request:partial,response:body.response};
+        let signed;
+        try{
+          if(route!=='check')signed=validateBuyerSubmission(submission);
+          else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
           need(order.revision===1&&!order.paused&&order.items[0].attempts.length===1&&order.items[0].attempts[0].state==='wallet-pending'
-            &&order.items.slice(1).every(item=>!item.attempts.length),'REQUEST',400);
+            &&order.items.slice(1).every(item=>!item.attempts.length),'REQUEST',400);}
         }catch{throw new BuyerCheckError('REQUEST',400);}
+        // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
+        const sendKey='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,claim.asset]));
+        if(route==='send'){
+          need(!order.paused,'ORDER_PAUSED',409);
+          need(await this.storage.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
+        }
         await this.reserveCheck();reserved=true;
+        if(route==='send')await this.storage.transaction(async tx=>{
+          need(await tx.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
+          await tx.put(sendKey,{version:1,signature:signed.signature,transactionSha256:signedBytesId(signed.transactionBase64)});
+        });
         const endpoint=new URL('https://devnet.helius-rpc.com/');endpoint.searchParams.set('api-key',this.env.BUYER_HELIUS_API_KEY);
-        const report=await checker.checkPreparedOrder({readOrder:()=>structuredClone(order),claim,request:partial,endpoint:endpoint.href,timeoutMs:12000,
-          fetchImpl:async(url,init)=>{
+        const fetchImpl=async(url,init)=>{
             try{
-              const rpc=JSON.parse(init.body);need(url===endpoint.href&&METHODS.has(rpc.method),'RPC_METHOD',503);
+              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
+              if(rpc.method==='sendTransaction'){
+                need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+                const consumed=await this.storage.get(sendKey);
+                need(consumed?.signature===signed.signature&&consumed?.transactionSha256===signedBytesId(rpc.params[0]),'SEND_CLAIM',503);
+              }
               await this.reserveRpc(rpc.method);need(!init.signal.aborted,'RPC_TIMEOUT',504);
               const response=await this.fetchImpl(url,{...init,redirect:'manual'});
               if([429,503].includes(response.status)){
@@ -97,10 +121,29 @@ export function makeBuyerGateway(input){
               }
               return response;
             }catch(error){infra=error instanceof BuyerCheckError?error:new BuyerCheckError('UPSTREAM_UNAVAILABLE',503);throw error;}
-          }});
+          };
+        if(route==='recover'){
+          const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        const report=await checker[route==='send'?'checkSignedOrder':'checkPreparedOrder']({readOrder:()=>structuredClone(order),
+          claim,request:partial,response:body.response,endpoint:endpoint.href,timeoutMs:12000,fetchImpl});
         // Keep the crash hold after uncertain transport/timeout or storage failure.
-        settled=report.status==='wallet-check-passed'||(report.status==='blocked'&&!report.code?.startsWith('RPC_'));
+        settled=['wallet-check-passed','submission-check-passed'].includes(report.status)||(report.status==='blocked'&&!report.code?.startsWith('RPC_'));
         if(infra)throw infra;
+        if(route==='send'&&report.status==='submission-check-passed'){
+          settled=false;
+          need(report.simulationMode==='signed'&&report.candidate.transactionBase64===signed.transactionBase64,'SIGNED_CHECK',409);
+          const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:15000,maxResponseBytes:16384,
+            submission:{transactionBase64:signed.transactionBase64,minContextSlot:report.checkedSlot}});
+          await assertCluster(rpc,'devnet');
+          need(performance.now()-started<30000&&Date.now()<report.expiresAt,'CHECK_TOO_OLD',409);
+          await rpc.call('sendTransaction',[signed.transactionBase64,{encoding:'base64',skipPreflight:false,preflightCommitment:'confirmed',maxRetries:0,minContextSlot:report.checkedSlot}]);
+          settled=true;
+          return reply(200,{version:1,nonce:body.nonce,report:{...submissionBinding(submission),status:'accepted',cluster:'devnet',
+            chainVerified:false,readyToSubmit:false,salesOpen:false,networkRequests:report.networkRequests+rpc.requests}});
+        }
         if(report.status!=='wallet-check-passed')return reply(409,{version:1,nonce:body.nonce,report});
         return reply(200,{version:1,nonce:body.nonce,report});
       }catch(error){return failure(error);}
