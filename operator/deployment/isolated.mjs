@@ -44,9 +44,10 @@ function localAccount(svm, address) {
     data: [Buffer.from(account.data).toString('base64'), 'base64'], space: account.data.length };
 }
 
-export async function runIsolatedDeployment({ snapshot, onProgress = () => {} } = {}) {
+export async function runIsolatedDeployment({ snapshot, onProgress = () => {}, retainVm = false } = {}) {
   need(svmPackage.version === '1.4.1', 'ISOLATED_RUNTIME_VERSION_CHANGED');
   need(typeof onProgress === 'function', 'INVALID_ISOLATED_OPTIONS');
+  need(typeof retainVm === 'boolean', 'INVALID_ISOLATED_OPTIONS');
   const source = decodeIsolatedSnapshot(snapshot);
   const snapshotSha256 = bytesHash(Buffer.from(JSON.stringify(snapshot)));
   const report = { version: 1, kind: 'isolated-devnet-deployment', status: 'running',
@@ -160,5 +161,6 @@ export async function runIsolatedDeployment({ snapshot, onProgress = () => {} } 
     runtimeFeesLamports: fees.toString(), payerDebitLamports: total.toString(), payerDebitSol: formatSol(total),
     protocolFeeLocation: 'reserved-asset-balance-above-rent', modelMatched: true };
   report.status = 'isolated-passed'; report.completedAt = new Date().toISOString();
-  return { report, plan };
+  // Opt-in reuse by subsequent LOCAL cost scenarios; never exposed by the CLI.
+  return { report, plan, ...(retainVm ? { svm } : {}) };
 }
