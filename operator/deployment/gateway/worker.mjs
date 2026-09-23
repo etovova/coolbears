@@ -1,6 +1,6 @@
 // A separate private operator gateway. No imports from the deployed laboratory Worker.
 import { createHash, timingSafeEqual } from 'node:crypto';
-import { createRequestValidator } from '../request-policy.mjs';
+import { createRequestValidator, validRecoverySignature } from '../request-policy.mjs';
 import { createDeploymentRpc, DeploymentRpcError, GENESIS_HASHES } from '../rpc.mjs';
 const HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
   'x-content-type-options': 'nosniff' };
@@ -73,9 +73,11 @@ function retrySeconds(value, now) {
   return Number.isFinite(seconds) ? Math.max(1, Math.min(300, seconds)) : 5;
 }
 
-export function makeGateway(compiledPolicy) {
+export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
+  const compiledPolicy = JSON.parse(JSON.stringify(inputPolicy));
+  if (allowSubmission && compiledPolicy.allowSimulation !== true) fail('CONFIGURATION');
   // Private deploy-time configuration; there is no request-time policy registration API.
-  const validate = createRequestValidator(compiledPolicy);
+  const validate = createRequestValidator(compiledPolicy, { allowSubmission });
   class DeploymentGate {
     constructor(state, env, { fetchImpl = (...args) => globalThis.fetch(...args), clock = Date.now,
       pause = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
@@ -103,32 +105,74 @@ export function makeGateway(compiledPolicy) {
       });
     }
     async upstream(method, params) {
-      await this.reserve(method);
-      let cooldown = 0, status;
+      let gatewayFailure;
       const endpoint = new URL('https://devnet.helius-rpc.com/');
       endpoint.searchParams.set('api-key', this.env.HELIUS_API_KEY);
       const rpc = createDeploymentRpc({ endpoint: endpoint.href, allowSimulation: true, timeoutMs: 12000,
+        ...(method === 'sendTransaction' ? { submission: { transactionBase64: params[0], minContextSlot: params[1].minContextSlot } } : {}),
         fetchImpl: async (url, init) => {
-          // workerd accepts manual redirects; the transport rejects every 3xx.
-          const response = await this.fetchImpl(url, { ...init, redirect: 'manual' }); status = response.status;
-          if ([429, 503].includes(status)) cooldown = retrySeconds(response.headers.get('retry-after'), this.clock());
-          return response;
+          let reserved = false, cooldown = 0;
+          try {
+            await this.reserve(JSON.parse(init.body).method); reserved = true;
+            if (init.signal.aborted) throw new DeploymentRpcError('TIMEOUT');
+            // workerd accepts manual redirects; every 3xx is rejected upstream.
+            const response = await this.fetchImpl(url, { ...init, redirect: 'manual' });
+            if ([429, 503].includes(response.status)) {
+              cooldown = retrySeconds(response.headers.get('retry-after'), this.clock());
+              gatewayFailure = new GatewayError('UPSTREAM_HTTP', response.status, cooldown);
+            }
+            return response;
+          } catch (error) {
+            if (error instanceof GatewayError) gatewayFailure = error;
+            else if (!reserved) gatewayFailure = new GatewayError('UNAVAILABLE');
+            throw error;
+          } finally {
+            if (reserved) try {
+              await this.storage.transaction(async tx => {
+                const now = this.clock(), value = ledger(await tx.get(KEY), now);
+                value.holdUntil = 0; value.nextAt = Math.max(value.nextAt, now + INTERVAL);
+                value.cooldownUntil = Math.max(value.cooldownUntil, now + cooldown * 1000);
+                await tx.put(KEY, value);
+              });
+            } catch (error) { gatewayFailure = new GatewayError('UNAVAILABLE'); throw error; }
+          }
         } });
-      try { return await rpc.call(method, params); }
-      catch (error) {
-        if (error instanceof DeploymentRpcError) {
-          if (error.code === 'HTTP' && [429, 503].includes(status)) throw new GatewayError('UPSTREAM_HTTP', status, cooldown);
-          throw new GatewayError(`UPSTREAM_${error.code}`, error.code === 'TIMEOUT' ? 504 : 502);
+      try {
+        if (method === 'sendTransaction') {
+          const genesis = await rpc.call('getGenesisHash', []);
+          if (genesis !== GENESIS_HASHES.devnet) fail('GENESIS', 502);
         }
+        return await rpc.call(method, params);
+      } catch (error) {
+        if (gatewayFailure) throw gatewayFailure;
+        if (error instanceof DeploymentRpcError) throw new GatewayError(`UPSTREAM_${error.code}`, error.code === 'TIMEOUT' ? 504 : 502);
         throw error;
-      } finally {
-        await this.storage.transaction(async tx => {
-          const now = this.clock(), value = ledger(await tx.get(KEY), now);
-          value.holdUntil = 0; value.nextAt = Math.max(value.nextAt, now + INTERVAL);
-          value.cooldownUntil = Math.max(value.cooldownUntil, now + cooldown * 1000);
-          await tx.put(KEY, value);
-        });
       }
+    }
+    async validateRequest(method, params) {
+      // Recovery for signatures previously claimed here needs no redeployment.
+      // An unrecognized signature never enables arbitrary history scans.
+      try { return validate(method, params); } catch {
+        if (!allowSubmission || !['getSignatureStatuses', 'getTransaction'].includes(method)) fail('POLICY', 400);
+        const signature = method === 'getTransaction' ? params?.[0] : params?.[0]?.[0];
+        if (!validRecoverySignature(signature)) fail('POLICY', 400);
+        const identity = await this.storage.get(`deployment-signature:v1:${signature}`);
+        if (!compiledPolicy.messageIdentities.includes(identity)) fail('POLICY', 400);
+        const claim = await this.storage.get(`deployment-send:v1:${identity}`);
+        if (claim?.signature !== signature || claim?.identity !== identity) fail('POLICY', 400);
+        try { createRequestValidator({ ...compiledPolicy, recoverySignatures: [signature] })(method, params); }
+        catch { fail('POLICY', 400); }
+      }
+    }
+    async claimSubmission(claim) {
+      // Permanent intent lock, not a timeout lease. A different blockhash or
+      // valid re-signing cannot bypass it. No HTTP reset/retry endpoint exists.
+      await this.storage.transaction(async tx => {
+        const key = `deployment-send:v1:${claim.identity}`;
+        if (await tx.get(key) !== undefined) fail('ALREADY_CLAIMED', 409);
+        await tx.put(key, claim);
+        await tx.put(`deployment-signature:v1:${claim.signature}`, claim.identity);
+      });
     }
     async fetch(request) {
       let id = null, ownsBusy = false;
@@ -140,7 +184,8 @@ export function makeGateway(compiledPolicy) {
         if (!object(body) || Object.keys(body).sort().join(',') !== 'id,jsonrpc,method,params'
           || body.jsonrpc !== '2.0' || !integer(body.id) || body.id < 1) fail('REQUEST', 400);
         id = body.id;
-        try { validate(body.method, body.params); } catch { fail('POLICY', 400); }
+        const claim = await this.validateRequest(body.method, body.params);
+        if (claim) await this.claimSubmission(claim);
         let result;
         if (!this.genesisVerified || body.method === 'getGenesisHash') {
           this.genesisVerified = false;

@@ -117,6 +117,20 @@ export function validateSigningRequest(request) {
   return expected;
 }
 
+// A transport still needs a separately approved message policy. This function
+// checks canonical wire bytes and all signatures; it does not approve intent.
+export function inspectSignedDeploymentTransaction(transactionBase64) {
+  const parsed = canonicalTransaction(transactionBase64);
+  requireValid(parsed.transaction.version === 0, 'Deployment submission requires v0.');
+  for (let index = 0; index < parsed.requiredSigners.length; index++) {
+    requireValid(signatureValid(parsed.messageBytes, parsed.transaction.signatures[index],
+      parsed.transaction.message.staticAccountKeys[index]), 'Invalid deployment signature.');
+  }
+  return Object.freeze({ transactionBase64: parsed.transactionBase64,
+    signature: base58.deserialize(parsed.transaction.signatures[0])[0],
+    messageSha256: digest(parsed.messageBytes), owner: parsed.requiredSigners[0] });
+}
+
 export function verifySigningResponse(request, response) {
   const expected = validateSigningRequest(request);
   exactRecord(response, ['transactionBase64']);

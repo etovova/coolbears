@@ -9,6 +9,7 @@ import { createScopedDeploymentRpc } from '../deployment/scoped-rpc.mjs';
 import { GENESIS_HASHES } from '../deployment/rpc.mjs';
 import { makeGateway } from '../deployment/gateway/worker.mjs';
 import { createGatewayFetch } from '../deployment/gateway/client.mjs';
+import { inspectSignedDeploymentTransaction } from '../deployment/signing.mjs';
 const endpoint = 'https://operator.test/rpc', token = 'T'.repeat(43), secret = 'PRIVATE_SENTINEL';
 const key = n => Keypair.fromSeed(createHash('sha256').update(`operator-gateway:${n}`).digest());
 const owner = key('owner'), collection = key('collection');
@@ -28,10 +29,10 @@ function memory() {
   return { values, async get(key) { return structuredClone(values.get(key)); },
     async put(key, value) { values.set(key, structuredClone(value)); }, async transaction(fn) { return fn(this); } };
 }
-function harness({ storage = memory(), vars = {}, responder, candidate = compiled } = {}) {
+function harness({ storage = memory(), vars = {}, responder, candidate = compiled, allowSubmission = false } = {}) {
   let now = 1800000000000;
   const env = { OPERATOR_RPC_TOKEN: token, HELIUS_API_KEY: secret, ...vars }, calls = [];
-  const { DeploymentGate, worker } = makeGateway(candidate);
+  const { DeploymentGate, worker } = makeGateway(candidate, { allowSubmission });
   const options = { clock: () => now, pause: async ms => { now += ms; }, fetchImpl: async (url, init) => {
     assert.equal(new URL(url).hostname, 'devnet.helius-rpc.com');
     assert.equal(new URL(url).searchParams.get('api-key'), secret);
@@ -169,4 +170,69 @@ test('gateway client serializes concurrent calls, aborts queued work, pins desti
   assert.equal(calls, 9);
   for (const invalid of ['https://operator.test/rpc?key=x', 'http://operator.test/rpc', 'https://operator.test/rpc#'])
     assert.throws(() => createGatewayFetch({ endpoint: invalid, token }));
+});
+
+function signedSubmission(hash) {
+  const tx = VersionedTransaction.deserialize(Buffer.from(plan.steps[0].transactionBase64, 'base64'));
+  if (hash) tx.message.recentBlockhash = hash;
+  tx.sign([owner, collection]);
+  const bytes = Buffer.from(tx.serialize()).toString('base64');
+  return { tx, bytes, ...inspectSignedDeploymentTransaction(bytes), params: [bytes, {
+    encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 9 }] };
+}
+
+test('submission is opt-in, validates all signatures/intent/options, and never relaxes the default read gateway', async () => {
+  const item = signedSubmission(), disabled = harness(), h = harness({ allowSubmission: true });
+  assert.equal((await disabled.call('sendTransaction', item.params)).status, 400); assert.equal(disabled.calls.length, 0);
+  for (const params of [[plan.steps[0].transactionBase64, item.params[1]],
+    ...[{ maxRetries: 1 }, { skipPreflight: true }, { preflightCommitment: 'processed' }, { minContextSlot: -1 }]
+      .map(config => [item.bytes, { ...item.params[1], ...config }])])
+    assert.equal((await h.call('sendTransaction', params)).status, 400);
+  item.tx.message.compiledInstructions[0].data[0] ^= 1; item.tx.sign([owner, collection]);
+  assert.equal((await h.call('sendTransaction', [Buffer.from(item.tx.serialize()).toString('base64'), item.params[1]])).status, 400);
+  assert.equal(h.calls.length, 0); assert.equal(h.storage.values.size, 0);
+});
+
+test('permanent gateway claim precedes submission and blocks new hashes/restarts; claimed signatures allow bounded recovery', async () => {
+  const item = signedSubmission(); let h;
+  h = harness({ allowSubmission: true, responder: async rpc => {
+    if (rpc.method === 'sendTransaction') {
+      assert.equal([...h.storage.values.keys()].filter(key => key.startsWith('deployment-send:')).length, 1);
+      assert.deepEqual(rpc.params, item.params);
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: item.signature }));
+    }
+  } });
+  assert.equal((await h.call('sendTransaction', item.params)).status, 200);
+  assert.deepEqual(h.calls.map(call => call.method), ['getGenesisHash', 'getGenesisHash', 'sendTransaction']);
+  h.restart(); h.advance(86400000);
+  for (const params of [item.params, signedSubmission(key('fresh-hash').publicKey.toBase58()).params]) {
+    const result = await h.call('sendTransaction', params);
+    assert.equal(result.status, 409); assert.equal(await category(result), 'ALREADY_CLAIMED');
+  }
+  assert.equal(h.calls.length, 3);
+  assert.equal((await h.call('getSignatureStatuses', [[item.signature], { searchTransactionHistory: true }])).status, 200);
+  assert.equal((await h.call('getTransaction', [item.signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }])).status, 200);
+  const before = h.calls.length;
+  assert.equal((await h.call('getTransaction', [signedSubmission(key('other-hash').publicKey.toBase58()).signature,
+    { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }])).status, 400);
+  assert.equal(h.calls.length, before);
+  assert.equal(h.calls.filter(call => call.method === 'sendTransaction').length, 1);
+});
+
+test('ambiguous gateway submission, concurrent requests and failed claim storage never release the permanent lock', async () => {
+  const item = signedSubmission();
+  for (const mode of ['lost', '429', 'wrong-signature']) {
+    const h = harness({ allowSubmission: true, responder: rpc => {
+      if (rpc.method !== 'sendTransaction') return;
+      if (mode === 'lost') throw Error(secret);
+      if (mode === '429') return new Response(secret, { status: 429, headers: { 'retry-after': '1' } });
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: 'wrong' }));
+    } });
+    const results = await Promise.all([h.call('sendTransaction', item.params), h.call('sendTransaction', item.params)]);
+    assert.ok(results.every(result => result.status >= 400)); h.restart(); h.advance(50000);
+    assert.equal((await h.call('sendTransaction', item.params)).status, 409);
+    assert.equal(h.calls.filter(call => call.method === 'sendTransaction').length, 1);
+  }
+  const failed = harness({ allowSubmission: true, storage: { async transaction() { throw Error(secret); } } });
+  assert.equal((await failed.call('sendTransaction', item.params)).status, 503); assert.equal(failed.calls.length, 0);
 });

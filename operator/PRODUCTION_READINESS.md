@@ -106,3 +106,12 @@ Unsigned/signed-симуляция проверяет неизменные bytes
 ## Изолированная проверка всей цепочки
 
 [LiteSVM-проверка](deployment/ISOLATED.md) выполняет все 1431 операции подготовки с сохранением зависимого состояния в памяти. Копии трёх программ и Rent/Clock читаются из одного finalized банка Devnet; реальные транзакции не отправляются. Проверяются все 9999 записей, закрытый AddressGate, цена 0.2 SOL, размеры аккаунтов и движение lamports. Обнаруженное расхождение discriminator в hooked SDK исправлено через официальный generated header с сохранением полной проверки Guard. Это изолированное выполнение, не подтверждение Mainnet или работы кошелька; итог и границы покрытия сохраняются в отдельном отчёте. Production bundle по-прежнему не создан, продажи закрыты.
+# PR33: single-step sender и durable recovery
+
+Добавлены private CLI send-one/resume, свежая signed simulation, claim на диск
+до dispatch, одна передача точных bytes и finalized/account reconciliation с
+CAS. Private gateway имеет отключённый по умолчанию send opt-in, строгую
+проверку подписей, постоянный SQLite claim по intent и recovery signature map.
+См. `deployment/SENDING.md`. Это не новая live Devnet транзакция и не Mainnet.
+Реальные custody/endpoint, failed/expired retry, очередь владельца, мобильные
+кошельки, buyer RPC и путь 1–50 остаются незавершёнными. Продажи закрыты.

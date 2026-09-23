@@ -1,5 +1,6 @@
-// Explicit read-only deployment inspection. No signing, submission,
-// automatic retry or endpoint fallback is available through this transport.
+// Read-only by default. Submission needs an exact signed-byte grant, a checked
+// Devnet genesis and one local use. No signing, retry or endpoint fallback.
+import { inspectSignedDeploymentTransaction } from './signing.mjs';
 // Simulation requires an explicit opt-in and never replaces a blockhash.
 // Full genesis hashes: official Solana ClusterType::get_genesis_hash source:
 // https://github.com/solana-labs/solana/blob/master/sdk/src/genesis_config.rs
@@ -81,18 +82,36 @@ async function readBody(response, signal, limit, expiresAt) {
   }
 }
 
-export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false } = {}) {
+export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission } = {}) {
   const url = endpointUrl(endpoint);
   if (typeof allowSimulation !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
     || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 16 * 1024 * 1024
     || (totalTimeoutMs !== undefined && (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 1 || totalTimeoutMs > 600000))) throw fail('CONFIGURATION');
+  let grant = null;
+  if (submission !== undefined) {
+    try {
+      if (!object(submission) || Object.keys(submission).sort().join(',') !== 'minContextSlot,transactionBase64'
+        || !Number.isSafeInteger(submission.minContextSlot) || submission.minContextSlot < 0) throw Error();
+      grant = { ...inspectSignedDeploymentTransaction(submission.transactionBase64), minContextSlot: submission.minContextSlot };
+    } catch { throw fail('CONFIGURATION'); }
+  }
   const startedAt = performance.now();
+  let devnetChecked = false, submitted = false;
   let requests = 0;
   return Object.freeze({
     get requests() { return requests; },
     async call(method, params = []) {
-      if (typeof method !== 'string' || !(METHODS.has(method) || (allowSimulation && method === 'simulateTransaction'))) throw fail('METHOD');
+      if (typeof method !== 'string' || !(METHODS.has(method) || (allowSimulation && method === 'simulateTransaction')
+        || (grant && method === 'sendTransaction'))) throw fail('METHOD');
       if (!Array.isArray(params)) throw fail('PARAMS');
+      if (method === 'sendTransaction') {
+        const [bytes, config] = params;
+        if (submitted || !devnetChecked) throw fail('METHOD');
+        if (params.length !== 2 || bytes !== grant.transactionBase64 || !object(config)
+          || Object.keys(config).sort().join(',') !== 'encoding,maxRetries,minContextSlot,preflightCommitment,skipPreflight'
+          || config.encoding !== 'base64' || config.maxRetries !== 0 || config.skipPreflight !== false
+          || config.preflightCommitment !== 'confirmed' || config.minContextSlot !== grant.minContextSlot) throw fail('PARAMS');
+      }
       if (method === 'simulateTransaction') {
         const [bytes, config] = params;
         if (params.length !== 2 || typeof bytes !== 'string' || bytes.length > 1644 || !object(config)
@@ -116,6 +135,8 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       if (remaining <= 0) throw fail('TIMEOUT');
       const callTimeoutMs = Math.min(timeoutMs, remaining);
       requests = id;
+      if (method === 'sendTransaction') submitted = true; // Consume before I/O, including ambiguous failures.
+      if (method === 'getGenesisHash') devnetChecked = false;
       const controller = new AbortController();
       const expiresAt = performance.now() + callTimeoutMs;
       let timer;
@@ -143,7 +164,9 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
           if (!object(data.error) || !Number.isSafeInteger(data.error.code) || typeof data.error.message !== 'string') throw fail('RESPONSE');
           throw fail('RPC');
         }
-        return data.result; // null is a legitimate Solana RPC result.
+        if (method === 'getGenesisHash') devnetChecked = data.result === GENESIS_HASHES.devnet;
+        if (method === 'sendTransaction' && data.result !== grant.signature) throw fail('RESPONSE');
+        return data.result; // null is a legitimate read RPC result.
       });
       try { return await Promise.race([operation, deadline]); }
       catch (error) { throw error instanceof DeploymentRpcError ? error : fail(controller.signal.aborted ? 'TIMEOUT' : 'RESPONSE'); }

@@ -103,3 +103,10 @@ Primary references: [Durable Object storage](https://developers.cloudflare.com/d
 [Worker secrets](https://developers.cloudflare.com/workers/configuration/secrets/),
 [Worker Request](https://developers.cloudflare.com/workers/runtime-apis/request/),
 [Solana message fees](https://solana.com/docs/rpc/http/getfeeformessage).
+# Отправка PR33
+
+По умолчанию gateway по-прежнему запрещает `sendTransaction`. Отдельный
+compile-time opt-in добавляет проверку всех подписей, постоянные SQLite claims
+по message identity и ограниченное чтение сохранённых signature.
+См. [порядок, команды и ограничения](../SENDING.md). Эта версия не развёрнута;
+рабочий лабораторный Worker не менялся. Снятие claims/retry не реализовано.
