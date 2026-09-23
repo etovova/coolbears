@@ -85,6 +85,15 @@ try{
   assert.equal((await read(page,failed,'read')).revision,3);assert.equal(await calls(),count+1);
   report.cases.push('response persistence abort retains verified bytes in memory; recovery stores bytes plus event without another wallet request');
 
+  const unavailable=await setup('storage-after-wallet');await page.evaluate(()=>window.walletMode='storage-unavailable');
+  const countUnavailable=await calls();assert.equal(await failure(),'STORAGE_UNAVAILABLE');
+  assert.equal(await page.evaluate(()=>client.state().canRecover),true);
+  assert.equal((await read(page,unavailable,'read')).revision,2);
+  await page.evaluate(()=>{window.storageUnavailable=false;window.walletMode=null;});
+  assert.equal((await page.evaluate(()=>client.recover())).status,'buyer-response-saved');
+  assert.equal(await calls(),countUnavailable+1);
+  report.cases.push('storage becoming unavailable at wallet completion cannot discard cryptographically verified response; recovery saves it without another signature');
+
   const ack=await setup('lost-ack');await page.evaluate(()=>window.loseAck=true);
   const countAck=await calls();assert.equal(await failure(),'LOST_ACK');
   assert.equal((await read(page,ack,'read')).revision,3);

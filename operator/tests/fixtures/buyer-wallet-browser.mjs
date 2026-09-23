@@ -27,6 +27,7 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
       const tx=VersionedTransaction.deserialize(input.transaction);
       if(window.walletMode==='tamper')tx.message.compiledInstructions[0].data[1]^=1;
       tx.sign([buyer]);
+      if(window.walletMode==='storage-unavailable')window.storageUnavailable=true;
       if(window.walletMode==='account-change'){wallet.accounts=[];changed?.({accounts:[]});}
       return [{signedTransaction:tx.serialize()}];
     }},
@@ -45,9 +46,9 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
     if(window.checkMode==='hold'){window.checkEntered=true;await new Promise(resolve=>window.releaseCheck=resolve);}
     return report;
   };
-  const wrapped={read:store.read,readAssetSigning:store.readAssetSigning,readBuyerResponse:store.readBuyerResponse,
+  const wrapped={read:async(...args)=>{if(window.storageUnavailable)throw Error('STORAGE_UNAVAILABLE');return store.read(...args);},readAssetSigning:store.readAssetSigning,readBuyerResponse:store.readBuyerResponse,
     claimBuyerWallet:store.claimBuyerWallet,
-    saveBuyerResponse:async(...args)=>{const result=await store.saveBuyerResponse(...args);if(window.loseAck)throw Error('LOST_ACK');return result;}};
+    saveBuyerResponse:async(...args)=>{if(window.storageUnavailable)throw Error('STORAGE_UNAVAILABLE');const result=await store.saveBuyerResponse(...args);if(window.loseAck)throw Error('LOST_ACK');return result;}};
   window.fakeWallet=wallet;window.walletChanged=()=>{wallet.accounts=[];changed?.({accounts:[]});};
   window.client=createBuyerWalletClient({storage:wrapped,scope,checkPrepared:checked,walletTimeoutMs,
     storageManager:{persisted:async()=>window.fakePersisted,persist:async()=>window.fakePersisted}});

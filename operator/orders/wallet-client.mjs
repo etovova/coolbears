@@ -126,7 +126,9 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
             && outputs[0].signedTransaction.length <= 1232, 'WALLET_RESPONSE');
           const transactionBase64 = Buffer.from(outputs[0].signedTransaction).toString('base64');
           // Account changes/timeout do not discard a valid old response. Save evidence.
-          verifyBuyerSigningResponse(await storage.read(scope), bundle.claim, bundle.request, {transactionBase64});
+          // Verify against the immutable pre-call snapshot before any storage await.
+          // saveBuyerResponse independently checks the current journal and claim.
+          verifyBuyerSigningResponse(before, bundle.claim, bundle.request, {transactionBase64});
           memory = {claimId:claimed.claim.claimId,transactionBase64};
           return saveMemory();
         });
