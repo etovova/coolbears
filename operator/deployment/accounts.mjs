@@ -10,9 +10,10 @@ import { getCollectionV1AccountDataSerializer as collectionSerializer } from '..
 import { getAssetV1AccountDataSerializer as assetSerializer } from '../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
 import { getRegistryRecordSerializer } from '../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/registryRecord.js';
 import { getCandyMachineAccountDataSerializer as machineBaseSerializer } from '../node_modules/@metaplex-foundation/mpl-core-candy-machine/dist/src/generated/types/candyMachineAccountData.js';
+import { getCandyGuardAccountDataSerializer as guardHeaderSerializer } from '../node_modules/@metaplex-foundation/mpl-core-candy-machine/dist/src/generated/accounts/candyGuard.js';
 import { mplCandyMachine, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID,
   CANDY_MACHINE_HIDDEN_SECTION, findCandyGuardPda, findCandyMachineAuthorityPda,
-  getCandyMachineSize, getCandyMachineAccountDataSerializer, getCandyGuardAccountDataSerializer } from '@metaplex-foundation/mpl-core-candy-machine';
+  getCandyMachineSize, getCandyMachineAccountDataSerializer, getCandyGuardDataSerializer } from '@metaplex-foundation/mpl-core-candy-machine';
 import { policy } from '../prepare.mjs';
 
 const ERROR = 'EXPECTED_ACCOUNT_STATE_MISMATCH';
@@ -195,16 +196,21 @@ function verifyMachine(expected, bytes, guardBytes) {
   requireThat(machine.collectionMint === expected.collection && machine.mintAuthority === expected.mintAuthority && machine.itemsLoaded === expected.itemsLoaded);
   const [guardAddress, bump] = findCandyGuardPda(umi, { base: expected.machine });
   requireThat(guardAddress === expected.guard);
-  const serializer = getCandyGuardAccountDataSerializer(umi, guardProgram);
-  const expectedGuard = serializer.serialize({ base: expected.machine, bump, authority: expected.guardAuthority,
+  // The 0.3.0 hooked account serializer hardcodes an unrelated discriminator.
+  // Use the generated CandyGuard header (sha256("account:CandyGuard")[0:8]),
+  // matching Rust #[account] CandyGuard and the captured Devnet binary.
+  const header = guardHeaderSerializer().serialize({ base: expected.machine, bump, authority: expected.guardAuthority });
+  const serializer = getCandyGuardDataSerializer(umi, guardProgram);
+  const data = serializer.serialize({
     guards: { addressGate: some({ address: expected.addressGate }),
       solPayment: some({ lamports: lamports(BigInt(expected.payment.lamports)), destination: expected.payment.destination }) }, groups: [] });
+  const expectedGuard = Buffer.concat([header, data]);
   // Compare the complete expected encoding BEFORE parsing variable guard arrays.
   requireThat(equalBytes(guardBytes, expectedGuard));
   // SDK reverseSerializer assumes Uint8Array.slice() copies. Buffer.slice()
   // aliases and its reversed guard bitmask would mutate our canonical bytes.
-  const [guard, end] = serializer.deserialize(new Uint8Array(guardBytes));
-  requireThat(end === guardBytes.length && equalBytes(serializer.serialize(guard), guardBytes));
+  const [guard, end] = serializer.deserialize(new Uint8Array(guardBytes.subarray(header.length)));
+  requireThat(end === data.length && equalBytes(serializer.serialize(guard), data));
 }
 function verifyInsert(expected, bytes) {
   const machine = machineState(bytes);

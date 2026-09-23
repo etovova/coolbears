@@ -1,6 +1,7 @@
 // Synthetic account data built with official SDK serializers. No RPC or keys.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { some, none, lamports } from '@metaplex-foundation/umi';
 import { createUmi } from '@metaplex-foundation/umi-bundle-defaults';
@@ -14,6 +15,7 @@ import { getCandyMachineAccountDataSerializer } from '../node_modules/@metaplex-
 import { policy } from '../prepare.mjs';
 import { buildDeploymentPlan } from '../deployment/plan.mjs';
 import { expectedAccountAddresses, verifyExpectedAccounts } from '../deployment/accounts.mjs';
+import actualGuard from './fixtures/isolated-core-guard.json' with { type: 'json' };
 
 const address = byte => base58.deserialize(new Uint8Array(32).fill(byte))[0];
 const umi = createUmi('http://127.0.0.1:1', { fetch() { throw Error('NO_NETWORK'); } }).use(mplCandyMachine());
@@ -79,9 +81,12 @@ function machineFixture(loaded = 0, changes = {}) {
   return rpc(bytes, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID);
 }
 function guardFixture(changes = {}) {
-  return rpc(guardSerializer.serialize({ base: machineExpected.machine, bump: findCandyGuardPda(umi, { base: machineExpected.machine })[1],
+  const bytes = Buffer.from(guardSerializer.serialize({ base: machineExpected.machine, bump: findCandyGuardPda(umi, { base: machineExpected.machine })[1],
     authority: machineExpected.guardAuthority, guards: { addressGate: some({ address: policy.owner }),
-      solPayment: some({ lamports: lamports(200000000), destination: policy.owner }) }, groups: [], ...changes }), MPL_CORE_CANDY_GUARD_PROGRAM_ID);
+      solPayment: some({ lamports: lamports(200000000), destination: policy.owner }) }, groups: [], ...changes }));
+  // Rust #[account] CandyGuard; the hooked 0.3.0 SDK encoder has a wrong prefix.
+  bytes.set(createHash('sha256').update('account:CandyGuard').digest().subarray(0, 8));
+  return rpc(bytes, MPL_CORE_CANDY_GUARD_PROGRAM_ID);
 }
 function corrupt(account, mutate) {
   const bytes = bytesOf(account); mutate(bytes);
@@ -188,6 +193,9 @@ test('loaded prefix has exact counter, bitmap, clean unused area and correct min
 });
 
 test('guard must be canonical Core guard with exact base/bump/authority/payment and no additional guards/groups', () => {
+  deny(machineExpected, [machineFixture(), corrupt(guardFixture(), bytes => {
+    bytes.set([95, 25, 33, 117, 164, 206, 9, 250]); // Old SDK-generated false fixture.
+  })]);
   for (const changes of [{ base: address(88) }, { authority: address(88) }, { bump: 0 }, { groups: [{ label: 'other', guards: {} }] },
     { guards: { addressGate: some({ address: address(88) }), solPayment: some({ lamports: lamports(200000000), destination: policy.owner }) } },
     { guards: { addressGate: some({ address: policy.owner }), solPayment: some({ lamports: lamports(1), destination: policy.owner }) } },
@@ -196,6 +204,13 @@ test('guard must be canonical Core guard with exact base/bump/authority/payment 
   ]) deny(machineExpected, [machineFixture(), guardFixture(changes)]);
   deny(machineExpected, [machineFixture(), corrupt(guardFixture(), bytes => { bytes[0] ^= 1; })]);
   deny(machineExpected, [machineFixture(), rpc(Buffer.concat([bytesOf(guardFixture()), Buffer.from([0])]), MPL_CORE_CANDY_GUARD_PROGRAM_ID)]);
+});
+
+test('actual guard bytes emitted by the Devnet binary pass; the hooked SDK discriminator fails', () => {
+  const expected = actualGuard.expected;
+  const machine = machineFixture(0, { mintAuthority: expected.mintAuthority, collectionMint: expected.collection });
+  assert.equal(check(expected, [machine, actualGuard.account]), true);
+  deny(expected, [machine, corrupt(actualGuard.account, bytes => bytes.set([95, 25, 33, 117, 164, 206, 9, 250]))]);
 });
 
 test('insert checks actual requested indices and exact padded UTF8 bytes, never just SDK decoded names', () => {
