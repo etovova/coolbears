@@ -10,6 +10,7 @@ import { createOrderPlanner } from '../../orders/transaction-model.mjs';
 import { prepareAssetClaim, finalizeAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from '../../orders/signing.mjs';
 import { insertionAccounts } from './group-accounts.mjs';
 import { none } from '@metaplex-foundation/umi';
+import {base58} from '@metaplex-foundation/umi/serializers';
 import { Key, MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
 import { getAssetV1AccountDataSerializer } from '../../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
 import { inspectSignedDeploymentTransaction } from '../../deployment/signing.mjs';
@@ -86,6 +87,20 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:mode==='send-wrong'?'wrong-signature':signature}),{headers:{'content-type':'application/json'}});
     }
     const found=submitted.get(call.params?.[0]?.[0])??submitted.get(call.params?.[0]);
+    if(mode.startsWith('expiry-')){
+      const row=(slot)=>({slot,signature:base58.deserialize(createHash('sha512').update('expiry-row:'+slot).digest())[0],err:null,confirmationStatus:'finalized'});
+      const assetFound=call.method==='getMultipleAccounts'&&[...submitted.values()].some(v=>v.asset===call.params[0][0]);
+      const results={getGenesisHash:GENESIS_HASHES.devnet,
+        getBlock:call.params[0]===600?{blockhash:key('hash').publicKey.toBase58(),blockHeight:1800,parentSlot:599}:
+          {blockhash:key('expiry-horizon').publicKey.toBase58(),blockHeight:2100,parentSlot:899},
+        isBlockhashValid:{context:{slot:900},value:mode==='expiry-live'},getFirstAvailableBlock:mode==='expiry-pruned'?601:1,
+        getSignatureStatuses:{context:{slot:1000},value:[found||mode==='expiry-observed'?{slot:950,err:null,confirmationStatus:'finalized',confirmations:null}:null]},
+        getTransaction:found?{slot:950,transaction:[found.bytes,'base64'],meta:{err:null}}:null,
+        getMultipleAccounts:{context:{slot:950},value:[assetFound||mode==='expiry-asset'?{owner:MPL_CORE_PROGRAM_ID}:null]},
+        getSignaturesForAddress:call.params[0]===policy.owner?(mode==='expiry-empty'?[]:[row(850),row(599)]):(mode==='expiry-asset-history'?[row(850)]:[])};
+      if(!Object.hasOwn(results,call.method))throw Error('forbidden expiry RPC '+call.method);
+      return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:results[call.method]}),{headers:{'content-type':'application/json'}});
+    }
     if(['getSignatureStatuses','getTransaction'].includes(call.method)){
       const failed=mode==='failed'?{InstructionError:[0,{Custom:1}]}:null;
       let result=call.method==='getSignatureStatuses'?{context:{slot:700},value:[found&&mode!=='missing'?{
