@@ -20,7 +20,7 @@ await build({ stdin: { contents: `
   window.model = createOrderModel(policy);
   window.raw = async (names, mode, action) => {
     const db = await new Promise((resolve, reject) => {
-      const r = indexedDB.open('coolbears-buyer-custody-v1', 1); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
+      const r = indexedDB.open('coolbears-buyer-custody-v1'); r.onsuccess = () => resolve(r.result); r.onerror = () => reject(r.error);
     });
     try { return await new Promise((resolve, reject) => {
       const tx = db.transaction(names, mode); let result;

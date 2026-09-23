@@ -1,10 +1,11 @@
-// Storage foundation only: no wallet, RPC, transaction signing or dispatch.
+// Browser custody and asset-only signing. No buyer wallet, RPC or dispatch.
 import policy from '../../metadata/policy.json' with { type: 'json' };
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { createOrderModel } from './journal-model.mjs';
+import { prepareAssetClaim, validateAssetClaim, finalizeAssetRequest, validateAssetRequest } from './signing.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
-const STORES = ['orders', 'keys', 'events'];
+const STORES = ['orders', 'keys', 'events', 'signing'];
 const MAX_REVISION = 1024, MAX_BYTES = 262144;
 const requireThat = (ok, code) => { if (!ok) throw Error(code); };
 const fields = ['id', 'cluster', 'buyer', 'machine', 'collection', 'guard'];
@@ -36,12 +37,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     requireCapabilities();
     return opening ??= new Promise((resolve, reject) => {
       let settled = false;
-      const request = indexedDB.open(DATABASE, 1);
+      const request = indexedDB.open(DATABASE, 2);
       const timer = setTimeout(() => fail(), 5000);
       function fail() { if (!settled) { settled = true; clearTimeout(timer); reject(Error('STORAGE_UNAVAILABLE')); } }
       request.onupgradeneeded = () => {
         if (settled || closed) { request.transaction.abort(); return; }
-        for (const store of STORES) request.result.createObjectStore(store);
+        for (const store of STORES) if (!request.result.objectStoreNames.contains(store)) request.result.createObjectStore(store);
       };
       request.onblocked = request.onerror = fail;
       request.onsuccess = () => {
@@ -72,15 +73,16 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
   function load(tx, scopeKey, callback, abort) {
     const queries = [tx.objectStore('orders').get(scopeKey),
       tx.objectStore('keys').getAll(IDBKeyRange.bound([scopeKey, 0], [scopeKey, 50])),
-      tx.objectStore('events').getAll(IDBKeyRange.bound([scopeKey, 0], [scopeKey, MAX_REVISION + 1]))];
+      tx.objectStore('events').getAll(IDBKeyRange.bound([scopeKey, 0], [scopeKey, MAX_REVISION + 1])),
+      tx.objectStore('signing').getAll(IDBKeyRange.bound([scopeKey], [scopeKey, []]))];
     let left = queries.length;
     queries.forEach(request => { request.onsuccess = () => {
       if (--left !== 0) return;
       try { callback(queries.map(request => request.result)); } catch (error) { abort(error); }
     }; });
   }
-  function validate([order, keys, events], scope, scopeKey) {
-    if (order === undefined) { requireThat(keys.length === 0 && events.length === 0, 'ORPHANED_ORDER_DATA'); return null; }
+  function validate([order, keys, events, signing], scope, scopeKey) {
+    if (order === undefined) { requireThat(keys.length === 0 && events.length === 0 && signing.length === 0, 'ORPHANED_ORDER_DATA'); return null; }
     bounded(order);
     requireThat(fields.every(field => order[field] === scope[field]), 'ORDER_SCOPE_MISMATCH');
     requireThat(keys.length === order.quantity, 'ASSET_KEY_MISSING');
@@ -90,6 +92,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     requireThat(replay.revision === 0 && !replay.paused && replay.items.every(item => !item.attempts.length), 'CORRUPT_ORDER_HISTORY');
     for (let i = 1; i < events.length; i++) replay = model.transitionOrder(replay, events[i]);
     requireThat(equal(replay, order), 'CORRUPT_ORDER_HISTORY');
+    if (signing.length) {
+      const claim = signing[0]?.record;
+      requireThat(equal(events[1], { type:'prepare', revision:0, index:0, blockhash:claim?.blockhash,
+        lastValidBlockHeight:claim?.lastValidBlockHeight, messageSha256:claim?.messageSha256 }), 'ASSET_CLAIM_HISTORY');
+    }
+    signingState(order, signing);
     return order;
   }
   async function proveKeys(order, records, scopeKey) {
@@ -107,12 +115,25 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       } catch { throw Error('ASSET_KEY_MISMATCH'); }
     }
   }
-  async function snapshot(scope, scopeKey) {
+  function signingState(order, records) {
+    requireThat(records.length <= 2, 'CORRUPT_ASSET_SIGNING');
+    if (!records.length) return null;
+    const [claimed, ready] = records;
+    requireThat(claimed?.phase === 'claimed' && (!ready || ready.phase === 'ready'), 'CORRUPT_ASSET_SIGNING');
+    validateAssetClaim(order, claimed.record);
+    if (ready) validateAssetRequest(order, claimed.record, ready.record);
+    return { status: ready ? 'asset-partial-saved' : 'asset-signing-unknown',
+      claim: structuredClone(claimed.record), request: ready ? structuredClone(ready.record) : null,
+      mode: 'offline-devnet-asset-signing', networkVerified: false, blockhashVerified: false, guardPriceVerified: false,
+      readyToSign: false, readyToSubmit: false, salesOpen: false };
+  }
+  async function snapshotData(scope, scopeKey) {
     const data = await transaction('readonly', (tx, resolve, abort) => load(tx, scopeKey, resolve, abort));
     const order = validate(data, scope, scopeKey);
     if (order) await proveKeys(order, data[1], scopeKey);
-    return order;
+    return { order, keys: data[1], signing: data[3] };
   }
+  async function snapshot(scope, scopeKey) { return (await snapshotData(scope, scopeKey)).order; }
   async function locked(input, action) {
     requireCapabilities();
     const scope = checkedScope(structuredClone(input)), scopeKey = JSON.stringify(scope);
@@ -170,6 +191,47 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const persisted = await snapshot(scope, scopeKey);
         requireThat(equal(persisted, next), 'ORDER_NOT_SAVED');
         return persisted;
+      });
+    },
+    // Fresh first item only. The persisted claim is consumed before asset signing.
+    async prepareAssetSigning(input, candidate) {
+      const frozen = structuredClone(candidate);
+      return locked(input, async (scope, scopeKey) => {
+        const before = await snapshotData(scope, scopeKey);
+        requireThat(before.order, 'MISSING_ORDER');
+        const prepared = prepareAssetClaim(before.order, frozen);
+        bounded(prepared.order);
+        requireThat(before.signing.length === 0, 'ASSET_SIGNING_EXISTS');
+        const claimed = { phase: 'claimed', record: prepared.claim };
+        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
+          requireThat(equal(validate(data, scope, scopeKey), before.order) && data[3].length === 0, 'STALE_REVISION');
+          tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
+          tx.objectStore('orders').put(prepared.order, scopeKey);
+          tx.objectStore('signing').add(claimed, [scopeKey, 0, 1, 0]);
+          resolve(true);
+        }, abort));
+        // Native signing starts only after the intent has committed and been read back.
+        const saved = await snapshotData(scope, scopeKey);
+        requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [claimed]), 'ASSET_CLAIM_CHANGED');
+        const message = validateAssetClaim(saved.order, prepared.claim);
+        let signature;
+        try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[0].privateKey, message)); }
+        catch { throw Error('ASSET_SIGNING_FAILED'); }
+        const request = finalizeAssetRequest(saved.order, prepared.claim, signature);
+        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
+          requireThat(equal(validate(data, scope, scopeKey), saved.order) && equal(data[3], [claimed]), 'ASSET_CLAIM_CHANGED');
+          tx.objectStore('signing').add({ phase: 'ready', record: request }, [scopeKey, 0, 1, 1]);
+          resolve(true);
+        }, abort));
+        const final = await snapshotData(scope, scopeKey);
+        requireThat(equal(final.order, saved.order) && equal(final.signing, [claimed, {phase:'ready',record:request}]), 'ASSET_REQUEST_NOT_SAVED');
+        return signingState(final.order, final.signing);
+      });
+    },
+    readAssetSigning(input) {
+      return locked(input, async (scope, scopeKey) => {
+        const current = await snapshotData(scope, scopeKey);
+        return current.order ? signingState(current.order, current.signing) : null;
       });
     },
     // Closing connections never deletes orders, events or keys.

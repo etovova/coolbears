@@ -1,13 +1,15 @@
 # Browser custody and order storage
 
-This is a **Devnet storage foundation**, not a purchase executor or a public
-website feature. Sales remain closed at 0.2 SOL. There is no wallet connection,
-RPC request, transaction signing, submission, gateway, UI or Mainnet path here.
-The existing read-only preflight is not yet connected to this store.
+This is a **Devnet custody foundation**, not a purchase executor or a public
+website feature. Sales remain closed at 0.2 SOL. [Asset partial signing](SIGNING.md)
+is now available for the first item of a fresh order. There is no buyer wallet
+connection, RPC request, submission, gateway, UI or Mainnet path. The existing
+read-only preflight is not yet connected to this store.
 
 ## What is durable
 
-`browser-storage.mjs` uses IndexedDB `coolbears-buyer-custody-v1`, version 1.
+`browser-storage.mjs` uses IndexedDB `coolbears-buyer-custody-v1`, schema version 2 (same database name). The additive upgrade only creates the
+new `signing` store; existing orders, history and keys are retained.
 A scope is the ordered tuple `id, cluster, buyer, machine, collection, guard`.
 Creation generates one native WebCrypto Ed25519 pair per item (1–50), with a
 non-extractable private key. The order, all CryptoKey records and initial history
@@ -23,9 +25,9 @@ it does not bundle Node file access or the operator preparation CLI.
 
 Every read validates the scope, order, complete replay of stored events, key
 count and identities. It signs an internally generated, domain-separated random
-challenge and verifies it using each stored public key. No challenge or signature
-is exposed. No API returns private keys, accepts arbitrary signing bytes or
-exports a signer. Missing/mismatched keys or history block continuation without
+challenge and verifies it using each stored public key. No custody challenge or challenge signature
+is exposed. No API returns private keys or exports a signer. Asset partial signing accepts
+only bytes that match a fresh order and an independent SDK reconstruction. Missing/mismatched keys or history block continuation without
 a replacement key, rollback, deletion or automatic migration.
 
 ## API
@@ -61,7 +63,8 @@ errors fail closed; opening has a 5-second deadline and transactions 10 seconds.
 A timed-out/failed call must be read again before an explicit decision: an error
 after commit can mean the data was saved. There is no automatic replay/re-sign.
 The existing `coolbears:offline-order:v1:*` localStorage namespace is untouched.
-There is no list-all, cleanup, migration, export or delete API.
+There is no list-all, cleanup, legacy localStorage migration, export or delete API.
+The additive v1→v2 IndexedDB schema upgrade is described in SIGNING.md.
 
 ## Limits
 
@@ -73,8 +76,8 @@ the profile can lose custody. This stage does not claim permanent persistence,
 request persistent-storage permission or implement backup/recovery of erased
 keys. Unsupported IndexedDB, strict durability, Web Locks, CryptoKey cloning or
 Ed25519 blocks the operation; no plaintext or localStorage fallback exists.
-Do not use this stage for a live purchase until the persistence policy, signed
-message verification and sender/recovery are complete.
+Do not use this stage for a live purchase until the persistence policy, wallet response persistence, fresh network
+checks and sender/recovery are complete.
 
 ## Verification
 
