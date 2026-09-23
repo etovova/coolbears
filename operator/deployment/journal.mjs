@@ -121,12 +121,22 @@ function applyEvent(snapshot, event) {
     requireThat(Buffer.from(prepared.message.serialize()).equals(Buffer.from(template.message.serialize())), 'REQUEST_INTENT_MISMATCH');
     step.attempts.push({ number: expectedRequest.attempt, state: 'wallet-pending', request: structuredClone(request), signed: null, proof: null });
   } else {
-    const fields = { signed: 'transactionBase64', 'claim-send': '', accepted: '', unknown: '', cancelled: '', reconcile: 'proof' };
+    const fields = { 'request-wallet': 'claimId', 'wallet-declined': 'claimId', signed: 'transactionBase64', 'claim-send': '', accepted: '', unknown: '', cancelled: '', reconcile: 'proof' };
     requireThat(Object.hasOwn(fields, event.type), 'UNKNOWN_EVENT');
     exact(event, `type stepId attempt${fields[event.type] ? ` ${fields[event.type]}` : ''}`);
     requireThat(attempt && event.attempt === attempt.number, 'STALE_ATTEMPT');
     requireThat(ACTIVE.has(attempt.state), 'ATTEMPT_TERMINAL');
     switch (event.type) {
+      case 'request-wallet':
+        requireThat(attempt.state === 'wallet-pending' && !attempt.signed && !attempt.walletClaim
+          && typeof event.claimId === 'string' && /^[0-9a-f]{64}$/.test(event.claimId), 'WALLET_ALREADY_REQUESTED');
+        attempt.walletClaim = event.claimId; break;
+      case 'wallet-declined':
+        // A trusted local UI reported explicit code 4001. This is not a chain
+        // failure/expiry proof and cannot release an uncertain or signed attempt.
+        requireThat(attempt.state === 'wallet-pending' && !attempt.signed && attempt.walletClaim
+          && event.claimId === attempt.walletClaim, 'WALLET_DECLINE_MISMATCH');
+        attempt.walletClaim = null; break;
       case 'signed': {
         requireThat(['wallet-pending', 'unknown'].includes(attempt.state), 'SIGNATURE_NOT_EXPECTED');
         const signed = verifySigningResponse(attempt.request, { transactionBase64: event.transactionBase64 });
@@ -143,7 +153,7 @@ function applyEvent(snapshot, event) {
         attempt.state = 'accepted'; break;
       case 'unknown': attempt.state = 'unknown'; break;
       case 'cancelled':
-        requireThat(attempt.state === 'wallet-pending' && !attempt.signed, 'CANCELLATION_NOT_PROVEN');
+        requireThat(attempt.state === 'wallet-pending' && !attempt.signed && !attempt.walletClaim, 'CANCELLATION_NOT_PROVEN');
         attempt.state = 'cancelled'; break;
       case 'reconcile':
         validateProof(next, definition, attempt, event.proof);
