@@ -100,7 +100,7 @@ try {
       await page.locator('#minus').click();
       assert.equal(await page.locator('#qty').inputValue(), '1');
       await page.locator('#qty').fill('50');
-      assert.equal(await page.locator('#total').textContent(), '25');
+      assert.equal(await page.locator('#total').textContent(), '10');
       await page.locator('#plus').click();
       assert.equal(await page.locator('#qty').inputValue(), '50');
       await page.locator('#qty').fill('999');

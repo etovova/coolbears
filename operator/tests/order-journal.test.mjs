@@ -59,7 +59,7 @@ test('orders of one and fifty separate buyer, treasury, total price and unquoted
     assert.equal(order.treasury, policy.owner);
     assert.notEqual(order.buyer, order.treasury);
     assert.equal(order.items.length, quantity);
-    assert.equal(order.totalPriceLamports, String(500000000n * BigInt(quantity)));
+    assert.equal(order.totalPriceLamports, String(200000000n * BigInt(quantity)));
     assert.deepEqual(nextAction(order), { type: 'prepare', index: 0 });
     const summary = summarizeOrder(order);
     assert.equal(summary.verified, 0);
@@ -94,7 +94,7 @@ test('partial success survives wallet cancellation; resume still requires explic
   assert.deepEqual(nextAction(order), { type: 'paused' });
   assert.throws(() => itemsToPlan(order), /ORDER_PAUSED/);
   assert.equal(summarizeOrder(order).verified, 1);
-  assert.equal(summarizeOrder(order).listedPriceForVerifiedLamports, '500000000');
+  assert.equal(summarizeOrder(order).listedPriceForVerifiedLamports, '200000000');
   order = event(order, 'resume');
   assert.deepEqual(nextAction(order), { type: 'retry-review', index: 1 });
   assert.throws(() => prepare(order, 1), /RETRY_REQUIRES_REVIEW/);

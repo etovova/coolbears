@@ -41,8 +41,8 @@ for (const quantity of [1, 50]) {
     const order = makeOrder(quantity); const original = JSON.stringify(order);
     const result = buildOrderTransactions(order, block);
     assert.equal(result.plannedTransactions, quantity); assert.equal(result.templates.length, quantity);
-    assert.equal(result.quantity, quantity); assert.equal(result.unitPriceLamports, '500000000');
-    assert.equal(result.totalPriceLamports, (500000000n * BigInt(quantity)).toString());
+    assert.equal(result.quantity, quantity); assert.equal(result.unitPriceLamports, '200000000');
+    assert.equal(result.totalPriceLamports, (200000000n * BigInt(quantity)).toString());
     assert.equal(result.mode, 'offline-unsigned-order'); assert.equal(result.orderId, order.id); assert.equal(result.orderRevision, order.revision);
     assert.deepEqual({ rpc: result.networkRequests, signed: result.signaturesCreated, sent: result.transactionsSent }, { rpc: 0, signed: 0, sent: 0 });
     assert.equal(result.guardPriceVerified, false); assert.equal(result.networkVerified, false); assert.equal(result.blockhashVerified, false); assert.equal(result.feeQuote, null);
@@ -83,7 +83,7 @@ test('real Core mint pays the fixed treasury while buyer is fee payer, payer, mi
   assert.equal(transaction.message.isAccountWritable(mint.accountKeyIndexes[13]), true);
   assert.equal(transaction.message.isAccountSigner(mint.accountKeyIndexes[13]), false);
   assert.equal(keys[0], buyer); assert.equal(template.feePayer, buyer); assert.equal(template.owner, buyer);
-  assert.deepEqual(template.payment, { destination: policy.owner, lamports: '500000000' });
+  assert.deepEqual(template.payment, { destination: policy.owner, lamports: '200000000' });
   // solPayment's amount is not encoded in mint data. It must be verified from
   // Candy Guard state before any future live signature, independently of this
   // intended payment amount. The SDK appends only the destination account here.
@@ -160,7 +160,7 @@ test('resolved items are excluded while unresolved attempts block all replanning
       name: policy.hiddenName.replace('{index:04d}', '0001'), uri: `${policy.website}/metadata/hidden/0001.json` },
   } });
   const original = JSON.stringify(order); const result = buildOrderTransactions(order, block);
-  assert.equal(result.plannedTransactions, 1); assert.equal(result.totalPriceLamports, '500000000');
+  assert.equal(result.plannedTransactions, 1); assert.equal(result.totalPriceLamports, '200000000');
   assert.equal(result.templates[0].itemIndex, 1); assert.equal(result.templates[0].asset, order.items[1].asset);
   assert.equal(JSON.stringify(order), original);
 });

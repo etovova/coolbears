@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 
 export function makePreparation({ collection = '', metadataBase } = {}) {
   assert.equal(policy.supply, 10000);
-  assert.equal(policy.priceSol, 0.5);
+  assert.equal(policy.priceSol, 0.2);
   assert.equal(policy.royaltyPercent, 7);
   publicKey(policy.owner);
   assert.equal(typeof collection, 'string', 'Collection must be a public-key string or an empty string');

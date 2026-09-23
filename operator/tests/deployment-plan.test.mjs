@@ -102,7 +102,7 @@ test('one machine transaction allocates full account, initializes owner authorit
   const guardData = getCandyGuardDataSerializer(umi, umi.programs.get('mplCoreCandyGuard', '*')).deserialize(guardBytes)[0];
   assert.equal(guardData.guards.addressGate.value.address, policy.owner);
   assert.equal(guardData.guards.solPayment.value.destination, policy.owner);
-  assert.equal(guardData.guards.solPayment.value.lamports.basisPoints, 500000000n);
+  assert.equal(guardData.guards.solPayment.value.lamports.basisPoints, 200000000n);
   assert.deepEqual(guardData.groups, []);
   assert.equal(wrap.program, MPL_CORE_CANDY_GUARD_PROGRAM_ID);
   assert.deepEqual(wrap.keys, [result.roles.guard, policy.owner, input.machine, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, policy.owner]);
