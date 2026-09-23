@@ -151,6 +151,7 @@ test('finalized receipt needs expected effects; failed retry needs execution fai
   assert.equal((await readDeploymentJournal(h.directory)).revision, snapshot.revision);
   await append(h, 'reconcile', { proof: failed });
   await assert.rejects(prepare(h));
+  await assert.rejects(prepare(h, 0, { retry: true }), /RETRY_REQUIRES_NEW_BLOCKHASH/);
   await prepare(h, 0, { retry: true, transaction: h.builders[0](blockhash(121)) });
   const reloaded = await readDeploymentJournal(h.directory);
   assert.equal(reloaded.steps[0].attempts[0].state, 'failed');

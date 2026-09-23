@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { Keypair, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
 import { createSigningRequest, verifySigningResponse } from '../deployment/signing.mjs';
-import { verifyFinalizedReceipt } from '../deployment/receipt.mjs';
+import { verifyFinalizedReceipt, verifyFinalizedFailedTransaction } from '../deployment/receipt.mjs';
 
 const key = label => Keypair.fromSeed(createHash('sha256').update(`deployment-receipt-fixture:${label}`).digest());
 const owner = key('owner'), ephemeral = key('ephemeral'), blockhash = key('blockhash').publicKey.toBase58();
@@ -189,4 +189,35 @@ test('receipt verification never signs, creates keys, calls fetch or mutates the
   t.mock.method(VersionedTransaction.prototype, 'sign', blocked);
   assert.equal(verifyFinalizedReceipt(input).signature, input.signed.signature);
   assert.equal(JSON.stringify(input), before);
+});
+
+function failedFixture() {
+  const input = fixture(), err = { InstructionError: [0, 'InvalidArgument'] };
+  input.statusResult.value[0].err = err; input.statusResult.value[0].status = { Err: err };
+  input.transactionResult.meta.err = err;
+  return { transactionBase64: input.signed.transactionBase64, statusResult: input.statusResult, transactionResult: input.transactionResult };
+}
+test('finalized failure binds every signed byte and matching modern and legacy errors', () => {
+  const input = failedFixture(), result = verifyFinalizedFailedTransaction(input);
+  assert.equal(result.slot, 55000); assert.equal(result.contextSlot, 55002);
+  assert.match(result.errorSha256, /^[0-9a-f]{64}$/); assert.equal('err' in result, false);
+  assert.ok(Object.isFrozen(result));
+  delete input.statusResult.value[0].status; assert.deepEqual(verifyFinalizedFailedTransaction(input), result);
+});
+test('success, absence, partial finality, conflicting errors, different bytes and invalid signatures do not prove failure', () => {
+  const edits = [
+    x => { x.statusResult.value[0] = null; }, x => { x.transactionResult = null; },
+    x => { x.statusResult.value[0].err = null; }, x => { x.transactionResult.meta.err = null; },
+    x => { x.statusResult.value[0].confirmationStatus = 'confirmed'; },
+    x => { x.statusResult.value[0].confirmations = 0; }, x => { x.transactionResult.slot++; },
+    x => { x.statusResult.context.slot = 54999; }, x => { x.transactionResult.meta.err = 'AccountInUse'; },
+    x => { x.statusResult.value[0].status = { Ok: null }; },
+    x => { x.transactionResult.transaction[0] = fixture().request.transactionBase64; },
+    x => { const b = Buffer.from(x.transactionBase64, 'base64'); b[1] ^= 1; x.transactionBase64 = b.toString('base64'); x.transactionResult.transaction[0] = x.transactionBase64; },
+    ...[{}, [], false, '', 0, { a: 1, b: 2 }].map(err => x => {
+      x.statusResult.value[0].err = err; x.statusResult.value[0].status = { Err: err }; x.transactionResult.meta.err = err;
+    }),
+  ];
+  for (const edit of edits) { const input = failedFixture(); edit(input);
+    assert.throws(() => verifyFinalizedFailedTransaction(input), e => e.code === 'DEPLOYMENT_RECEIPT_INVALID'); }
 });

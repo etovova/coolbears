@@ -6,7 +6,8 @@
 // parameters or the RPC's honesty. Deployment account effects need a separate
 // verification; this receipt only binds finalized success to the exact bytes.
 import { VersionedTransaction } from '@solana/web3.js';
-import { verifySigningResponse } from './signing.mjs';
+import { createHash } from 'node:crypto';
+import { inspectSignedDeploymentTransaction, verifySigningResponse } from './signing.mjs';
 
 const ERROR_CODE = 'DEPLOYMENT_RECEIPT_INVALID';
 const ERROR_MESSAGE = 'Finalized transaction receipt could not be verified.';
@@ -35,6 +36,49 @@ function array(value, length) {
   return value;
 }
 function positiveInteger(value) { return Number.isSafeInteger(value) && value > 0; }
+
+// Compare the complete error value without relying on provider property order.
+// Errors are never returned verbatim to the operator or stored in the gateway.
+function errorJson(value) {
+  function copy(item, depth = 0) {
+    check(depth < 8);
+    if (item === null || typeof item === 'boolean' || typeof item === 'string') return item;
+    if (typeof item === 'number') { check(Number.isSafeInteger(item)); return item; }
+    if (Array.isArray(item)) return array(item, item.length).map(v => copy(v, depth + 1));
+    check(record(item));
+    return Object.fromEntries(Reflect.ownKeys(item).sort().map(key => {
+      check(typeof key === 'string'); return [key, copy(field(item, key), depth + 1)];
+    }));
+  }
+  check((typeof value === 'string' && value.length > 0) || (record(value) && Reflect.ownKeys(value).length === 1));
+  const text = JSON.stringify(copy(value)); check(text.length <= 2048); return text;
+}
+
+// Server-side proof: full signed bytes are independently checked, without a
+// caller-provided request, claimed finality flag or local journal proof.
+export function verifyFinalizedFailedTransaction(input) {
+  try {
+    exactRecord(input, ['transactionBase64', 'statusResult', 'transactionResult']);
+    const { transactionBase64, statusResult, transactionResult } = input;
+    const verified = inspectSignedDeploymentTransaction(transactionBase64);
+    const contextSlot = field(field(statusResult, 'context'), 'slot');
+    const [status] = array(field(statusResult, 'value'), 1);
+    const slot = field(status, 'slot');
+    check(positiveInteger(slot) && positiveInteger(contextSlot) && slot <= contextSlot);
+    check(field(status, 'confirmationStatus') === 'finalized' && field(status, 'confirmations') === null);
+    const error = errorJson(field(status, 'err'));
+    if (Object.hasOwn(status, 'status')) {
+      const legacy = field(status, 'status'); exactRecord(legacy, ['Err']);
+      check(errorJson(legacy.Err) === error);
+    }
+    check(field(transactionResult, 'slot') === slot && field(transactionResult, 'version') === 0);
+    check(errorJson(field(field(transactionResult, 'meta'), 'err')) === error);
+    const returned = array(field(transactionResult, 'transaction'), 2);
+    check(returned[0] === verified.transactionBase64 && returned[1] === 'base64');
+    return Object.freeze({ slot, contextSlot, signature: verified.signature,
+      messageSha256: verified.messageSha256, errorSha256: createHash('sha256').update(error).digest('hex') });
+  } catch { throw Object.assign(Error(ERROR_MESSAGE), { code: ERROR_CODE }); }
+}
 
 export function verifyFinalizedReceipt(input) {
   try {

@@ -83,6 +83,8 @@ export async function prepareDeploymentSigning(input) {
     sameSnapshot(await readDeploymentJournal(bundle.journalDirectory), baseline);
     const attempt = (currentAttempt(baseline, args.stepId)?.number ?? 0) + 1;
     const candidate = preflight.candidate;
+    need(!baseline.steps.find(step => step.id === args.stepId).attempts.some(previous =>
+      previous.signed && previous.request.blockhash === candidate.blockhash), 'RETRY_REQUIRES_NEW_BLOCKHASH');
     const request = signer.partialSign({ stepId: args.stepId, transactionBase64: candidate.transactionBase64,
       lastValidBlockHeight: candidate.lastValidBlockHeight, attempt });
     need(request.messageSha256 === candidate.messageSha256 && request.blockhash === candidate.blockhash

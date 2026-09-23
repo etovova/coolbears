@@ -31,7 +31,7 @@ assert.ok(!contents.includes('buildDeploymentCostModel')); assert.ok(!contents.i
 const persist = await mkdtemp(path.join(tmpdir(), 'coolbears-operator-runtime-'));
 const name = 'coolbears-deployment-rpc-runtime', endpoint = 'https://private-operator.test/rpc';
 const token = 'W'.repeat(43), secret = 'runtime-private-sentinel', calls = [], errors = [];
-let mf, mode = 'normal', sendPhase = false;
+let mf, mode = 'normal', sendPhase = false, failedBytes;
 async function outbound(request) {
   const url = new URL(request.url); assert.equal(url.hostname, 'devnet.helius-rpc.com');
   assert.equal(url.searchParams.get('api-key'), secret); assert.equal(request.headers.has('authorization'), false);
@@ -47,6 +47,11 @@ async function outbound(request) {
   if (rpc.method === 'simulateTransaction') result = { context: { slot: 9 }, value: { err: null, logs: [], unitsConsumed: 1 } };
   if (rpc.method === 'sendTransaction') result = inspectSignedDeploymentTransaction(rpc.params[0]).signature;
   if (['getSignatureStatuses', 'getTransaction'].includes(rpc.method)) result = null;
+  if (mode === 'failed') {
+    const err = { InstructionError: [0, 'InvalidArgument'] };
+    if (rpc.method === 'getSignatureStatuses') result = { context: { slot: 600 }, value: [{ slot: 590, confirmations: null, confirmationStatus: 'finalized', err }] };
+    if (rpc.method === 'getTransaction') result = { slot: 590, version: 0, meta: { err }, transaction: [failedBytes, 'base64'] };
+  }
   return new RuntimeResponse(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result }));
 }
 async function start() {
@@ -55,7 +60,7 @@ async function start() {
       name, compatibilityDate: '2026-09-23', compatibilityFlags: ['nodejs_compat'],
       manifest: { mainModule: 'worker.mjs', modules: { 'worker.mjs': { type: 'esm', contents } } },
       env: { OPERATOR_RPC_TOKEN: { type: 'text', value: token }, HELIUS_API_KEY: { type: 'text', value: secret },
-        DAILY_CREDIT_CAP: { type: 'text', value: sendPhase ? '20' : '7' }, DAILY_SIMULATION_CAP: { type: 'text', value: '1' },
+        DAILY_CREDIT_CAP: { type: 'text', value: sendPhase ? '40' : '7' }, DAILY_SIMULATION_CAP: { type: 'text', value: '1' },
         DEPLOYMENT_GATE: { type: 'durable-object', worker: name, exportName: 'DeploymentGate' } },
       exports: { DeploymentGate: { type: 'durable-object', storage: 'sqlite' } },
     }, dev: { outboundService: { type: 'fetcher', handler: outbound } } }] });
@@ -106,16 +111,31 @@ try {
   assert.equal(calls.length, sentCount); cases++;
   assert.equal((await dispatch('getSignatureStatuses', [[signature], { searchTransactionHistory: true }])).status, 200);
   assert.equal((await dispatch('getTransaction', [signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }])).status, 200); cases++;
+  mode = 'failed'; failedBytes = bytes;
+  const review = await dispatch('coolbears_authorizeFailedRetry', [bytes]);
+  assert.equal(review.status, 200, await review.clone().text());
+  const authorization = (await review.json()).result; assert.equal(authorization.status, 'retry-authorized');
+  const reviewedCount = calls.length; await mf.dispose(); await start();
+  const recovered = await dispatch('coolbears_authorizeFailedRetry', [bytes]);
+  assert.equal(recovered.status, 200); assert.deepEqual((await recovered.json()).result, authorization);
+  assert.equal(calls.length, reviewedCount); cases++;
+  assert.equal((await dispatch('sendTransaction', [bytes, options])).status, 409);
+  const retryBytes = Buffer.from(tx.serialize()).toString('base64');
+  assert.equal((await dispatch('sendTransaction', [retryBytes, options])).status, 200);
+  await mf.dispose(); await start();
+  assert.equal((await dispatch('sendTransaction', [retryBytes, options])).status, 409);
+  assert.equal((await dispatch('coolbears_authorizeFailedRetry', [bytes])).status, 409);
+  assert.equal((await dispatch('getTransaction', [signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }])).status, 200); cases++;
   const second = VersionedTransaction.deserialize(Buffer.from(plan.steps[1].transactionBase64, 'base64')); second.sign([owner, key('asset')]);
   const secondBytes = Buffer.from(second.serialize()).toString('base64'); mode = 'send-lost';
   assert.equal((await dispatch('sendTransaction', [secondBytes, options])).status, 503);
   const afterLoss = calls.length; await mf.dispose(); await start(); mode = 'normal';
   assert.equal((await dispatch('sendTransaction', [secondBytes, options])).status, 409);
-  assert.equal(calls.length, afterLoss); assert.equal(calls.filter(call => call.method === 'sendTransaction').length, 2); cases++;
+  assert.equal(calls.length, afterLoss); assert.equal(calls.filter(call => call.method === 'sendTransaction').length, 3); cases++;
   assert.ok(calls.slice(1).every((call, i) => call.at - calls[i].at >= 195));
   assert.deepEqual(errors, []);
   const version = JSON.parse(await readFile(path.join(root, 'node_modules/miniflare/package.json'), 'utf8')).version;
   console.log(JSON.stringify({ passed: true, engine: 'workerd', miniflare: version, storage: 'SQLite', cases,
     upstreamRequests: calls.length, bundleBytes: Buffer.byteLength(contents), bundleSha256: createHash('sha256').update(contents).digest('hex'),
-    fixtureSubmissions: 2, outboundNetwork: 'intercepted fixtures only', cloudflareDeployed: false, liveDevnet: false, transactionsSent: 0 }));
+    fixtureSubmissions: 3, outboundNetwork: 'intercepted fixtures only', cloudflareDeployed: false, liveDevnet: false, transactionsSent: 0 }));
 } finally { if (mf) await mf.dispose(); await rm(persist, { recursive: true, force: true }); }

@@ -2,6 +2,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequestValidator, validRecoverySignature } from '../request-policy.mjs';
 import { createDeploymentRpc, DeploymentRpcError, GENESIS_HASHES } from '../rpc.mjs';
+import { verifyFinalizedFailedTransaction } from '../receipt.mjs';
 const HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
   'x-content-type-options': 'nosniff' };
 const KEY = 'operator-rpc-limits:v1', INTERVAL = 200, HOLD = 15000;
@@ -150,6 +151,13 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
       }
     }
     async validateRequest(method, params) {
+      if (method === 'coolbears_authorizeFailedRetry') {
+        if (!allowSubmission || !Array.isArray(params) || params.length !== 1) fail('POLICY', 400);
+        try {
+          return { reviewFailure: true, claim: validate('sendTransaction', [params[0], {
+            encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 0 }]) };
+        } catch { fail('POLICY', 400); }
+      }
       // Recovery for signatures previously claimed here needs no redeployment.
       // An unrecognized signature never enables arbitrary history scans.
       try { return validate(method, params); } catch {
@@ -158,21 +166,61 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
         if (!validRecoverySignature(signature)) fail('POLICY', 400);
         const identity = await this.storage.get(`deployment-signature:v1:${signature}`);
         if (!compiledPolicy.messageIdentities.includes(identity)) fail('POLICY', 400);
-        const claim = await this.storage.get(`deployment-send:v1:${identity}`);
+        const claim = await this.storage.get(`deployment-attempt:v1:${signature}`)
+          ?? await this.storage.get(`deployment-send:v1:${identity}`);
         if (claim?.signature !== signature || claim?.identity !== identity) fail('POLICY', 400);
         try { createRequestValidator({ ...compiledPolicy, recoverySignatures: [signature] })(method, params); }
         catch { fail('POLICY', 400); }
       }
     }
     async claimSubmission(claim) {
-      // Permanent intent lock, not a timeout lease. A different blockhash or
-      // valid re-signing cannot bypass it. No HTTP reset/retry endpoint exists.
+      // Never delete history. A new signature can replace the current pointer
+      // only after independent finalized failure proof for that exact pointer.
       await this.storage.transaction(async tx => {
         const key = `deployment-send:v1:${claim.identity}`;
-        if (await tx.get(key) !== undefined) fail('ALREADY_CLAIMED', 409);
+        const previous = await tx.get(key);
+        if (previous !== undefined) {
+          const failure = await tx.get(`deployment-failed:v1:${previous.signature}`);
+          if (!this.matchesFailure(previous, failure)) fail('ALREADY_CLAIMED', 409);
+          await tx.put(`deployment-attempt:v1:${previous.signature}`, previous);
+        }
+        if (await tx.get(`deployment-signature:v1:${claim.signature}`) !== undefined) fail('SIGNATURE_USED', 409);
         await tx.put(key, claim);
+        await tx.put(`deployment-attempt:v1:${claim.signature}`, claim);
         await tx.put(`deployment-signature:v1:${claim.signature}`, claim.identity);
       });
+    }
+    matchesFailure(claim, failure) {
+      return object(claim) && object(failure) && failure.version === 1 && failure.kind === 'finalized-failure'
+        && failure.identity === claim.identity && failure.signature === claim.signature
+        && failure.transactionSha256 === claim.transactionSha256 && integer(failure.slot) && failure.slot > 0
+        && typeof failure.errorSha256 === 'string' && /^[0-9a-f]{64}$/.test(failure.errorSha256);
+    }
+    async authorizeFailedRetry(claim, transactionBase64) {
+      const key = `deployment-send:v1:${claim.identity}`, failureKey = `deployment-failed:v1:${claim.signature}`;
+      const matches = current => current?.identity === claim.identity && current.signature === claim.signature
+        && current.transactionSha256 === claim.transactionSha256;
+      if (!matches(await this.storage.get(key))) fail('CLAIM_MISMATCH', 409);
+      let failure = await this.storage.get(failureKey);
+      if (failure !== undefined && !this.matchesFailure(claim, failure)) fail('LEDGER');
+      if (failure === undefined) {
+        // Always verify Devnet afresh. The custom method itself never reaches
+        // Helius; each bounded upstream read is charged by the existing ledger.
+        if (await this.upstream('getGenesisHash', []) !== GENESIS_HASHES.devnet) fail('GENESIS', 502);
+        const statusResult = await this.upstream('getSignatureStatuses', [[claim.signature], { searchTransactionHistory: true }]);
+        const transactionResult = await this.upstream('getTransaction', [claim.signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }]);
+        let receipt;
+        try { receipt = verifyFinalizedFailedTransaction({ transactionBase64, statusResult, transactionResult }); }
+        catch { fail('FAILURE_NOT_PROVEN', 409); }
+        failure = { version: 1, kind: 'finalized-failure', ...claim, slot: receipt.slot, errorSha256: receipt.errorSha256 };
+        await this.storage.transaction(async tx => {
+          if (!matches(await tx.get(key))) fail('CLAIM_MISMATCH', 409);
+          if (await tx.get(failureKey) !== undefined) fail('LEDGER');
+          await tx.put(failureKey, failure);
+        });
+      }
+      return { status: 'retry-authorized', cluster: 'devnet', signature: claim.signature,
+        transactionSha256: claim.transactionSha256, slot: failure.slot };
     }
     async fetch(request) {
       let id = null, ownsBusy = false;
@@ -185,6 +233,10 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           || body.jsonrpc !== '2.0' || !integer(body.id) || body.id < 1) fail('REQUEST', 400);
         id = body.id;
         const claim = await this.validateRequest(body.method, body.params);
+        if (claim?.reviewFailure) {
+          const result = await this.authorizeFailedRetry(claim.claim, body.params[0]);
+          return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { headers: HEADERS });
+        }
         if (claim) await this.claimSubmission(claim);
         let result;
         if (!this.genesisVerified || body.method === 'getGenesisHash') {

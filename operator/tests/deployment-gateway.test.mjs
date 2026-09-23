@@ -236,3 +236,76 @@ test('ambiguous gateway submission, concurrent requests and failed claim storage
   const failed = harness({ allowSubmission: true, storage: { async transaction() { throw Error(secret); } } });
   assert.equal((await failed.call('sendTransaction', item.params)).status, 503); assert.equal(failed.calls.length, 0);
 });
+
+function failureResponder(item, edit = () => {}) {
+  const err = { InstructionError: [0, 'InvalidArgument'] };
+  const values = { getSignatureStatuses: { context: { slot: 600 }, value: [{ slot: 590, confirmations: null, confirmationStatus: 'finalized', err }] },
+    getTransaction: { slot: 590, version: 0, meta: { err }, transaction: [item.params[0], 'base64'] } };
+  edit(values);
+  return rpc => {
+    if (rpc.method === 'sendTransaction') return new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: inspectSignedDeploymentTransaction(rpc.params[0]).signature }));
+    if (Object.hasOwn(values, rpc.method)) return new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: values[rpc.method] }));
+  };
+}
+test('finalized failure authorizes one replacement, preserves old recovery after restart, and cannot authorize a later attempt', async () => {
+  const item = signedSubmission(), replacement = signedSubmission(key('retry-hash').publicKey.toBase58());
+  const h = harness({ allowSubmission: true, responder: failureResponder(item) });
+  assert.equal((await h.call('sendTransaction', item.params)).status, 200);
+  assert.equal((await h.call('sendTransaction', replacement.params)).status, 409);
+  const before = h.calls.length;
+  const reviewed = await h.call('coolbears_authorizeFailedRetry', [item.params[0]]);
+  assert.equal(reviewed.status, 200, await reviewed.clone().text());
+  assert.equal((await reviewed.json()).result.status, 'retry-authorized');
+  assert.deepEqual(h.calls.slice(before).map(x => x.method), ['getGenesisHash', 'getSignatureStatuses', 'getTransaction']);
+  h.restart(); const saved = h.calls.length;
+  assert.equal((await h.call('coolbears_authorizeFailedRetry', [item.params[0]])).status, 200);
+  assert.equal(h.calls.length, saved); // Lost reply recovery reuses a durable proof.
+  assert.equal((await h.call('sendTransaction', item.params)).status, 409);
+  const concurrent = await Promise.all([h.call('sendTransaction', replacement.params), h.call('sendTransaction', replacement.params)]);
+  assert.equal(concurrent.filter(r => r.status === 200).length, 1);
+  assert.equal(h.calls.filter(x => x.method === 'sendTransaction').length, 2);
+  h.restart();
+  assert.equal((await h.call('coolbears_authorizeFailedRetry', [item.params[0]])).status, 409);
+  assert.equal((await h.call('sendTransaction', signedSubmission(key('third-hash').publicKey.toBase58()).params)).status, 409);
+  for (const signature of [item.signature, replacement.signature]) {
+    assert.equal((await h.call('getTransaction', [signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }])).status, 200);
+    assert.equal(h.storage.values.get(`deployment-attempt:v1:${signature}`).signature, signature);
+  }
+});
+test('failed retry refuses null, success, inconsistent or unfinalized receipts, 429, foreign bytes and read-only mode', async () => {
+  const item = signedSubmission();
+  const edits = [v => { v.getTransaction = null; }, v => { v.getSignatureStatuses.value[0] = null; },
+    v => { v.getSignatureStatuses.value[0].confirmationStatus = 'confirmed'; },
+    v => { v.getTransaction.meta.err = null; },
+    v => { v.getTransaction.transaction[0] = signedSubmission(key('foreign').publicKey.toBase58()).params[0]; }];
+  for (const edit of edits) {
+    const h = harness({ allowSubmission: true, responder: failureResponder(item, edit) });
+    await h.call('sendTransaction', item.params);
+    assert.equal(await category(await h.call('coolbears_authorizeFailedRetry', [item.params[0]])), 'FAILURE_NOT_PROVEN');
+    assert.equal((await h.call('sendTransaction', signedSubmission(key('new').publicKey.toBase58()).params)).status, 409);
+    assert.equal([...h.storage.values.keys()].some(k => k.startsWith('deployment-failed:')), false);
+  }
+  const readOnly = harness(); assert.equal((await readOnly.call('coolbears_authorizeFailedRetry', [item.params[0]])).status, 400);
+  assert.equal(readOnly.calls.length, 0);
+  let rateLimited = false;
+  const h = harness({ allowSubmission: true, responder: rpc => rateLimited
+    ? new Response(secret, { status: 429, headers: { 'retry-after': '3' } }) : failureResponder(item)(rpc) });
+  await h.call('sendTransaction', item.params); rateLimited = true;
+  assert.equal((await h.call('coolbears_authorizeFailedRetry', [item.params[0]])).status, 429);
+  assert.equal((await h.call('sendTransaction', signedSubmission(key('new').publicKey.toBase58()).params)).status, 409);
+  assert.equal(h.storage.values.has(`deployment-failed:v1:${item.signature}`), false);
+});
+test('PR33 claim compatibility and lost failure-write acknowledgment retain proof and quota history', async () => {
+  const item = signedSubmission(), h = harness({ allowSubmission: true, responder: failureResponder(item) });
+  await h.call('sendTransaction', item.params);
+  h.storage.values.delete(`deployment-attempt:v1:${item.signature}`); // Emulate the original PR33 schema, fixture only.
+  const put = h.storage.put.bind(h.storage); let lost = true;
+  h.storage.put = async (key, value) => { await put(key, value);
+    if (key.startsWith('deployment-failed:') && lost) { lost = false; throw Error(secret); } };
+  assert.equal((await h.call('coolbears_authorizeFailedRetry', [item.params[0]])).status, 503);
+  h.restart();
+  assert.equal((await h.call('coolbears_authorizeFailedRetry', [item.params[0]])).status, 200);
+  assert.equal((await h.call('sendTransaction', signedSubmission(key('compat').publicKey.toBase58()).params)).status, 200);
+  assert.equal(h.storage.values.get(`deployment-attempt:v1:${item.signature}`).signature, item.signature);
+  assert.equal(h.storage.values.get('operator-rpc-limits:v1').used, h.calls.length);
+});

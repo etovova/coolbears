@@ -26,7 +26,7 @@ export async function runOwnerConsole(args, { input = process.stdin, output = pr
   let passphrase;
   try {
     const [command, directory, stepId, ...extra] = args;
-    if (!['prepare', 'serve', 'import-response'].includes(command) || !directory || extra.length || (command !== 'serve' ? !stepId : stepId !== undefined)) throw Error();
+    if (!['prepare', 'prepare-retry', 'serve', 'import-response'].includes(command) || !directory || extra.length || (command !== 'serve' ? !stepId : stepId !== undefined)) throw Error();
     if (command === 'import-response') {
       const response = await responseFile(stepId);
       const session = await createSigningSession({ directory });
@@ -35,14 +35,15 @@ export async function runOwnerConsole(args, { input = process.stdin, output = pr
     }
     const endpoint = env.COOLBEARS_RPC_URL;
     const fetchImpl = env.COOLBEARS_OPERATOR_RPC_TOKEN === undefined ? undefined : createGatewayFetch({ endpoint, token: env.COOLBEARS_OPERATOR_RPC_TOKEN });
-    if (command === 'prepare') {
+    if (command === 'prepare' || command === 'prepare-retry') {
       // A pending request is resumed, never silently replaced or re-signed.
       const bundle = await readDeploymentBundle(directory), action = nextDeploymentAction(bundle.snapshot);
-      if (action.type !== 'prepare' || action.stepId !== stepId) {
+      const retry = command === 'prepare-retry';
+      if (action.type !== (retry ? 'retry-review' : 'prepare') || action.stepId !== stepId) {
         errorOutput.write('This step cannot be prepared. Resume the existing request or reconcile its outcome.\n'); return 1;
       }
       passphrase = await readPassphrase({ input, output: errorOutput });
-      const result = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl });
+      const result = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl, retry });
       output.write(JSON.stringify({ status: 'request-saved', stepId, ...result.binding, ownerSignatureCreated: false, transactionsSent: 0 }) + '\n');
       return 0;
     }

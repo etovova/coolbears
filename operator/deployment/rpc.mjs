@@ -82,7 +82,7 @@ async function readBody(response, signal, limit, expiresAt) {
   }
 }
 
-export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission } = {}) {
+export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission, failedRetry } = {}) {
   const url = endpointUrl(endpoint);
   if (typeof allowSimulation !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
     || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 16 * 1024 * 1024
@@ -95,6 +95,13 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       grant = { ...inspectSignedDeploymentTransaction(submission.transactionBase64), minContextSlot: submission.minContextSlot };
     } catch { throw fail('CONFIGURATION'); }
   }
+  let retryGrant = null, retryReviewed = false;
+  if (failedRetry !== undefined) {
+    try {
+      if (submission !== undefined || !object(failedRetry) || Object.keys(failedRetry).join(',') !== 'transactionBase64') throw Error();
+      retryGrant = inspectSignedDeploymentTransaction(failedRetry.transactionBase64);
+    } catch { throw fail('CONFIGURATION'); }
+  }
   const startedAt = performance.now();
   let devnetChecked = false, submitted = false;
   let requests = 0;
@@ -102,8 +109,12 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
     get requests() { return requests; },
     async call(method, params = []) {
       if (typeof method !== 'string' || !(METHODS.has(method) || (allowSimulation && method === 'simulateTransaction')
-        || (grant && method === 'sendTransaction'))) throw fail('METHOD');
+        || (grant && method === 'sendTransaction') || (retryGrant && method === 'coolbears_authorizeFailedRetry'))) throw fail('METHOD');
       if (!Array.isArray(params)) throw fail('PARAMS');
+      if (method === 'coolbears_authorizeFailedRetry') {
+        if (retryReviewed || !devnetChecked) throw fail('METHOD');
+        if (params.length !== 1 || params[0] !== retryGrant.transactionBase64) throw fail('PARAMS');
+      }
       if (method === 'sendTransaction') {
         const [bytes, config] = params;
         if (submitted || !devnetChecked) throw fail('METHOD');
@@ -136,6 +147,7 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       const callTimeoutMs = Math.min(timeoutMs, remaining);
       requests = id;
       if (method === 'sendTransaction') submitted = true; // Consume before I/O, including ambiguous failures.
+      if (method === 'coolbears_authorizeFailedRetry') retryReviewed = true;
       if (method === 'getGenesisHash') devnetChecked = false;
       const controller = new AbortController();
       const expiresAt = performance.now() + callTimeoutMs;

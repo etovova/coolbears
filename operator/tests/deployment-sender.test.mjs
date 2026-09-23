@@ -22,12 +22,12 @@ const key = n => Keypair.fromSeed(createHash('sha256').update(`sender-fixture-${
 const owner = key('owner'), passphrase = Buffer.from('sender-fixture-private-password');
 const endpoint = 'https://sender.test/rpc', stepId = 'collection-create';
 const originalOwner = policy.owner, originalFetch = globalThis.fetch;
-let fixture, request, signed, sendDeploymentStep, resumeDeploymentStep, runDeploymentSenderCli;
+let fixture, request, signed, sendDeploymentStep, resumeDeploymentStep, reviewFailedDeploymentStep, runDeploymentSenderCli;
 before(async () => {
   policy.owner = owner.publicKey.toBase58(); globalThis.fetch = () => assert.fail('Unstubbed HTTP forbidden');
   // The account verifier snapshots the approved owner on import. Load it after
   // installing this worker's disposable policy, as in deployment-read tests.
-  ({ sendDeploymentStep, resumeDeploymentStep } = await import('../deployment/sender.mjs'));
+  ({ sendDeploymentStep, resumeDeploymentStep, reviewFailedDeploymentStep } = await import('../deployment/sender.mjs'));
   ({ runDeploymentSenderCli } = await import('../deployment/send-cli.mjs'));
   fixture = await createDeploymentSignerVault({ id: 'sender-fixture', cluster: 'devnet', blockhash: key('hash').publicKey.toBase58(),
     lastValidBlockHeight: 2000, machineRentLamports: '5000000000', passphrase });
@@ -210,4 +210,102 @@ test('sender through bearer gateway recovers its durable signature after gateway
   const recovered = await resume(h, { fetchImpl }); assert.equal(recovered.status, 'verified', JSON.stringify(recovered));
   assert.equal(rpc.calls.some(call => call.method === 'sendTransaction'), false);
   assert.equal(values.has(`deployment-signature:v1:${signed.signature}`), true);
+});
+
+function failedResults(bytes = signed.transactionBase64) {
+  const err = { InstructionError: [0, 'InvalidArgument'] };
+  return { getSignatureStatuses: { context: { slot: 509 }, value: [{ slot: 500, confirmations: null, err, confirmationStatus: 'finalized' }] },
+    getTransaction: { slot: 500, version: 0, meta: { err }, transaction: [bytes, 'base64'] } };
+}
+const review = (h, rpc, extra = {}) => reviewFailedDeploymentStep({ directory: h.directory, stepId, endpoint,
+  fetchImpl: rpc.fetchImpl, authorizeRetryReview: true, ...extra });
+
+test('failure review requires explicit action, exact finalized failure, unchanged accounts and unchanged journal', async t => {
+  const h = await harness(t), none = upstream();
+  assert.equal((await review(h, none, { authorizeRetryReview: false })).code, 'EXPLICIT_RETRY_REVIEW_REQUIRED'); assert.equal(none.calls.length, 0);
+  for (const rpc of [upstream(), upstream({ override: { getTransaction: null } }),
+    upstream({ completed: true, override: failedResults() })]) {
+    assert.equal((await review(h, rpc)).status, 'unknown');
+    assert.equal(rpc.calls.some(c => c.method === 'coolbears_authorizeFailedRetry'), false);
+    assert.equal((await h.snapshot()).revision, 2);
+  }
+  const moved = upstream({ override: failedResults(), onCall: async call => {
+    if (call.method === 'getMultipleAccounts') await appendDeploymentEvent(h.journalDirectory,
+      { type: 'unknown', stepId, attempt: 1 }, { expectedRevision: 2 });
+  } });
+  assert.equal((await review(h, moved)).status, 'unknown');
+  assert.equal(moved.calls.some(c => c.method === 'coolbears_authorizeFailedRetry'), false);
+});
+
+test('failed send to durable gateway: lost review reply, restart, explicit new signing, one replacement and finalized recovery', async t => {
+  const h = await harness(t), compiled = await compileDeploymentRpcPolicy(fixture.manifest, { allowSimulation: true });
+  const values = new Map(), storage = { async get(key) { return structuredClone(values.get(key)); },
+    async put(key, value) { values.set(key, structuredClone(value)); }, async transaction(fn) { return fn(this); } };
+  const token = 'F'.repeat(43), env = { OPERATOR_RPC_TOKEN: token, HELIUS_API_KEY: 'test-only-secret' };
+  const { DeploymentGate, worker } = makeGateway(compiled, { allowSubmission: true });
+  let now = 1800000000000, rpc = upstream(), gate, loseReview = true;
+  const networkCalls = [];
+  function restart() {
+    gate = new DeploymentGate({ storage }, env, { clock: () => now, pause: async ms => { now += ms; },
+      fetchImpl: (_url, init) => { networkCalls.push(JSON.parse(init.body)); return rpc.fetchImpl(endpoint, init); } });
+  }
+  restart(); env.DEPLOYMENT_GATE = { idFromName: name => name, get: () => gate };
+  const fetchImpl = createGatewayFetch({ endpoint, token, fetchImpl: async (url, init) => {
+    const response = await worker.fetch(new Request(url, init), env);
+    if (JSON.parse(init.body).method === 'coolbears_authorizeFailedRetry' && loseReview) { loseReview = false; throw Error('PRIVATE_SENTINEL'); }
+    return response;
+  } });
+  assert.equal((await send(h, { fetchImpl })).status, 'accepted');
+  rpc = upstream({ override: failedResults() });
+  assert.equal((await review(h, { fetchImpl })).status, 'unknown');
+  assert.equal((await h.snapshot()).steps[0].attempts[0].state, 'accepted');
+  assert.equal(values.has(`deployment-failed:v1:${signed.signature}`), true);
+  restart();
+  // Also lose the local journal acknowledgement path before any new signing.
+  await mkdir(path.join(h.journalDirectory, '.writer-lock'), { mode: 0o700 });
+  assert.equal((await review(h, { fetchImpl })).status, 'unknown');
+  await rm(path.join(h.journalDirectory, '.writer-lock'), { recursive: true }); // fixture-owned lock only
+  const result = await review(h, { fetchImpl }); assert.equal(result.status, 'failed', JSON.stringify(result));
+  assert.equal(result.submissionAttempts, 0); assert.equal(result.gatewayRetryAuthorized, true);
+  assert.equal((await review(h, { fetchImpl })).status, 'already-recorded');
+  const { prepareDeploymentSigning, acceptDeploymentSigningResponse } = await import('../deployment/handoff.mjs');
+  await assert.rejects(prepareDeploymentSigning({ directory: h.directory, stepId, passphrase, endpoint, fetchImpl }));
+  rpc = upstream({ override: { getLatestBlockhash: { context: { slot: 512 }, value: { blockhash: key('retry-hash').publicKey.toBase58(), lastValidBlockHeight: 2500 } } } });
+  const prepared = await prepareDeploymentSigning({ directory: h.directory, stepId, passphrase, endpoint, fetchImpl, retry: true });
+  assert.equal(prepared.request.attempt, 2); assert.notEqual(prepared.request.blockhash, request.blockhash);
+  const tx = VersionedTransaction.deserialize(Buffer.from(prepared.request.transactionBase64, 'base64')); tx.sign([owner]);
+  const replacement = verifySigningResponse(prepared.request, { transactionBase64: Buffer.from(tx.serialize()).toString('base64') });
+  await acceptDeploymentSigningResponse({ directory: h.directory, request: prepared.request, response: { transactionBase64: replacement.transactionBase64 } });
+  rpc = upstream({ override: { sendTransaction: replacement.signature } });
+  const resent = await send(h, { fetchImpl }); assert.equal(resent.status, 'accepted', JSON.stringify(resent));
+  rpc = upstream({ completed: true, override: {
+    getTransaction: { slot: 500, version: 0, meta: { err: null }, transaction: [replacement.transactionBase64, 'base64'] } } });
+  assert.equal((await resume(h, { fetchImpl })).status, 'verified');
+  const snapshot = await h.snapshot(); assert.deepEqual(snapshot.steps[0].attempts.map(a => a.state), ['failed', 'verified']);
+  assert.equal(snapshot.steps[0].attempts[0].signed.transactionBase64, signed.transactionBase64);
+  assert.equal(networkCalls.filter(c => c.method === 'sendTransaction').length, 2);
+  assert.equal(networkCalls.some(c => c.method.startsWith('coolbears_')), false);
+});
+
+test('retry-review transport grant is exact, separate from send, Devnet-only and consumed before ambiguous I/O', async () => {
+  const args = { endpoint, failedRetry: { transactionBase64: signed.transactionBase64 } };
+  const calls = [], fetchImpl = async (_url, init) => {
+    const call = JSON.parse(init.body); calls.push(call);
+    if (call.method === 'coolbears_authorizeFailedRetry') throw Error('lost');
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: call.id, result: GENESIS_HASHES.devnet }));
+  };
+  const rpc = createDeploymentRpc({ ...args, fetchImpl });
+  await assert.rejects(rpc.call('coolbears_authorizeFailedRetry', [signed.transactionBase64])); assert.equal(calls.length, 0);
+  await rpc.call('getGenesisHash');
+  await assert.rejects(rpc.call('coolbears_authorizeFailedRetry', [request.transactionBase64]));
+  await assert.rejects(rpc.call('sendTransaction', []));
+  await assert.rejects(rpc.call('coolbears_authorizeFailedRetry', [signed.transactionBase64]));
+  await assert.rejects(rpc.call('coolbears_authorizeFailedRetry', [signed.transactionBase64])); assert.equal(calls.length, 2);
+  const disabled = createDeploymentRpc({ endpoint, fetchImpl });
+  await assert.rejects(disabled.call('coolbears_authorizeFailedRetry', [signed.transactionBase64]));
+  assert.throws(() => createDeploymentRpc({ endpoint, failedRetry: { transactionBase64: request.transactionBase64 } }));
+  assert.throws(() => createDeploymentRpc({ ...args, submission: { transactionBase64: signed.transactionBase64, minContextSlot: 0 } }));
+  let output = '';
+  assert.equal(await runDeploymentSenderCli(['review-failure', '/missing', stepId], { env: {}, write: text => { output += text; } }), 1);
+  assert.match(output, /--authorize-retry/);
 });
