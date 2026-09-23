@@ -1,5 +1,7 @@
 # Exact buyer message and persistent asset partial signature
 
+**PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
+
 This stage signs **only the first asset of a fresh Devnet order** (quantity
 1–50), using its existing non-extractable CryptoKey. The buyer signature remains
 empty. It does not open a wallet, read RPC, submit, open sales or enable Mainnet.

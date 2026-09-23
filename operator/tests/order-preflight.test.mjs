@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, writeFile, readFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { CANDY_MACHINE_HIDDEN_SECTION } from '@metaplex-foundation/mpl-core-candy-machine';
 import { getCandyMachineAccountDataSerializer as machineSerializer } from '../node_modules/@metaplex-foundation/mpl-core-candy-machine/dist/src/generated/types/candyMachineAccountData.js';
 import { getCollectionV1AccountDataSerializer as collectionSerializer } from '../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/collectionV1AccountData.js';
@@ -15,7 +15,11 @@ import { insertionAccounts } from './fixtures/group-accounts.mjs';
 import { GENESIS_HASHES } from '../deployment/rpc.mjs';
 import { policy } from '../prepare.mjs';
 import { createOrder, transitionOrder } from '../orders/journal.mjs';
-import { preflightOrder } from '../orders/preflight.mjs';
+import { checkPreparedOrder, preflightOrder } from '../orders/preflight.mjs';
+import { prepareAssetClaim, finalizeAssetRequest } from '../orders/signing.mjs';
+import { buildOrderTransactions } from '../orders/transactions.mjs';
+import { ed25519 } from '@noble/curves/ed25519';
+import { validateWalletCheck } from '../orders/wallet-client.mjs';
 import { runOrderCheck } from '../orders/check.mjs';
 
 const address = label => {
@@ -53,8 +57,19 @@ function accounts(redeemed = 0) {
   });
   return value;
 }
-function harness({ quantity = 1, buyer = policy.owner, redeemed = 0, transform, revise } = {}) {
+function harness({ quantity = 1, buyer = policy.owner, redeemed = 0, transform, revise, prepared = false } = {}) {
   let saved = order(quantity, { buyer }), reads = 0, accountReads = 0;
+  let signing;
+  if (prepared) {
+    const asset = Keypair.fromSeed(new Uint8Array(32).fill(19));
+    saved = order(1, {buyer,assets:[asset.publicKey.toBase58()]});
+    const block = {blockhash,lastValidBlockHeight:2000};
+    const transactionBase64 = Buffer.from(buildOrderTransactions(saved,block).templates[0].unsignedBytes).toString('base64');
+    const value = prepareAssetClaim(saved,{orderRevision:0,itemIndex:0,...block,transactionBase64});
+    saved = value.order;
+    const message = VersionedTransaction.deserialize(Buffer.from(transactionBase64,'base64')).message.serialize();
+    signing = {claim:value.claim,request:finalizeAssetRequest(saved,value.claim,ed25519.sign(message,asset.secretKey.slice(0,32)))};
+  }
   const base = accounts(redeemed), calls = [];
   const readOrder = () => { reads++; if (reads > 1 && revise) saved = revise(saved); return structuredClone(saved); };
   const fetchImpl = async (url, init) => {
@@ -75,8 +90,8 @@ function harness({ quantity = 1, buyer = policy.owner, redeemed = 0, transform, 
     if (transform) result = transform(call, result, accountReads);
     return new Response(JSON.stringify({ jsonrpc: '2.0', id: call.id, result }));
   };
-  return { calls, readOrder, fetchImpl, initial: () => structuredClone(saved),
-    run: () => preflightOrder({ readOrder, endpoint, fetchImpl }) };
+  return { calls, readOrder, fetchImpl, signing, initial: () => structuredClone(saved),
+    run: () => prepared ? checkPreparedOrder({readOrder,endpoint,fetchImpl,...signing}) : preflightOrder({ readOrder, endpoint, fetchImpl }) };
 }
 for (const quantity of [1, 50]) test(`fresh ${quantity}-item order validates a full machine and only simulates the first exact message`, async () => {
   const h = harness({ quantity, redeemed: 7 }), before = h.initial();
@@ -205,4 +220,43 @@ test('429 and hung transport are bounded, sanitized and never retried', async ()
   assert.equal(blocked.code, 'RPC_HTTP'); assert.equal(calls, 1); assert.doesNotMatch(JSON.stringify(blocked), /SECRET/);
   const timed = await preflightOrder({ readOrder: () => order(), endpoint, timeoutMs: 10, fetchImpl: () => new Promise(() => {}) });
   assert.equal(timed.code, 'RPC_TIMEOUT'); assert.equal(timed.networkRequests, 1);
+});
+
+
+test('prepared sign-only check uses saved partial bytes and hash; never refreshes/replans and binds the wallet contract', async () => {
+  const h = harness({prepared:true}), before=h.initial(), report=await h.run();
+  assert.equal(report.status,'wallet-check-passed',JSON.stringify(report));
+  validateWalletCheck(report,before,h.signing.request);
+  assert.equal(report.readyToSign,true);assert.equal(report.readyToSubmit,false);assert.equal(report.salesOpen,false);
+  assert.equal(report.budget.complete,false);assert.equal(report.signaturesCreated+report.journalWrites+report.transactionsSent,0);
+  assert.equal(h.calls.some(c=>c.method==='getLatestBlockhash'),false);
+  assert.equal(h.calls.find(c=>c.method==='simulateTransaction').params[0],h.signing.request.transactionBase64);
+  assert.deepEqual(h.initial(),before);
+});
+test('prepared check blocks stale/mutated/unknown requests, expiry and wrong network without a wallet grant', async () => {
+  for(const transform of [
+    (call,r)=>call.method==='isBlockhashValid'?{...r,value:false}:r,
+    (call,r)=>call.method==='getGenesisHash'?GENESIS_HASHES['mainnet-beta']:r,
+    (call,r)=>call.method==='simulateTransaction'?{...r,value:{err:{Custom:1}}}:r,
+  ]) {const h=harness({prepared:true,transform});assert.equal((await h.run()).readyToSign,false);}
+  const h=harness({prepared:true});
+  const unknown=transitionOrder(h.initial(),{type:'unknown',revision:1,index:0,attempt:1});
+  const stopped=await checkPreparedOrder({readOrder:()=>unknown,endpoint,...h.signing,fetchImpl:()=>assert.fail('RPC forbidden')});
+  assert.equal(stopped.status,'blocked');assert.equal(stopped.networkRequests,0);
+  h.signing.request.transactionBase64='AAAA';const report=await h.run();assert.equal(report.status,'blocked');assert.equal(report.networkRequests,0);
+});
+test('prepared freshness still detects order revision changes and ordinary buyers remain closed', async () => {
+  const h=harness({prepared:true,revise:s=>transitionOrder(s,{type:'pause',revision:s.revision})});
+  assert.equal((await h.run()).code,'ORDER_CHANGED');
+  const buyer=Keypair.fromSeed(new Uint8Array(32).fill(20)).publicKey.toBase58();
+  const closed=harness({prepared:true,buyer});assert.equal((await closed.run()).code,'SALES_CLOSED');assert.equal(closed.calls.length,2);
+});
+test('wallet check rejects forged bindings, missing network checks and expired/future grants', async () => {
+  const h=harness({prepared:true}), report=await h.run();
+  for(const edit of [r=>r.requestId='0'.repeat(64),r=>r.orderSha256='0'.repeat(64),r=>r.cluster='mainnet-beta',
+    r=>r.candidate.transactionBase64='AAAA',r=>r.candidate.lastValidBlockHeight++,r=>r.guardPriceVerified=false,
+    r=>r.readyToSubmit=true,r=>r.salesOpen=true,r=>r.expiresAt=Date.now()-1,r=>r.checkedAt=Date.now()+1000,
+    r=>r.expiresAt=r.checkedAt+20001]) {
+    const changed=structuredClone(report);edit(changed);assert.throws(()=>validateWalletCheck(changed,h.initial(),h.signing.request),/PREFLIGHT_BLOCKED/);
+  }
 });

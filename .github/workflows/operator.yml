@@ -153,6 +153,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-owner-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Buyer sign-only wallet handoff and response recovery
+        run: node operator/tests/order-wallet.browser.mjs
       - name: Exact buyer asset signing and durable crash recovery
         run: node operator/tests/order-signing.browser.mjs
       - name: Buyer custody in real IndexedDB across browser restarts
@@ -166,4 +168,5 @@ jobs:
             operator/build/owner-console-chromium/
             operator/build/buyer-storage-chromium/
             operator/build/buyer-signing-chromium/
+            operator/build/buyer-wallet-chromium/
           retention-days: 14
