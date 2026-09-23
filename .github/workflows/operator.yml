@@ -22,3 +22,34 @@ jobs:
       - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
       - run: npm run --prefix operator setup
       - run: npm run --prefix operator verify
+
+  devnet-preview:
+    name: Read-only public Devnet cost preview
+    needs: verify
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'deployment-preview-') && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: operator/package-lock.json
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run --prefix operator setup
+      - name: Read every Devnet message fee and simulate the unsigned first step
+        run: node operator/deployment/preview-cli.mjs
+      - name: Preserve the public planning report, including blocked results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-cost-preview
+          path: build/devnet-cost-preview.json
+          retention-days: 14
+          if-no-files-found: warn
