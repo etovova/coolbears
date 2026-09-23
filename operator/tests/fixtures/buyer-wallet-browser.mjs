@@ -4,6 +4,7 @@ import { Keypair, VersionedTransaction } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { createBuyerWalletClient } from '../../orders/wallet-client.mjs';
+import {createCostQuote} from '../../orders/cost-approval.mjs';
 import { buyerRequestId } from '../../orders/signing.mjs';
 window.walletCalls=0;window.checkCalls=0;window.walletObservations=[];window.fakePersisted=true;
 async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
@@ -19,7 +20,7 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
       const rows=await raw(['signing'],'readonly',tx=>tx.objectStore('signing').getAll(IDBKeyRange.bound([key],[key,[]])));
       const observation={revision:order.revision,state:order.items[0].attempts[0].state,phases:rows.map(r=>r.phase)};
       window.walletObservations.push(observation);
-      if(order.revision!==2||observation.state!=='unknown'||rows.length!==3||rows[2].phase!=='wallet-claimed')throw Error('WALLET_BEFORE_COMMIT');
+      if(order.revision!==2||observation.state!=='unknown'||rows.length!==3||rows[2].phase!=='wallet-claimed'||rows[2].record.version!==2||!rows[2].record.costApproval)throw Error('WALLET_BEFORE_COMMIT');
       window.walletEntered=true;
       if(window.walletMode==='reject')throw Object.assign(Error('fixture rejected'),{code:4001});
       if(window.walletMode==='throw')throw Error('fixture transport failed');
@@ -38,8 +39,12 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
     const report={status:'wallet-check-passed',mode:'closed-devnet-sign-only-check',cluster:'devnet',orderId:order.id,
       orderRevision:order.revision,orderSha256:bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(order)))),
       requestId:buyerRequestId(request),candidate:{...request},quantity:order.quantity,itemIndex:0,
-      networkVerified:true,guardPriceVerified:true,blockhashVerified:true,blockhashProvenanceVerified:true,budget:{complete:true,scope:'next-item-current-template'},simulationVerified:true,simulationMode:'unsigned',
+      networkVerified:true,guardPriceVerified:true,blockhashVerified:true,blockhashProvenanceVerified:true,budget:{complete:true,scope:'next-item-current-template',projectionOnly:true,fullOrderTotalLamports:null,
+        unitPriceLamports:order.unitPriceLamports,orderItemPriceLamports:order.totalPriceLamports,nextItemFeeLamports:String(window.feeLamports??10000),
+        nextItemBaseRentLamports:'1999999',protocolChargesLamports:'1500000',priorityFeeLamports:'0',nextItemKnownMinimumLamports:String(203499999n+BigInt(window.feeLamports??10000)),
+        projectedOrderTotalLamports:String((203499999n+BigInt(window.feeLamports??10000))*BigInt(order.quantity)),balanceLamports:'20000000000'},simulationVerified:true,simulationMode:'unsigned',
       checkedSlot:600,checkedAt:now,expiresAt:now+20000,readyToSign:true,readyToSubmit:false,salesOpen:false};
+    report.costQuote=createCostQuote({order,claim,request},report);
     if(window.checkMode==='expired')report.expiresAt=now-1;
     if(window.checkMode==='altered')report.candidate.messageSha256='0'.repeat(64);
     if(window.checkMode==='account-change'){wallet.accounts=[];changed?.({accounts:[]});}
@@ -47,11 +52,12 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
     return report;
   };
   const wrapped={read:async(...args)=>{if(window.storageUnavailable)throw Error('STORAGE_UNAVAILABLE');return store.read(...args);},readAssetSigning:store.readAssetSigning,readBuyerResponse:store.readBuyerResponse,
-    claimBuyerWallet:store.claimBuyerWallet,
+    claimBuyerWallet:async(...args)=>{const r=await store.claimBuyerWallet(...args);if(window.loseCostClaimAck)throw Error('LOST_COST_ACK');return r;},
     saveBuyerResponse:async(...args)=>{if(window.storageUnavailable)throw Error('STORAGE_UNAVAILABLE');const result=await store.saveBuyerResponse(...args);if(window.loseAck)throw Error('LOST_ACK');return result;}};
   window.fakeWallet=wallet;window.walletChanged=()=>{wallet.accounts=[];changed?.({accounts:[]});};
   window.client=createBuyerWalletClient({storage:wrapped,scope,checkPrepared:checked,walletTimeoutMs,
     storageManager:{persisted:async()=>window.fakePersisted,persist:async()=>window.fakePersisted}});
   await client.load();await client.connect(wallet);return client.state();
 }
+window.approveFixtureCost=async()=>{const quote=await client.quoteCost();window.costConsent={authorizeCost:true,quoteId:quote.quoteId,maxTotalLamports:quote.budget.totalLamports};return quote;};
 Object.assign(window,{openClient,buyerRequestId});

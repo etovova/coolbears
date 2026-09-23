@@ -19,10 +19,10 @@ function signedInput(id='send-case'){
 }
 function harness({enabled=true}={}){
   const values=new Map();let now=Date.now(),failSendClaim=false;
-  const storage={async get(k){return structuredClone(values.get(k)??(k.startsWith('buyer-blockhash:')?f.preparations.get(k):undefined));},async put(k,v){if(failSendClaim&&k.startsWith('buyer-send:'))throw Error('disk');values.set(k,structuredClone(v));},async transaction(fn){return fn(this);}};
+  const storage={async get(k){return structuredClone(values.get(k)??(k.startsWith('buyer-blockhash:')?f.preparations.get(k):k.startsWith('buyer-cost:')?f.costQuotes.get(k):undefined));},async put(k,v){if(failSendClaim&&k.startsWith('buyer-send:'))throw Error('disk');values.set(k,structuredClone(v));},async transaction(fn){return fn(this);}};
   const create=(settings={})=>new(makeBuyerGateway(f.config(origin),{allowSubmission:enabled}).BuyerCheckGate)({storage},{...env,...settings},{clock:()=>now,pause:async ms=>{now+=ms;},fetchImpl:(url,init)=>f.upstream(new Request(url,init))});
   let gate=create();
-  return{values,dispatch:(route,input,headers={})=>gate.fetch(new Request(origin+'/api/buyer/'+route,{method:'POST',headers:{origin,'content-type':'application/json',...headers},body:JSON.stringify({version:1,nonce,...input})})),
+  return{values,dispatch:(route,input,headers={})=>gate.fetch(new Request(origin+'/api/buyer/'+route,{method:'POST',headers:{origin,'content-type':'application/json',...headers},body:JSON.stringify({version:1,nonce,...input,...(route==='send'?{costApproval:f.costApproval(input)}:{})})})),
     fetch:(url,init)=>gate.fetch(new Request(url,{...init,headers:{...init.headers,origin}})),advance:ms=>{now+=ms;},restart:settings=>{gate=create(settings);},failClaim:()=>{failSendClaim=true;}};
 }
 test('send is disabled by default; opt-in and exact fully signed owner input are required',async()=>{
@@ -72,7 +72,7 @@ test('recovery requires matching finalized full bytes AND correct Core account; 
 test('HTTP submission adapter binds nonce/bytes/order, omits credentials and has a complete deadline',async()=>{
   const h=harness(),input=signedInput('transport');let init;
   const transport=createBuyerSubmissionTransport({origin,fetchImpl:(url,options)=>{init=options;return h.fetch(url,options);}});
-  const result=await transport.send(input);assert.equal(result.status,'accepted');assert.equal(init.credentials,'omit');assert.equal(init.redirect,'error');
+  const result=await transport.send(input,f.costApproval(input));assert.equal(result.status,'accepted');assert.equal(init.credentials,'omit');assert.equal(init.redirect,'error');
   h.advance(1000);assert.equal((await transport.recover(input)).status,'verified');
   const altered=createBuyerSubmissionTransport({origin,fetchImpl:async(url,options)=>{h.advance(1000);const r=await h.fetch(url,options),b=await r.json();b.nonce='c'.repeat(64);return Response.json(b);}});
   await assert.rejects(altered.recover(input));
@@ -81,8 +81,8 @@ test('HTTP submission adapter binds nonce/bytes/order, omits credentials and has
 });
 test('sender records its one-shot claim before transport and never repeats after timeout or lost local acknowledgment',async()=>{
   for(const lost of ['network','claim-ack']){
-    let consumed=false,calls=0;const input=signedInput('sender-'+lost);
-    const storage={readBuyerSubmission:async()=>({status:consumed?'send-claimed':'ready',input}),claimBuyerSubmission:async()=>{consumed=true;if(lost==='claim-ack')throw Error('lost commit reply');return{status:'send-claimed',input};}};
+    let consumed=false,calls=0;const input=signedInput('sender-'+lost),costApproval=f.costApproval(input);
+    const storage={readBuyerSubmission:async()=>({status:consumed?'send-claimed':'ready',input,costApproval}),claimBuyerSubmission:async()=>{consumed=true;if(lost==='claim-ack')throw Error('lost commit reply');return{status:'send-claimed',input,costApproval};}};
     const transport={send:async()=>{assert.equal(consumed,true);calls++;throw Error('network timeout');},recover:async()=>{throw Error('unused');}};
     const sender=createBuyerSender({storage,scope:{},transport,storageManager:{persisted:async()=>true}});
     await assert.rejects(sender.sendOnce(),/EXPLICIT_SEND_REQUIRED/);await assert.rejects(sender.sendOnce({authorizeDevnetSend:true}));

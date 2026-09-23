@@ -7,12 +7,13 @@ import { policy as nodePolicy } from '../../prepare.mjs';
 import { buildDeploymentPlan } from '../../deployment/plan.mjs';
 import { createOrderModel } from '../../orders/journal-model.mjs';
 import { createOrderPlanner } from '../../orders/transaction-model.mjs';
-import { prepareAssetClaim, finalizeAssetRequest, verifyBuyerSigningResponse } from '../../orders/signing.mjs';
+import { prepareAssetClaim, finalizeAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from '../../orders/signing.mjs';
 import { insertionAccounts } from './group-accounts.mjs';
 import { none } from '@metaplex-foundation/umi';
 import { Key, MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
 import { getAssetV1AccountDataSerializer } from '../../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
 import { inspectSignedDeploymentTransaction } from '../../deployment/signing.mjs';
+import {createCostQuote,costQuoteKey} from '../../orders/cost-approval.mjs';
 import {baseAssetBytes} from '../../orders/mint-cost.mjs';
 import {preparationFor} from '../../orders/preparation.mjs';
 import {anchorKey} from '../../orders/blockhash-anchor.mjs';
@@ -27,7 +28,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       machine:key('machine').publicKey.toBase58(),blockhash:key('hash').publicKey.toBase58(),lastValidBlockHeight:2000,machineRentLamports:'5000000000'});
     full=insertionAccounts({steps:plan.steps},9999);
   }finally{[approved.owner,nodePolicy.owner]=previous;}
-  const model=createOrderModel(policy),planner=createOrderPlanner(model),calls=[],preparations=new Map();
+  const model=createOrderModel(policy),planner=createOrderPlanner(model),calls=[],preparations=new Map(),costQuotes=new Map();
   let mode='normal',wait,entered;const submitted=new Map();
   function receipt(bytes){
     const signed=inspectSignedDeploymentTransaction(bytes),tx=VersionedTransaction.deserialize(Buffer.from(bytes,'base64'));
@@ -57,6 +58,18 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       const signed=verifyBuyerSigningResponse(value.order,value.claim,value.request,response);
       value.order=model.transitionOrder(value.order,{type:'signature',revision:2,index:0,attempt:1,signature:signed.signature,messageSha256:signed.messageSha256});
       return{...value,response};
+    }finally{approved.owner=old;}
+  }
+  // Prior-stage tests inject these quotes explicitly; new consent tests use real HTTP issuance.
+  function costApproval(value){
+    const old=approved.owner;approved.owner=policy.owner;
+    try{
+      const report={status:'wallet-check-passed',orderRevision:1,orderId:value.order.id,readyToSign:true,
+        checkedSlot:600,checkedAt:Date.now(),budget:{complete:true,scope:'next-item-current-template',projectionOnly:true,fullOrderTotalLamports:null,
+          unitPriceLamports:value.order.unitPriceLamports,orderItemPriceLamports:value.order.totalPriceLamports,nextItemFeeLamports:'10000',nextItemBaseRentLamports:'1999999',
+          protocolChargesLamports:'1500000',priorityFeeLamports:'0',nextItemKnownMinimumLamports:'203509999',projectedOrderTotalLamports:String(203509999n*BigInt(value.order.quantity)),balanceLamports:'20000000000'}};
+      report.requestId=buyerRequestId(value.request);const quote=createCostQuote(value,report);costQuotes.set(costQuoteKey(quote.quoteId),quote);
+      return{version:1,quote,maxTotalLamports:quote.budget.totalLamports,approvedAt:Date.now()};
     }finally{approved.owner=old;}
   }
   async function upstream(request,ResponseType=Response){
@@ -102,13 +115,13 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     }
     const results={getLatestBlockhash:{context:{slot:600},value:{blockhash:key('hash').publicKey.toBase58(),lastValidBlockHeight:2000}},getGenesisHash:mode==='genesis'?GENESIS_HASHES['mainnet-beta']:GENESIS_HASHES.devnet,
       getMultipleAccounts:{context:{slot:600},value:[...full.slice(0,3),full[5],full[6],full[3],...Array(quantity).fill(null)]},
-      getBalance:{context:{slot:600},value:20000000000},getFeeForMessage:{context:{slot:600},value:10000},getMinimumBalanceForRentExemption:1999999,
+      getBalance:{context:{slot:600},value:20000000000},getFeeForMessage:{context:{slot:600},value:mode==='fee-rise'?20000:10000},getMinimumBalanceForRentExemption:1999999,
       simulateTransaction:{context:{slot:600},value:{err:mode==='simulation'?{Custom:1}:null,unitsConsumed:99999,accounts:simulatedAccounts}},
       isBlockhashValid:{context:{slot:600},value:mode!=='expired'},getBlockHeight:mode==='near-expiry'?1950:1800};
     if(!Object.hasOwn(results,call.method))throw Error('forbidden RPC '+call.method);
     return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:results[call.method]}),{headers:{'content-type':'application/json'}});
   }
-  return{policy,owner,plan,full,model,planner,key,input,preparations,signedInput,calls,upstream,receipt,submitted,setMode:value=>{mode=value;},
+  return{policy,owner,plan,full,model,planner,key,input,preparations,costApproval,costQuotes,signedInput,calls,upstream,receipt,submitted,setMode:value=>{mode=value;},
     onRequest:callback=>{entered=callback;},release:()=>wait?.(),
     config:origin=>({version:1,cluster:'devnet',origin,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard})};
 }

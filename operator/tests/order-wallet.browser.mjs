@@ -31,14 +31,14 @@ async function read(p,s,method='readAssetSigning'){
 }
 async function setup(id, options={}) {
   const s={...scope,id},c=await create(s);await prepare(s,c);
-  await page.evaluate(({s,options})=>openClient(s,options),{s,options});return s;
+  await page.evaluate(({s,options})=>openClient(s,options),{s,options});await page.evaluate(()=>approveFixtureCost());return s;
 }
-const failure=()=>page.evaluate(()=>code(client.signOnly()));
+const failure=()=>page.evaluate(()=>code(client.signOnly(window.costConsent)));
 const calls=()=>page.evaluate(()=>walletCalls);
 try{
   await launch();
   const good=await setup('success');
-  const result=await page.evaluate(()=>client.signOnly());
+  const result=await page.evaluate(()=>client.signOnly(window.costConsent));
   assert.equal(result.status,'buyer-response-saved');assert.equal(result.readyToSubmit,false);
   assert.deepEqual(await page.evaluate(()=>walletObservations),[{revision:2,state:'unknown',phases:['claimed','ready','wallet-claimed']}]);
   assert.equal((await read(page,good,'read')).items[0].attempts[0].state,'unknown');
@@ -114,14 +114,14 @@ try{
   report.cases.push('bounded wallet timeout retains consumed intent; late valid callback saves evidence without enabling send');
 
   const changed=await setup('account-changed-response');await page.evaluate(()=>window.walletMode='account-change');
-  assert.equal((await page.evaluate(()=>client.signOnly())).status,'buyer-response-saved');
+  assert.equal((await page.evaluate(()=>client.signOnly(window.costConsent))).status,'buyer-response-saved');
   assert.equal((await read(page,changed,'read')).items[0].attempts[0].state,'unknown');await page.evaluate(()=>window.walletMode=null);
   report.cases.push('account change after invocation does not discard the original buyer valid signature; it remains evidence only');
 
   const crash=await setup('wallet-tab-crash');await page.evaluate(()=>{window.walletMode='hold';window.walletEntered=false;});
-  const pending=page.evaluate(()=>client.signOnly()).then(()=>null,e=>e.message);await page.waitForFunction(()=>walletEntered);
+  const pending=page.evaluate(()=>client.signOnly(window.costConsent)).then(()=>null,e=>e.message);await page.waitForFunction(()=>walletEntered);
   const second=await tab();await second.evaluate(s=>openClient(s),crash);
-  assert.equal(await second.evaluate(()=>code(client.signOnly())),'NOT_READY');assert.equal(await second.evaluate(()=>walletCalls),0);
+  assert.equal(await second.evaluate(()=>code(client.signOnly(window.costConsent))),'NOT_READY');assert.equal(await second.evaluate(()=>walletCalls),0);
   await page.close();await pending;page=second;
   const afterCrash=await read(page,crash,'readBuyerResponse');assert.equal(afterCrash.status,'wallet-response-unknown');
   assert.equal(await failure(),'NOT_READY');assert.equal(await calls(),0);
@@ -131,6 +131,38 @@ try{
   assert.notEqual(await page.evaluate(s=>code(store.readBuyerResponse(s)),good),'UNEXPECTED_SUCCESS');
   assert.notEqual(await page.evaluate(s=>code(store.read(s)),good),'UNEXPECTED_SUCCESS');assert.equal(await calls(),0);
   report.cases.push('corrupt saved buyer response blocks all reads without deleting or replacing custody/history');
+  // Each new case uses this disposable profile only; production data is never rewritten.
+  const consent=await setup('explicit-cost-consent');const oldCalls=await calls();
+  assert.equal(await page.evaluate(()=>code(client.signOnly())),'COST_APPROVAL_REQUIRED');
+  assert.equal(await page.evaluate(()=>code(client.signOnly({...costConsent,quoteId:'f'.repeat(64)}))),'COST_APPROVAL_REQUIRED');
+  assert.equal(await page.evaluate(()=>code(client.signOnly({...costConsent,maxTotalLamports:'1'}))),'COST_LIMIT_TOO_LOW');
+  await page.evaluate(()=>window.feeLamports=20000);assert.equal(await failure(),'COST_LIMIT_EXCEEDED');
+  assert.equal(await calls(),oldCalls);assert.equal((await read(page,consent,'read')).revision,1);
+  await page.evaluate(()=>{window.costConsent.maxTotalLamports=String(BigInt(costConsent.maxTotalLamports)+10000n);});
+  const acceptedCost=await page.evaluate(()=>client.signOnly(costConsent));assert.equal(acceptedCost.claim.version,2);
+  assert.equal(acceptedCost.claim.costApproval.maxTotalLamports,'203519999');await page.evaluate(()=>window.feeLamports=null);
+  report.cases.push('explicit quote identity and cap are required; a higher fresh cost blocks before wallet, and an explicitly increased cap is durably recorded');
+
+  const lostCost=await setup('lost-cost-claim-ack');const beforeLost=await calls();await page.evaluate(()=>window.loseCostClaimAck=true);
+  assert.equal(await failure(),'LOST_COST_ACK');assert.equal(await calls(),beforeLost);
+  const savedCost=await read(page,lostCost,'readBuyerResponse');assert.equal(savedCost.status,'wallet-response-unknown');assert.equal(savedCost.claim.version,2);assert.ok(savedCost.claim.costApproval);
+  await page.evaluate(()=>window.loseCostClaimAck=false);await page.evaluate(s=>openClient(s),lostCost);
+  assert.equal(await failure(),'NOT_READY');assert.equal(await calls(),beforeLost);
+  report.cases.push('lost atomic consent/claim acknowledgment keeps consent and consumed intent but never invokes or reopens wallet');
+
+  const unapproved=await setup('quote-browser-crash'),oldConsent=await page.evaluate(()=>costConsent);
+  await context.close();context=null;await launch();await page.evaluate(s=>openClient(s),unapproved);
+  assert.equal(await page.evaluate(c=>code(client.signOnly(c)),oldConsent),'COST_APPROVAL_REQUIRED');assert.equal(await calls(),0);
+  assert.equal((await read(page,unapproved,'read')).revision,1);
+  await page.evaluate(()=>approveFixtureCost());assert.equal((await page.evaluate(()=>client.signOnly(costConsent))).status,'buyer-response-saved');
+  report.cases.push('quote-only browser restart creates no approval; old UI consent cannot sign until a fresh quote is explicitly approved');
+
+  const legacy=await setup('legacy-without-cost');await page.evaluate(()=>client.signOnly(costConsent));
+  await page.evaluate(async s=>raw(['signing'],'readwrite',tx=>{const k=[scopeKey(s),0,1,2],r=tx.objectStore('signing').get(k);r.onsuccess=()=>{const v=r.result;delete v.record.costApproval;v.record.version=1;tx.objectStore('signing').put(v,k);};return r;}),legacy);
+  const historical=await read(page,legacy,'readBuyerSubmission');assert.equal(historical.costApproval,null);assert.equal(historical.status,'ready');
+  assert.equal(await page.evaluate(s=>code(store.claimBuyerSubmission(s,{orderRevision:3,transactionSha256:'x'})),legacy),'COST_APPROVAL_REQUIRED');
+  assert.equal((await read(page,legacy,'read')).revision,3);assert.ok((await read(page,legacy,'readBuyerResponse')).response.transactionBase64);
+  report.cases.push('legacy v1 wallet evidence remains readable without inventing consent; no new send claim is allowed');
   assert.equal(report.externalRequests,0);assert.deepEqual(report.pageErrors,[]);report.passed=true;
 }finally{
   report.completedAt=new Date().toISOString();await writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));

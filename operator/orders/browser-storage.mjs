@@ -4,6 +4,7 @@ import { base58 } from '@metaplex-foundation/umi/serializers';
 import { createOrderModel } from './journal-model.mjs';
 import { prepareAssetClaim, validateAssetClaim, finalizeAssetRequest, validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
+import {validateCostApproval} from './cost-approval.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -135,9 +136,11 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     const claim = records[2]?.record, response = records[3]?.record;
     const shape = (value, names) => value && equal(Object.keys(value).sort(), names.split(' ').sort());
     requireThat(records[2]?.phase === 'wallet-claimed'
-      && shape(claim, 'version claimId requestId orderRevision') && claim.version === 1
+      && ((claim.version===1&&shape(claim,'version claimId requestId orderRevision'))
+        ||(claim.version===2&&shape(claim,'version claimId requestId orderRevision costApproval')))
       && /^[a-f0-9]{64}$/.test(claim.claimId) && claim.requestId === buyerRequestId(records[1].record)
       && claim.orderRevision === 2 && order.revision >= 2, 'CORRUPT_WALLET_CLAIM');
+    if(claim.version===2)validateCostApproval(claim.costApproval,{order,claim:records[0].record,request:records[1].record});
     requireThat(equal(events[2], {type:'unknown',revision:1,index:0,attempt:1}), 'WALLET_CLAIM_HISTORY');
     if (response) {
       requireThat(records[3].phase === 'buyer-response'
@@ -176,7 +179,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       requireThat(!prior.paused,'SEND_CLAIM_HISTORY');validateBuyerSubmission({...input,order:prior});
     }
     return {status:order.items[0].attempts[0].state==='verified'?'verified':sendClaim?'send-claimed':'ready',
-      input,sendClaim:sendClaim?structuredClone(sendClaim):null,readyToSubmit:false,salesOpen:false};
+      input,costApproval:wallet.claim.costApproval?structuredClone(wallet.claim.costApproval):null,sendClaim:sendClaim?structuredClone(sendClaim):null,readyToSubmit:false,salesOpen:false};
   }
   async function snapshotData(scope, scopeKey) {
     const data = await transaction('readonly', (tx, resolve, abort) => load(tx, scopeKey, resolve, abort));
@@ -287,17 +290,19 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     },
     // Consume the single wallet invocation before opening it. The order becomes
     // unknown immediately; a later signature is evidence, never a send grant.
-    claimBuyerWallet(input, {orderRevision, requestId} = {}) {
+    claimBuyerWallet(input, {orderRevision, requestId, costApproval} = {}) {
+      const approval=structuredClone(costApproval);
       return locked(input, async (scope, scopeKey) => {
         const before = await snapshotData(scope, scopeKey);
         requireThat(before.order?.revision === orderRevision && orderRevision === 1, 'STALE_REVISION');
         requireThat(!before.order.paused && before.signing.length === 2
           && before.order.items[0].attempts[0].state === 'wallet-pending'
           && requestId === buyerRequestId(before.signing[1].record), 'WALLET_NOT_READY');
+        validateCostApproval(approval,{order:before.order,claim:before.signing[0].record,request:before.signing[1].record},{now:Date.now()});
         const event = {type:'unknown',revision:1,index:0,attempt:1};
         const order = bounded(model.transitionOrder(before.order, event));
         const claimId = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
-        const claimed = {phase:'wallet-claimed',record:{version:1,claimId,requestId,orderRevision:order.revision}};
+        const claimed = {phase:'wallet-claimed',record:{version:2,claimId,requestId,orderRevision:order.revision,costApproval:approval}};
         await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
           requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3], before.signing), 'STALE_REVISION');
           tx.objectStore('events').add(event, [scopeKey, order.revision]);
@@ -345,6 +350,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const before=await snapshotData(scope,scopeKey),state=before.order&&submissionState(before.order,before.signing,before.events);
         requireThat(state?.status==='ready'&&!before.order.paused&&before.order.revision===orderRevision,'SEND_NOT_READY');
         validateBuyerSubmission(state.input);
+        validateCostApproval(state.costApproval,state.input,{now:Date.now()});
         requireThat(transactionSha256===signedBytesId(state.input.response.transactionBase64),'SEND_BYTES');
         const event={type:'unknown',revision:before.order.revision,index:0,attempt:1};
         const order=bounded(model.transitionOrder(before.order,event));

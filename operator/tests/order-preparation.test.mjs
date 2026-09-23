@@ -19,7 +19,7 @@ function harness(){
     {clock:()=>now,pause:async ms=>{now+=ms;},fetchImpl:(u,i)=>f.upstream(new Request(u,i))});
   let gate=create();const fetch=(url,init)=>gate.fetch(new Request(url,{...init,headers:{...init.headers,origin}}));
   return{values,fetch,restart:extra=>{gate=create(extra);},advance:()=>{now+=46000;},loseAck:()=>{lostAck=true;},failRead:()=>{failRead=true;},
-    call:(route,input)=>fetch(origin+'/api/buyer/'+route,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({version:1,nonce,...input})})};
+    call:(route,input)=>fetch(origin+'/api/buyer/'+route,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({version:1,nonce,...input,...(route==='send'?{costApproval:f.costApproval(input)}:{})})})};
 }
 test('legacy and caller-created hashes cannot grant signing or submission without trusted durable provenance',async()=>{
   const h=harness(),start=f.calls.length;

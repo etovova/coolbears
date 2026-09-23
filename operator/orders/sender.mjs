@@ -1,5 +1,6 @@
 // Explicit first-item closed Devnet send; local claim before HTTP, never automatic retry.
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
+import {validateCostApproval} from './cost-approval.mjs';
 const need=(v,code)=>{if(!v)throw Error(code);};
 export function createBuyerSender({storage,scope,transport,storageManager=globalThis.navigator?.storage}={}){
   need(storage&&transport&&typeof transport.send==='function'&&typeof transport.recover==='function','SENDER_CONFIGURATION');
@@ -11,10 +12,12 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
         let timer;try{need(await Promise.race([storageManager?.persisted?.(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('PERSISTENT_STORAGE_REQUIRED')),5000);})])===true,'PERSISTENT_STORAGE_REQUIRED');}finally{clearTimeout(timer);}
         const before=await storage.readBuyerSubmission(frozenScope);need(before?.status==='ready'&&!before.input.order.paused,'SEND_NOT_READY');
         validateBuyerSubmission(before.input);
+        validateCostApproval(before.costApproval,before.input,{now:Date.now()});
         const claimed=await storage.claimBuyerSubmission(frozenScope,{orderRevision:before.input.order.revision,transactionSha256:signedBytesId(before.input.response.transactionBase64)});
-        need(claimed.status==='send-claimed','SEND_CLAIM_NOT_SAVED');
+        need(claimed.status==='send-claimed'&&JSON.stringify(claimed.costApproval)===JSON.stringify(before.costApproval),'SEND_CLAIM_NOT_SAVED');
+        validateCostApproval(claimed.costApproval,claimed.input,{now:Date.now()});
         // Any HTTP/storage/result failure retains this consumed claim. Only recover may follow.
-        return validateBuyerResult(await transport.send(claimed.input),claimed.input);
+        return validateBuyerResult(await transport.send(claimed.input,claimed.costApproval),claimed.input);
       }finally{busy=false;}
     },
     async recover(){
