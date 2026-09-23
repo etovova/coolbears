@@ -1,5 +1,6 @@
-// Explicit read-only deployment inspection. No signing, simulation, submission,
+// Explicit read-only deployment inspection. No signing, submission,
 // automatic retry or endpoint fallback is available through this transport.
+// Simulation requires an explicit opt-in and never replaces a blockhash.
 // Full genesis hashes: official Solana ClusterType::get_genesis_hash source:
 // https://github.com/solana-labs/solana/blob/master/sdk/src/genesis_config.rs
 export const GENESIS_HASHES = Object.freeze({
@@ -80,9 +81,9 @@ async function readBody(response, signal, limit, expiresAt) {
   }
 }
 
-export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024 } = {}) {
+export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false } = {}) {
   const url = endpointUrl(endpoint);
-  if (typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
+  if (typeof allowSimulation !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
     || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 16 * 1024 * 1024
     || (totalTimeoutMs !== undefined && (!Number.isSafeInteger(totalTimeoutMs) || totalTimeoutMs < 1 || totalTimeoutMs > 120000))) throw fail('CONFIGURATION');
   const startedAt = performance.now();
@@ -90,8 +91,16 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
   return Object.freeze({
     get requests() { return requests; },
     async call(method, params = []) {
-      if (typeof method !== 'string' || !METHODS.has(method)) throw fail('METHOD');
+      if (typeof method !== 'string' || !(METHODS.has(method) || (allowSimulation && method === 'simulateTransaction'))) throw fail('METHOD');
       if (!Array.isArray(params)) throw fail('PARAMS');
+      if (method === 'simulateTransaction') {
+        const [bytes, config] = params;
+        if (params.length !== 2 || typeof bytes !== 'string' || bytes.length > 1644 || !object(config)
+          || Object.keys(config).sort().join(',') !== 'commitment,encoding,minContextSlot,replaceRecentBlockhash,sigVerify'
+          || config.encoding !== 'base64' || config.commitment !== 'confirmed'
+          || config.replaceRecentBlockhash !== false || typeof config.sigVerify !== 'boolean'
+          || !Number.isSafeInteger(config.minContextSlot) || config.minContextSlot < 0) throw fail('PARAMS');
+      }
       const id = requests + 1;
       if (!Number.isSafeInteger(id)) throw fail('CONFIGURATION');
       let body;

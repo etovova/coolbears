@@ -81,6 +81,12 @@ function blocked(error, phase, rpc, status) {
     readyToSubmit: false, salesOpen: false };
 }
 
+// Shared read-only primitives; callers still rebuild canonical intent and
+// recheck the journal after asynchronous network work.
+export { context as rpcContext, amount as rpcAmount, binding as snapshotBinding,
+  unchanged as assertJournalUnchanged, checkState as checkDeploymentState,
+  requireThat as requireDeploymentCheck, blocked as blockedDeploymentReport };
+
 export async function preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs } = {}) {
   let rpc, phase = 'journal';
   try {

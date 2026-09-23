@@ -2,7 +2,7 @@
 // transaction, prove settlement, or make the incomplete budget sufficient.
 import { readDeploymentBundle } from './vault-store.mjs';
 import { openDeploymentSignerVault } from './vault.mjs';
-import { preflightDeploymentStep } from './read.mjs';
+import { simulateDeploymentStep } from './simulation.mjs';
 import { readDeploymentJournal, appendDeploymentEvent, nextDeploymentAction, sha256Json } from './journal.mjs';
 import { verifySigningResponse } from './signing.mjs';
 
@@ -49,13 +49,14 @@ function sameRequest(left, right) {
   need(left && right && sha256Json(left) === sha256Json(right), 'REQUEST_MISMATCH');
 }
 function preflightMatches(report, snapshot, stepId) {
-  need(report?.status === 'read-checks-passed', 'PREFLIGHT_BLOCKED');
+  need(report?.status === 'simulation-passed', 'PREFLIGHT_BLOCKED');
   need(report.deploymentId === snapshot.manifest.id && report.manifestSha256 === snapshot.manifestSha256
     && report.expectedRevision === snapshot.revision && report.expectedHeadHash === snapshot.headHash
     && report.stepId === stepId && report.cluster === snapshot.manifest.cluster
     && report.source === 'refreshed-unsigned-template', 'PREFLIGHT_BINDING_MISMATCH');
   need(report.transactionsSent === 0 && report.journalWrites === 0 && report.readyToSubmit === false
-    && report.budget?.complete === false && report.simulationVerified === false, 'PREFLIGHT_BINDING_MISMATCH');
+    && report.budget?.complete === false && report.simulationVerified === true
+    && report.mode === 'unsigned' && report.signaturesVerified === false, 'PREFLIGHT_BINDING_MISMATCH');
 }
 
 export async function prepareDeploymentSigning(input) {
@@ -76,7 +77,7 @@ export async function prepareDeploymentSigning(input) {
     signer = await openDeploymentSignerVault({ vault: bundle.vault, manifest: baseline.manifest, passphrase: ownedPassphrase });
     ownedPassphrase.fill(0);
     sameSnapshot(await readDeploymentJournal(bundle.journalDirectory), baseline);
-    const preflight = await preflightDeploymentStep({ directory: bundle.journalDirectory, stepId: args.stepId,
+    const preflight = await simulateDeploymentStep({ directory: bundle.journalDirectory, stepId: args.stepId, mode: 'unsigned',
       endpoint: args.endpoint, fetchImpl: args.fetchImpl, timeoutMs: args.timeoutMs });
     preflightMatches(preflight, baseline, args.stepId);
     sameSnapshot(await readDeploymentJournal(bundle.journalDirectory), baseline);
@@ -96,7 +97,7 @@ export async function prepareDeploymentSigning(input) {
       && recorded?.number === attempt && recorded.state === 'wallet-pending', 'SAVE_NOT_VERIFIED');
     sameRequest(recorded.request, request);
     return { request: structuredClone(recorded.request), binding: binding(saved, args.stepId, attempt),
-      preflight, ...limits() };
+      preflight, ...limits(), simulationVerified: true, simulationMode: 'unsigned' };
   } catch (error) { throw safeError(error); }
   finally { ownedPassphrase?.fill(0); signer?.dispose(); }
 }

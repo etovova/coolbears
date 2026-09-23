@@ -58,6 +58,7 @@ function rpcFixture({ override = {}, onCall } = {}) {
     getFeeForMessage: { context: { slot: 513 }, value: 10000 },
     isBlockhashValid: { context: { slot: 514 }, value: true },
     getBlockHeight: 1500,
+    simulateTransaction: { context: { slot: 514 }, value: { err: null, unitsConsumed: 5000 } },
     ...override,
   };
   return { calls, fetchImpl: async (url, options) => {
@@ -76,8 +77,9 @@ const responseFor = request => {
   return { transactionBase64: encode(transaction) };
 };
 const accept = (h, request, response = responseFor(request)) => acceptDeploymentSigningResponse({ directory: h.directory, request, response });
-function limited(result) {
-  for (const flag of ['readyToSubmit', 'budgetComplete', 'simulationVerified', 'lifetimeGuaranteed', 'salesOpen']) assert.equal(result[flag], false);
+function limited(result, simulated = false) {
+  for (const flag of ['readyToSubmit', 'budgetComplete', 'lifetimeGuaranteed', 'salesOpen']) assert.equal(result[flag], false);
+  assert.equal(result.simulationVerified, simulated);
   assert.equal(result.transactionsSent, 0);
   const printable = JSON.stringify(result);
   assert.equal(printable.includes('fixture-private-token'), false); assert.equal(printable.includes(passphrase.toString()), false);
@@ -92,9 +94,9 @@ function fixedError(expected) {
 
 test('prepare persists exact partial request before release; reload and owner acceptance preserve durable bytes', async t => {
   const h = await harness(t), rpc = rpcFixture(), beforePassphrase = Buffer.from(passphrase);
-  const prepared = await prepare(h, rpc); limited(prepared);
+  const prepared = await prepare(h, rpc); limited(prepared, true);
   assert.deepEqual(passphrase, beforePassphrase);
-  assert.equal(prepared.preflight.status, 'read-checks-passed'); assert.equal(rpc.calls.length, 8);
+  assert.equal(prepared.preflight.status, 'simulation-passed'); assert.equal(rpc.calls.length, 12);
   const snapshot = await h.snapshot(), attempt = snapshot.steps[0].attempts[0];
   assert.equal(snapshot.revision, 1); assert.equal(attempt.state, 'wallet-pending'); assert.deepEqual(attempt.request, prepared.request);
   assert.equal(prepared.binding.expectedRevision, snapshot.revision); assert.equal(prepared.binding.expectedHeadHash, snapshot.headHash);
@@ -102,14 +104,14 @@ test('prepare persists exact partial request before release; reload and owner ac
   assert.ok(transaction.signatures[0].every(byte => byte === 0)); assert.ok(transaction.signatures[1].some(Boolean));
   assert.equal(prepared.request.blockhash, freshHash); assert.equal(prepared.request.attempt, 1);
   const resumed = await readPendingDeploymentSigning(h.directory); limited(resumed);
-  assert.deepEqual(resumed.request, prepared.request); assert.deepEqual(resumed.binding, prepared.binding); assert.equal(rpc.calls.length, 8);
+  assert.deepEqual(resumed.request, prepared.request); assert.deepEqual(resumed.binding, prepared.binding); assert.equal(rpc.calls.length, 12);
   const response = responseFor(resumed.request), accepted = await accept(h, resumed.request, response); limited(accepted);
   const signed = await h.snapshot(); assert.equal(signed.revision, 2); assert.equal(accepted.state, 'signed');
   assert.equal(signed.steps[0].attempts[0].signed.signature, accepted.signature);
   assert.equal(signed.steps[0].attempts[0].signed.transactionBase64, response.transactionBase64);
   assert.deepEqual(signed.steps[0].attempts[0].request, resumed.request);
   await assert.rejects(readPendingDeploymentSigning(h.directory), fixedError('RECONCILIATION_REQUIRED'));
-  assert.equal(rpc.calls.length, 8);
+  assert.equal(rpc.calls.length, 12);
 });
 
 test('wrong passphrase authenticates before RPC and caller-supplied preflight evidence is rejected', async t => {
@@ -122,6 +124,15 @@ test('wrong passphrase authenticates before RPC and caller-supplied preflight ev
   const badRpc = rpcFixture({ override: { getGenesisHash: GENESIS_HASHES['mainnet-beta'] } });
   await assert.rejects(prepare(h, badRpc), fixedError('PREFLIGHT_BLOCKED'));
   assert.equal(badRpc.calls.length, 1); assert.deepEqual(await h.snapshot(), initial);
+});
+
+test('failed unsigned simulation prevents creating a wallet request or journal event', async t => {
+  const h = await harness(t), before = await h.snapshot();
+  const rpc = rpcFixture({ override: { simulateTransaction: { context: { slot: 514 },
+    value: { err: 'fixture-private-token', unitsConsumed: 100, logs: ['fixture-private-token'] } } } });
+  await assert.rejects(prepare(h, rpc), fixedError('PREFLIGHT_BLOCKED'));
+  assert.deepEqual(await h.snapshot(), before);
+  assert.equal(rpc.calls.filter(call => call.method === 'simulateTransaction').length, 1);
 });
 
 test('already durable pending request is recovered exactly; second prepare does no RPC and forged responses write nothing', async t => {
@@ -173,7 +184,7 @@ test('late owner signature is saved in unknown state without reissue, RPC or sub
   const noRpc = rpcFixture();
   await assert.rejects(prepare(h, noRpc, { retry: true }), fixedError('RECONCILIATION_REQUIRED'));
   await assert.rejects(readPendingDeploymentSigning(h.directory), fixedError('RECONCILIATION_REQUIRED'));
-  assert.equal(noRpc.calls.length, 0); assert.equal(rpc.calls.length, 8); assert.deepEqual(await h.snapshot(), snapshot);
+  assert.equal(noRpc.calls.length, 0); assert.equal(rpc.calls.length, 12); assert.deepEqual(await h.snapshot(), snapshot);
 });
 
 test('retry requires explicit intent and new attempt; old owner response cannot replace current saved request', async t => {
@@ -181,7 +192,7 @@ test('retry requires explicit intent and new attempt; old owner response cannot 
   await h.append('cancelled');
   const rpc = rpcFixture();
   await assert.rejects(prepare(h, rpc), fixedError('EXPLICIT_RETRY_REQUIRED')); assert.equal(rpc.calls.length, 0);
-  const second = await prepare(h, rpc, { retry: true }); assert.equal(second.request.attempt, 2); assert.equal(rpc.calls.length, 8);
+  const second = await prepare(h, rpc, { retry: true }); assert.equal(second.request.attempt, 2); assert.equal(rpc.calls.length, 12);
   const before = await h.snapshot();
   assert.equal(before.steps[0].attempts.length, 2); assert.equal(before.steps[0].attempts[0].state, 'cancelled');
   assert.deepEqual(before.steps[0].attempts[0].request, first.request);
