@@ -1,3 +1,8 @@
+**PR44:** [подготовка с сохранённым исходным blockhash и полный бюджет первого NFT](PREPARATION.md)
+теперь обязательны для buyer check/send. Бюджет всего заказа остаётся прогнозом;
+старые попытки без server anchor не получают разрешения на новую подпись/отправку.
+Продажи закрыты, цена 0,2 SOL, отправка по умолчанию выключена. Ниже — история этапов.
+
 # First-item submission and finalized recovery — closed Devnet
 
 PR43 connects a saved buyer response to an explicit, single-use send and a

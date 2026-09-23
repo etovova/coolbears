@@ -35,3 +35,6 @@ window.openSender=scope=>{
 };
 const add=IDBObjectStore.prototype.add;
 IDBObjectStore.prototype.add=function(value,key){if(this.name==='events'&&value.type==='reconcile'&&window.failProofWrite)throw new DOMException('fixture quota','QuotaExceededError');return add.call(this,value,key);};
+
+import {createBuyerPreparationClient} from '../../orders/gateway/preparation-client.mjs';
+window.prepareThroughGateway=createBuyerPreparationClient();

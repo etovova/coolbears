@@ -2,10 +2,10 @@
 // No signer custody, wallet invocation, journal mutation or submission grant.
 import { createHash } from 'node:crypto';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
-import { none } from '@metaplex-foundation/umi';
-import { Key, MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
+import { MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
 import { MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID } from '@metaplex-foundation/mpl-core-candy-machine';
-import { getAssetV1AccountDataSerializer } from '../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
+import { baseAssetBytes, verifySimulatedMintCost, CORE_CREATE_LAMPORTS } from './mint-cost.mjs';
+import { validateBlockhashAnchor } from './blockhash-anchor.mjs';
 import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deployment/rpc.mjs';
 
@@ -35,7 +35,7 @@ function preflightOrder(options) { return checkOrder(options); }
 // Internal trusted adapter for a sign-only closed Devnet session, not a purchase grant.
 function checkPreparedOrder(options) { return checkOrder(options, true); }
 function checkSignedOrder(options) { return checkOrder(options, true, true); }
-async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request, response } = {}, prepared = false, signedMode = false) {
+async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request, response, blockhashAnchor } = {}, prepared = false, signedMode = false) {
   let rpc, phase = 'order';
   const started = performance.now();
   try {
@@ -45,6 +45,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     if (prepared) {
       claim = structuredClone(claim); request = structuredClone(request);
       validateAssetRequest(order, claim, request);
+      blockhashAnchor = validateBlockhashAnchor(structuredClone(blockhashAnchor), claim);
       need(!order.paused && order.items[0].attempts.length === 1 && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
       if (signedMode) {
         response = verifyBuyerSigningResponse(order, claim, request, structuredClone(response));
@@ -58,7 +59,9 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     phase = 'accounts'; const initial = await readState(rpc, order);
     phase = 'balance';
     const balance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: initial.slot }]);
-    let slot = context(balance, initial.slot); const funds = amount(balance.value);
+    let slot = context(balance, initial.slot);
+    if (prepared) slot = Math.max(slot, blockhashAnchor.sourceSlot);
+    const funds = amount(balance.value);
     phase = 'blockhash';
     let template;
     if (prepared) template = request;
@@ -74,22 +77,20 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     const feeResult = await rpc.call('getFeeForMessage', [Buffer.from(tx.message.serialize()).toString('base64'),
       { commitment: 'confirmed', minContextSlot: slot }]);
     slot = context(feeResult, slot); const fee = amount(feeResult.value); need(fee > 0n, 'FEE_UNAVAILABLE');
-    // Every approved hidden name/URI has the same byte length. This is base
-    // asset rent only; no claim that protocol charges or a full order are quoted.
-    const assetBytes = getAssetV1AccountDataSerializer().serialize({ key: Key.AssetV1, owner: order.buyer,
-      updateAuthority: { __kind: 'Collection', fields: [order.collection] }, seq: none(),
-      name: policy.hiddenName.replace('{index:04d}', '0001'), uri: `${policy.website}/metadata/hidden/0001.json` }).length;
+    const assetBytes = baseAssetBytes(policy, order).length;
     const rent = amount(await rpc.call('getMinimumBalanceForRentExemption', [assetBytes, { commitment: 'confirmed' }]));
     need(rent > 0n, 'RENT_UNAVAILABLE');
-    const knownMinimum = BigInt(order.unitPriceLamports) + fee + rent;
+    const knownMinimum = BigInt(order.unitPriceLamports) + fee + rent + CORE_CREATE_LAMPORTS;
     need(funds >= knownMinimum, 'INSUFFICIENT_BALANCE');
     phase = 'simulation';
     const simulation = await rpc.call('simulateTransaction', [encoded, { encoding: 'base64', commitment: 'confirmed',
-      minContextSlot: slot, sigVerify: signedMode, replaceRecentBlockhash: false }]);
+      minContextSlot: slot, sigVerify: signedMode, replaceRecentBlockhash: false,
+      accounts: { encoding: 'base64', addresses: [template.asset] } }]);
     slot = context(simulation, slot);
     need(simulation.value?.err === null && simulation.value.replacementBlockhash == null
       && Number.isSafeInteger(simulation.value.unitsConsumed) && simulation.value.unitsConsumed >= 0
       && simulation.value.unitsConsumed <= 300000, 'SIMULATION_FAILED');
+    verifySimulatedMintCost(policy, order, simulation.value.accounts, rent);
     phase = 'freshness';
     // Finalized accounts need not overtake a confirmed simulation bank.
     const final = await readState(rpc, order, initial.slot);
@@ -110,13 +111,14 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
       ...(prepared ? { requestId: buyerRequestId(request), checkedAt, expiresAt: checkedAt + 20000 } : {}), orderId: order.id,
       orderRevision: order.revision, orderSha256, itemIndex: 0, quantity: order.quantity,
       itemsRemaining: final.itemsRemaining, checkedSlot: slot, accountSlot: final.slot,
-      cluster: 'devnet', networkVerified: true, guardPriceVerified: true, blockhashVerified: true,
+      cluster: 'devnet', networkVerified: true, guardPriceVerified: true, blockhashVerified: true, blockhashProvenanceVerified: true,
       simulationVerified: true, simulationMode: signedMode ? 'signed' : 'unsigned', remainingBlocks: template.lastValidBlockHeight - height,
       candidate: { asset: template.asset, transactionBase64: encoded, messageSha256: template.messageSha256,
         blockhash: template.blockhash, lastValidBlockHeight: template.lastValidBlockHeight },
-      budget: { complete: false, unitPriceLamports: order.unitPriceLamports, orderItemPriceLamports: order.totalPriceLamports,
+      budget: { complete: true, scope: 'next-item-current-template', unitPriceLamports: order.unitPriceLamports, orderItemPriceLamports: order.totalPriceLamports,
         nextItemFeeLamports: fee.toString(), nextItemBaseRentLamports: rent.toString(), baseAssetBytes: assetBytes,
-        nextItemKnownMinimumLamports: knownMinimum.toString(), protocolChargesLamports: null,
+        nextItemKnownMinimumLamports: knownMinimum.toString(), protocolChargesLamports: CORE_CREATE_LAMPORTS.toString(), priorityFeeLamports: '0',
+        projectedOrderTotalLamports: (knownMinimum * BigInt(order.quantity)).toString(), projectionOnly: true,
         fullOrderTotalLamports: null, balanceLamports: String(latestBalance.value) },
       networkRequests: rpc.requests, signaturesCreated: 0, journalWrites: 0, transactionsSent: 0,
       readyToSign: prepared && !signedMode, readyToSubmit: false, salesOpen: false };

@@ -1,5 +1,6 @@
 // Read-only by default. Submission needs an exact signed-byte grant, a checked
 // Devnet genesis and one local use. No signing, retry or endpoint fallback.
+import { PublicKey } from '@solana/web3.js';
 import { inspectSignedDeploymentTransaction } from './signing.mjs';
 // Simulation requires an explicit opt-in and never replaces a blockhash.
 // Full genesis hashes: official Solana ClusterType::get_genesis_hash source:
@@ -140,10 +141,16 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       if (method === 'simulateTransaction') {
         const [bytes, config] = params;
         if (params.length !== 2 || typeof bytes !== 'string' || bytes.length > 1644 || !object(config)
-          || Object.keys(config).sort().join(',') !== 'commitment,encoding,minContextSlot,replaceRecentBlockhash,sigVerify'
+          || !['commitment,encoding,minContextSlot,replaceRecentBlockhash,sigVerify','accounts,commitment,encoding,minContextSlot,replaceRecentBlockhash,sigVerify'].includes(Object.keys(config).sort().join(','))
           || config.encoding !== 'base64' || config.commitment !== 'confirmed'
           || config.replaceRecentBlockhash !== false || typeof config.sigVerify !== 'boolean'
           || !Number.isSafeInteger(config.minContextSlot) || config.minContextSlot < 0) throw fail('PARAMS');
+      }
+      if(method==='simulateTransaction'&&Object.hasOwn(params[1],'accounts')){
+        const a=params[1].accounts;
+        if(!object(a)||Object.keys(a).sort().join(',')!=='addresses,encoding'||a.encoding!=='base64'
+          ||!Array.isArray(a.addresses)||a.addresses.length!==1)throw fail('PARAMS');
+        try{if(new PublicKey(a.addresses[0]).toBase58()!==a.addresses[0])throw Error();}catch{throw fail('PARAMS');}
       }
       const id = requests + 1;
       if (!Number.isSafeInteger(id)) throw fail('CONFIGURATION');

@@ -16,6 +16,14 @@ try{
   assert.equal((await dispatch({origin:'https://foreign.test'})).status,403);
   assert.equal((await dispatch({},JSON.stringify({jsonrpc:'2.0',method:'sendTransaction',params:[]}))).status,400);
   assert.equal(fixture.calls.length,0);cases.push('foreign origin and arbitrary RPC reject before outbound');
+  const fresh=fixture.model.createOrder({...input.order,available:9999,assets:input.order.items.map(i=>i.asset)});
+  const prepare=()=>runtime.dispatch(origin+'/api/buyer/prepare',{method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify({version:1,nonce:'a'.repeat(64),order:fresh})});
+  const prepared=await prepare();assert.equal(prepared.status,200,await prepared.clone().text());
+  const record=(await prepared.json()).report;assert.equal(record.restored,false);assert.equal(fixture.calls.length,3);
+  await runtime.stop();await runtime.start();
+  const restored=await prepare();assert.equal(restored.status,200);assert.equal((await restored.json()).report.restored,true);assert.equal(fixture.calls.length,3);
+  cases.push('original RPC blockhash preparation survives SQLite restart and restores without another RPC');
+  await new Promise(r=>setTimeout(r,250));
   const good=await dispatch(),result=await good.json();assert.equal(good.status,200,JSON.stringify({result,errors:runtime.errors}));
   assert.equal(result.report.candidate.transactionBase64,input.request.transactionBase64);
   assert.equal(result.report.status,'wallet-check-passed');assert.equal(result.report.networkRequests,10);assert.equal(result.report.readyToSubmit,false);
