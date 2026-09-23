@@ -9,6 +9,33 @@ on:
 permissions:
   contents: read
 jobs:
+  lifecycle-costs:
+    name: Isolated lifecycle costs and read-only Devnet calibration
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'lifecycle-costs-')
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: operator/package-lock.json
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run --prefix operator setup
+      - run: node operator/costs/cli.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: isolated-lifecycle-costs
+          path: operator/build/lifecycle-costs/
+          retention-days: 14
   isolated-deployment:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'isolated-deployment-')
     needs: verify

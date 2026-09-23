@@ -1,0 +1,65 @@
+{
+  "checkedAt": "2026-09-23",
+  "currency": "USD",
+  "actualAccountPlansVerified": false,
+  "actualInvoiceTotal": null,
+  "includesTaxes": false,
+  "includesOverages": false,
+  "services": [
+    {
+      "name": "Helius RPC",
+      "source": "https://www.helius.dev/pricing",
+      "actualPlan": null,
+      "monthlyReferences": [
+        { "plan": "Free", "usd": "0.00", "credits": 1000000, "rpcRequestsPerSecond": 10, "sendRequestsPerSecond": 1 },
+        { "plan": "Developer", "usd": "49.00", "credits": 10000000, "rpcRequestsPerSecond": 50, "sendRequestsPerSecond": 5 }
+      ],
+      "usageEstimate": null,
+      "note": "Current account billing and production request volume were not inspected. No plan change."
+    },
+    {
+      "name": "Cloudflare Workers RPC proxy",
+      "source": "https://developers.cloudflare.com/workers/platform/pricing/",
+      "actualPlan": null,
+      "monthlyReferences": [
+        { "plan": "Free", "usd": "0.00", "dailyRequests": 100000, "cpuMillisecondsPerRequest": 10 },
+        { "plan": "Paid minimum", "usd": "5.00", "monthlyRequests": 10000000, "monthlyCpuMilliseconds": 30000000 }
+      ],
+      "usageEstimate": null,
+      "note": "Proxy cost only; this is not a quote for replacement website hosting. No settings changed."
+    },
+    {
+      "name": "Pinata storage and gateway",
+      "source": "https://pinata.cloud/pricing",
+      "actualPlan": null,
+      "monthlyReferences": [
+        { "plan": "Free", "usd": "0.00", "storageGb": 1, "files": 500, "bandwidthGb": 10, "requests": 10000 },
+        { "plan": "Picnic", "usd": "20.00", "storageTb": 1, "files": 5000000, "bandwidthGb": 500, "requests": 1000000 }
+      ],
+      "usageEstimate": null,
+      "note": "A reference option, not a confirmed subscription. 10000 images plus 10000 JSON files exceed 500 files if stored as individual billable files. Actual bytes, provider accounting and traffic are unknown."
+    },
+    {
+      "name": "Domain renewal",
+      "source": "https://porkbun.com/products/domains",
+      "actualRenewalInvoiceUsd": null,
+      "annualReference": { "category": "non-premium .com renewal", "usd": "11.08" },
+      "note": "Public registrar reference only. Existing domain billing date and invoice were not inspected."
+    },
+    {
+      "name": "Commercial launch website hosting",
+      "source": "https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits",
+      "actualMonthlyUsd": null,
+      "status": "unresolved-before-sales",
+      "note": "GitHub Pages disallows use as free hosting for sites primarily facilitating commercial transactions. A commercial mint requires a suitable hosting decision. No migration or deployment performed."
+    }
+  ],
+  "illustrativeMonthlyServiceSubtotals": [
+    { "pinataPicnicUsd": "20.00", "heliusUsd": "0.00", "workersUsd": "0.00", "subtotalUsd": "20.00" },
+    { "pinataPicnicUsd": "20.00", "heliusUsd": "49.00", "workersUsd": "0.00", "subtotalUsd": "69.00" },
+    { "pinataPicnicUsd": "20.00", "heliusUsd": "49.00", "workersUsd": "5.00", "subtotalUsd": "74.00" }
+  ],
+  "subtotalExclusions": ["website hosting", "domain renewal", "taxes", "overages", "unverified existing subscriptions"],
+  "solUsdExchangeRate": null,
+  "budgetComplete": false
+}
