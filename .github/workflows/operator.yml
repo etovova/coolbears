@@ -108,7 +108,7 @@ jobs:
           if-no-files-found: warn
 
   gateway-runtime:
-    name: Private deployment gateway in workerd
+    name: Deployment and buyer check gateways in workerd
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -126,10 +126,11 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
       - run: npm run --prefix operator setup
+      - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
   owner-console-browser:
-    name: Owner signing console in Chromium
+    name: Owner and buyer signing in Chromium
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -153,6 +154,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-owner-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Buyer HTTPS checker through workerd and SQLite
+        run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
         run: node operator/tests/order-wallet.browser.mjs
       - name: Exact buyer asset signing and durable crash recovery
@@ -169,4 +172,5 @@ jobs:
             operator/build/buyer-storage-chromium/
             operator/build/buyer-signing-chromium/
             operator/build/buyer-wallet-chromium/
+            operator/build/buyer-gateway-chromium/
           retention-days: 14
