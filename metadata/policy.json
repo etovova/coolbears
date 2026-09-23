@@ -41,6 +41,6 @@
   },
   "chain": "Solana",
   "standard": "Metaplex Core",
-  "priceSol": 0.5,
+  "priceSol": 0.2,
   "maxPerOrder": 50
 }
