@@ -1,6 +1,7 @@
 // Explicit first-item closed Devnet send; local claim before HTTP, never automatic retry.
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
 import {validateCostApproval} from './cost-approval.mjs';
+import {validateBuyerExpiryResult} from './expiry-review.mjs';
 const need=(v,code)=>{if(!v)throw Error(code);};
 export function createBuyerSender({storage,scope,transport,storageManager=globalThis.navigator?.storage}={}){
   need(storage&&transport&&typeof transport.send==='function'&&typeof transport.recover==='function','SENDER_CONFIGURATION');
@@ -24,9 +25,19 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
       need(!busy,'BUSY');busy=true;
       try{
         const state=await storage.readBuyerSubmission(frozenScope);need(state,'SAVED_RESPONSE_REQUIRED');
-        if(state.status==='verified')return{status:'already-recorded',signature:state.input.order.items[0].attempts[0].signature,readyToSubmit:false,salesOpen:false};
+        if(['verified','expired'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[0].attempts[0].signature,readyToSubmit:false,salesOpen:false};
         const report=validateBuyerResult(await transport.recover(state.input),state.input,{recovery:true});
         return report.status==='verified'?await storage.saveBuyerProof(frozenScope,report):report;
+      }finally{busy=false;}
+    },
+    async reviewExpiry({authorizeExpiryReview=false}={}){
+      need(authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED');need(!busy,'BUSY');busy=true;
+      try{
+        const state=await storage.readBuyerSubmission(frozenScope);need(state&&state.status!=='verified','EXPIRY_NOT_READY');
+        if(state.status==='expired')return{status:'already-recorded',outcome:'expired',retryAuthorized:false,readyToSubmit:false,salesOpen:false};
+        need(typeof transport.reviewExpiry==='function'&&typeof storage.saveBuyerExpiry==='function','EXPIRY_CONFIGURATION');
+        const report=validateBuyerExpiryResult(await transport.reviewExpiry(state.input),state.input);
+        return report.status==='expired'?await storage.saveBuyerExpiry(frozenScope,report):report;
       }finally{busy=false;}
     },
   });

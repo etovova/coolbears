@@ -11,6 +11,8 @@ import { preparationFor, validatePreparation } from '../preparation.mjs';
 import { validateAssetRequest } from '../signing.mjs';
 import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../submission.mjs';
 import { recoverBuyerOrder } from '../recovery.mjs';
+import {reviewBuyerExpiry} from '../review-expiry.mjs';
+import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
 import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
 import { BuyerCheckError, need, exact, readJson } from './http.mjs';
 const model=createOrderModel(policy),planner=createOrderPlanner(model);
@@ -19,6 +21,7 @@ const KEY='buyer-check-budget:v1',GLOBAL='buyer-check-global-v1',HOLD=45000,INTE
 const METHODS=new Set(['getGenesisHash','getMultipleAccounts','getBalance','getFeeForMessage',
   'getMinimumBalanceForRentExemption','simulateTransaction','isBlockhashValid','getBlockHeight',
   'getSignatureStatuses','getTransaction','getLatestBlockhash']);
+const EXPIRY_METHODS=new Set(['getBlock','getFirstAvailableBlock','getSignaturesForAddress']);
 const HEADERS={'content-type':'application/json; charset=utf-8','cache-control':'no-store',
   'x-content-type-options':'nosniff','cross-origin-resource-policy':'same-origin','referrer-policy':'no-referrer'};
 const integer=n=>Number.isSafeInteger(n)&&n>=0;
@@ -36,7 +39,7 @@ export function validateBuyerGatewayConfig(input){
   return structuredClone(input);
 }
 function authorize(request,config,env){
-  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/review-expiry'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
   need(request.method==='POST','METHOD',405);
   need(request.headers.get('origin')===config.origin&&!request.headers.has('cookie')&&!request.headers.has('authorization')
     &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
@@ -83,7 +86,8 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        if(route==='review-expiry')need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
@@ -98,6 +102,14 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         }catch{throw new BuyerCheckError('REQUEST',400);}
         // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
         const sendKey='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset]));
+        const retiredKey=expiryKey(order),retired=await this.storage.get(retiredKey);
+        if(retired!==undefined){
+          if(route==='review-expiry'){
+            let report;try{report=restoreExpiryReport(submission,retired);}catch{throw new BuyerCheckError('EXPIRY_RECORD_CONFLICT',409);}
+            return reply(200,{version:1,nonce:body.nonce,report});
+          }
+          need(route==='recover','ATTEMPT_EXPIRED',409);
+        }
         if(route==='send'){
           need(!order.paused,'ORDER_PAUSED',409);
           need(await this.storage.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
@@ -107,7 +119,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
           return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
         }
-        if(['check','send'].includes(route)){
+        if(['check','send','review-expiry'].includes(route)){
           try{validateBlockhashAnchor(savedPreparation?.anchor,claim);}catch{throw new BuyerCheckError('BLOCKHASH_ANCHOR_REQUIRED',409);}
         }
         if(route==='send'){
@@ -123,7 +135,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const endpoint=new URL('https://devnet.helius-rpc.com/');endpoint.searchParams.set('api-key',this.env.BUYER_HELIUS_API_KEY);
         const fetchImpl=async(url,init)=>{
             try{
-              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
+              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(route==='review-expiry'&&EXPIRY_METHODS.has(rpc.method))||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
               if(rpc.method==='sendTransaction'){
                 need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
                 const consumed=await this.storage.get(sendKey);
@@ -159,6 +171,18 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(route==='recover'){
           const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl});
           settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(route==='review-expiry'){
+          const report=await reviewBuyerExpiry({input:submission,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='expired'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+            const record=expiryRecord(submission,report);
+            await this.storage.transaction(async tx=>{need(await tx.get(retiredKey)===undefined,'EXPIRY_RECORD_CONFLICT',409);await tx.put(retiredKey,record);});
+            need(JSON.stringify(await this.storage.get(retiredKey))===JSON.stringify(record),'EXPIRY_NOT_SAVED',503);
+            settled=true;
+          }
           return reply(200,{version:1,nonce:body.nonce,report});
         }
         const report=await checker[route==='send'?'checkSignedOrder':'checkPreparedOrder']({readOrder:()=>structuredClone(order),

@@ -1,3 +1,7 @@
+**PR46:** [явная проверка истечения попытки покупателя](EXPIRY_REVIEW.md) сохраняет
+доказательство в SQLite и браузерном журнале. Старые claims не освобождаются;
+новая подпись и повторная отправка этим этапом не разрешаются. Ниже — история этапов.
+
 # Buyer quote approval and application cost ceiling
 
 PR45 extends PR44 in the closed Devnet candidate. No public purchase UI, endpoint,

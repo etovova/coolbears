@@ -17,16 +17,17 @@ await build({entryPoints:['operator/tests/fixtures/buyer-gateway-browser.mjs'],b
   inject:['scripts/browser-buffer.mjs'],plugins:[fixturePolicyPlugin(fixture)]});
 const bytes=await readFile(bundle);
 await promisify(execFile)('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',path.join(parent,'key.pem'),'-out',path.join(parent,'cert.pem'),'-days','1','-subj','/CN=127.0.0.1']);
-let runtime,origin,alter=false,loseReply=false,context,page;
+let runtime,origin,alter=false,loseReply=false,loseExpiryReply=false,context,page;
 const report={passed:false,engine:'chromium',transport:'HTTPS to local workerd with real SQLite',tlsCertificate:'disposable self-signed test only',
   realWallets:false,physicalPhones:false,liveRpc:false,persistencePermission:'fixture only',transactionsSent:0,cases:[],pageErrors:[],externalRequests:0};
 const server=createServer({key:await readFile(path.join(parent,'key.pem')),cert:await readFile(path.join(parent,'cert.pem'))},async(req,res)=>{
   try{
-    if(['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover'].includes(req.url)){
+    if(['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/review-expiry'].includes(req.url)){
       const parts=[];for await(const chunk of req)parts.push(chunk);
       const response=await runtime.dispatch(origin+req.url,{method:req.method,headers:req.headers,body:Buffer.concat(parts)});
       let body=await response.text();if(alter&&response.status===200){const value=JSON.parse(body);value.report.orderSha256='0'.repeat(64);body=JSON.stringify(value);}
       if(loseReply&&req.url==='/api/buyer/send'&&response.status===200){res.writeHead(503,{'content-type':'application/json'});res.end('{}');return;}
+      if(loseExpiryReply&&req.url==='/api/buyer/review-expiry'&&response.status===200){res.writeHead(503,{'content-type':'application/json'});res.end('{}');return;}
       res.writeHead(response.status,Object.fromEntries(response.headers));res.end(body);
     }else if(req.url==='/fixture.js'){res.writeHead(200,{'content-type':'text/javascript'});res.end(bytes);}
     else{res.writeHead(200,{'content-type':'text/html'});res.end('<!doctype html><title>Disposable buyer gateway integration</title><script type="module" src="/fixture.js"></script>');}
@@ -56,6 +57,8 @@ async function setup(id,buyer=fixture.owner){
 const failure=()=>page.evaluate(()=>code(sender.sendOnce({authorizeDevnetSend:true})));
 const send=()=>page.evaluate(()=>sender.sendOnce({authorizeDevnetSend:true}));
 const recover=()=>page.evaluate(()=>sender.recover());
+const review=()=>page.evaluate(()=>sender.reviewExpiry({authorizeExpiryReview:true}));
+const reviewFailure=()=>page.evaluate(()=>code(sender.reviewExpiry({authorizeExpiryReview:true})));
 const sends=()=>fixture.calls.filter(c=>c.method==='sendTransaction').length;
 async function signed(id){await spaced();const scope=await setup(id);await page.evaluate(()=>client.signOnly(window.costConsent));await page.evaluate(s=>openSender(s),scope);await spaced();return scope;}
 const count=()=>page.evaluate(()=>walletCalls);
@@ -113,6 +116,62 @@ try{
   assert.equal(await second.evaluate(()=>code(sender.sendOnce({authorizeDevnetSend:true}))),'SEND_NOT_READY');
   fixture.setMode('normal');fixture.onRequest(null);fixture.release();assert.equal((await sending).status,'accepted');await second.close();
   report.cases.push('another tab cannot reuse the committed send intent while the first HTTP request is pending');
+
+  const sendsBeforeExpiry=sends();
+  const expiry=await signed('expiry-saved'),originalBytes=await page.evaluate(s=>(store.readBuyerResponse(s)).then(v=>v.response.transactionBase64),expiry);
+  const beforeReview=fixture.calls.length;
+  assert.equal(await page.evaluate(()=>code(sender.reviewExpiry())),'EXPLICIT_EXPIRY_REVIEW_REQUIRED');assert.equal(fixture.calls.length,beforeReview);
+  fixture.setMode('expiry-clear');assert.equal((await review()).status,'expired');
+  assert.equal((await page.evaluate(s=>store.read(s),expiry)).revision,4);
+  await context.close();context=null;await runtime.stop();await runtime.start();await launch();await page.evaluate(s=>openSender(s),expiry);
+  const retiredCalls=fixture.calls.length;assert.equal((await review()).status,'already-recorded');assert.equal((await recover()).outcome,'expired');
+  assert.equal(await failure(),'SEND_NOT_READY');assert.equal(fixture.calls.length,retiredCalls);assert.equal(await count(),0);
+  assert.equal(await page.evaluate(s=>store.readBuyerResponse(s).then(v=>v.response.transactionBase64),expiry),originalBytes);
+  report.cases.push('explicit expiry review atomically retires signed unsent bytes; full browser/server restart preserves evidence and never invokes wallet or send');
+
+  fixture.setMode('normal');const incomplete=await signed('expiry-incomplete');fixture.setMode('expiry-empty');
+  assert.equal((await review()).status,'unknown');assert.equal((await page.evaluate(s=>store.read(s),incomplete)).revision,3);
+  await spaced();fixture.setMode('expiry-clear');assert.equal((await review()).status,'expired');
+  report.cases.push('empty payer history keeps the browser attempt unknown until an explicit complete review succeeds');
+
+  fixture.setMode('normal');const httpExpiry=await signed('expiry-http-ack');fixture.setMode('expiry-clear');loseExpiryReply=true;
+  assert.equal(await reviewFailure(),'SUBMISSION_HTTP');loseExpiryReply=false;
+  assert.equal((await page.evaluate(s=>store.read(s),httpExpiry)).revision,3);const expiryRpc=fixture.calls.length;
+  await context.close();context=null;await runtime.stop();await runtime.start();await launch();await page.evaluate(s=>openSender(s),httpExpiry);
+  assert.equal((await review()).status,'expired');assert.equal(fixture.calls.length,expiryRpc);assert.equal(await count(),0);
+  report.cases.push('lost expiry HTTP reply restores the durable server proof after both processes restart without repeating RPC');
+
+  fixture.setMode('normal');const atomicExpiry=await signed('expiry-write');fixture.setMode('expiry-clear');
+  await page.evaluate(()=>window.writeFailure='expiry-reviewed');assert.notEqual(await reviewFailure(),'UNEXPECTED_SUCCESS');
+  assert.equal((await page.evaluate(s=>store.read(s),atomicExpiry)).revision,3);
+  await page.evaluate(()=>{window.writeFailure=null;window.loseExpiryAck=true;});const savedExpiryCalls=fixture.calls.length;
+  assert.equal(await reviewFailure(),'LOST_EXPIRY_ACK');assert.equal(fixture.calls.length,savedExpiryCalls);
+  await context.close();context=null;await launch();await page.evaluate(s=>openSender(s),atomicExpiry);
+  assert.equal((await review()).status,'already-recorded');assert.equal((await page.evaluate(s=>store.read(s),atomicExpiry)).revision,4);
+  assert.equal(fixture.calls.length,savedExpiryCalls);
+  report.cases.push('expiry evidence write abort rolls back order and event together; lost committed browser reply is idempotent after restart');
+
+  fixture.setMode('normal');const staleExpiry=await signed('expiry-stale');fixture.setMode('hold');let expiryEntered;
+  const expiryReady=new Promise(r=>expiryEntered=r);fixture.onRequest(()=>expiryEntered());const reviewing=reviewFailure();
+  await Promise.race([expiryReady,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('expiry did not reach fixture')),10000);expiryReady.finally(()=>clearTimeout(timer));})]);
+  await page.evaluate(s=>store.append(s,{type:'pause',revision:3}),staleExpiry);
+  fixture.setMode('expiry-clear');fixture.onRequest(null);fixture.release();assert.notEqual(await reviewing,'UNEXPECTED_SUCCESS');
+  assert.equal((await page.evaluate(s=>store.read(s),staleExpiry)).items[0].attempts[0].state,'unknown');
+  const staleCalls=fixture.calls.length;assert.equal((await review()).status,'expired');assert.equal(fixture.calls.length,staleCalls);
+  assert.equal((await page.evaluate(s=>store.read(s),staleExpiry)).paused,true);
+  report.cases.push('changed order rejects an in-flight expiry result; explicit restore rebinds to current revision and retains pause');
+
+  fixture.setMode('normal');const alteredExpiry=await signed('expiry-altered');fixture.setMode('expiry-clear');alter=true;
+  assert.notEqual(await reviewFailure(),'UNEXPECTED_SUCCESS');alter=false;assert.equal((await page.evaluate(s=>store.read(s),alteredExpiry)).revision,3);
+  const alteredCalls=fixture.calls.length;assert.equal((await review()).status,'expired');assert.equal(fixture.calls.length,alteredCalls);
+  report.cases.push('altered HTTPS expiry binding cannot change the browser journal; original persisted proof remains recoverable');
+
+  fixture.setMode('normal');const consumedExpiry=await signed('expiry-consumed-send');fixture.setMode('fee-rise');assert.equal(await failure(),'SUBMISSION_HTTP');
+  await spaced();fixture.setMode('expiry-clear');assert.equal((await review()).status,'expired');
+  await context.close();context=null;await runtime.stop();await runtime.start();await launch();await page.evaluate(s=>openSender(s),consumedExpiry);
+  const terminal=await page.evaluate(s=>store.readBuyerSubmission(s),consumedExpiry);assert.equal(terminal.status,'expired');assert.ok(terminal.sendClaim);
+  assert.equal(await failure(),'SEND_NOT_READY');assert.equal((await review()).status,'already-recorded');assert.equal(sends(),sendsBeforeExpiry);
+  report.cases.push('cost-rejected send keeps both permanent claims after expiry and full browser/server restart');
   assert.deepEqual(runtime.errors,[]);assert.deepEqual(report.pageErrors,[]);assert.equal(report.externalRequests,0);report.passed=true;
 }finally{
   fixture.setMode('normal');fixture.release();
