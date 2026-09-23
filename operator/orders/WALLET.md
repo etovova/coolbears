@@ -26,15 +26,17 @@ budget. Stored lastValidBlockHeight is input metadata; current isBlockhashValid
 and height are rechecked, but metadata does not independently prove its original
 RPC origin or guarantee a future expiry window. This is closed-profile Devnet
 signing only. A live purchase integration still needs complete cost disclosure,
-submission checks and the separate buyer gateway. No public purchase readiness
+submission checks and deployment of the separate buyer gateway. No public purchase readiness
 is inferred from this result.
 
 The client's `checkPrepared` constructor dependency must be a trusted adapter
 that actually executes this check against the configured RPC. Do not implement
 it as an echo of a caller's booleans or accept reports from URLs/UI/localStorage.
-This PR adds no HTTP transport or public checker endpoint. Browser tests inject
-an explicitly named fixture; Node tests exercise the real checker and RPC parser.
-Those independent tests are not a live browser-to-gateway integration test.
+PR42 adds the fixed same-origin HTTPS adapter in `gateway/client.mjs` and a
+separate closed Devnet check Worker; see [gateway boundaries](gateway/README.md).
+Its integrated browser test runs the real transport/checker in local workerd
+with intercepted RPC, not live Devnet. Earlier wallet-only tests retain their
+explicitly named checker fixture. No endpoint has been deployed.
 
 ## Durable invocation and response
 

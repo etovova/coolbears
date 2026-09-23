@@ -1,3 +1,7 @@
+Текущий следующий этап: [отдельный gateway](gateway/README.md) связывает
+prepared-byte checker с браузером через HTTPS. Это закрытый Devnet-кандидат,
+не развёрнутый endpoint или разрешение отправки. Ниже — исходный preview.
+
 # Проверка заказа до подписи
 
 **PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.

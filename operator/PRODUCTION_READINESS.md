@@ -1,5 +1,12 @@
 # CoolBears: подготовка полного выпуска
 
+**PR42:** добавлен кандидат [buyer check gateway](orders/gateway/README.md) и
+фиксированный браузерный HTTPS transport для закрытой Devnet. Exact checker
+работает в workerd; SQLite сохраняет лимиты после перезапуска. Связанная
+проверка Chromium использует disposable wallet и перехваченные RPC, не живую
+сеть. Gateway, UI и реальная приватная настройка ещё не опубликованы; полный
+бюджет, отправка и восстановление покупок ещё нужны. Продажи закрыты, 0,2 SOL.
+
 **PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `orders/WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
 
 Состояние на 23 сентября 2026. Этот документ описывает подготовку, а не разрешение запуска продаж. Mainnet-продажи остаются закрытыми; адреса production-коллекции и машины ещё не настроены в основном сайте.

@@ -1,0 +1,13 @@
+{
+  "$schema": "../../../node_modules/wrangler/config-schema.json",
+  "name": "coolbears-buyer-check",
+  "main": "private/entry.mjs",
+  "compatibility_date": "2026-09-23",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {"DAILY_CHECK_CAP":"100","DAILY_RPC_CAP":"2000","DAILY_SIMULATION_CAP":"100"},
+  "durable_objects": {"bindings":[{"name":"BUYER_CHECK_GATE","class_name":"BuyerCheckGate"}]},
+  "migrations": [{"tag":"v1","new_sqlite_classes":["BuyerCheckGate"]}],
+  "observability": {"enabled":false}
+}

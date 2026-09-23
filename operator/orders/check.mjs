@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { preflightOrder } from './preflight.mjs';
 
-async function readOrderFile(filename) {
+export async function readOrderFile(filename) {
   const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
     const stat = await file.stat(); if (!stat.isFile() || stat.size > 262144) throw Error('ORDER_FILE');
