@@ -40,3 +40,9 @@ storage correctly refused concurrent work; the test now waits (at most 5 s)
 for the browser lock manager's read-only held-state to clear before asserting
 read success. No production lock behavior was weakened. Buyer tests now run
 before the longer owner-console suite for faster feedback. Final CI pending.
+
+Second run 35896929910 showed that an empty query snapshot was not a lock-service
+barrier: immediate acquisition could still report ORDER_BUSY. The test now
+probes actual read-only acquisition for at most 5 s and records outcomes. No
+write, key generation, signature, or transaction is replayed by this probe.
+Production code remains unchanged; latest-head browser/full CI pending.
