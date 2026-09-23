@@ -138,11 +138,12 @@ function verifyPlugins(bytes, baseEnd, expectedPlugins) {
   requireThat(cursor === registryOffset); // No overlaps, unexplained gaps or trailing plugin bytes.
 }
 
-function verifyCollection(expected, bytes) {
+function verifyCollection(expected, bytes, minted) {
   const [collection, end] = canonicalPrefix(collectionSerializer(), bytes);
   requireThat(collection.key === Key.CollectionV1 && collection.updateAuthority === expected.updateAuthority && collection.name === expected.name && collection.uri === expected.uri);
   const reservedCount = expected.reservedAssetCreated ? 1 : 0;
-  requireThat(collection.currentSize === reservedCount && collection.numMinted === reservedCount);
+  if (minted === undefined) requireThat(collection.currentSize === reservedCount && collection.numMinted === reservedCount);
+  else requireThat(collection.numMinted === minted && collection.currentSize <= minted);
   const plugins = new Map([[PluginType.Royalties, {
     authority: { __kind: 'UpdateAuthority' },
     plugin: { __kind: 'Royalties', fields: [{ basisPoints: expected.royaltyBasisPoints,
@@ -164,16 +165,17 @@ function verifyReserve(expected, bytes) {
   verifyPlugins(bytes, end, new Map());
 }
 
-function machineState(bytes) {
+function machineState(bytes, minting = false) {
   requireThat(bytes.length === MACHINE_SIZE);
   // Bound the base decode to its reserved section before the SDK reads arrays.
   const [base, end] = canonicalPrefix(machineBaseSerializer(), bytes.subarray(0, CANDY_MACHINE_HIDDEN_SECTION));
-  requireThat(base.authority === OWNER && base.itemsRedeemed === 0n && base.data.itemsAvailable === BigInt(N) && base.data.maxEditionSupply === 0n && base.data.isMutable === true);
+  requireThat(base.authority === OWNER && (minting ? base.itemsRedeemed >= 0n && base.itemsRedeemed <= BigInt(N) : base.itemsRedeemed === 0n)
+    && base.data.itemsAvailable === BigInt(N) && base.data.maxEditionSupply === 0n && base.data.isMutable === true);
   assert.deepEqual(base.data.configLineSettings, some(SETTINGS));
   assert.deepEqual(base.data.hiddenSettings, { __option: 'None' });
   requireThat(bytes.subarray(end, CANDY_MACHINE_HIDDEN_SECTION).every(byte => byte === 0));
   const loaded = bytes.readUInt32LE(CANDY_MACHINE_HIDDEN_SECTION);
-  requireThat(loaded <= N);
+  requireThat(minting ? loaded === N : loaded <= N);
   const lineSize = SETTINGS.nameLength + SETTINGS.uriLength;
   const linesOffset = CANDY_MACHINE_HIDDEN_SECTION + 4;
   const bitmapOffset = linesOffset + N * lineSize, bitmapBytes = Math.floor(N / 8) + 1;
@@ -182,8 +184,15 @@ function machineState(bytes) {
     requireThat(bit === (index < loaded)); // This project's deployment loads a contiguous prefix.
   }
   const indicesOffset = bitmapOffset + bitmapBytes;
+  const remaining = N - Number(base.itemsRedeemed), unused = new Set();
   for (let index = 0; index < N; index++) {
-    requireThat(bytes.readUInt32LE(indicesOffset + index * 4) === (index < loaded ? index : 0));
+    const value = bytes.readUInt32LE(indicesOffset + index * 4);
+    if (!minting) requireThat(value === (index < loaded ? index : 0));
+    else {
+      // Only this prefix is used by non-sequential minting. The consumed tail
+      // is not an inventory source and need not be an identity permutation.
+      if (index < remaining) { requireThat(value < N && !unused.has(value)); unused.add(value); }
+    }
   }
   requireThat(bytes.subarray(indicesOffset + N * 4).every(byte => byte === 0));
   requireThat(bytes.subarray(linesOffset + loaded * lineSize, bitmapOffset).every(byte => byte === 0));
@@ -194,6 +203,9 @@ function machineState(bytes) {
 function verifyMachine(expected, bytes, guardBytes) {
   const machine = machineState(bytes);
   requireThat(machine.collectionMint === expected.collection && machine.mintAuthority === expected.mintAuthority && machine.itemsLoaded === expected.itemsLoaded);
+  verifyGuard(expected, guardBytes);
+}
+function verifyGuard(expected, guardBytes) {
   const [guardAddress, bump] = findCandyGuardPda(umi, { base: expected.machine });
   requireThat(guardAddress === expected.guard);
   // The 0.3.0 hooked account serializer hardcodes an unrelated discriminator.
@@ -211,6 +223,35 @@ function verifyMachine(expected, bytes, guardBytes) {
   // aliases and its reversed guard bitmask would mutate our canonical bytes.
   const [guard, end] = serializer.deserialize(new Uint8Array(guardBytes.subarray(header.length)));
   requireThat(end === data.length && equalBytes(serializer.serialize(guard), data));
+}
+
+// Readiness of the completed, still-closed machine after zero or more mints.
+// This does not relax deployment's zero-redemption/prefix invariants above.
+// Public sale profiles and additional guards are intentionally unsupported.
+export function verifyOrderAccounts(order, values) {
+  try {
+    const { machine, guard, collection, buyer } = order;
+    [machine, guard, collection, buyer].forEach(address);
+    requireThat(new Set([machine, guard, collection]).size === 3 && Array.isArray(values) && values.length === 3);
+    const machineBytes = rawAccount(values[0], MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MACHINE_SIZE);
+    const state = machineState(machineBytes, true);
+    requireThat(state.collectionMint === collection && state.mintAuthority === guard);
+    verifyGuard({ machine, guard, guardAuthority: OWNER, addressGate: OWNER,
+      payment: { lamports: String(policy.priceSol * 1e9), destination: OWNER } },
+    rawAccount(values[1], MPL_CORE_CANDY_GUARD_PROGRAM_ID, 65536));
+    verifyCollection({ collection, machine, updateAuthority: OWNER, name: policy.collectionName,
+      uri: `${policy.website}/metadata/collection.json`, royaltyBasisPoints: policy.royaltyPercent * 100,
+      royaltyRecipient: OWNER }, rawAccount(values[2], MPL_CORE_PROGRAM_ID, 65536), Number(state.itemsRedeemed) + 1);
+    for (let index = 0; index < N; index++) {
+      const encoded = Buffer.alloc(state.lineSize);
+      encoded.write(name(index + 1), 0, SETTINGS.nameLength, 'utf8');
+      encoded.write(uri(index + 1), SETTINGS.nameLength, SETTINGS.uriLength, 'utf8');
+      const at = state.linesOffset + index * state.lineSize;
+      requireThat(equalBytes(encoded, machineBytes.subarray(at, at + state.lineSize)));
+    }
+    return { itemsRemaining: N - Number(state.itemsRedeemed), buyerAllowed: buyer === OWNER,
+      guardPriceVerified: true, unitPriceLamports: String(policy.priceSol * 1e9), salesOpen: false };
+  } catch { fail(); }
 }
 function verifyInsert(expected, bytes) {
   const machine = machineState(bytes);
