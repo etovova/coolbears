@@ -6,7 +6,8 @@ import { preflightDeploymentStep, rpcContext, assertJournalUnchanged,
   requireDeploymentCheck as need, blockedDeploymentReport } from './read.mjs';
 import { readDeploymentJournal } from './journal.mjs';
 import { verifySigningResponse } from './signing.mjs';
-import { createDeploymentRpc, assertCluster } from './rpc.mjs';
+import { assertCluster } from './rpc.mjs';
+import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 
 export async function simulateDeploymentStep({ directory, stepId, mode, endpoint, fetchImpl, timeoutMs } = {}) {
   let rpc, phase = 'journal', previousRequests = 0;
@@ -30,7 +31,8 @@ export async function simulateDeploymentStep({ directory, stepId, mode, endpoint
     need(Buffer.from(tx.serialize()).equals(bytes), 'NONCANONICAL_SIMULATION_TRANSACTION');
     if (mode === 'signed') need(candidate.transactionBase64 === attempt.signed.transactionBase64, 'SIGNED_SIMULATION_BYTES_CHANGED');
     else need(tx.signatures[0].every(byte => byte === 0), 'UNSIGNED_MODE_HAS_OWNER_SIGNATURE');
-    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true });
+    rpc = await createScopedDeploymentRpc({ manifest: baseline.manifest, endpoint, fetchImpl, timeoutMs,
+      totalTimeoutMs: 30000, allowSimulation: true });
     phase = 'network';
     await assertCluster(rpc, preflight.cluster);
     phase = 'simulation';

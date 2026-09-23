@@ -179,6 +179,20 @@ test('finalized failed fees are incurred, while the whole failed step remains in
   assert.equal(result.incurred.verifiedOwnerDebitLamports, '12345'); assert.equal(result.estimates.remainingSteps, 1431);
 });
 
+test('historical failed fees remain readable after a new attempt is prepared', async t => {
+  const h = await harness(t), receipt = await h.settle('failed');
+  const tx = decode(manifest.steps[0].transactionBase64);
+  tx.message.recentBlockhash = key('second-attempt').publicKey.toBase58(); tx.sign([collection]);
+  const request = createSigningRequest({ deploymentId: manifest.id, stepId: 'collection-create', attempt: 2,
+    cluster: 'devnet', owner: policy.owner, transactionBase64: encode(tx), lastValidBlockHeight: 3000 });
+  await h.append('prepare', { request, retry: true });
+  const before = await h.snapshot(), rpc = fixture({ receipt }), result = await quote(h, rpc);
+  assert.equal(result.status, 'budget-estimated');
+  assert.equal(result.incurred.verifiedOwnerDebitLamports, '12345');
+  assert.equal(result.incurred.receipts[0].attempt, 1);
+  assert.deepEqual(await h.snapshot(), before);
+});
+
 test('missing actual receipt cannot be silently treated as zero spent', async t => {
   const h = await harness(t), receipt = await h.settle(), rpc = fixture({ completed: true, receipt, override: { getTransaction: null } });
   const result = await quote(h, rpc); safe(result); assert.equal(result.status, 'blocked'); assert.equal(result.phase, 'spent');

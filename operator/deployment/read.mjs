@@ -6,7 +6,8 @@ import { MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
 import { MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID } from '@metaplex-foundation/mpl-core-candy-machine';
 import { readDeploymentJournal, nextDeploymentAction, sha256Json } from './journal.mjs';
 import { validateCanonicalDeploymentManifest } from './intent.mjs';
-import { createDeploymentRpc, assertCluster, DeploymentRpcError } from './rpc.mjs';
+import { assertCluster, DeploymentRpcError } from './rpc.mjs';
+import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 import { expectedAccountAddresses, verifyExpectedAccounts } from './accounts.mjs';
 import { verifyFinalizedReceipt } from './receipt.mjs';
 
@@ -93,7 +94,7 @@ export async function preflightDeploymentStep({ directory, stepId, endpoint, fet
     const { snapshot, plan, index, step, attempt, action } = await target(directory, stepId);
     requireThat(action.type !== 'reconcile' || ['wallet-pending', 'signed'].includes(attempt?.state), 'RECONCILIATION_REQUIRED');
     phase = 'network';
-    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000 });
+    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'accounts';
@@ -159,7 +160,8 @@ export async function reconcileDeploymentStep({ directory, stepId, endpoint, fet
     const { snapshot, plan, index, step, attempt } = await target(directory, stepId);
     requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
     phase = 'network';
-    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000 });
+    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
+      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature] });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'receipt';
