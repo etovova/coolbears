@@ -1,0 +1,355 @@
+{
+  "evidence": {
+    "sourceCommit": "7d07ab3cf2266279dd9632b9642e192fbd0bc217",
+    "sourceTree": "361e42331cad8828c9b32c0365fbcb8b25142ecb",
+    "runId": 35830165119,
+    "runUrl": "https://github.com/etovova/coolbears/actions/runs/35830165119",
+    "jobId": 107080674250,
+    "conclusion": "success",
+    "completedAt": "2026-09-23T07:10:35Z",
+    "tests": {
+      "root": {
+        "tests": 201,
+        "pass": 201,
+        "fail": 0,
+        "skip": 0
+      },
+      "audit": {
+        "tests": 5,
+        "pass": 5,
+        "fail": 0,
+        "skip": 0
+      },
+      "runtime": {
+        "cases": 6,
+        "pass": true
+      }
+    },
+    "steps": [
+      {
+        "name": "Set up job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 1
+      },
+      {
+        "name": "Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 2
+      },
+      {
+        "name": "Run actions/setup-node@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 3
+      },
+      {
+        "name": "Run npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 4
+      },
+      {
+        "name": "Run npm ci --ignore-scripts --no-audit --no-fund",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 5
+      },
+      {
+        "name": "Run npm run test:devnet",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 6
+      },
+      {
+        "name": "Run npm run build:wallet",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 7
+      },
+      {
+        "name": "Run npm run build:site",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 8
+      },
+      {
+        "name": "Run npm run verify",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 9
+      },
+      {
+        "name": "Run node --test hosting/audit.test.mjs",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 10
+      },
+      {
+        "name": "Run node hosting/prepare.mjs",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 11
+      },
+      {
+        "name": "Run node hosting/runtime.mjs",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 12
+      },
+      {
+        "name": "Wrangler validation without upload",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 13
+      },
+      {
+        "name": "Run actions/upload-artifact@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 14
+      },
+      {
+        "name": "Post Run actions/setup-node@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 27
+      },
+      {
+        "name": "Post Run actions/checkout@v4",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 28
+      },
+      {
+        "name": "Complete job",
+        "status": "completed",
+        "conclusion": "success",
+        "number": 29
+      }
+    ],
+    "artifact": [
+      {
+        "id": 10736649999,
+        "name": "closed-hosting-candidate",
+        "sizeInBytes": 8423848,
+        "digest": "sha256:7df85f5918c71f5e1ac152b7c0bb5b9b6ad49903bf91b1a93e5f79768930aa19",
+        "createdAt": "2026-09-23T07:10:31Z",
+        "expiresAt": "2026-10-07T07:10:25Z",
+        "expired": false
+      }
+    ]
+  },
+  "preparation": {
+    "version": 1,
+    "kind": "hosting-candidate-preparation",
+    "status": "prepared-locally",
+    "checkedAt": "2026-09-23T07:10:12.400Z",
+    "providerCandidate": "Cloudflare Workers Static Assets",
+    "source": {
+      "files": 10031,
+      "totalBytes": 11145924,
+      "largestFileBytes": 1504057,
+      "manifestSha256": "0f4c7529774108f47133dbf6c07654a202aec51e8b4c9e13b8708f2e858f7730",
+      "limits": {
+        "files": 20000,
+        "fileBytes": 26214400
+      },
+      "withinFreeAssetLimits": true
+    },
+    "candidate": {
+      "files": 10032,
+      "totalBytes": 11146096,
+      "largestFileBytes": 1504057,
+      "manifestSha256": "fd73845f95c98d23066d49a6b3fc3bf73051356bba1788143f3f83a9771e17bc",
+      "limits": {
+        "files": 20000,
+        "fileBytes": 26214400
+      },
+      "withinFreeAssetLimits": true
+    },
+    "hiddenMetadataVerified": 10000,
+    "existingPublicFileBytesUnchanged": true,
+    "originalMediaVerified": true,
+    "extraControlFiles": [
+      "_headers"
+    ],
+    "configurationSha256": "440aab1594aedb9b555bb23d3139bdca72011802c46fc297a46f1dc9ecaae8cf",
+    "allSourcePathsFromApprovedAllowlist": true,
+    "salesOpen": false,
+    "priceSol": 0.2,
+    "publicOrigin": "https://coolbears-nfts.com",
+    "rpcEndpointUnchanged": true,
+    "rpcKind": "site-devnet",
+    "rpcAcceptsSameOrigin": true,
+    "publicPreviewOriginAcceptedByRpc": false,
+    "productionRpcReady": false,
+    "userWorkerScriptIncluded": false,
+    "routesConfigured": false,
+    "publicPreviewEnabled": false,
+    "deploymentPerformed": false,
+    "dnsChanged": false,
+    "walletUsed": false,
+    "realTransactionsSent": 0,
+    "referenceStaticHostingMonthlyUsd": "0.00",
+    "actualAccountBillUsd": null,
+    "freePlanFitIsConditionalOnUnchangedLimitsAndStaticOnlyRouting": true,
+    "domainAndRpcAndFinalStorageIncluded": false,
+    "readyForDeployment": false,
+    "remaining": [
+      "Owner hosting decision",
+      "Cloudflare zone/account eligibility and existing DNS records",
+      "Actual deployment, TLS and domain routing verification",
+      "Actual account invoices and final storage usage",
+      "Production mint RPC path remains a separate unfinished stage"
+    ]
+  },
+  "runtime": {
+    "version": 1,
+    "kind": "local-hosting-runtime",
+    "startedAt": "2026-09-23T07:10:18.703Z",
+    "passed": true,
+    "engine": "workerd",
+    "miniflareVersion": "5.20260921.0-alpha",
+    "candidateManifestSha256": "fd73845f95c98d23066d49a6b3fc3bf73051356bba1788143f3f83a9771e17bc",
+    "configurationSha256": "440aab1594aedb9b555bb23d3139bdca72011802c46fc297a46f1dc9ecaae8cf",
+    "deploymentPerformed": false,
+    "dnsChanged": false,
+    "liveTlsTested": false,
+    "realWalletTested": false,
+    "realTransactionsSent": 0,
+    "realRpcRequests": 0,
+    "salesOpen": false,
+    "cases": [
+      {
+        "name": "root and Devnet directory use their existing HTML bytes",
+        "passed": true
+      },
+      {
+        "name": "all non-HTML public assets and legal pages retain their original bytes",
+        "passed": true,
+        "assetsChecked": 29
+      },
+      {
+        "name": "hidden metadata stays JSON with public read access and no SPA fallback",
+        "passed": true,
+        "httpSamples": 4,
+        "metadataFilesAuditedBeforeServing": 10000
+      },
+      {
+        "name": "missing and private paths do not expose data or return the home page",
+        "passed": true
+      },
+      {
+        "name": "the static host contains no RPC or mint endpoint",
+        "passed": true
+      },
+      {
+        "name": "configuration is not cached and HEAD/ETag do not alter media",
+        "passed": true
+      }
+    ],
+    "outboundRequests": 0,
+    "localUnreachableHarnessStub": true,
+    "completedAt": "2026-09-23T07:10:20.046Z"
+  },
+  "references": {
+    "checkedDate": "2026-09-23",
+    "currency": "USD",
+    "accountBillingInspected": false,
+    "actualMonthlyBillUsd": null,
+    "cloudflareWorkersStaticAssets": {
+      "referenceMonthlyUsd": "0.00",
+      "staticRequestsUnmetered": true,
+      "additionalAssetStorageCharge": false,
+      "freeMaxFiles": 20000,
+      "maxFileBytes": 26214400,
+      "workerExecutionIncluded": false,
+      "sources": [
+        "https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/",
+        "https://developers.cloudflare.com/workers/platform/limits/",
+        "https://www.cloudflare.com/terms/",
+        "https://www.cloudflare.com/service-specific-terms-developer-platform/"
+      ],
+      "customDomainRequiresActiveCloudflareZone": true,
+      "customDomainSource": "https://developers.cloudflare.com/workers/configuration/routing/custom-domains/"
+    },
+    "netlifyAlternative": {
+      "monthlyPlans": [
+        {
+          "name": "Free",
+          "usd": "0.00",
+          "credits": 300
+        },
+        {
+          "name": "Personal",
+          "usd": "9.00",
+          "credits": 1000
+        },
+        {
+          "name": "Pro starting tier",
+          "usd": "20.00",
+          "credits": 3000
+        }
+      ],
+      "creditsPerProductionDeploy": 15,
+      "creditsPerGbBandwidth": 20,
+      "creditsPer10000Requests": 2,
+      "source": "https://www.netlify.com/pricing/",
+      "scenarios": [
+        {
+          "productionDeploys": 4,
+          "bandwidthGb": 10,
+          "webRequests": 10000,
+          "credits": 262
+        },
+        {
+          "productionDeploys": 4,
+          "bandwidthGb": 100,
+          "webRequests": 100000,
+          "credits": 2080
+        }
+      ],
+      "scenariosAreTrafficForecast": false
+    },
+    "dnsObservation": {
+      "method": "read-only Google Public DNS HTTPS JSON API",
+      "date": "2026-09-23",
+      "domain": "coolbears-nfts.com",
+      "nameservers": [
+        "fortaleza.ns.porkbun.com",
+        "salvador.ns.porkbun.com",
+        "curitiba.ns.porkbun.com",
+        "maceio.ns.porkbun.com"
+      ],
+      "apexA": [
+        "185.199.110.153",
+        "185.199.109.153",
+        "185.199.108.153",
+        "185.199.111.153"
+      ],
+      "wwwCname": "etovova.github.io",
+      "fullZoneExported": false,
+      "dnssecStatusVerified": false,
+      "recordsChanged": false
+    },
+    "budgetEffect": {
+      "conditionalStaticHostingAdditionUsdPerMonth": "0.00",
+      "pr27ServiceSubtotalsWithThisCandidateUsd": [
+        "20.00",
+        "69.00",
+        "74.00"
+      ],
+      "actualChosenServicesVerified": false,
+      "excludes": [
+        "domain renewal",
+        "taxes",
+        "service overages",
+        "final collection storage usage",
+        "unverified existing account charges"
+      ],
+      "budgetComplete": false
+    }
+  }
+}
