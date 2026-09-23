@@ -2,7 +2,7 @@
 // step and message must be bound to the caller's separately reviewed manifest.
 // Keep the exact prepared bytes and accepted signed bytes in the durable journal.
 // Nothing here opens a wallet, creates keys, signs, checks expiry or uses RPC.
-import { createHash } from 'node:crypto';
+import { sha256 } from '@noble/hashes/sha256';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { ed25519 } from '@noble/curves/ed25519';
 import { base58 } from '@metaplex-foundation/umi/serializers';
@@ -16,7 +16,7 @@ const sameStrings = (a, b) => Array.isArray(a) && a.length === b.length
   && Reflect.ownKeys(a).length === a.length + 1
   && b.every((item, index) => Object.hasOwn(a, index)
     && Object.getOwnPropertyDescriptor(a, index)?.value === item);
-const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+const digest = bytes => Buffer.from(sha256(bytes)).toString('hex');
 function requireValid(condition, message) {
   if (!condition) throw Object.assign(Error(message), { code: 'DEPLOYMENT_SIGNING_INVALID' });
 }
@@ -108,12 +108,17 @@ export function createSigningRequest(input) {
   });
 }
 
-export function verifySigningResponse(request, response) {
+export function validateSigningRequest(request) {
   exactRecord(request, REQUEST_KEYS);
   const expected = createSigningRequest(Object.fromEntries(INPUT_KEYS.map(key => [key, request[key]])));
   requireValid(request.version === expected.version && request.kind === expected.kind
     && request.blockhash === expected.blockhash && request.messageSha256 === expected.messageSha256
     && sameStrings(request.requiredSigners, expected.requiredSigners), 'Signing request metadata does not match its transaction.');
+  return expected;
+}
+
+export function verifySigningResponse(request, response) {
+  const expected = validateSigningRequest(request);
   exactRecord(response, ['transactionBase64']);
   const prepared = canonicalTransaction(expected.transactionBase64);
   const signed = canonicalTransaction(response.transactionBase64);

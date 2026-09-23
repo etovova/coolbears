@@ -127,3 +127,36 @@ jobs:
       - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
       - run: npm run --prefix operator setup
       - run: node operator/tests/deployment-gateway.runtime.mjs
+
+  owner-console-browser:
+    name: Owner signing console in Chromium
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            operator/package-lock.json
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run --prefix operator setup
+      - run: node operator/deployment/owner-console/build.mjs
+      - name: Install Chromium
+        run: |
+          npm install --prefix "$RUNNER_TEMP/coolbears-owner-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - run: node operator/tests/deployment-owner-console.browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: private-owner-console-browser
+          path: operator/build/owner-console-chromium/
+          retention-days: 14
