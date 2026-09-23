@@ -1,0 +1,22 @@
+{
+  "checkedAt": "2026-09-23T11:01:19.660450+00:00",
+  "method": "getGenesisHash",
+  "origin": "https://coolbears-nfts.com",
+  "status": "HTTP/2 429 ",
+  "allowOrigin": [
+    "https://coolbears-nfts.com"
+  ],
+  "result": {
+    "jsonrpc": "2.0",
+    "id": 1,
+    "error": {
+      "code": -32098,
+      "message": "CoolBears Devnet RPC request unavailable.",
+      "data": {
+        "category": "RATE_LIMIT"
+      }
+    }
+  },
+  "transactionsSent": 0,
+  "passed": false
+}

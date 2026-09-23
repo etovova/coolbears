@@ -1,3 +1,26 @@
+# CoolBears — актуально после перехода на Cloudflare
+
+23 сентября 2026: **зона Active, apex и www привязаны к Cloudflare**.
+Продолжать с PR29, ветка `hosting-staging-20260923`.
+[Отчёт переноса](hosting-cutover-20260923.md),
+[47 edge-проверок](hosting-cutover-edge-20260923.json).
+
+NS уже сменены владельцем, полный DNS и DNSSEC Porkbun сверены. Повторно
+просить их, OAuth или разрешение переноса не нужно. Основной assets-only Worker
+`coolbears-site-candidate` не перезагружался. Www обслуживает отдельный assets-only
+`coolbears-www-redirect`: 301 на HTTPS apex с сохранением пути/query.
+Продажи закрыты, 0,2 SOL. Main и GitHub Pages сохранены для отката.
+
+Ближайшая проверка — распространение DNS: Google уже видит Cloudflare, другой
+резолвер и обычный путь текущей среды пока ещё GitHub. Не выдавать 47 проверок
+с явно выбранным Cloudflare IP за полное распространение DNS.
+Один read-only RPC запрос вернул 429 / RATE_LIMIT. RPC не изменён, CORS не
+расширен, транзакций нет. Production RPC остаётся отдельным незавершённым этапом.
+
+Ниже история; старые блокеры NS/DNSSEC уже закрыты.
+
+---
+
 # CoolBears — продолжение после PR28
 
 ## Актуальное продолжение: Cloudflare staging опубликован

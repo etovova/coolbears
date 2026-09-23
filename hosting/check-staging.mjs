@@ -5,18 +5,26 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { hash } from './audit.mjs';
+import { edgeRequest } from './edge-request.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const directory = path.join(root, 'build/hosting-candidate');
-const origin = 'https://coolbears-site-candidate.yauheni84.workers.dev';
+const target = process.argv[2] ?? '--staging';
+assert.ok(process.argv.length <= 3 && ['--staging', '--production'].includes(target), 'Use --staging or --production');
+const production = target === '--production';
+const edgeIp = process.env.COOLBEARS_EDGE_IP;
+assert.ok(!edgeIp || production, 'Edge diagnostics are only for the approved main domain');
+const origin = production ? 'https://coolbears-nfts.com' : 'https://coolbears-site-candidate.yauheni84.workers.dev';
 const bundle = JSON.parse(await readFile(path.join(directory, 'direct-upload.json')));
 const entries = new Map(bundle.entries.map(e => [e.path, e]));
 const publicFiles = JSON.parse(await readFile(path.join(root, 'scripts/public-files.json')));
-const report = { kind: 'live-cloudflare-static-staging', startedAt: new Date().toISOString(), origin,
+const report = { kind: production ? 'live-cloudflare-static-production' : 'live-cloudflare-static-staging', startedAt: new Date().toISOString(), origin,
   sourceCommit: bundle.sourceCommit, candidateManifestSha256: bundle.candidateManifestSha256,
+  connectionOverride: edgeIp ?? null, publicDnsRouteTested: !edgeIp,
   passed: false, checks: [], salesOpen: false, priceSol: 0.2,
   realWalletTested: false, realRpcRequests: 0, realTransactionsSent: 0, mainDomainSwitched: false };
 const failures = [];
 async function request(url, options = {}) {
+  if (edgeIp) return edgeRequest(origin + url, edgeIp, options);
   const response = await fetch(origin + url, { redirect: 'manual', signal: AbortSignal.timeout(30000), ...options });
   return { response, body: Buffer.from(await response.arrayBuffer()) };
 }
@@ -36,6 +44,7 @@ async function checkFile(file) {
   }
   const { response, body } = await request(url), expected = entries.get(file);
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get('server'), 'cloudflare');
   assert.equal(hash(body), expected.sha256, 'HTTP_BYTES_CHANGED');
   assert.equal(response.headers.get('content-type').split(';')[0], expected.type.split(';')[0]);
   assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
@@ -82,7 +91,8 @@ await check('GIF HEAD and ETag', async () => {
   assert.equal(head.response.status, 200); assert.equal(head.body.length, 0);
 });
 report.passed = failures.length === 0;
+report.mainDomainSwitched = production && !edgeIp && report.passed;
 report.completedAt = new Date().toISOString();
-await writeFile(path.join(directory, 'live-staging.json'), JSON.stringify(report,null,2)+'\n');
+await writeFile(path.join(directory, production ? (edgeIp ? 'live-production-edge.json' : 'live-production.json') : 'live-staging.json'), JSON.stringify(report,null,2)+'\n');
 console.log(JSON.stringify({ passed: report.passed, checks: report.checks.length, failures, origin }));
 if (!report.passed) process.exitCode = 1;
