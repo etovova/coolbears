@@ -1,0 +1,56 @@
+{
+  "checkedDate": "2026-09-23",
+  "currency": "USD",
+  "accountBillingInspected": false,
+  "actualMonthlyBillUsd": null,
+  "cloudflareWorkersStaticAssets": {
+    "referenceMonthlyUsd": "0.00",
+    "staticRequestsUnmetered": true,
+    "additionalAssetStorageCharge": false,
+    "freeMaxFiles": 20000,
+    "maxFileBytes": 26214400,
+    "workerExecutionIncluded": false,
+    "sources": [
+      "https://developers.cloudflare.com/workers/static-assets/billing-and-limitations/",
+      "https://developers.cloudflare.com/workers/platform/limits/",
+      "https://www.cloudflare.com/terms/",
+      "https://www.cloudflare.com/service-specific-terms-developer-platform/"
+    ],
+    "customDomainRequiresActiveCloudflareZone": true,
+    "customDomainSource": "https://developers.cloudflare.com/workers/configuration/routing/custom-domains/"
+  },
+  "netlifyAlternative": {
+    "monthlyPlans": [
+      { "name": "Free", "usd": "0.00", "credits": 300 },
+      { "name": "Personal", "usd": "9.00", "credits": 1000 },
+      { "name": "Pro starting tier", "usd": "20.00", "credits": 3000 }
+    ],
+    "creditsPerProductionDeploy": 15,
+    "creditsPerGbBandwidth": 20,
+    "creditsPer10000Requests": 2,
+    "source": "https://www.netlify.com/pricing/",
+    "scenarios": [
+      { "productionDeploys": 4, "bandwidthGb": 10, "webRequests": 10000, "credits": 262 },
+      { "productionDeploys": 4, "bandwidthGb": 100, "webRequests": 100000, "credits": 2080 }
+    ],
+    "scenariosAreTrafficForecast": false
+  },
+  "dnsObservation": {
+    "method": "read-only Google Public DNS HTTPS JSON API",
+    "date": "2026-09-23",
+    "domain": "coolbears-nfts.com",
+    "nameservers": ["fortaleza.ns.porkbun.com", "salvador.ns.porkbun.com", "curitiba.ns.porkbun.com", "maceio.ns.porkbun.com"],
+    "apexA": ["185.199.110.153", "185.199.109.153", "185.199.108.153", "185.199.111.153"],
+    "wwwCname": "etovova.github.io",
+    "fullZoneExported": false,
+    "dnssecStatusVerified": false,
+    "recordsChanged": false
+  },
+  "budgetEffect": {
+    "conditionalStaticHostingAdditionUsdPerMonth": "0.00",
+    "pr27ServiceSubtotalsWithThisCandidateUsd": ["20.00", "69.00", "74.00"],
+    "actualChosenServicesVerified": false,
+    "excludes": ["domain renewal", "taxes", "service overages", "final collection storage usage", "unverified existing account charges"],
+    "budgetComplete": false
+  }
+}

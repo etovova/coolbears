@@ -1,0 +1,39 @@
+name: Verify hosting candidate without deployment
+on:
+  pull_request:
+    paths: ['hosting/**', '.github/workflows/hosting.yml']
+permissions:
+  contents: read
+jobs:
+  hosting:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      CLOUDFLARE_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run test:devnet
+      - run: npm run build:wallet
+      - run: npm run build:site
+      - run: npm run verify
+      - run: node --test hosting/audit.test.mjs
+      - run: node hosting/prepare.mjs
+      - run: node hosting/runtime.mjs
+      - name: Wrangler validation without upload
+        run: node node_modules/wrangler/bin/wrangler.js deploy --config build/hosting-candidate/wrangler.json --dry-run --outdir build/hosting-dry-run
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: closed-hosting-candidate
+          path: build/hosting-candidate/
+          retention-days: 14
