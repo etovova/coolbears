@@ -1,0 +1,1318 @@
+{
+  "version": 1,
+  "kind": "isolated-lifecycle-costs",
+  "status": "isolated-lifecycle-passed-and-calibrated",
+  "startedAt": "2026-09-23T06:47:29.741Z",
+  "sourceCapturedAt": "2026-09-23T06:47:29.707Z",
+  "sourceCluster": "devnet",
+  "sourceSlot": 502822208,
+  "snapshotSha256": "01ee8b4ee488b50036a4d094919bb75c6d20d8ee0327ba68c5085bad06bef26a",
+  "programs": [
+    {
+      "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+      "programDataAddress": "9ZC25KLUrfgSoFVgjE1rrydZBbZns58UXi8A8ZhTdGfr",
+      "deploymentSlot": "492585604",
+      "upgradeAuthority": "Fsxr5WVKZZoeb7xgwTWRHymSRVGY9vk7m5B5GPu1KU59",
+      "programDataSha256": "72726e4b8fc837e9ee05d8a942903c5f10890d33cb4480344844211b30b03dcb",
+      "elfSha256": "5680d2371204033f55cdcf0c08d393ed737d99cfe35d83f65befe80f7537484a",
+      "elfBytes": 855888
+    },
+    {
+      "address": "CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J",
+      "programDataAddress": "3w3omcedXpcSCMASSGLFrbeSR4Bv27EUUxWuE7JXV7WC",
+      "deploymentSlot": "465360225",
+      "upgradeAuthority": "CMADP5F3EPYDZC2KBBBC1GmGi1arFEyfozpA8B3rwLWW",
+      "programDataSha256": "62405e95ed9de208563efa7a5a2f7146b0cc49568e2c6581dafc0faee7d734ed",
+      "elfSha256": "744fd03055950cbc496e844260e537f0e1a06c758df2726403aee726f212182c",
+      "elfBytes": 943120
+    },
+    {
+      "address": "CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ",
+      "programDataAddress": "GADi4g14b9y6fcn6DWbZy7nd2DCToD7viEMu9UGEDXqB",
+      "deploymentSlot": "465360252",
+      "upgradeAuthority": "CMADP5F3EPYDZC2KBBBC1GmGi1arFEyfozpA8B3rwLWW",
+      "programDataSha256": "90b3f2575e9bb1a6c8a884e1aa8ae1a21fe77b11faa64faac9342863a17c99d8",
+      "elfSha256": "376d2a57c501560cf78d36dc81d60ee864f7e2007e7d4c9a3785356f5b5975ee",
+      "elfBytes": 1871248
+    }
+  ],
+  "rent": {
+    "lamportsPerByteYear": "5080",
+    "exemptionThreshold": 1,
+    "burnPercent": 50
+  },
+  "rentSha256": "e6833309a1b7d9ce57849bd64d1d5834144a14cbc659346a9fda424a3e7ae219",
+  "clockSha256": "a81779a88b439fe4bf1d9aeca24c288f307a7194fef8f5c8ade3e49e45c7de68",
+  "environment": "LiteSVM-in-memory",
+  "litesvmVersion": "1.4.1",
+  "signaturesVerified": false,
+  "keysCreated": 0,
+  "signaturesCreated": 0,
+  "ownerWalletUsed": false,
+  "blockhashScope": "local-VM-only",
+  "blockhashChecked": true,
+  "transactionHistoryCapacity": 0,
+  "featureSet": "LiteSVM-default-not-cluster-feature-parity",
+  "runtimeMatchesDevnetValidator": false,
+  "realTransactionsSent": 0,
+  "transactionsSent": 0,
+  "realLamportsSpent": "0",
+  "productionBundleCreated": false,
+  "salesOpen": false,
+  "readyToSubmit": false,
+  "budgetComplete": false,
+  "fundingRecommendationLamports": null,
+  "preparation": {
+    "messages": 1431,
+    "configLinesVerified": 9999,
+    "finalStateVerified": true,
+    "accountRentLamports": "4434225320",
+    "protocolLamports": "1500000",
+    "runtimeFeesLamports": "7170000",
+    "payerDebitLamports": "4442895320"
+  },
+  "services": {
+    "checkedAt": "2026-09-23",
+    "currency": "USD",
+    "actualAccountPlansVerified": false,
+    "actualInvoiceTotal": null,
+    "includesTaxes": false,
+    "includesOverages": false,
+    "services": [
+      {
+        "name": "Helius RPC",
+        "source": "https://www.helius.dev/pricing",
+        "actualPlan": null,
+        "monthlyReferences": [
+          {
+            "plan": "Free",
+            "usd": "0.00",
+            "credits": 1000000,
+            "rpcRequestsPerSecond": 10,
+            "sendRequestsPerSecond": 1
+          },
+          {
+            "plan": "Developer",
+            "usd": "49.00",
+            "credits": 10000000,
+            "rpcRequestsPerSecond": 50,
+            "sendRequestsPerSecond": 5
+          }
+        ],
+        "usageEstimate": null,
+        "note": "Current account billing and production request volume were not inspected. No plan change."
+      },
+      {
+        "name": "Cloudflare Workers RPC proxy",
+        "source": "https://developers.cloudflare.com/workers/platform/pricing/",
+        "actualPlan": null,
+        "monthlyReferences": [
+          {
+            "plan": "Free",
+            "usd": "0.00",
+            "dailyRequests": 100000,
+            "cpuMillisecondsPerRequest": 10
+          },
+          {
+            "plan": "Paid minimum",
+            "usd": "5.00",
+            "monthlyRequests": 10000000,
+            "monthlyCpuMilliseconds": 30000000
+          }
+        ],
+        "usageEstimate": null,
+        "note": "Proxy cost only; this is not a quote for replacement website hosting. No settings changed."
+      },
+      {
+        "name": "Pinata storage and gateway",
+        "source": "https://pinata.cloud/pricing",
+        "actualPlan": null,
+        "monthlyReferences": [
+          {
+            "plan": "Free",
+            "usd": "0.00",
+            "storageGb": 1,
+            "files": 500,
+            "bandwidthGb": 10,
+            "requests": 10000
+          },
+          {
+            "plan": "Picnic",
+            "usd": "20.00",
+            "storageTb": 1,
+            "files": 5000000,
+            "bandwidthGb": 500,
+            "requests": 1000000
+          }
+        ],
+        "usageEstimate": null,
+        "note": "A reference option, not a confirmed subscription. 10000 images plus 10000 JSON files exceed 500 files if stored as individual billable files. Actual bytes, provider accounting and traffic are unknown."
+      },
+      {
+        "name": "Domain renewal",
+        "source": "https://porkbun.com/products/domains",
+        "actualRenewalInvoiceUsd": null,
+        "annualReference": {
+          "category": "non-premium .com renewal",
+          "usd": "11.08"
+        },
+        "note": "Public registrar reference only. Existing domain billing date and invoice were not inspected."
+      },
+      {
+        "name": "Commercial launch website hosting",
+        "source": "https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits",
+        "actualMonthlyUsd": null,
+        "status": "unresolved-before-sales",
+        "note": "GitHub Pages disallows use as free hosting for sites primarily facilitating commercial transactions. A commercial mint requires a suitable hosting decision. No migration or deployment performed."
+      }
+    ],
+    "illustrativeMonthlyServiceSubtotals": [
+      {
+        "pinataPicnicUsd": "20.00",
+        "heliusUsd": "0.00",
+        "workersUsd": "0.00",
+        "subtotalUsd": "20.00"
+      },
+      {
+        "pinataPicnicUsd": "20.00",
+        "heliusUsd": "49.00",
+        "workersUsd": "0.00",
+        "subtotalUsd": "69.00"
+      },
+      {
+        "pinataPicnicUsd": "20.00",
+        "heliusUsd": "49.00",
+        "workersUsd": "5.00",
+        "subtotalUsd": "74.00"
+      }
+    ],
+    "subtotalExclusions": [
+      "website hosting",
+      "domain renewal",
+      "taxes",
+      "overages",
+      "unverified existing subscriptions"
+    ],
+    "solUsdExchangeRate": null,
+    "budgetComplete": false
+  },
+  "mintPriceLamports": "200000000",
+  "priorityFeesIncludedInExecution": false,
+  "sampleMints": [
+    {
+      "sample": 1,
+      "messageSha256": "3855c5f54fe62d139baee4ad2dd7422ee4913895bb2d45ed518a2c1468f75954",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 2,
+      "messageSha256": "7f6b3df48b1d2b97ae6e90269328ecbd21724b1f02dbe7a12d9b5269e3a94ae2",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 3,
+      "messageSha256": "bef7f754fd8ceea1d2451110f2d513aaba5ee70a4787d1b5b40f4bb57768441a",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 4,
+      "messageSha256": "6edd72c12b8e8ca692f38c2956349a8b72bb72594963dca9b6790108e64a478d",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 5,
+      "messageSha256": "13b190a2ad7993333e053d4def686ff892f4bc133bab99f57846cc91257ec54a",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 6,
+      "messageSha256": "19e61f5dc007c0b9f67a4e359f94a9174f4f871d3722cfaefc68a6b082dbc146",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 7,
+      "messageSha256": "1db115b6ce412dee612f4680beab509096038e2f840230c91a9c77d8b2327343",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 8,
+      "messageSha256": "a57a441ec8a0baee4466e19276d327376af5391aaffcc19bb578c4c2cee78bbd",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 9,
+      "messageSha256": "e977bc6682fe26b9150f6199420d19ad84bb371f551a164832a6fecbd59c88e8",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 10,
+      "messageSha256": "057d7d244fa556237cf14faf44314a85cd64498e36b18e168e573bc3103ca495",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 11,
+      "messageSha256": "d1a09714dee3616cba374894323f1396c264c62c21b7beb426d6b20a94adc414",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 12,
+      "messageSha256": "41d693d90ffe43b787c230f52e76cc0819bb1e083c0e997ca0be28ee6c7410c8",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 13,
+      "messageSha256": "7252c71b4c70fb38119ec4c656d814c5c101e92dd908051b2d0b069398a3bb3e",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 14,
+      "messageSha256": "50aa8ec67cbd559d51d07fce3f7561d433b59825d478ba4b79f6d7d5ed664109",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 15,
+      "messageSha256": "368730bf8aeaca36a2d61c8cfd8a67fe8d33b024ec8cfbb191db15e01c9679e6",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 16,
+      "messageSha256": "05901721e332c5506600cdf40d2bed0a2ede63960ef28a1a8899c6049718bb76",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 17,
+      "messageSha256": "e0e6b87060adb4958a33e8733a76c55df26fb8018546ff9f95be97b2fccbff25",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 18,
+      "messageSha256": "c06941a34fa4c3b28ef674972ca46b0eb0fa4a1271c5d140150856dce8555d12",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 19,
+      "messageSha256": "0e77095a91a6dfe99a5165819c6ce5b155a3f57d0ec60b8e51f03e1866d61195",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 20,
+      "messageSha256": "c5c794671b1e5e5e2d2bd88bd1d27a7937a8abf3cfa9eb63988a3325072ccfdf",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 21,
+      "messageSha256": "3b3707f1196b9435e33ac2cb57ef69e878f10455af05a8647e9f510d77613f08",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 22,
+      "messageSha256": "bb4a1b901576b0bffa640e6a38d3e547ef5388b7d5ac118bf544e60394072c92",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 23,
+      "messageSha256": "79ff3f610acf828be4cd346d27ce10671230886735544aa16a34341633071040",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 24,
+      "messageSha256": "083d12c03a0236602cd7c7495a8cd1c5256c499c5baa070b108b47adb07911c2",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 25,
+      "messageSha256": "6aa0908225681774799e42fdf4c9071fcf26e4914b254a49b6d217440cc3c2ae",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 26,
+      "messageSha256": "2c55567c48c7bce2c265ade12f6ede69777441e19aaa74dfd469571ab79ab91a",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 27,
+      "messageSha256": "997eb937be44f0c24b202e573391ad10a1ff2c1809f82e724921e4063c27b456",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 28,
+      "messageSha256": "e416b7f21ae4bfff01ba378f395b2b9fa2b8685bb453582690179de61a01ea07",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 29,
+      "messageSha256": "da772800ab4b42748bccd539f95784ddfc6a4c61a3eef3cf1f40237f9c5f7b59",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 30,
+      "messageSha256": "2435d332d02e913f325b5263b5bee28efd0c9430c712ea78a457e29c68c6a0f7",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 31,
+      "messageSha256": "1a342b7544a0b0ee4f4fb528c14aea6c2b28ca1b2cce9d2948a739aa94638200",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 32,
+      "messageSha256": "9a58529797cc43e8beb4677d11d58af12970ea673892a8c5788609a8a1a08dcf",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 33,
+      "messageSha256": "3eb725aecacca7dca8fbc0acd3766730ae3c317ced2b7738c42052e5a9561352",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 34,
+      "messageSha256": "76f04040123fad8e503d623ea8737b007c38dbab4f719208b92da72131f6aed3",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 35,
+      "messageSha256": "59f7336d643d3d6ea0ac7c5e03676fba1dac49f47f50442550a73c6858c4566d",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 36,
+      "messageSha256": "d7b4d7fd7b69f94aa51263657550b49827cd1286997a90da59e7e155d3e2105f",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 37,
+      "messageSha256": "5dd0d3ce05a9597697beb5f51131030104173f3864ecd3bb6849d546b46c2b66",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 38,
+      "messageSha256": "1e2ca92a4571fffa468ac7e542b0f986dbd50576efcc684e54f89596e5554e25",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 39,
+      "messageSha256": "c01337cc4c1dd8cb0d13c7ac251262b685ef78a957f11248f67b7cb485d06bf8",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 40,
+      "messageSha256": "70b8bf8376888ef23eda9c10ee34289715d675b791acd7be7b7b3ff077012cb9",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 41,
+      "messageSha256": "217be64b878b570618189e4876318d2d36319d30f6e3d5b766fa0abbcc1c9ad2",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 42,
+      "messageSha256": "b739d09e72648f6d9ff01b043c4d87e7f74762305ea603ed07455e61a1d0b052",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 43,
+      "messageSha256": "8de92871cbe31e0f7b42a16de6937985170027f57aca95f23faf517c5e28bfd0",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 44,
+      "messageSha256": "e6b2189cfcd30b3329d7e048a8103a8dd43d13b8792fda467944d64265af6356",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 45,
+      "messageSha256": "98200d066d80416389c46c804b74e7ea6488f18cc6ce67f5ea5fa991031f38d9",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 46,
+      "messageSha256": "7ad72728da0976e58dd04d2408d9a9f6bb7ee4003e3bade66dd6c9595505be18",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 47,
+      "messageSha256": "78656d0caf4ca7e60b838d2a6c11e98c4a95e44b72b462db1b6570aadc29f277",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 48,
+      "messageSha256": "0cea21979dcfb4924509b73fa88503cf357db03ecde2faff2b0662fe9ddd35db",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 49,
+      "messageSha256": "90ce56e969c55ca1ee8176ea7ebc1114291b33feba9c6a8dda02371841f27d04",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "sample": 50,
+      "messageSha256": "fc984255f240ae69a1d1b3ad882db84526d1a8519ed5f7ecee4b6c85e148fdc8",
+      "requiredSignatures": 2,
+      "computeUnits": "58433",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2962880",
+      "assetBytes": 158,
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    }
+  ],
+  "revealScenarios": [
+    {
+      "uriBytes": 52,
+      "assetBytesBefore": 158,
+      "assetBytesAfter": 142,
+      "oldRentLamports": "1452880",
+      "newRentLamports": "1371600",
+      "assetBalanceDeltaLamports": "-81280",
+      "messageSha256": "481eee5ee39d81091726a45165551be7fef4b098f92efb306fcdfd631d628d7e",
+      "requiredSignatures": 1,
+      "computeUnits": "10436",
+      "feeLamports": "5000",
+      "payerDebitLamports": "-76280",
+      "uriIsSynthetic": true,
+      "ownerUnchanged": true,
+      "collectionUnchanged": true,
+      "protocolChargePreserved": true,
+      "actualRevealExecuted": false,
+      "projection": {
+        "quantity": 10000,
+        "transactions": 10000,
+        "requiredSignaturesPerTransaction": 1,
+        "rentTopup": {
+          "lamports": "0",
+          "sol": "0.000000000"
+        },
+        "possibleRentRefund": {
+          "lamports": "812800000",
+          "sol": "0.812800000"
+        },
+        "networkFees": {
+          "lamports": "50000000",
+          "sol": "0.050000000"
+        },
+        "grossFundingBeforeRefunds": {
+          "lamports": "50000000",
+          "sol": "0.050000000"
+        },
+        "refundUsedToReduceFunding": false,
+        "payer": "collection-update-authority",
+        "projection": true,
+        "actualRevealExecuted": false
+      },
+      "ownerChainScenario": {
+        "preparation": {
+          "lamports": "4442895320",
+          "sol": "4.442895320"
+        },
+        "reveal": {
+          "lamports": "50000000",
+          "sol": "0.050000000"
+        },
+        "grossChainSubtotal": {
+          "lamports": "4492895320",
+          "sol": "4.492895320"
+        },
+        "includesBuyerCosts": false,
+        "includesServices": false,
+        "includesContingency": false,
+        "includesPriorityFees": false,
+        "includesFailedAttempts": false,
+        "budgetComplete": false,
+        "fundingRecommendationLamports": null
+      }
+    },
+    {
+      "uriBytes": 80,
+      "assetBytesBefore": 158,
+      "assetBytesAfter": 170,
+      "oldRentLamports": "1452880",
+      "newRentLamports": "1513840",
+      "assetBalanceDeltaLamports": "60960",
+      "messageSha256": "0166e0f64cebf3cfe73dac72b1e16355f7ded1d42ae9372d839447720d8cf446",
+      "requiredSignatures": 1,
+      "computeUnits": "12145",
+      "feeLamports": "5000",
+      "payerDebitLamports": "65960",
+      "uriIsSynthetic": true,
+      "ownerUnchanged": true,
+      "collectionUnchanged": true,
+      "protocolChargePreserved": true,
+      "actualRevealExecuted": false,
+      "projection": {
+        "quantity": 10000,
+        "transactions": 10000,
+        "requiredSignaturesPerTransaction": 1,
+        "rentTopup": {
+          "lamports": "609600000",
+          "sol": "0.609600000"
+        },
+        "possibleRentRefund": {
+          "lamports": "0",
+          "sol": "0.000000000"
+        },
+        "networkFees": {
+          "lamports": "50000000",
+          "sol": "0.050000000"
+        },
+        "grossFundingBeforeRefunds": {
+          "lamports": "659600000",
+          "sol": "0.659600000"
+        },
+        "refundUsedToReduceFunding": false,
+        "payer": "collection-update-authority",
+        "projection": true,
+        "actualRevealExecuted": false
+      },
+      "ownerChainScenario": {
+        "preparation": {
+          "lamports": "4442895320",
+          "sol": "4.442895320"
+        },
+        "reveal": {
+          "lamports": "659600000",
+          "sol": "0.659600000"
+        },
+        "grossChainSubtotal": {
+          "lamports": "5102495320",
+          "sol": "5.102495320"
+        },
+        "includesBuyerCosts": false,
+        "includesServices": false,
+        "includesContingency": false,
+        "includesPriorityFees": false,
+        "includesFailedAttempts": false,
+        "budgetComplete": false,
+        "fundingRecommendationLamports": null
+      }
+    },
+    {
+      "uriBytes": 120,
+      "assetBytesBefore": 158,
+      "assetBytesAfter": 210,
+      "oldRentLamports": "1452880",
+      "newRentLamports": "1717040",
+      "assetBalanceDeltaLamports": "264160",
+      "messageSha256": "ba7f0d8936c5b8acb2b09751cfe95df43885fa7fe4d3a97d48ddbaa32c7344ce",
+      "requiredSignatures": 1,
+      "computeUnits": "12107",
+      "feeLamports": "5000",
+      "payerDebitLamports": "269160",
+      "uriIsSynthetic": true,
+      "ownerUnchanged": true,
+      "collectionUnchanged": true,
+      "protocolChargePreserved": true,
+      "actualRevealExecuted": false,
+      "projection": {
+        "quantity": 10000,
+        "transactions": 10000,
+        "requiredSignaturesPerTransaction": 1,
+        "rentTopup": {
+          "lamports": "2641600000",
+          "sol": "2.641600000"
+        },
+        "possibleRentRefund": {
+          "lamports": "0",
+          "sol": "0.000000000"
+        },
+        "networkFees": {
+          "lamports": "50000000",
+          "sol": "0.050000000"
+        },
+        "grossFundingBeforeRefunds": {
+          "lamports": "2691600000",
+          "sol": "2.691600000"
+        },
+        "refundUsedToReduceFunding": false,
+        "payer": "collection-update-authority",
+        "projection": true,
+        "actualRevealExecuted": false
+      },
+      "ownerChainScenario": {
+        "preparation": {
+          "lamports": "4442895320",
+          "sol": "4.442895320"
+        },
+        "reveal": {
+          "lamports": "2691600000",
+          "sol": "2.691600000"
+        },
+        "grossChainSubtotal": {
+          "lamports": "7134495320",
+          "sol": "7.134495320"
+        },
+        "includesBuyerCosts": false,
+        "includesServices": false,
+        "includesContingency": false,
+        "includesPriorityFees": false,
+        "includesFailedAttempts": false,
+        "budgetComplete": false,
+        "fundingRecommendationLamports": null
+      }
+    },
+    {
+      "uriBytes": 200,
+      "assetBytesBefore": 158,
+      "assetBytesAfter": 290,
+      "oldRentLamports": "1452880",
+      "newRentLamports": "2123440",
+      "assetBalanceDeltaLamports": "670560",
+      "messageSha256": "467ab31b9cbb473a0f5f00a90efe83ac23a380cb7596a5e8ea193994304aaf07",
+      "requiredSignatures": 1,
+      "computeUnits": "12152",
+      "feeLamports": "5000",
+      "payerDebitLamports": "675560",
+      "uriIsSynthetic": true,
+      "ownerUnchanged": true,
+      "collectionUnchanged": true,
+      "protocolChargePreserved": true,
+      "actualRevealExecuted": false,
+      "projection": {
+        "quantity": 10000,
+        "transactions": 10000,
+        "requiredSignaturesPerTransaction": 1,
+        "rentTopup": {
+          "lamports": "6705600000",
+          "sol": "6.705600000"
+        },
+        "possibleRentRefund": {
+          "lamports": "0",
+          "sol": "0.000000000"
+        },
+        "networkFees": {
+          "lamports": "50000000",
+          "sol": "0.050000000"
+        },
+        "grossFundingBeforeRefunds": {
+          "lamports": "6755600000",
+          "sol": "6.755600000"
+        },
+        "refundUsedToReduceFunding": false,
+        "payer": "collection-update-authority",
+        "projection": true,
+        "actualRevealExecuted": false
+      },
+      "ownerChainScenario": {
+        "preparation": {
+          "lamports": "4442895320",
+          "sol": "4.442895320"
+        },
+        "reveal": {
+          "lamports": "6755600000",
+          "sol": "6.755600000"
+        },
+        "grossChainSubtotal": {
+          "lamports": "11198495320",
+          "sol": "11.198495320"
+        },
+        "includesBuyerCosts": false,
+        "includesServices": false,
+        "includesContingency": false,
+        "includesPriorityFees": false,
+        "includesFailedAttempts": false,
+        "budgetComplete": false,
+        "fundingRecommendationLamports": null
+      }
+    }
+  ],
+  "closedGate": {
+    "messageSha256": "18c9a55cd048c242ed39e1d71e07e05ce7d2f0e3559549c6ce37c4a5c051ff85",
+    "requiredSignatures": 2,
+    "computeUnits": "13863",
+    "feeLamports": "10000",
+    "payerDebitLamports": "10000",
+    "errorCode": 6033,
+    "error": "AddressNotAuthorized",
+    "rejected": true,
+    "assetCreated": false,
+    "priceTransferredLamports": "0",
+    "relevantAccountsUnchanged": true
+  },
+  "standardMint": {
+    "samples": 50,
+    "exactOrderTemplateUsed": true,
+    "allHiddenMetadataValidated": true,
+    "sampleMetadataDistinct": true,
+    "payerEqualsTreasury": true,
+    "priceTransferNetLamports": "0",
+    "rentLamports": "1452880",
+    "protocolLamports": "1500000",
+    "baseFeeLamports": "10000",
+    "overheadLamports": "2962880",
+    "publicBuyerTotalIsProjection": true,
+    "entireSupplyMinted": false
+  },
+  "sponsoredMint": {
+    "messageSha256": "66875db6a9b4c78ddf763aa20db93fbadc2e51f064a8235769f97279408b64a8",
+    "requiredSignatures": 3,
+    "computeUnits": "58606",
+    "feeLamports": "15000",
+    "payerDebitLamports": "202967880",
+    "priceTransferredLamports": "200000000",
+    "payerDifferentFromAuthorizedMinter": true,
+    "assetOwnedByPayer": true,
+    "guardChanged": false,
+    "extraMinterSignature": true,
+    "representsStandardPublicBuyer": false
+  },
+  "finalState": {
+    "guardUnchanged": true,
+    "guardDataSha256": "0211f4e083f12c7315e9e2121605bbd7826457b357b10b3216c30f68778e74f4",
+    "collectionPolicyAndPluginsUnchanged": true,
+    "collectionMintCountIncrease": 51,
+    "machineConfigurationUnchanged": true,
+    "machineItemsRedeemed": 51,
+    "verified": true
+  },
+  "buyerScenarios": [
+    {
+      "quantity": 1,
+      "transactions": 1,
+      "requiredSignaturesPerTransaction": 2,
+      "price": {
+        "lamports": "200000000",
+        "sol": "0.200000000"
+      },
+      "accountRent": {
+        "lamports": "1452880",
+        "sol": "0.001452880"
+      },
+      "protocolCharge": {
+        "lamports": "1500000",
+        "sol": "0.001500000"
+      },
+      "baseNetworkFees": {
+        "lamports": "10000",
+        "sol": "0.000010000"
+      },
+      "priorityFees": {
+        "lamports": "0",
+        "sol": "0.000000000"
+      },
+      "overhead": {
+        "lamports": "2962880",
+        "sol": "0.002962880"
+      },
+      "total": {
+        "lamports": "202962880",
+        "sol": "0.202962880"
+      },
+      "payer": "buyer",
+      "projection": true,
+      "publicMintCurrentlyAllowed": false
+    },
+    {
+      "quantity": 10,
+      "transactions": 10,
+      "requiredSignaturesPerTransaction": 2,
+      "price": {
+        "lamports": "2000000000",
+        "sol": "2.000000000"
+      },
+      "accountRent": {
+        "lamports": "14528800",
+        "sol": "0.014528800"
+      },
+      "protocolCharge": {
+        "lamports": "15000000",
+        "sol": "0.015000000"
+      },
+      "baseNetworkFees": {
+        "lamports": "100000",
+        "sol": "0.000100000"
+      },
+      "priorityFees": {
+        "lamports": "0",
+        "sol": "0.000000000"
+      },
+      "overhead": {
+        "lamports": "29628800",
+        "sol": "0.029628800"
+      },
+      "total": {
+        "lamports": "2029628800",
+        "sol": "2.029628800"
+      },
+      "payer": "buyer",
+      "projection": true,
+      "publicMintCurrentlyAllowed": false
+    },
+    {
+      "quantity": 50,
+      "transactions": 50,
+      "requiredSignaturesPerTransaction": 2,
+      "price": {
+        "lamports": "10000000000",
+        "sol": "10.000000000"
+      },
+      "accountRent": {
+        "lamports": "72644000",
+        "sol": "0.072644000"
+      },
+      "protocolCharge": {
+        "lamports": "75000000",
+        "sol": "0.075000000"
+      },
+      "baseNetworkFees": {
+        "lamports": "500000",
+        "sol": "0.000500000"
+      },
+      "priorityFees": {
+        "lamports": "0",
+        "sol": "0.000000000"
+      },
+      "overhead": {
+        "lamports": "148144000",
+        "sol": "0.148144000"
+      },
+      "total": {
+        "lamports": "10148144000",
+        "sol": "10.148144000"
+      },
+      "payer": "buyer",
+      "projection": true,
+      "publicMintCurrentlyAllowed": false
+    }
+  ],
+  "priorityExamples": [
+    {
+      "microLamportsPerCu": "0",
+      "computeUnitLimit": 300000,
+      "additionalLamportsPerMint": "0",
+      "arithmeticOnly": true,
+      "currentMarketQuote": false
+    },
+    {
+      "microLamportsPerCu": "1000",
+      "computeUnitLimit": 300000,
+      "additionalLamportsPerMint": "300",
+      "arithmeticOnly": true,
+      "currentMarketQuote": false
+    },
+    {
+      "microLamportsPerCu": "10000",
+      "computeUnitLimit": 300000,
+      "additionalLamportsPerMint": "3000",
+      "arithmeticOnly": true,
+      "currentMarketQuote": false
+    }
+  ],
+  "retries": {
+    "automaticRetry": false,
+    "chargedFailedMintBaseFeeLamports": "10000",
+    "failedMintPriceChargedLamports": "0",
+    "successfulNewAttemptPaysNormalCostAgain": true,
+    "allFailureModesSimulated": false,
+    "unknownTransactionMustBeReconciledBeforeRetry": true
+  },
+  "localRentQuotes": [
+    {
+      "bytes": 158,
+      "lamports": "1452880"
+    },
+    {
+      "bytes": 142,
+      "lamports": "1371600"
+    },
+    {
+      "bytes": 170,
+      "lamports": "1513840"
+    },
+    {
+      "bytes": 210,
+      "lamports": "1717040"
+    },
+    {
+      "bytes": 290,
+      "lamports": "2123440"
+    }
+  ],
+  "revealEarliestDate": "2027-01-01",
+  "unresolved": [
+    "Mainnet program/rent/fee calibration",
+    "Final metadata URI byte length and actual assets to update",
+    "Priority fees and failure/contingency allowance at execution time",
+    "Actual service plans, usage, taxes and billing periods",
+    "Commercial launch hosting choice and price",
+    "Production wallet/network path and signed simulation"
+  ],
+  "completedAt": "2026-09-23T06:47:37.561Z",
+  "calibration": {
+    "cluster": "devnet",
+    "checkedAt": "2026-09-23T06:47:37.561Z",
+    "rentQuotes": [
+      {
+        "bytes": 158,
+        "lamports": "1452880"
+      },
+      {
+        "bytes": 142,
+        "lamports": "1371600"
+      },
+      {
+        "bytes": 170,
+        "lamports": "1513840"
+      },
+      {
+        "bytes": 210,
+        "lamports": "1717040"
+      },
+      {
+        "bytes": 290,
+        "lamports": "2123440"
+      }
+    ],
+    "feeQuotes": [
+      {
+        "id": "closed-public-mint",
+        "messageSha256": "73c980233c96b77c0850825bd2a47266d2a76854391208dee38dea4b681101ad",
+        "slot": 502822279,
+        "lamports": "10000"
+      },
+      {
+        "id": "standard-owner-mint",
+        "messageSha256": "477b3a4cce92449404db8ee5506ec787ba0e014708309d9f61a000535bfc2d4e",
+        "slot": 502822281,
+        "lamports": "10000"
+      },
+      {
+        "id": "sponsored-mint",
+        "messageSha256": "2404f4224205f9ee126c27e0836ff0d4271d9f6f613be556ab270f6ff9e01c9c",
+        "slot": 502822284,
+        "lamports": "15000"
+      },
+      {
+        "id": "synthetic-reveal",
+        "messageSha256": "ef3cd8819db9d16eb005cf7f83cfda61e454917aac6c8cc7085f5d8a4281b99a",
+        "slot": 502822286,
+        "lamports": "5000"
+      }
+    ],
+    "representativeMessagesQuoted": 4,
+    "everyMessageQuoted": false,
+    "rentMatched": true,
+    "representativeFeesMatched": true,
+    "programSnapshotRevalidatedAfterRun": false
+  },
+  "networkRequests": 16,
+  "evidence": {
+    "sourceCommit": "77608af72b5ae27a02adc5c837e305c020dd3402",
+    "sourceTree": "fc8c0aadd8b8105497833b109df15f48c689b515",
+    "runId": 35828101398,
+    "conclusion": "success",
+    "completedAt": "2026-09-23T06:47:43Z",
+    "verifyJobId": 107074212361,
+    "lifecycleJobId": 107075084861,
+    "tests": 263,
+    "passed": 262,
+    "failed": 0,
+    "skipped": 1,
+    "durationMs": 180998.221914,
+    "localVerification": {
+      "tests": 263,
+      "passed": 262,
+      "skipped": 1,
+      "failed": 0,
+      "durationMs": 103197.066977
+    },
+    "localPreview": {
+      "sourceSlot": 502820088,
+      "snapshotSha256": "84576a6a6502d44859ae6921b5889df78dac871dd3687e1a0756944bb5f8429d",
+      "networkRequests": 16,
+      "status": "isolated-lifecycle-passed-and-calibrated"
+    }
+  }
+}
