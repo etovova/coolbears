@@ -26,5 +26,8 @@
     "node": ">=24.19.0 <25",
     "npm": "11.9.0"
   },
-  "packageManager": "npm@11.9.0"
+  "packageManager": "npm@11.9.0",
+  "devDependencies": {
+    "litesvm": "1.4.1"
+  }
 }
