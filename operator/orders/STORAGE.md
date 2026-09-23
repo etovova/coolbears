@@ -1,5 +1,7 @@
 # Browser custody and order storage
 
+**PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
+
 This is a **Devnet custody foundation**, not a purchase executor or a public
 website feature. Sales remain closed at 0.2 SOL. [Asset partial signing](SIGNING.md)
 is now available for the first item of a fresh order. There is no buyer wallet

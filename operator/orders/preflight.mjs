@@ -9,6 +9,7 @@ import { getAssetV1AccountDataSerializer } from '../node_modules/@metaplex-found
 import { policy } from '../prepare.mjs';
 import { validateOrder } from './journal.mjs';
 import { buildOrderTransactions } from './transactions.mjs';
+import { validateAssetRequest, buyerRequestId } from './signing.mjs';
 import { verifyOrderAccounts } from '../deployment/accounts.mjs';
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deployment/rpc.mjs';
 
@@ -33,14 +34,22 @@ async function readState(rpc, order, minimum = 0) {
   return { ...state, slot };
 }
 
-export async function preflightOrder({ readOrder, endpoint, fetchImpl, timeoutMs } = {}) {
+export function preflightOrder(options) { return checkOrder(options); }
+// Internal trusted adapter for a sign-only closed Devnet session, not a purchase grant.
+export function checkPreparedOrder(options) { return checkOrder(options, true); }
+async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request } = {}, prepared = false) {
   let rpc, phase = 'order';
   const started = performance.now();
   try {
     need(typeof readOrder === 'function', 'ORDER_READER_REQUIRED');
     const order = structuredClone(validateOrder(await readOrder())), orderSha256 = hash(order);
     need(order.cluster === 'devnet', 'DEVNET_ONLY');
-    need(order.revision === 0 && !order.paused && order.items.every(item => item.attempts.length === 0), 'FRESH_ORDER_REQUIRED');
+    if (prepared) {
+      claim = structuredClone(claim); request = structuredClone(request);
+      validateAssetRequest(order, claim, request);
+      need(order.revision === 1 && !order.paused && order.items[0].attempts.length === 1
+        && order.items[0].attempts[0].state === 'wallet-pending' && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
+    } else need(order.revision === 0 && !order.paused && order.items.every(item => item.attempts.length === 0), 'FRESH_ORDER_REQUIRED');
     need([order.buyer, ...order.items.map(item => item.asset)].every(address => PublicKey.isOnCurve(new PublicKey(address).toBytes())), 'UNSIGNABLE_ADDRESS');
     rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true });
     phase = 'network'; await assertCluster(rpc, 'devnet');
@@ -49,12 +58,16 @@ export async function preflightOrder({ readOrder, endpoint, fetchImpl, timeoutMs
     const balance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: initial.slot }]);
     let slot = context(balance, initial.slot); const funds = amount(balance.value);
     phase = 'blockhash';
-    const latest = await rpc.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: slot }]);
-    slot = context(latest, slot);
-    const planned = buildOrderTransactions(order, latest.value), template = planned.templates[0];
-    need(template?.itemIndex === 0 && planned.templates.length === order.quantity, 'ORDER_TEMPLATE');
-    const encoded = Buffer.from(template.unsignedBytes).toString('base64');
-    const tx = VersionedTransaction.deserialize(template.unsignedBytes);
+    let template;
+    if (prepared) template = request;
+    else {
+      const latest = await rpc.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: slot }]);
+      slot = context(latest, slot);
+      const planned = buildOrderTransactions(order, latest.value); template = planned.templates[0];
+      need(template?.itemIndex === 0 && planned.templates.length === order.quantity, 'ORDER_TEMPLATE');
+    }
+    const encoded = prepared ? request.transactionBase64 : Buffer.from(template.unsignedBytes).toString('base64');
+    const tx = VersionedTransaction.deserialize(Buffer.from(encoded, 'base64'));
     phase = 'cost';
     const feeResult = await rpc.call('getFeeForMessage', [Buffer.from(tx.message.serialize()).toString('base64'),
       { commitment: 'confirmed', minContextSlot: slot }]);
@@ -89,7 +102,10 @@ export async function preflightOrder({ readOrder, endpoint, fetchImpl, timeoutMs
     phase = 'order-recheck';
     need(hash(validateOrder(await readOrder())) === orderSha256, 'ORDER_CHANGED');
     need(performance.now() - started <= 30000, 'PREFLIGHT_TOO_OLD');
-    return { status: 'preflight-passed', mode: 'closed-devnet-order-preview', orderId: order.id,
+    const checkedAt = Date.now();
+    return { status: prepared ? 'wallet-check-passed' : 'preflight-passed',
+      mode: prepared ? 'closed-devnet-sign-only-check' : 'closed-devnet-order-preview',
+      ...(prepared ? { requestId: buyerRequestId(request), checkedAt, expiresAt: checkedAt + 20000 } : {}), orderId: order.id,
       orderRevision: order.revision, orderSha256, itemIndex: 0, quantity: order.quantity,
       itemsRemaining: final.itemsRemaining, checkedSlot: slot, accountSlot: final.slot,
       cluster: 'devnet', networkVerified: true, guardPriceVerified: true, blockhashVerified: true,
@@ -101,7 +117,7 @@ export async function preflightOrder({ readOrder, endpoint, fetchImpl, timeoutMs
         nextItemKnownMinimumLamports: knownMinimum.toString(), protocolChargesLamports: null,
         fullOrderTotalLamports: null, balanceLamports: String(latestBalance.value) },
       networkRequests: rpc.requests, signaturesCreated: 0, journalWrites: 0, transactionsSent: 0,
-      readyToSign: false, readyToSubmit: false, salesOpen: false };
+      readyToSign: prepared, readyToSubmit: false, salesOpen: false };
   } catch (error) {
     const code = error instanceof DeploymentRpcError ? `RPC_${error.code}`
       : error?.code === 'EXPECTED_ACCOUNT_STATE_MISMATCH' ? 'ACCOUNT_STATE_MISMATCH'

@@ -1,5 +1,7 @@
 # Проверка заказа до подписи
 
+**PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
+
 `preflight.mjs` добавляет сетевое чтение к офлайн-планировщику заказов 1–50.
 Это **диагностика первого item нового заказа в закрытой Devnet-конфигурации**.
 Сайт, публичный RPC и кошелёк к ней ещё не подключены. Продажи не открываются.

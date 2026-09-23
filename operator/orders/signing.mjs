@@ -108,3 +108,9 @@ export function verifyBuyerSigningResponse(order, claim, request, response) {
     mode:'offline-buyer-response-check', networkVerified:false, blockhashVerified:false, guardPriceVerified:false,
     readyToSubmit:false, salesOpen:false };
 }
+
+// Canonical immutable request identity for wallet claims and trusted check responses.
+export function buyerRequestId(request) {
+  exact(request, BINDING);
+  return digest(Object.fromEntries(BINDING.map(key => [key, request[key]])));
+}

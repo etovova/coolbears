@@ -1,4 +1,6 @@
 [Частичная подпись asset](SIGNING.md) теперь связывает первый item нового
+
+**PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
 Devnet-заказа с точными SDK bytes, сохраняет claim до native-подписи и готовые
 bytes до возврата. Проверка ответа покупателя пока чистая функция; кошелёк,
 сохранение его ответа и отправитель ещё не подключены.
