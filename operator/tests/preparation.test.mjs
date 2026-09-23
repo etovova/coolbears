@@ -45,7 +45,7 @@ test('the official CLI parser preserves the owner gate, full price, royalty sett
   validateCmConfig(p.cmConfig);
   const parsed = jsonGuardParser(p.cmConfig);
   assert.equal(parsed.guards.addressGate.value.address, policy.owner);
-  assert.equal(parsed.guards.solPayment.value.lamports.basisPoints, 500000000n);
+  assert.equal(parsed.guards.solPayment.value.lamports.basisPoints, 200000000n);
   assert.equal(parsed.guards.solPayment.value.destination, policy.owner);
   assert.equal(parsed.guards.mintLimit, undefined);
   assert.deepEqual(parsed.groups, []);

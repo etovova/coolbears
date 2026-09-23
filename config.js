@@ -2,7 +2,7 @@ window.COOLBEARS_CONFIG = {
   officialWebsite: 'https://coolbears-nfts.com',
   network: 'solana',
   cluster: 'devnet',
-  priceSol: 0.5,
+  priceSol: 0.2,
   supply: 10000,
   royaltyPercent: 7,
   maxPerOrder: 50,
