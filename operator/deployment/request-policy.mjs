@@ -4,6 +4,7 @@ import { PublicKey, VersionedMessage, VersionedTransaction } from '@solana/web3.
 import { base58 } from '@metaplex-foundation/umi/serializers';
 import { ed25519 } from '@noble/curves/ed25519';
 import { DeploymentRpcError } from './rpc.mjs';
+import { inspectSignedDeploymentTransaction } from './signing.mjs';
 export const PROGRAMS = ['CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d',
   'CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J', 'CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ'];
 const ZERO_HASH = '11111111111111111111111111111111';
@@ -53,7 +54,8 @@ export function jsonSnapshot(value) {
   } catch { throw new DeploymentRpcError('PARAMS'); }
 }
 
-export function createRequestValidator(input) {
+export function createRequestValidator(input, { allowSubmission = false } = {}) {
+  need(typeof allowSubmission === 'boolean', 'CONFIGURATION');
   let policy;
   try { policy = JSON.parse(JSON.stringify(input)); } catch { throw new DeploymentRpcError('CONFIGURATION'); }
   need(exact(policy, ['version', 'cluster', 'owner', 'accounts', 'sizes', 'messageIdentities', 'allowSimulation', 'recoverySignatures'])
@@ -73,6 +75,17 @@ export function createRequestValidator(input) {
     need(Array.isArray(params));
     const [first, second] = params;
     switch (method) {
+      case 'sendTransaction': {
+        need(allowSubmission, 'METHOD');
+        need(params.length === 2 && exact(second, ['encoding', 'skipPreflight', 'preflightCommitment', 'maxRetries', 'minContextSlot'])
+          && second.encoding === 'base64' && second.skipPreflight === false && second.preflightCommitment === 'confirmed'
+          && second.maxRetries === 0 && uint(second.minContextSlot));
+        const signed = inspectSignedDeploymentTransaction(first);
+        const bytes = decode(first, 1232), tx = VersionedTransaction.deserialize(bytes);
+        const identity = messageIdentity(Buffer.from(tx.message.serialize()));
+        need(signed.owner === policy.owner && identities.has(identity));
+        return { identity, signature: signed.signature, transactionSha256: createHash('sha256').update(bytes).digest('hex') };
+      }
       case 'getGenesisHash': need(params.length === 0); break;
       case 'getMultipleAccounts':
         need(params.length === 2 && JSON.stringify(first) === JSON.stringify(accounts) && config(second, 'finalized', true)); break;
