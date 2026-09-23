@@ -95,6 +95,9 @@ try {
   await second.evaluate(s => { window.held = false; navigator.locks.request(`coolbears:buyer-order:v1:${scopeKey(s)}`, async () => { window.held=true; await new Promise(resolve=>window.release=resolve); }); }, race);
   await second.waitForFunction(()=>window.held); assert.equal(await code(page,'read',race),'ORDER_BUSY');
   await second.close(); second = null;
+  // Closing the page and release in the browser's lock manager are separate tasks.
+  // Wait on read-only lock state, never retry a write or forcibly steal the lock.
+  await page.waitForFunction(async s => !(await navigator.locks.query()).held.some(lock => lock.name === `coolbears:buyer-order:v1:${scopeKey(s)}`), race, { timeout: 5000 });
   assert.equal((await read(page,race)).revision,1);
   report.cases.push('two-tab create/CAS competition has one winner; busy lock fails promptly and tab closure releases lock without deleting data');
 

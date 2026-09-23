@@ -153,9 +153,9 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-owner-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - run: node operator/tests/deployment-owner-console.browser.mjs
       - name: Buyer custody in real IndexedDB across browser restarts
         run: node operator/tests/order-storage.browser.mjs
+      - run: node operator/tests/deployment-owner-console.browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

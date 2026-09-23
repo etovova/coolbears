@@ -33,3 +33,10 @@ Sales closed, price 0.2 SOL. Do not repeat lab 2/2 or clear working journal,
 bundle, SQLite, locks or browser data. Original assets/site/DNS/Cloudflare
 protections and lab RPC/secrets remain unchanged. Owner password only in safe
 local TTY; actual private deployment bundle/endpoint are still not configured.
+
+First browser run (35896307143) passed 50-key full restart and unknown recovery,
+then observed ORDER_BUSY immediately after closing the lock-holding tab. The
+storage correctly refused concurrent work; the test now waits (at most 5 s)
+for the browser lock manager's read-only held-state to clear before asserting
+read success. No production lock behavior was weakened. Buyer tests now run
+before the longer owner-console suite for faster feedback. Final CI pending.
