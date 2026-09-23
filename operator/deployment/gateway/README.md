@@ -8,9 +8,9 @@ The server independently enforces the same compiled policy as the PR30 client:
 seven exact accounts, one payer, known rent sizes and all 1431 canonical message
 identities. Only the recent blockhash is normalized. Simulations require a
 compile-time opt-in, exact transaction bytes and valid nonempty signatures.
-Recovery signatures are fixed from the existing private journal. They must be
-recompiled when that journal gains a new signed attempt. Runtime policy inputs,
-registration routes, scans, batch, airdrop and send methods are absent.
+Recovery signatures are fixed from the existing private journal. With submission enabled, signatures claimed durably by this gateway also remain
+readable across all attempts without recompilation. Runtime policy inputs,
+registration routes, scans, batch and airdrop methods are absent.
 
 ## Private configuration
 
@@ -109,4 +109,8 @@ Primary references: [Durable Object storage](https://developers.cloudflare.com/d
 compile-time opt-in добавляет проверку всех подписей, постоянные SQLite claims
 по message identity и ограниченное чтение сохранённых signature.
 См. [порядок, команды и ограничения](../SENDING.md). Эта версия не развёрнута;
-рабочий лабораторный Worker не менялся. Снятие claims/retry не реализовано.
+рабочий лабораторный Worker не менялся. PR34 добавляет [явное разрешение повтора после finalized failure](../RETRY.md),
+с независимой серверной проверкой receipt и сохранением всей истории.
+Метод `coolbears_authorizeFailedRetry` доступен только при `allowSubmission`;
+он не передаётся upstream. Подтверждённый failed допускает одну новую подпись,
+не удаляя предыдущий claim. Expiry/отсутствие результата по-прежнему блокируют повтор.

@@ -114,6 +114,7 @@ function applyEvent(snapshot, event) {
       attempt: step.attempts.length + 1, cluster: next.manifest.cluster, owner: next.manifest.owner,
       transactionBase64: request?.transactionBase64, lastValidBlockHeight: request?.lastValidBlockHeight });
     assert.deepEqual(request, expectedRequest, 'REQUEST_BINDING_MISMATCH');
+    requireThat(!step.attempts.some(previous => previous.signed && previous.request.blockhash === request.blockhash), 'RETRY_REQUIRES_NEW_BLOCKHASH');
     const template = decode(definition.transactionBase64), prepared = decode(request.transactionBase64);
     // A fresh blockhash is required in real execution. It may change; every
     // other message byte (including payer, accounts and instructions) is fixed.

@@ -1,11 +1,12 @@
 // Explicit single-step Devnet submission and read-only recovery with CAS writes.
 // No wallet, vault unlock, new signature, blockhash replacement or automatic retry.
 import { readDeploymentBundle } from './vault-store.mjs';
+import { createHash } from 'node:crypto';
 import { appendDeploymentEvent, nextDeploymentAction } from './journal.mjs';
 import { verifySigningResponse } from './signing.mjs';
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from './rpc.mjs';
 import { simulateDeploymentStep } from './simulation.mjs';
-import { reconcileDeploymentStep, assertJournalUnchanged, requireDeploymentCheck as need } from './read.mjs';
+import { reconcileDeploymentStep, reconcileFailedDeploymentStep, assertJournalUnchanged, requireDeploymentCheck as need } from './read.mjs';
 
 const binding = snapshot => ({ manifestSha256: snapshot.manifestSha256, revision: snapshot.revision, headHash: snapshot.headHash });
 const attemptAt = (snapshot, stepId) => snapshot.steps.find(step => step.id === stepId)?.attempts.at(-1);
@@ -13,7 +14,7 @@ const fixed = { salesOpen: false, readyToOpenSales: false, automaticRetry: false
 const failureCode = error => error instanceof DeploymentRpcError ? `RPC_${error.code}`
   : ['JOURNAL_CHANGED_DURING_READ', 'SAVED_SIGNED_ATTEMPT_REQUIRED', 'STEP_NOT_CURRENT',
     'DEVNET_ONLY', 'EXPLICIT_SEND_REQUIRED', 'SIGNED_SIMULATION_REQUIRED', 'SIMULATION_TOO_OLD',
-    'RECONCILIATION_REQUIRED'].includes(error?.checkCode) ? error.checkCode : 'DEPLOYMENT_SEND_STOPPED';
+    'RECONCILIATION_REQUIRED', 'EXPLICIT_RETRY_REVIEW_REQUIRED', 'GATEWAY_RETRY_NOT_AUTHORIZED'].includes(error?.checkCode) ? error.checkCode : 'DEPLOYMENT_SEND_STOPPED';
 
 export async function sendDeploymentStep({ directory, stepId, authorizeDevnetSend = false,
   endpoint, fetchImpl, timeoutMs } = {}) {
@@ -84,5 +85,48 @@ export async function resumeDeploymentStep({ directory, stepId, endpoint, fetchI
   } catch (error) {
     return { status: 'unknown', code: failureCode(error), ...fixed, submissionAttempts: 0, transactionsSent: 0,
       chainVerified: false, networkRequests: report?.networkRequests ?? 0, nextAction: 'reconcile' };
+  }
+}
+
+// Explicit review only: never signs or broadcasts. Lost server/disk replies
+// are recovered by repeating this review against the same current attempt.
+export async function reviewFailedDeploymentStep({ directory, stepId, authorizeRetryReview = false,
+  endpoint, fetchImpl, timeoutMs } = {}) {
+  let report, rpc;
+  try {
+    need(authorizeRetryReview === true, 'EXPLICIT_RETRY_REVIEW_REQUIRED');
+    const bundle = await readDeploymentBundle(directory), baseline = bundle.snapshot;
+    need(baseline.manifest.cluster === 'devnet', 'DEVNET_ONLY');
+    const attempt = attemptAt(baseline, stepId);
+    if (attempt?.state === 'failed') return { status: 'already-recorded', ...binding(baseline), ...fixed,
+      submissionAttempts: 0, transactionsSent: 0, networkRequests: 0, journalWrites: 0, freshChainCheck: false,
+      nextAction: 'manual-retry-prepare' };
+    need(nextDeploymentAction(baseline).stepId === stepId
+      && ['signed', 'send-claimed', 'accepted', 'unknown'].includes(attempt?.state) && attempt.signed, 'RECONCILIATION_REQUIRED');
+    const signed = verifySigningResponse(attempt.request, { transactionBase64: attempt.signed.transactionBase64 });
+    report = await reconcileFailedDeploymentStep({ directory: bundle.journalDirectory, stepId, endpoint, fetchImpl, timeoutMs });
+    if (report.status !== 'failed-verified') return { ...report, ...fixed, submissionAttempts: 0, nextAction: 'reconcile' };
+    need(report.manifestSha256 === baseline.manifestSha256 && report.expectedRevision === baseline.revision
+      && report.expectedHeadHash === baseline.headHash, 'JOURNAL_CHANGED_DURING_READ');
+    await assertJournalUnchanged(bundle.journalDirectory, baseline);
+    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, maxResponseBytes: 4096,
+      failedRetry: { transactionBase64: signed.transactionBase64 } });
+    await assertCluster(rpc, 'devnet');
+    const authorization = await rpc.call('coolbears_authorizeFailedRetry', [signed.transactionBase64]);
+    need(authorization && Object.keys(authorization).sort().join(',') === 'cluster,signature,slot,status,transactionSha256'
+      && authorization.status === 'retry-authorized' && authorization.cluster === 'devnet'
+      && authorization.signature === signed.signature && authorization.slot === report.proof.slot
+      && authorization.transactionSha256 === createHash('sha256').update(Buffer.from(signed.transactionBase64, 'base64')).digest('hex'),
+    'GATEWAY_RETRY_NOT_AUTHORIZED');
+    await assertJournalUnchanged(bundle.journalDirectory, baseline);
+    const saved = await appendDeploymentEvent(bundle.journalDirectory, { type: 'reconcile', stepId,
+      attempt: attempt.number, proof: report.proof }, { expectedRevision: baseline.revision });
+    return { status: 'failed', stepId, attempt: attempt.number, ...binding(saved), ...fixed,
+      submissionAttempts: 0, transactionsSent: 0, chainVerified: true, gatewayRetryAuthorized: true,
+      networkRequests: report.networkRequests + rpc.requests, journalWrites: 1, nextAction: 'manual-retry-prepare' };
+  } catch (error) {
+    return { status: 'unknown', code: failureCode(error), ...fixed, submissionAttempts: 0, transactionsSent: 0,
+      chainVerified: false, networkRequests: (report?.networkRequests ?? 0) + (rpc?.requests ?? 0),
+      nextAction: 'review-same-attempt' };
   }
 }

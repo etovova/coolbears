@@ -9,7 +9,7 @@ import { validateCanonicalDeploymentManifest } from './intent.mjs';
 import { assertCluster, DeploymentRpcError } from './rpc.mjs';
 import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 import { expectedAccountAddresses, verifyExpectedAccounts } from './accounts.mjs';
-import { verifyFinalizedReceipt } from './receipt.mjs';
+import { verifyFinalizedReceipt, verifyFinalizedFailedTransaction } from './receipt.mjs';
 
 const PROGRAMS = [MPL_CORE_PROGRAM_ID, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID];
 const ACTIVE = new Set(['wallet-pending', 'signed', 'send-claimed', 'accepted', 'unknown']);
@@ -179,5 +179,34 @@ export async function reconcileDeploymentStep({ directory, stepId, endpoint, fet
       transactionSucceeded: true, expectedStateVerified: true };
     return { status: 'verified', ...binding(snapshot, stepId), cluster: plan.cluster, genesisHash,
       proof, networkRequests: rpc.requests, transactionsSent: 0, journalWrites: 0, readyToSubmit: false, salesOpen: false };
+  } catch (error) { return blocked(error, phase, rpc, 'unknown'); }
+}
+
+// A finalized execution failure proves atomic rollback of the instructions,
+// not a refund of fees. Also require the exact predecessor account state.
+export async function reconcileFailedDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs } = {}) {
+  let rpc, phase = 'journal';
+  try {
+    const { snapshot, plan, index, step, attempt } = await target(directory, stepId);
+    requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
+    phase = 'network';
+    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
+      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature] });
+    const startedAt = performance.now();
+    const genesisHash = await assertCluster(rpc, plan.cluster);
+    phase = 'receipt';
+    const statusResult = await rpc.call('getSignatureStatuses', [[attempt.signed.signature], { searchTransactionHistory: true }]);
+    const transactionResult = await rpc.call('getTransaction', [attempt.signed.signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }]);
+    const receipt = verifyFinalizedFailedTransaction({ transactionBase64: attempt.signed.transactionBase64, statusResult, transactionResult });
+    phase = 'accounts';
+    const readSlot = await checkState(rpc, plan, index - 1, receipt.slot);
+    phase = 'journal';
+    await unchanged(directory, snapshot);
+    requireThat(performance.now() - startedAt <= 30000, 'READ_CHECK_TOO_OLD');
+    const proof = { kind: 'failed', manifestSha256: snapshot.manifestSha256, stepId, attempt: attempt.number,
+      messageSha256: receipt.messageSha256, signature: receipt.signature, commitment: 'finalized',
+      slot: receipt.slot, readSlot, expectedSha256: sha256Json(step.expected), executionFailed: true, effectsAbsent: true };
+    return { status: 'failed-verified', ...binding(snapshot, stepId), cluster: plan.cluster, genesisHash, proof,
+      networkRequests: rpc.requests, transactionsSent: 0, journalWrites: 0, readyToSubmit: false, salesOpen: false };
   } catch (error) { return blocked(error, phase, rpc, 'unknown'); }
 }
