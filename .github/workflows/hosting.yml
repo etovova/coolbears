@@ -29,6 +29,7 @@ jobs:
       - run: node --test hosting/audit.test.mjs
       - run: node hosting/prepare.mjs
       - run: node hosting/runtime.mjs
+      - run: node hosting/www-redirect/runtime.mjs
       - name: Wrangler validation without upload
         run: node node_modules/wrangler/bin/wrangler.js deploy --config build/hosting-candidate/wrangler.json --dry-run --outdir build/hosting-dry-run
       - uses: actions/upload-artifact@v4

@@ -1,0 +1,253 @@
+{
+  "kind": "live-cloudflare-static-production",
+  "startedAt": "2026-09-23T11:00:24.156Z",
+  "origin": "https://coolbears-nfts.com",
+  "sourceCommit": "5bce65e3735ac24f3a93a826d5143a96558049ff",
+  "candidateManifestSha256": "fd73845f95c98d23066d49a6b3fc3bf73051356bba1788143f3f83a9771e17bc",
+  "connectionOverride": null,
+  "publicDnsRouteTested": true,
+  "passed": false,
+  "checks": [
+    {
+      "name": "bytes app.js",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes CNAME",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/collection/banner.png",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/collection/gif.gif",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/promo-02.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/hero-main.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/collection/logo.png",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/promo-03.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/promo-06.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/promo-05.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/promo-07.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes assets/nft/promo-04.webp",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes devnet/style.css",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes config.js",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes devnet/index.html",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes devnet/app.js",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes index.html",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes devnet/app.js.LEGAL.txt",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes metadata/collection.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes metadata/0000.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes mobile-fix.css",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes sitemap.xml",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes privacy.html",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n200 !== 307\n"
+    },
+    {
+      "name": "bytes robots.txt",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes style.css",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes terms.html",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n200 !== 307\n"
+    },
+    {
+      "name": "bytes wallet-core.mjs",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes wallet-ui.mjs",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes wallet-standard.js.LEGAL.txt",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes metadata/hidden/0000.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes wallet.css",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes wallet-standard.js",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes metadata/hidden/0001.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes metadata/hidden/9999.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "bytes metadata/hidden/4999.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n+ actual - expected\n\n+ 'GitHub.com'\n- 'cloudflare'\n"
+    },
+    {
+      "name": "directory redirect",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n301 !== 307\n"
+    },
+    {
+      "name": "not served /missing.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /metadata/hidden/10000.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /operator/package.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /private/reveal.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /.git/config",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /_headers",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /wrangler.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "not served /report.json",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n9379 !== 0\n"
+    },
+    {
+      "name": "no endpoint /rpc",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n131 !== 0\n"
+    },
+    {
+      "name": "no endpoint /api/mint",
+      "passed": false,
+      "error": "Expected values to be strictly equal:\n\n131 !== 0\n"
+    },
+    {
+      "name": "GIF HEAD and ETag",
+      "passed": true
+    }
+  ],
+  "salesOpen": false,
+  "priceSol": 0.2,
+  "realWalletTested": false,
+  "realRpcRequests": 0,
+  "realTransactionsSent": 0,
+  "mainDomainSwitched": false,
+  "completedAt": "2026-09-23T11:02:01.462Z"
+}

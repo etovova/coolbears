@@ -1,4 +1,41 @@
+# CoolBears — актуально после перехода на Cloudflare
+
+23 сентября 2026: **зона Active, apex и www привязаны к Cloudflare**.
+Продолжать с PR29, ветка `hosting-staging-20260923`.
+[Отчёт переноса](hosting-cutover-20260923.md),
+[47 edge-проверок](hosting-cutover-edge-20260923.json).
+
+NS уже сменены владельцем, полный DNS и DNSSEC Porkbun сверены. Повторно
+просить их, OAuth или разрешение переноса не нужно. Основной assets-only Worker
+`coolbears-site-candidate` не перезагружался. Www обслуживает отдельный assets-only
+`coolbears-www-redirect`: 301 на HTTPS apex с сохранением пути/query.
+Продажи закрыты, 0,2 SOL. Main и GitHub Pages сохранены для отката.
+
+Ближайшая проверка — распространение DNS: Google уже видит Cloudflare, другой
+резолвер и обычный путь текущей среды пока ещё GitHub. Не выдавать 47 проверок
+с явно выбранным Cloudflare IP за полное распространение DNS.
+Один read-only RPC запрос вернул 429 / RATE_LIMIT. RPC не изменён, CORS не
+расширен, транзакций нет. Production RPC остаётся отдельным незавершённым этапом.
+
+Ниже история; старые блокеры NS/DNSSEC уже закрыты.
+
+---
+
 # CoolBears — продолжение после PR28
+
+## Актуальное продолжение: Cloudflare staging опубликован
+
+23 сентября 2026: владелец разрешил согласованный перенос и подключил Cloudflare.
+Продолжать из `hosting-staging-20260923`. См. [новый отчёт](hosting-staging-20260923.md)
+и [47 живых проверок](hosting-staging-live-20260923.json).
+Отдельный assets-only сайт `coolbears-site-candidate.yauheni84.workers.dev` работает.
+В pending-зоне 4 A + www CNAME переведены в DNS-only, значения записей сохранены.
+Основной сайт всё ещё GitHub Pages, авторитетные NS — Porkbun, RPC не изменён.
+Следующий обязательный шаг — полный экспорт DNS Porkbun и состояние DNSSEC/DS;
+без них NS не переключать. Отдельный вход Porkbun ещё не выполнен. OAuth
+Cloudflare не повторять. Цена 0,2 SOL, продажи закрыты, mainnet не запускать.
+
+Ниже — историческая точка до разрешения переноса; новый раздел выше имеет приоритет.
 
 23 сентября 2026. Продолжать из `hosting-results-20260923`: код `7d07ab3cf2266279dd9632b9642e192fbd0bc217` плюс постоянные результаты. Draft [PR28](https://github.com/etovova/coolbears/pull/28) не слит. [Отчёт](hosting-pr28-20260923.md), [JSON](hosting-pr28-20260923.json), [конкретный план переноса](../README.md).
 
