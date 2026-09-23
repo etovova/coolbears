@@ -81,7 +81,7 @@ function machineFixture(loaded = 0, changes = {}) {
 function guardFixture(changes = {}) {
   return rpc(guardSerializer.serialize({ base: machineExpected.machine, bump: findCandyGuardPda(umi, { base: machineExpected.machine })[1],
     authority: machineExpected.guardAuthority, guards: { addressGate: some({ address: policy.owner }),
-      solPayment: some({ lamports: lamports(500000000), destination: policy.owner }) }, groups: [], ...changes }), MPL_CORE_CANDY_GUARD_PROGRAM_ID);
+      solPayment: some({ lamports: lamports(200000000), destination: policy.owner }) }, groups: [], ...changes }), MPL_CORE_CANDY_GUARD_PROGRAM_ID);
 }
 function corrupt(account, mutate) {
   const bytes = bytesOf(account); mutate(bytes);
@@ -189,10 +189,10 @@ test('loaded prefix has exact counter, bitmap, clean unused area and correct min
 
 test('guard must be canonical Core guard with exact base/bump/authority/payment and no additional guards/groups', () => {
   for (const changes of [{ base: address(88) }, { authority: address(88) }, { bump: 0 }, { groups: [{ label: 'other', guards: {} }] },
-    { guards: { addressGate: some({ address: address(88) }), solPayment: some({ lamports: lamports(500000000), destination: policy.owner }) } },
+    { guards: { addressGate: some({ address: address(88) }), solPayment: some({ lamports: lamports(200000000), destination: policy.owner }) } },
     { guards: { addressGate: some({ address: policy.owner }), solPayment: some({ lamports: lamports(1), destination: policy.owner }) } },
-    { guards: { addressGate: some({ address: policy.owner }), solPayment: some({ lamports: lamports(500000000), destination: address(88) }) } },
-    { guards: { addressGate: some({ address: policy.owner }), solPayment: some({ lamports: lamports(500000000), destination: policy.owner }), botTax: some({ lamports: lamports(1), lastInstruction: true }) } },
+    { guards: { addressGate: some({ address: policy.owner }), solPayment: some({ lamports: lamports(200000000), destination: address(88) }) } },
+    { guards: { addressGate: some({ address: policy.owner }), solPayment: some({ lamports: lamports(200000000), destination: policy.owner }), botTax: some({ lamports: lamports(1), lastInstruction: true }) } },
   ]) deny(machineExpected, [machineFixture(), guardFixture(changes)]);
   deny(machineExpected, [machineFixture(), corrupt(guardFixture(), bytes => { bytes[0] ^= 1; })]);
   deny(machineExpected, [machineFixture(), rpc(Buffer.concat([bytesOf(guardFixture()), Buffer.from([0])]), MPL_CORE_CANDY_GUARD_PROGRAM_ID)]);

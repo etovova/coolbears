@@ -55,7 +55,7 @@ describe('saved offline preparation integrity', { concurrency: false }, () => {
     assert.equal(report.reservedIndex, 0);
     assert.equal(report.reservedOwner, policy.owner);
     assert.equal(report.reservedAssetCreated, false);
-    assert.equal(report.priceLamports, '500000000');
+    assert.equal(report.priceLamports, '200000000');
     assert.equal(report.royaltyBasisPoints, 700);
     assert.equal(report.collectionAddressProvided, false);
     assert.equal(report.salesOpen, false);
