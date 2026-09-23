@@ -18,7 +18,7 @@ export async function simulateDeploymentStep({ directory, stepId, mode, endpoint
     if (mode === 'signed') {
       need(attempt?.state === 'signed' && attempt.signed, 'SAVED_SIGNED_ATTEMPT_REQUIRED');
       verifySigningResponse(attempt.request, { transactionBase64: attempt.signed.transactionBase64 });
-    } else need(!attempt?.signed || attempt.state === 'failed', 'UNSIGNED_MODE_HAS_OWNER_SIGNATURE');
+    } else need(!attempt?.signed || ['failed', 'expired'].includes(attempt.state), 'UNSIGNED_MODE_HAS_OWNER_SIGNATURE');
     const startedAt = performance.now();
     const preflight = await preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs });
     previousRequests = preflight.networkRequests;
@@ -32,7 +32,7 @@ export async function simulateDeploymentStep({ directory, stepId, mode, endpoint
     if (mode === 'signed') need(candidate.transactionBase64 === attempt.signed.transactionBase64, 'SIGNED_SIMULATION_BYTES_CHANGED');
     else {
       need(tx.signatures[0].every(byte => byte === 0), 'UNSIGNED_MODE_HAS_OWNER_SIGNATURE');
-      if (attempt?.state === 'failed') need(preflight.source === 'refreshed-unsigned-template'
+      if (['failed', 'expired'].includes(attempt?.state)) need(preflight.source === 'refreshed-unsigned-template'
         && tx.signatures.every(signature => signature.every(byte => byte === 0)), 'RETRY_TEMPLATE_REQUIRED');
     }
     rpc = await createScopedDeploymentRpc({ manifest: baseline.manifest, endpoint, fetchImpl, timeoutMs,

@@ -3,11 +3,15 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequestValidator, validRecoverySignature } from '../request-policy.mjs';
 import { createDeploymentRpc, DeploymentRpcError, GENESIS_HASHES } from '../rpc.mjs';
 import { verifyFinalizedFailedTransaction } from '../receipt.mjs';
+import { VersionedTransaction } from '@solana/web3.js';
+import { anchorFromLatestBlockhash, validateHashAnchor, verifyExpiredTransaction,
+  validExpiryEvidence, EXPIRY_FIELDS, DeploymentExpiryError } from '../expiry.mjs';
 const HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
   'x-content-type-options': 'nosniff' };
 const KEY = 'operator-rpc-limits:v1', INTERVAL = 200, HOLD = 15000;
 const integer = n => Number.isSafeInteger(n) && n >= 0;
 const object = v => v && typeof v === 'object' && !Array.isArray(v);
+const sameClaim = (a, b) => a?.identity === b?.identity && a?.signature === b?.signature && a?.transactionSha256 === b?.transactionSha256;
 class GatewayError extends Error {
   constructor(category, status = 503, retryAfter) { super(category); Object.assign(this, { category, status, retryAfter }); }
 }
@@ -110,6 +114,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
       const endpoint = new URL('https://devnet.helius-rpc.com/');
       endpoint.searchParams.set('api-key', this.env.HELIUS_API_KEY);
       const rpc = createDeploymentRpc({ endpoint: endpoint.href, allowSimulation: true, timeoutMs: 12000,
+        allowExpiryReads: ['getBlock', 'getFirstAvailableBlock', 'getSignaturesForAddress'].includes(method),
         ...(method === 'sendTransaction' ? { submission: { transactionBase64: params[0], minContextSlot: params[1].minContextSlot } } : {}),
         fetchImpl: async (url, init) => {
           let reserved = false, cooldown = 0;
@@ -151,10 +156,10 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
       }
     }
     async validateRequest(method, params) {
-      if (method === 'coolbears_authorizeFailedRetry') {
+      if (['coolbears_authorizeFailedRetry', 'coolbears_authorizeExpiredRetry'].includes(method)) {
         if (!allowSubmission || !Array.isArray(params) || params.length !== 1) fail('POLICY', 400);
         try {
-          return { reviewFailure: true, claim: validate('sendTransaction', [params[0], {
+          return { reviewFailure: method === 'coolbears_authorizeFailedRetry', reviewExpiry: method === 'coolbears_authorizeExpiredRetry', claim: validate('sendTransaction', [params[0], {
             encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 0 }]) };
         } catch { fail('POLICY', 400); }
       }
@@ -173,22 +178,75 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
         catch { fail('POLICY', 400); }
       }
     }
+    async eligibleReplacement(tx, claim) {
+      const previous = await tx.get(`deployment-send:v1:${claim.identity}`);
+      if (previous !== undefined) {
+        const failure = await tx.get(`deployment-failed:v1:${previous.signature}`);
+        const expiry = await tx.get(`deployment-expired:v1:${previous.signature}`);
+        if (!this.matchesFailure(previous, failure) && !this.matchesExpiry(previous, expiry)) fail('ALREADY_CLAIMED', 409);
+      }
+      if (await tx.get(`deployment-signature:v1:${claim.signature}`) !== undefined) fail('SIGNATURE_USED', 409);
+      return previous;
+    }
+    async writeClaim(tx, claim, previous) {
+      if (previous !== undefined) await tx.put(`deployment-attempt:v1:${previous.signature}`, previous);
+      await tx.put(`deployment-send:v1:${claim.identity}`, claim);
+      await tx.put(`deployment-attempt:v1:${claim.signature}`, claim);
+      await tx.put(`deployment-signature:v1:${claim.signature}`, claim.identity);
+    }
     async claimSubmission(claim) {
       // Never delete history. A new signature can replace the current pointer
-      // only after independent finalized failure proof for that exact pointer.
+      // only after finalized failure or expiry proof for that exact pointer.
       await this.storage.transaction(async tx => {
-        const key = `deployment-send:v1:${claim.identity}`;
-        const previous = await tx.get(key);
-        if (previous !== undefined) {
-          const failure = await tx.get(`deployment-failed:v1:${previous.signature}`);
-          if (!this.matchesFailure(previous, failure)) fail('ALREADY_CLAIMED', 409);
-          await tx.put(`deployment-attempt:v1:${previous.signature}`, previous);
-        }
-        if (await tx.get(`deployment-signature:v1:${claim.signature}`) !== undefined) fail('SIGNATURE_USED', 409);
-        await tx.put(key, claim);
-        await tx.put(`deployment-attempt:v1:${claim.signature}`, claim);
-        await tx.put(`deployment-signature:v1:${claim.signature}`, claim.identity);
+        const previous = await this.eligibleReplacement(tx, claim);
+        await this.writeClaim(tx, claim, previous);
       });
+    }
+    matchesExpiry(claim, expiry) {
+      return object(claim) && object(expiry) && expiry.version === 1 && expiry.kind === 'finalized-expiry'
+        && sameClaim(claim, expiry) && validExpiryEvidence(expiry);
+    }
+    async rememberHash(result, params) {
+      let anchor;
+      try { anchor = anchorFromLatestBlockhash(result, params[0].minContextSlot ?? 0); }
+      catch { fail('HASH_ANCHOR_INVALID', 502); }
+      await this.storage.transaction(async tx => {
+        const key = `deployment-hash:v1:${anchor.blockhash}`, previous = await tx.get(key);
+        if (previous === undefined) await tx.put(key, anchor);
+        else {
+          try { validateHashAnchor(previous); } catch { fail('LEDGER'); }
+          if (previous.blockhash !== anchor.blockhash || previous.lastValidBlockHeight !== anchor.lastValidBlockHeight) fail('LEDGER');
+          // Keep the first observation. Finalized getBlock must later match it.
+        }
+      });
+    }
+    async authorizeExpiredRetry(claim, transactionBase64) {
+      const key = `deployment-send:v1:${claim.identity}`, expiryKey = `deployment-expired:v1:${claim.signature}`;
+      const previous = await this.storage.get(key);
+      if (!sameClaim(previous, claim)) await this.eligibleReplacement(this.storage, claim);
+      let expiry = await this.storage.get(expiryKey);
+      if (expiry !== undefined && (!sameClaim(previous, claim) || !this.matchesExpiry(claim, expiry))) fail('LEDGER');
+      if (expiry === undefined) {
+        const hash = VersionedTransaction.deserialize(Buffer.from(transactionBase64, 'base64')).message.recentBlockhash;
+        const anchor = await this.storage.get(`deployment-hash:v1:${hash}`);
+        let proof;
+        try { proof = await verifyExpiredTransaction({ transactionBase64, anchor, call: (method, params) => this.upstream(method, params) }); }
+        catch (error) { if (error instanceof DeploymentExpiryError) fail(error.code, 409); throw error; }
+        expiry = { version: 1, kind: 'finalized-expiry', ...claim, ...proof };
+        await this.storage.transaction(async tx => {
+          const current = await tx.get(key);
+          if (!sameClaim(current, previous)) fail('CLAIM_MISMATCH', 409);
+          if (await tx.get(expiryKey) !== undefined) fail('LEDGER');
+          if (!sameClaim(current, claim)) {
+            const old = await this.eligibleReplacement(tx, claim);
+            // Retire a never-submitted signed attempt atomically with its proof.
+            await this.writeClaim(tx, claim, old);
+          }
+          await tx.put(expiryKey, expiry);
+        });
+      }
+      return { status: 'retry-authorized', kind: 'expired', cluster: 'devnet', signature: claim.signature,
+        transactionSha256: claim.transactionSha256, ...Object.fromEntries(EXPIRY_FIELDS.map(key => [key, expiry[key]])) };
     }
     matchesFailure(claim, failure) {
       return object(claim) && object(failure) && failure.version === 1 && failure.kind === 'finalized-failure'
@@ -233,8 +291,9 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           || body.jsonrpc !== '2.0' || !integer(body.id) || body.id < 1) fail('REQUEST', 400);
         id = body.id;
         const claim = await this.validateRequest(body.method, body.params);
-        if (claim?.reviewFailure) {
-          const result = await this.authorizeFailedRetry(claim.claim, body.params[0]);
+        if (claim?.reviewFailure || claim?.reviewExpiry) {
+          const result = claim.reviewFailure ? await this.authorizeFailedRetry(claim.claim, body.params[0])
+            : await this.authorizeExpiredRetry(claim.claim, body.params[0]);
           return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { headers: HEADERS });
         }
         if (claim) await this.claimSubmission(claim);
@@ -246,6 +305,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           this.genesisVerified = true;
         }
         if (body.method !== 'getGenesisHash') result = await this.upstream(body.method, body.params);
+        if (allowSubmission && body.method === 'getLatestBlockhash') await this.rememberHash(result, body.params);
         return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { headers: HEADERS });
       } catch (error) { return errorResponse(error, id); }
       finally { if (ownsBusy) this.busy = false; }

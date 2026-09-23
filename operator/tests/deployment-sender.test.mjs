@@ -22,12 +22,12 @@ const key = n => Keypair.fromSeed(createHash('sha256').update(`sender-fixture-${
 const owner = key('owner'), passphrase = Buffer.from('sender-fixture-private-password');
 const endpoint = 'https://sender.test/rpc', stepId = 'collection-create';
 const originalOwner = policy.owner, originalFetch = globalThis.fetch;
-let fixture, request, signed, sendDeploymentStep, resumeDeploymentStep, reviewFailedDeploymentStep, runDeploymentSenderCli;
+let fixture, request, signed, sendDeploymentStep, resumeDeploymentStep, reviewFailedDeploymentStep, reviewExpiredDeploymentStep, runDeploymentSenderCli;
 before(async () => {
   policy.owner = owner.publicKey.toBase58(); globalThis.fetch = () => assert.fail('Unstubbed HTTP forbidden');
   // The account verifier snapshots the approved owner on import. Load it after
   // installing this worker's disposable policy, as in deployment-read tests.
-  ({ sendDeploymentStep, resumeDeploymentStep, reviewFailedDeploymentStep } = await import('../deployment/sender.mjs'));
+  ({ sendDeploymentStep, resumeDeploymentStep, reviewFailedDeploymentStep, reviewExpiredDeploymentStep } = await import('../deployment/sender.mjs'));
   ({ runDeploymentSenderCli } = await import('../deployment/send-cli.mjs'));
   fixture = await createDeploymentSignerVault({ id: 'sender-fixture', cluster: 'devnet', blockhash: key('hash').publicKey.toBase58(),
     lastValidBlockHeight: 2000, machineRentLamports: '5000000000', passphrase });
@@ -308,4 +308,74 @@ test('retry-review transport grant is exact, separate from send, Devnet-only and
   let output = '';
   assert.equal(await runDeploymentSenderCli(['review-failure', '/missing', stepId], { env: {}, write: text => { output += text; } }), 1);
   assert.match(output, /--authorize-retry/);
+});
+
+const expire = (h, rpc, extra = {}) => reviewExpiredDeploymentStep({ directory: h.directory, stepId, endpoint,
+  fetchImpl: rpc.fetchImpl, authorizeRetryReview: true, ...extra });
+
+test('expiry retirement: lost gateway reply, account mismatch, CAS recovery and a new signed attempt without sending the old bytes', async t => {
+  const h = await harness(t), compiled = await compileDeploymentRpcPolicy(fixture.manifest, { allowSimulation: true });
+  const values = new Map(), storage = { async get(key) { return structuredClone(values.get(key)); },
+    async put(key, value) { values.set(key, structuredClone(value)); }, async transaction(fn) { return fn(this); } };
+  const token = 'E'.repeat(43), env = { OPERATOR_RPC_TOKEN: token, HELIUS_API_KEY: 'test-only-secret' };
+  const { DeploymentGate, worker } = makeGateway(compiled, { allowSubmission: true });
+  const fundingTx = VersionedTransaction.deserialize(Buffer.from(signed.transactionBase64, 'base64'));
+  fundingTx.message.recentBlockhash = key('funding-hash').publicKey.toBase58(); fundingTx.sign([owner]);
+  const { base58 } = await import('@metaplex-foundation/umi/serializers');
+  const fundingSignature = base58.deserialize(fundingTx.signatures[0])[0];
+  const expiryResults = { getLatestBlockhash: { context: { slot: 1000 }, value: { blockhash: request.blockhash, lastValidBlockHeight: 2000 } },
+    getBlock: null, isBlockhashValid: { context: { slot: 2500 }, value: false }, getBlockHeight: 2100,
+    getFirstAvailableBlock: 1, getSignatureStatuses: { context: { slot: 2600 }, value: [null] }, getTransaction: null,
+    getSignaturesForAddress: [{ signature: fundingSignature, slot: 999, err: null, confirmationStatus: 'finalized' }],
+    getMultipleAccounts: { context: { slot: 2700 }, value: [{ executable: true }, { executable: true }, { executable: true }, null, null, null, null] } };
+  const expiryRpc = completed => upstream({ override: { ...expiryResults,
+    ...(completed ? { getMultipleAccounts: { context: { slot: 2700 }, value: [{ executable: true }, { executable: true }, { executable: true }, collectionAccount(), null, null, null] } } : {}) },
+    onCall: call => call.method === 'getBlock' ? new Response(JSON.stringify({ jsonrpc: '2.0', id: call.id,
+      result: { blockhash: call.params[0] === 1000 ? request.blockhash : key('root').publicKey.toBase58(),
+        blockHeight: call.params[0] === 1000 ? 1850 : 2100, parentSlot: call.params[0] - 1 } })) : undefined });
+  let now = 1800000000000, rpc = expiryRpc(false), gate, lose = true;
+  const calls = [];
+  function restart() { gate = new DeploymentGate({ storage }, env, { clock: () => now, pause: async ms => { now += ms; },
+    fetchImpl: (_url, init) => { calls.push(JSON.parse(init.body)); return rpc.fetchImpl(endpoint, init); } }); }
+  restart(); env.DEPLOYMENT_GATE = { idFromName: name => name, get: () => gate };
+  const fetchImpl = createGatewayFetch({ endpoint, token, fetchImpl: async (url, init) => {
+    const response = await worker.fetch(new Request(url, init), env);
+    if (JSON.parse(init.body).method === 'coolbears_authorizeExpiredRetry' && lose) { lose = false; throw Error('private reply loss'); }
+    return response;
+  } });
+  const none = upstream(); assert.equal((await expire(h, none, { authorizeRetryReview: false })).code, 'EXPLICIT_RETRY_REVIEW_REQUIRED'); assert.equal(none.calls.length, 0);
+  const low = createDeploymentRpc({ endpoint, fetchImpl });
+  await low.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: 0 }]);
+  assert.equal((await expire(h, { fetchImpl })).status, 'unknown'); assert.equal((await h.snapshot()).revision, 2);
+  assert.equal(values.has(`deployment-expired:v1:${signed.signature}`), true);
+  restart(); rpc = expiryRpc(true);
+  assert.equal((await expire(h, { fetchImpl })).status, 'unknown'); assert.equal((await h.snapshot()).revision, 2);
+  rpc = expiryRpc(false);
+  await mkdir(path.join(h.journalDirectory, '.writer-lock'), { mode: 0o700 });
+  assert.equal((await expire(h, { fetchImpl })).status, 'unknown');
+  await rm(path.join(h.journalDirectory, '.writer-lock'), { recursive: true }); // fixture-owned lock only
+  const recovered = await expire(h, { fetchImpl }); assert.equal(recovered.status, 'expired', JSON.stringify(recovered));
+  assert.equal((await expire(h, { fetchImpl })).status, 'already-recorded');
+  assert.equal(calls.filter(c => c.method === 'getSignaturesForAddress').length, 1);
+  assert.equal(calls.some(c => c.method === 'sendTransaction'), false);
+  const fresh = { getLatestBlockhash: { context: { slot: 3012 }, value: { blockhash: key('after-expiry').publicKey.toBase58(), lastValidBlockHeight: 4000 } },
+    getMultipleAccounts: { ...expiryResults.getMultipleAccounts, context: { slot: 3010 } },
+    getBalance: { context: { slot: 3011 }, value: 10000000000 }, getFeeForMessage: { context: { slot: 3013 }, value: 10000 },
+    isBlockhashValid: { context: { slot: 3014 }, value: true }, getBlockHeight: 3100,
+    simulateTransaction: { context: { slot: 3014 }, value: { err: null, unitsConsumed: 5000 } } };
+  rpc = upstream({ override: fresh });
+  const { prepareDeploymentSigning, acceptDeploymentSigningResponse } = await import('../deployment/handoff.mjs');
+  const prepared = await prepareDeploymentSigning({ directory: h.directory, stepId, passphrase, endpoint, fetchImpl, retry: true });
+  const tx = VersionedTransaction.deserialize(Buffer.from(prepared.request.transactionBase64, 'base64')); tx.sign([owner]);
+  const replacement = verifySigningResponse(prepared.request, { transactionBase64: Buffer.from(tx.serialize()).toString('base64') });
+  await acceptDeploymentSigningResponse({ directory: h.directory, request: prepared.request, response: { transactionBase64: replacement.transactionBase64 } });
+  rpc = upstream({ override: { ...fresh, sendTransaction: replacement.signature } });
+  const sent = await send(h, { fetchImpl }); assert.equal(sent.status, 'accepted', JSON.stringify(sent));
+  rpc = upstream({ completed: true, override: {
+    getSignatureStatuses: { context: { slot: 3100 }, value: [{ slot: 3000, confirmations: null, err: null, confirmationStatus: 'finalized' }] },
+    getMultipleAccounts: { context: { slot: 3101 }, value: [{ executable: true }, { executable: true }, { executable: true }, collectionAccount(), null, null, null] },
+    getTransaction: { slot: 3000, version: 0, meta: { err: null }, transaction: [replacement.transactionBase64, 'base64'] } } });
+  const final = await resume(h, { fetchImpl }); assert.equal(final.status, 'verified', JSON.stringify(final));
+  assert.deepEqual((await h.snapshot()).steps[0].attempts.map(a => a.state), ['expired', 'verified']);
+  assert.equal(calls.filter(c => c.method === 'sendTransaction').length, 1);
 });

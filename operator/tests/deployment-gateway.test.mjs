@@ -309,3 +309,91 @@ test('PR33 claim compatibility and lost failure-write acknowledgment retain proo
   assert.equal(h.storage.values.get(`deployment-attempt:v1:${item.signature}`).signature, item.signature);
   assert.equal(h.storage.values.get('operator-rpc-limits:v1').used, h.calls.length);
 });
+
+function expiryResponder(item, change = () => {}) {
+  const hash = item.tx.message.recentBlockhash;
+  const values = { getLatestBlockhash: { context: { slot: 1000 }, value: { blockhash: hash, lastValidBlockHeight: 850 } },
+    anchor: { blockhash: hash, blockHeight: 700, parentSlot: 999 },
+    horizon: { blockhash: key('horizon').publicKey.toBase58(), blockHeight: 900, parentSlot: 1199 },
+    isBlockhashValid: { context: { slot: 1200 }, value: false }, getFirstAvailableBlock: 1,
+    getSignatureStatuses: { context: { slot: 1200 }, value: [null] }, getTransaction: null,
+    getSignaturesForAddress: [{ signature: signedSubmission(key('funding').publicKey.toBase58()).signature,
+      slot: 999, err: null, confirmationStatus: 'finalized' }] };
+  change(values);
+  return rpc => {
+    let result;
+    if (rpc.method === 'sendTransaction') result = inspectSignedDeploymentTransaction(rpc.params[0]).signature;
+    else if (rpc.method === 'getBlock') result = rpc.params[0] === 1000 ? values.anchor : values.horizon;
+    else if (Object.hasOwn(values, rpc.method)) result = values[rpc.method];
+    else return;
+    return new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result }));
+  };
+}
+const remember = h => h.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: 0 }]);
+test('anchored expiry retires sent and never-sent signed attempts, persists across restart and permits one new signature', async () => {
+  for (const submitted of [true, false]) {
+    const item = signedSubmission(), replacement = signedSubmission(key('expiry-replacement').publicKey.toBase58());
+    const h = harness({ allowSubmission: true, responder: expiryResponder(item) });
+    assert.equal((await remember(h)).status, 200);
+    if (submitted) assert.equal((await h.call('sendTransaction', item.params)).status, 200);
+    h.restart();
+    const checked = await h.call('coolbears_authorizeExpiredRetry', [item.bytes]);
+    assert.equal(checked.status, 200, await checked.clone().text()); const evidence = (await checked.json()).result;
+    assert.equal(evidence.kind, 'expired'); assert.equal(evidence.blockHeight, 900); assert.equal(evidence.lastValidBlockHeight, 850);
+    assert.equal(h.calls.some(c => c.method.startsWith('coolbears_')), false);
+    const before = h.calls.length; h.restart();
+    assert.deepEqual((await (await h.call('coolbears_authorizeExpiredRetry', [item.bytes])).json()).result, evidence);
+    assert.equal(h.calls.length, before); assert.equal((await h.call('sendTransaction', item.params)).status, 409);
+    assert.equal((await h.call('sendTransaction', replacement.params)).status, 200);
+    assert.equal((await h.call('sendTransaction', replacement.params)).status, 409);
+    assert.equal((await h.call('coolbears_authorizeExpiredRetry', [item.bytes])).status, 409);
+    assert.equal(h.calls.filter(c => c.method === 'sendTransaction').length, submitted ? 2 : 1);
+    assert.equal(h.storage.values.get(`deployment-attempt:v1:${item.signature}`).signature, item.signature);
+    assert.equal(h.storage.values.get('operator-rpc-limits:v1').used, h.calls.length);
+  }
+});
+test('missing anchor, fork mismatch, pruning, live hash and incomplete history retain existing claims', async () => {
+  const item = signedSubmission();
+  const missing = harness({ allowSubmission: true, responder: expiryResponder(item) });
+  await missing.call('sendTransaction', item.params);
+  const count = missing.calls.length;
+  assert.equal(await category(await missing.call('coolbears_authorizeExpiredRetry', [item.bytes])), 'EXPIRY_ANCHOR_REQUIRED');
+  assert.equal(missing.calls.length, count);
+  for (const change of [v => { v.anchor.blockhash = key('fork').publicKey.toBase58(); },
+    v => { v.getFirstAvailableBlock = 1001; }, v => { v.isBlockhashValid.value = true; },
+    v => { v.getSignaturesForAddress = []; }, v => { v.getSignaturesForAddress[0].signature = item.signature; }]) {
+    const h = harness({ allowSubmission: true, responder: expiryResponder(item, change) });
+    await remember(h); await h.call('sendTransaction', item.params);
+    assert.equal((await h.call('coolbears_authorizeExpiredRetry', [item.bytes])).status, 409);
+    assert.equal(h.storage.values.has(`deployment-expired:v1:${item.signature}`), false);
+    assert.equal((await h.call('sendTransaction', signedSubmission(key('new-after-unknown').publicKey.toBase58()).params)).status, 409);
+  }
+});
+test('expiry acknowledgment loss, storage failure and concurrent review preserve quota and never broadcast', async () => {
+  const item = signedSubmission(), h = harness({ allowSubmission: true, responder: expiryResponder(item) });
+  await remember(h);
+  const put = h.storage.put.bind(h.storage); let lose = true;
+  h.storage.put = async (key, value) => { await put(key, value);
+    if (key.startsWith('deployment-expired:') && lose) { lose = false; throw Error(secret); } };
+  const results = await Promise.all([h.call('coolbears_authorizeExpiredRetry', [item.bytes]), h.call('coolbears_authorizeExpiredRetry', [item.bytes])]);
+  assert.deepEqual(results.map(r => r.status).sort(), [429, 503]);
+  h.restart(); assert.equal((await h.call('coolbears_authorizeExpiredRetry', [item.bytes])).status, 200);
+  assert.equal(h.calls.some(c => c.method === 'sendTransaction'), false);
+  const disabled = harness(); assert.equal((await disabled.call('coolbears_authorizeExpiredRetry', [item.bytes])).status, 400);
+  for (const method of ['getBlock', 'getSignaturesForAddress', 'getFirstAvailableBlock'])
+    assert.equal((await h.call(method, [])).status, 400);
+});
+test('blockhash anchor is stored before response, never overwritten, and a conflicting provider lifetime is rejected', async () => {
+  const item = signedSubmission(); let changed = false;
+  const h = harness({ allowSubmission: true, responder: rpc => expiryResponder(item, v => {
+    if (changed) v.getLatestBlockhash.value.lastValidBlockHeight++;
+  })(rpc) });
+  assert.equal((await remember(h)).status, 200);
+  const anchorKey = `deployment-hash:v1:${item.tx.message.recentBlockhash}`;
+  const first = h.storage.values.get(anchorKey); assert.equal(first.slot, 1000);
+  changed = true; h.restart();
+  assert.equal(await category(await remember(h)), 'LEDGER');
+  assert.deepEqual(h.storage.values.get(anchorKey), first);
+  const broken = harness({ allowSubmission: true, responder: expiryResponder(item, v => { v.getLatestBlockhash.context.slot = 0; }) });
+  assert.equal((await remember(broken)).status, 502); assert.equal(broken.storage.values.has(anchorKey), false);
+});
