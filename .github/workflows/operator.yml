@@ -128,6 +128,7 @@ jobs:
       - run: npm run --prefix operator setup
       - run: node operator/tests/order-submission.runtime.mjs
       - run: node operator/tests/order-replacement.runtime.mjs
+      - run: node operator/tests/order-failure-recovery.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
@@ -160,6 +161,8 @@ jobs:
         run: node operator/tests/order-submission.browser.mjs
       - name: Buyer reviewed replacement across browser and gateway restarts
         run: node operator/tests/order-replacement.browser.mjs
+      - name: Buyer finalized failure and paid fee recovery
+        run: node operator/tests/order-failure-recovery.browser.mjs
       - name: Buyer HTTPS checker through workerd and SQLite
         run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
@@ -181,4 +184,5 @@ jobs:
             operator/build/buyer-gateway-chromium/
             operator/build/buyer-submission-chromium/
             operator/build/buyer-replacement-chromium/
+            operator/build/buyer-failure-recovery-chromium/
           retention-days: 14

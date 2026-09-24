@@ -104,15 +104,23 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     }
     if(['getSignatureStatuses','getTransaction'].includes(call.method)){
       const receiptSlot=found?.generation===2?1450:650,statusSlot=found?.generation===2?1500:700;
-      const failed=mode==='failed'?{InstructionError:[0,{Custom:1}]}:null;
+      const failureMode=mode.startsWith('failure-'),pending=mode==='pending'||mode==='failure-pending';
+      const failed=mode==='failed'||failureMode?{InstructionError:[0,{Custom:1}]}:null;
+      let failureMeta;
+      if(found&&failureMode){
+        const tx=VersionedTransaction.deserialize(Buffer.from(found.bytes,'base64'));
+        const preBalances=Array(tx.message.staticAccountKeys.length).fill(2000000);preBalances[0]=20000000000;preBalances[1]=0;
+        const postBalances=[...preBalances];postBalances[0]-=10000;
+        failureMeta={fee:mode==='failure-no-fee'?null:10000,preBalances,postBalances};
+      }
       let result=call.method==='getSignatureStatuses'?{context:{slot:statusSlot},value:[found&&mode!=='missing'?{
-        slot:receiptSlot,confirmationStatus:mode==='pending'?'confirmed':'finalized',confirmations:mode==='pending'?2:null,err:failed}:null]}:
-        found&&mode!=='missing'?{slot:receiptSlot,version:0,transaction:[mode==='wrong-bytes'?'AAAA':found.bytes,'base64'],meta:{err:failed}}:null;
+        slot:receiptSlot,confirmationStatus:pending?'confirmed':'finalized',confirmations:pending?2:null,err:failed}:null]}:
+        found&&mode!=='missing'?{slot:receiptSlot,version:0,transaction:[mode==='wrong-bytes'?'AAAA':found.bytes,'base64'],meta:{err:failed,...failureMeta}}:null;
       return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result}),{headers:{'content-type':'application/json'}});
     }
     if(call.method==='getMultipleAccounts'&&call.params[0].length===1){
       const value=[...submitted.values()].find(v=>v.asset===call.params[0][0]);let account=null;
-      if(value&&mode!=='absent-asset'){
+      if(value&&mode!=='absent-asset'&&(!mode.startsWith('failure-')||mode==='failure-asset')){
         const data=getAssetV1AccountDataSerializer().serialize({key:Key.AssetV1,owner:mode==='wrong-owner'?key('stranger').publicKey.toBase58():value.buyer,
           updateAuthority:{__kind:'Collection',fields:[mode==='wrong-collection'?key('stranger').publicKey.toBase58():plan.roles.collection]},seq:none(),
           name:policy.hiddenName.replace('{index:04d}','0001'),uri:mode==='wrong-uri'?'https://foreign.test/1':policy.website+'/metadata/hidden/0001.json'});

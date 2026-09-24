@@ -4,6 +4,7 @@ import {sha256} from '@noble/hashes/sha256';
 import {bytesToHex} from '@noble/hashes/utils';
 import {createOrderModel} from './journal-model.mjs';
 import {verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
+import {lamports} from './cost-approval.mjs';
 const model=createOrderModel(policy),need=(v,code)=>{if(!v)throw Error(code);};
 export const signedBytesId=bytes=>bytesToHex(sha256(new TextEncoder().encode(bytes)));
 export function validateBuyerSubmission({order,claim,request,response}){
@@ -22,10 +23,19 @@ export function validateBuyerResult(report,input,{recovery=false}={}){
   need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)
     &&report.cluster==='devnet'&&report.readyToSubmit===false&&report.salesOpen===false,'SUBMISSION_RESPONSE');
   if(recovery){
-    need(['verified','unknown'].includes(report.status),'SUBMISSION_RESPONSE');
-    if(report.status==='verified'){
-      need(report.proof?.kind==='verified'&&report.chainVerified===true,'SUBMISSION_RESPONSE');
+    need(['verified','failed','unknown'].includes(report.status),'SUBMISSION_RESPONSE');
+    if(['verified','failed'].includes(report.status)){
+      need(report.proof?.kind===report.status&&report.chainVerified===true,'SUBMISSION_RESPONSE');
       model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:report.proof});
+      if(report.status==='failed'){
+        const e=report.evidence,p=report.proof;
+        need(e&&Object.keys(e).sort().join(' ')==='errorSha256 feeLamports payerDebitLamports payerPostBalanceLamports payerPreBalanceLamports slot statusSlot'
+          &&e.slot===p.slot&&Number.isSafeInteger(e.statusSlot)&&e.statusSlot>=p.accountSlot
+          &&typeof e.errorSha256==='string'&&/^[a-f0-9]{64}$/.test(e.errorSha256)&&report.retryAuthorized===false&&report.transactionsSent===0
+          &&typeof report.restored==='boolean','FAILURE_EVIDENCE');
+        const fee=lamports(e.feeLamports),before=lamports(e.payerPreBalanceLamports),after=lamports(e.payerPostBalanceLamports);
+        need(fee>0n&&before>=after&&before-after===fee&&lamports(e.payerDebitLamports)===fee,'FAILURE_FEE_EVIDENCE');
+      }
     }else need(report.chainVerified===false&&!report.proof,'SUBMISSION_RESPONSE');
   }else need(report.status==='accepted'&&report.chainVerified===false&&!report.proof,'SUBMISSION_RESPONSE');
   return report;

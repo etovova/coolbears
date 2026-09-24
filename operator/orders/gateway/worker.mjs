@@ -13,6 +13,7 @@ import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../su
 import { recoverBuyerOrder } from '../recovery.mjs';
 import {reviewBuyerExpiry} from '../review-expiry.mjs';
 import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
+import {failureKey,failureRecord,restoreFailureReport} from '../failure-record.mjs';
 import {replacementKey,validateReplacementSource,validateReplacementPrior,replacementFor,replacementReport,validateReplacementClaim} from '../replacement.mjs';
 import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
 import { BuyerCheckError, need, exact, readJson } from './http.mjs';
@@ -107,6 +108,13 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const number=claim?.attempt??1;
         const sendKey=attemptKey('buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset])),number);
         const retiredKey=expiryKey(order,number),retired=await this.storage.get(retiredKey);
+        const failedKey=failureKey(order,number),failed=await this.storage.get(failedKey);
+        need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
+        if(failed!==undefined){
+          need(route==='recover','ATTEMPT_FAILED',409);
+          let report;try{report=restoreFailureReport(submission,failed);}catch{throw new BuyerCheckError('FAILURE_RECORD_CONFLICT',409);}
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
         if(retired!==undefined&&route!=='replace'){
           if(route==='review-expiry'){
             let report;try{report=restoreExpiryReport(submission,retired);}catch{throw new BuyerCheckError('EXPIRY_RECORD_CONFLICT',409);}
@@ -205,6 +213,14 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(route==='recover'){
           const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl});
           settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='failed'){
+            settled=false;need(retired===undefined,'TERMINAL_RECORD_CONFLICT',409);
+            need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=failureRecord(submission,report);
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined,'FAILURE_RECORD_CONFLICT',409);await tx.put(failedKey,record);
+            });
+            need(JSON.stringify(await this.storage.get(failedKey))===JSON.stringify(record),'FAILURE_NOT_SAVED',503);settled=true;
+          }
           return reply(200,{version:1,nonce:body.nonce,report});
         }
         if(route==='review-expiry'){
