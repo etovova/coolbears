@@ -60,6 +60,8 @@ window.openPrewalletRecovery=scope=>{
   window.prewalletRecovery=createBuyerPrewalletRecovery({scope,transport:createBuyerSubmissionTransport(),storage:{
     readPrewalletRecovery:store.readPrewalletRecovery,
     readPrewalletReplacement:store.readPrewalletReplacement,
+    savePrewalletExpiry:async(...args)=>{const value=await store.savePrewalletExpiry(...args);
+      if(window.losePrewalletAck)throw Error('LOST_PREWALLET_ACK');return value;},
     savePrewalletRecovery:async(...args)=>{const value=await store.savePrewalletRecovery(...args);
       if(window.losePrewalletAck)throw Error('LOST_PREWALLET_ACK');return value;}}});
 };

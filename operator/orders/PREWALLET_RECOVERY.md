@@ -4,6 +4,10 @@ The separate reviewed replacement adapter described in `PREWALLET_REPLACEMENT.md
 now permits a second attempt after a retained failed outcome and exact paid-fee
 acknowledgment. Recovery itself still grants no signing, submission or retry.
 
+`PREWALLET_EXPIRY.md` describes the separate explicit absence review for an
+expired claim with no saved buyer signature. Empty discovery still proves nothing;
+retirement requires finalized lifetime and complete inspected payer coverage.
+
 An existing native signing claim may have no durable partial, or a partial may
 exist without a wallet claim. This adapter can close the attempt only if a bounded
 read-only search finds the exact finalized transaction and independently verifies

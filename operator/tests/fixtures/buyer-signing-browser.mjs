@@ -47,7 +47,7 @@ const subtle=new Proxy(native.subtle,{get(target,property){
 const makeStore=()=>createBuyerStorage({crypto:{subtle,getRandomValues:native.getRandomValues.bind(native)}});
 const originalAdd=IDBObjectStore.prototype.add;
 IDBObjectStore.prototype.add=function(value,key){
-  if(this.name==='signing'&&value.phase==='prewallet-recovered'&&window.losePrewalletReadback){
+  if(this.name==='signing'&&['prewallet-recovered','prewallet-expired'].includes(value.phase)&&window.losePrewalletReadback){
     window.losePrewalletReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});
   }
   if(this.name==='signing'&&value.phase==='ready'){
