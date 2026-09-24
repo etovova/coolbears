@@ -131,6 +131,7 @@ jobs:
       - run: node operator/tests/order-failure-recovery.runtime.mjs
       - run: node operator/tests/order-failed-replacement.runtime.mjs
       - run: node operator/tests/order-response-recovery.runtime.mjs
+      - run: node operator/tests/order-prewallet-recovery.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
@@ -169,6 +170,8 @@ jobs:
         run: node operator/tests/order-failed-replacement.browser.mjs
       - name: Buyer missing response discovery and atomic recovery
         run: node operator/tests/order-response-recovery.browser.mjs
+      - name: Buyer prewallet finalized discovery without invented consent
+        run: node operator/tests/order-prewallet-recovery.browser.mjs
       - name: Buyer HTTPS checker through workerd and SQLite
         run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
@@ -196,4 +199,5 @@ jobs:
             operator/build/buyer-failure-recovery-chromium/
             operator/build/buyer-failed-replacement-chromium/
             operator/build/buyer-response-recovery-chromium/
+            operator/build/buyer-prewallet-recovery-chromium/
           retention-days: 14

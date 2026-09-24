@@ -54,3 +54,18 @@ window.openResponseRecovery=scope=>{
       if(window.loseResponseRecoveryAck)throw Error('LOST_RESPONSE_RECOVERY_ACK');return value;}}});
 };
 window.responseTransport=createBuyerSubmissionTransport();
+
+import {createBuyerPrewalletRecovery} from '../../orders/prewallet-recovery-client.mjs';
+window.openPrewalletRecovery=scope=>{
+  window.prewalletRecovery=createBuyerPrewalletRecovery({scope,transport:createBuyerSubmissionTransport(),storage:{
+    readPrewalletRecovery:store.readPrewalletRecovery,
+    savePrewalletRecovery:async(...args)=>{const value=await store.savePrewalletRecovery(...args);
+      if(window.losePrewalletAck)throw Error('LOST_PREWALLET_ACK');return value;}}});
+};
+// Synthetic externally observed transaction only. Never used by the application,
+// never broadcast; it reuses the disposable native signature captured by this fixture.
+window.observedPrewalletBytes=async(scope,secret)=>{
+  const state=await store.readPrewalletRecovery(scope),tx=VersionedTransaction.deserialize(Buffer.from(state.input.claim.transactionBase64,'base64'));
+  tx.signatures[1]=new Uint8Array(window.lastNativeSignature);tx.sign([Keypair.fromSecretKey(new Uint8Array(secret))]);
+  return Buffer.from(tx.serialize()).toString('base64');
+};

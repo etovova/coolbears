@@ -33,6 +33,10 @@ The store's exclusive lock, strict input validation and history rules still appl
 
 ## What cannot be recovered
 
+The separate positive finalized adapter in `PREWALLET_RECOVERY.md` can now close
+an existing claim if its exact transaction and final outcome are independently
+observed. It does not restore missing bytes for signing or permit a retry.
+
 This is deliberately volatile, instance-local retention, not a new durable
 journal or device backup. A native exception or lost native promise response
 provides no result to retain. A different instance/tab cannot acquire it, and
