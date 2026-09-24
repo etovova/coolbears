@@ -29,6 +29,7 @@ window.openSender=scope=>{
     storage:{readBuyerSubmission:store.readBuyerSubmission,
       claimBuyerSubmission:async(...args)=>{const value=await store.claimBuyerSubmission(...args);if(window.loseSendClaimAck)throw Error('LOST_CLAIM_ACK');return value;},
       saveBuyerProof:async(...args)=>{const value=await store.saveBuyerProof(...args);if(window.loseProofAck)throw Error('LOST_PROOF_ACK');return value;},
+      saveBuyerFailure:async(...args)=>{const value=await store.saveBuyerFailure(...args);if(window.loseFailureAck)throw Error('LOST_FAILURE_ACK');return value;},
       saveBuyerExpiry:async(...args)=>{const value=await store.saveBuyerExpiry(...args);if(window.loseExpiryAck)throw Error('LOST_EXPIRY_ACK');return value;}},
     transport:{recover:transport.recover,reviewExpiry:transport.reviewExpiry,replace:transport.replace,send:async(input,approval)=>{
       const saved=await store.readBuyerSubmission(scope);if(saved.status!=='send-claimed'||saved.input.order.revision!==input.order.revision)throw Error('HTTP_BEFORE_CLAIM');

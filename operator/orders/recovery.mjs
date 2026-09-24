@@ -1,11 +1,12 @@
 // Trusted read orchestrator. Never submits, refreshes a hash or authorizes retry.
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {lamports} from '@metaplex-foundation/umi';
+import {VersionedTransaction} from '@solana/web3.js';
 import {deserializeAssetV1,Key,MPL_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-core';
 import {createSigningRequest,verifySigningResponse} from '../deployment/signing.mjs';
-import {verifyFinalizedReceipt} from '../deployment/receipt.mjs';
+import {verifyFinalizedReceipt,verifyFinalizedFailedTransaction} from '../deployment/receipt.mjs';
 import {createDeploymentRpc,assertCluster,DeploymentRpcError} from '../deployment/rpc.mjs';
-import {validateBuyerSubmission,submissionBinding} from './submission.mjs';
+import {validateBuyerSubmission,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {createOrderModel} from './journal-model.mjs';
 const model=createOrderModel(policy),need=(v,code)=>{if(!v)throw Object.assign(Error(code),{checkCode:code});};
 export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=12000}){
@@ -15,6 +16,26 @@ export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=1200
     rpc=createDeploymentRpc({endpoint,fetchImpl,timeoutMs,totalTimeoutMs:30000});await assertCluster(rpc,'devnet');
     const statusResult=await rpc.call('getSignatureStatuses',[[signed.signature],{searchTransactionHistory:true}]);
     const transactionResult=await rpc.call('getTransaction',[signed.signature,{commitment:'finalized',encoding:'base64',maxSupportedTransactionVersion:0}]);
+    if(statusResult?.value?.[0]?.err!=null||transactionResult?.meta?.err!=null){
+      const receipt=verifyFinalizedFailedTransaction({transactionBase64:signed.transactionBase64,statusResult,transactionResult});
+      const tx=VersionedTransaction.deserialize(Buffer.from(signed.transactionBase64,'base64')),meta=transactionResult.meta;
+      const count=tx.message.staticAccountKeys.length,uint=v=>Number.isSafeInteger(v)&&v>=0;
+      need(tx.message.addressTableLookups.length===0&&tx.message.staticAccountKeys[0].toBase58()===frozen.order.buyer
+        &&uint(meta.fee)&&meta.fee>0&&[meta.preBalances,meta.postBalances].every(a=>Array.isArray(a)&&a.length===count&&a.every(uint)),'FAILURE_FEE_EVIDENCE');
+      need(meta.preBalances[1]===0&&meta.postBalances[1]===0&&BigInt(meta.preBalances[0])-BigInt(meta.postBalances[0])===BigInt(meta.fee)
+        &&meta.preBalances.slice(1).every((v,n)=>v===meta.postBalances[n+1]),'FAILURE_BALANCE_EVIDENCE');
+      const state=await rpc.call('getMultipleAccounts',[[frozen.claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:receipt.slot}]);
+      need(uint(state?.context?.slot)&&state.context.slot>=receipt.slot&&Array.isArray(state.value)&&state.value.length===1&&state.value[0]===null,'FAILURE_ASSET_OBSERVED');
+      const finalStatus=await rpc.call('getSignatureStatuses',[[signed.signature],{searchTransactionHistory:true}]);
+      const finalReceipt=verifyFinalizedFailedTransaction({transactionBase64:signed.transactionBase64,statusResult:finalStatus,transactionResult});
+      need(finalReceipt.contextSlot>=state.context.slot&&finalReceipt.errorSha256===receipt.errorSha256,'FAILURE_STATUS_CONTEXT');
+      const proof={kind:'failed',cluster:'devnet',machine:frozen.order.machine,collection:frozen.order.collection,buyer:frozen.order.buyer,
+        asset:frozen.claim.asset,blockhash:frozen.claim.blockhash,messageSha256:signed.messageSha256,commitment:'finalized',slot:receipt.slot,
+        signature:signed.signature,executionFailed:true,accountAbsent:true,accountSlot:state.context.slot};
+      const evidence={slot:receipt.slot,statusSlot:finalReceipt.contextSlot,errorSha256:receipt.errorSha256,feeLamports:String(meta.fee),
+        payerDebitLamports:String(meta.fee),payerPreBalanceLamports:String(meta.preBalances[0]),payerPostBalanceLamports:String(meta.postBalances[0])};
+      return validateBuyerResult({...fixed,status:'failed',chainVerified:true,proof,evidence,retryAuthorized:false,restored:false,networkRequests:rpc.requests},frozen,{recovery:true});
+    }
     const request=createSigningRequest({deploymentId:frozen.order.id,stepId:'item-0',attempt:frozen.claim.attempt,cluster:'devnet',owner:frozen.order.buyer,
       transactionBase64:frozen.request.transactionBase64,lastValidBlockHeight:frozen.request.lastValidBlockHeight});
     const receipt=verifyFinalizedReceipt({request,signed:verifySigningResponse(request,{transactionBase64:signed.transactionBase64}),statusResult,transactionResult});

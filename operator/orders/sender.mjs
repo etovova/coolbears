@@ -26,15 +26,19 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
       need(!busy,'BUSY');busy=true;
       try{
         const state=await storage.readBuyerSubmission(frozenScope);need(state,'SAVED_RESPONSE_REQUIRED');
-        if(['verified','expired'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[0].attempts.at(-1).signature,readyToSubmit:false,salesOpen:false};
+        if(['verified','expired','failed'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[0].attempts.at(-1).signature,
+          ...(state.status==='failed'?{retryAuthorized:false,feeLamports:state.failureRecord.evidence.feeLamports}:{}),readyToSubmit:false,salesOpen:false};
         const report=validateBuyerResult(await transport.recover(state.input),state.input,{recovery:true});
+        if(report.status==='failed'){
+          need(typeof storage.saveBuyerFailure==='function','FAILURE_CONFIGURATION');return await storage.saveBuyerFailure(frozenScope,report);
+        }
         return report.status==='verified'?await storage.saveBuyerProof(frozenScope,report):report;
       }finally{busy=false;}
     },
     async reviewExpiry({authorizeExpiryReview=false}={}){
       need(authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED');need(!busy,'BUSY');busy=true;
       try{
-        const state=await storage.readBuyerSubmission(frozenScope);need(state&&state.status!=='verified','EXPIRY_NOT_READY');
+        const state=await storage.readBuyerSubmission(frozenScope);need(state&&!['verified','failed'].includes(state.status),'EXPIRY_NOT_READY');
         if(state.status==='expired')return{status:'already-recorded',outcome:'expired',retryAuthorized:false,readyToSubmit:false,salesOpen:false};
         need(typeof transport.reviewExpiry==='function'&&typeof storage.saveBuyerExpiry==='function','EXPIRY_CONFIGURATION');
         const report=validateBuyerExpiryResult(await transport.reviewExpiry(state.input),state.input);
