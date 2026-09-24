@@ -133,7 +133,7 @@ try{
   assert.notEqual(await page.evaluate(()=>code(client.signOnly(window.costConsent))),'UNEXPECTED_SUCCESS');
   fixture.receipt(await page.evaluate(()=>window.fixtureSignedBytes));await page.evaluate(s=>openResponseRecovery(s),failed.scope);await spaced();assert.equal((await discover()).status,'verified');
   await restart(failed.scope);assert.equal((await discover()).outcome,'verified');assert.deepEqual(await oldRows(failed.scope),firstRows);
-  const history=await page.evaluate(s=>Promise.all([store.readBuyerAttempt(s,1),store.readBuyerAttempt(s,2)]),failed.scope);
+  const history=await page.evaluate(async s=>[await store.readBuyerAttempt(s,1),await store.readBuyerAttempt(s,2)],failed.scope);
   assert.equal(history[0].submission.failureRecord.evidence.feeLamports,'10000');assert.equal(history[1].submission.status,'verified');
   assert.equal(await page.evaluate(()=>code(sender.prepareReplacement({authorizeReplacement:true}))),'REPLACEMENT_NOT_READY');
   report.cases.push('second missing response recovers after acknowledged paid failure with fresh consent, retaining all first-attempt rows and fee evidence across restart');
