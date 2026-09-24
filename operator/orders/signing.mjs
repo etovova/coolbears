@@ -52,7 +52,7 @@ export function prepareAssetClaim(order, input) {
   need(input.orderRevision === order.revision, 'STALE_REVISION');
   const prior=order.items[0].attempts,number=prior.length+1;
   need(!order.paused&&order.items.slice(1).every(item=>!item.attempts.length)
-    &&((number===1&&order.revision===0)||(number===2&&prior[0].state==='expired')), 'FRESH_ORDER_REQUIRED');
+    &&((number===1&&order.revision===0)||(number===2&&['expired','failed'].includes(prior[0].state))), 'FRESH_ORDER_REQUIRED');
   if(number===2)need(input.blockhash!==prior[0].blockhash,'REPLACEMENT_HASH_REQUIRED');
   need(input.itemIndex === 0, 'FIRST_ITEM_REQUIRED');
   const template = planner.buildOrderItemTemplate(order, 0, input);
@@ -73,7 +73,7 @@ export function validateAssetClaim(order, claim) {
   need(claim.version === 1 && claim.kind === CLAIM && claim.itemIndex === 0 && [1,2].includes(claim.attempt)
     && Number.isSafeInteger(claim.orderRevision)&&order.revision>=claim.orderRevision
     &&(claim.attempt===1?claim.orderRevision===1:claim.orderRevision>=5), 'ASSET_CLAIM_BINDING');
-  if(claim.attempt===2)need(order.items[0].attempts[0].state==='expired'
+  if(claim.attempt===2)need(['expired','failed'].includes(order.items[0].attempts[0].state)
     &&order.items[0].attempts[0].blockhash!==claim.blockhash,'REPLACEMENT_HASH_REQUIRED');
   need(order.items[0].attempts.length<=2&&order.items.slice(1).every(item=>!item.attempts.length),'ASSET_CLAIM_BINDING');
   need(claim.orderId === order.id && claim.orderIdentitySha256 === identity(order)

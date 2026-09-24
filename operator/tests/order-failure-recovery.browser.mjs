@@ -89,7 +89,7 @@ try{
   assert.deepEqual((await oldRows(scope)).slice(0,-1),original);assert.equal(saved.input.response.transactionBase64,bytes);
   await restart(scope);const before=fixture.calls.length,restored=await recover();assert.equal(restored.status,'already-recorded');assert.equal(restored.outcome,'failed');assert.equal(restored.feeLamports,'10000');
   assert.equal(await failure(),'SEND_NOT_READY');assert.equal(await reviewFailure(),'EXPIRY_NOT_READY');
-  assert.equal(await page.evaluate(()=>code(sender.prepareReplacement({authorizeReplacement:true}))),'REPLACEMENT_NOT_READY');
+  assert.equal(await page.evaluate(()=>code(sender.prepareReplacement({authorizeReplacement:true}))),'PAID_FEE_ACKNOWLEDGMENT_REQUIRED');
   assert.equal(fixture.calls.length,before);assert.equal(await count(),0);assert.equal(sends(),1);
   report.cases.push('exact finalized failure and paid fee close a sent attempt; full browser/server restart preserves response, approval, native/wallet/send claims and makes no new wallet/send/RPC call');
 

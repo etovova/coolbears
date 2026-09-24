@@ -14,7 +14,7 @@ import { recoverBuyerOrder } from '../recovery.mjs';
 import {reviewBuyerExpiry} from '../review-expiry.mjs';
 import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
 import {failureKey,failureRecord,restoreFailureReport} from '../failure-record.mjs';
-import {replacementKey,validateReplacementSource,validateReplacementPrior,replacementFor,replacementReport,validateReplacementClaim} from '../replacement.mjs';
+import {replacementKey,validateReplacementSource,validateReplacementPrior,validateReplacementAcknowledgment,replacementAccountFloor,replacementSourceFloor,replacementFor,replacementReport,validateReplacementClaim} from '../replacement.mjs';
 import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
 import { BuyerCheckError, need, exact, readJson } from './http.mjs';
 const model=createOrderModel(policy),planner=createOrderPlanner(model);
@@ -88,7 +88,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[0]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         if(route==='review-expiry')need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
         if(route==='replace')need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
         const {order,claim,request:partial}=body;
@@ -110,7 +110,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const retiredKey=expiryKey(order,number),retired=await this.storage.get(retiredKey);
         const failedKey=failureKey(order,number),failed=await this.storage.get(failedKey);
         need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
-        if(failed!==undefined){
+        if(failed!==undefined&&route!=='replace'){
           need(route==='recover','ATTEMPT_FAILED',409);
           let report;try{report=restoreFailureReport(submission,failed);}catch{throw new BuyerCheckError('FAILURE_RECORD_CONFLICT',409);}
           return reply(200,{version:1,nonce:body.nonce,report});
@@ -123,17 +123,21 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           need(route==='recover','ATTEMPT_EXPIRED',409);
         }
         const replaceKey=replacementKey(order),replacement=(number===2||route==='replace')?await this.storage.get(replaceKey):undefined;
+        const prior=order.items[0].attempts[0]?.state==='failed'?failed:retired;
         if(route==='replace'){
-          try{validateReplacementPrior(submission,retired);}catch{throw new BuyerCheckError('EXPIRY_RECORD_REQUIRED',409);}
+          try{validateReplacementPrior(submission,prior);}catch{throw new BuyerCheckError(prior?.proof?.kind==='failed'||order.items[0].attempts[0].state==='failed'?'FAILURE_RECORD_REQUIRED':'EXPIRY_RECORD_REQUIRED',409);}
+          try{validateReplacementAcknowledgment(submission,prior,body.acknowledgedFeeLamports);}catch{throw new BuyerCheckError('PAID_FEE_ACKNOWLEDGMENT_REQUIRED',409);}
           if(replacement!==undefined){
-            let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(retired),'REPLACEMENT_CONFLICT',409);report=replacementReport(submission,replacement,true);}
+            let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(prior),'REPLACEMENT_CONFLICT',409);report=replacementReport(submission,replacement,true);}
             catch{throw new BuyerCheckError('REPLACEMENT_CONFLICT',409);}
             return reply(200,{version:1,nonce:body.nonce,report});
           }
         }
         if(number===2&&route!=='recover'){
           try{validateReplacementClaim(order,claim,replacement);
-            need(JSON.stringify(replacement.prior)===JSON.stringify(await this.storage.get(expiryKey(order))),'REPLACEMENT_REQUIRED',409);}
+            const firstFailed=order.items[0].attempts[0].state==='failed';
+            need(await this.storage.get(firstFailed?expiryKey(order):failureKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
+            need(JSON.stringify(replacement.prior)===JSON.stringify(await this.storage.get(firstFailed?failureKey(order):expiryKey(order))),'REPLACEMENT_REQUIRED',409);}
           catch{throw new BuyerCheckError('REPLACEMENT_REQUIRED',409);}
         }
         if(route==='send'){
@@ -197,16 +201,21 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(route==='replace'){
           const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000});
           await assertCluster(rpc,'devnet');
-          const floor=Math.max(retired.proof.slot,retired.proof.accountSlot,retired.proof.statusSlot);
+          const floor=replacementAccountFloor(prior);
           const accounts=await rpc.call('getMultipleAccounts',[[claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:floor}]);
           need(integer(accounts?.context?.slot)&&accounts.context.slot>=floor&&Array.isArray(accounts.value)&&accounts.value.length===1&&accounts.value[0]===null,'REPLACEMENT_ASSET_OBSERVED',409);
-          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:Math.max(floor,accounts.context.slot)}]);
-          need(integer(latest?.context?.slot)&&latest.context.slot>=Math.max(floor,accounts.context.slot),'RPC_CONTEXT',503);
-          const record=replacementFor(submission,retired,latest.value,latest.context.slot);
+          const sourceFloor=Math.max(replacementSourceFloor(prior),accounts.context.slot);
+          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:sourceFloor}]);
+          need(integer(latest?.context?.slot)&&latest.context.slot>=sourceFloor,'RPC_CONTEXT',503);
+          const record=replacementFor(submission,prior,latest.value,latest.context.slot,body.acknowledgedFeeLamports);
           const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
           need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
           need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
-          await this.storage.transaction(async tx=>{need(await tx.get(replaceKey)===undefined,'REPLACEMENT_CONFLICT',409);await tx.put(replaceKey,record);});
+          await this.storage.transaction(async tx=>{
+            need(await tx.get(replaceKey)===undefined&&JSON.stringify(await tx.get(prior.proof.kind==='failed'?failedKey:retiredKey))===JSON.stringify(prior)
+              &&await tx.get(prior.proof.kind==='failed'?retiredKey:failedKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            await tx.put(replaceKey,record);
+          });
           need(JSON.stringify(await this.storage.get(replaceKey))===JSON.stringify(record),'REPLACEMENT_NOT_SAVED',503);settled=true;
           return reply(200,{version:1,nonce:body.nonce,report:replacementReport(submission,record)});
         }

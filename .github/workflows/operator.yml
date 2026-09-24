@@ -129,13 +129,14 @@ jobs:
       - run: node operator/tests/order-submission.runtime.mjs
       - run: node operator/tests/order-replacement.runtime.mjs
       - run: node operator/tests/order-failure-recovery.runtime.mjs
+      - run: node operator/tests/order-failed-replacement.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
   owner-console-browser:
     name: Owner and buyer signing in Chromium
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,6 +164,8 @@ jobs:
         run: node operator/tests/order-replacement.browser.mjs
       - name: Buyer finalized failure and paid fee recovery
         run: node operator/tests/order-failure-recovery.browser.mjs
+      - name: Buyer reviewed replacement after paid failure
+        run: node operator/tests/order-failed-replacement.browser.mjs
       - name: Buyer HTTPS checker through workerd and SQLite
         run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
@@ -185,4 +188,5 @@ jobs:
             operator/build/buyer-submission-chromium/
             operator/build/buyer-replacement-chromium/
             operator/build/buyer-failure-recovery-chromium/
+            operator/build/buyer-failed-replacement-chromium/
           retention-days: 14
