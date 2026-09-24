@@ -175,6 +175,8 @@ jobs:
         run: node operator/tests/order-wallet.browser.mjs
       - name: Exact buyer asset signing and durable crash recovery
         run: node operator/tests/order-signing.browser.mjs
+      - name: Recover retained native results without signing again
+        run: node operator/tests/order-native-recovery.browser.mjs
       - name: Buyer custody in real IndexedDB across browser restarts
         run: node operator/tests/order-storage.browser.mjs
       - run: node operator/tests/deployment-owner-console.browser.mjs
@@ -186,6 +188,7 @@ jobs:
             operator/build/owner-console-chromium/
             operator/build/buyer-storage-chromium/
             operator/build/buyer-signing-chromium/
+            operator/build/buyer-native-recovery-chromium/
             operator/build/buyer-wallet-chromium/
             operator/build/buyer-gateway-chromium/
             operator/build/buyer-submission-chromium/

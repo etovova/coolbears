@@ -18,6 +18,7 @@ const subtle=new Proxy(native.subtle,{get(target,property){
   if(property!=='sign')return typeof target[property]==='function'?target[property].bind(target):target[property];
   return async(...args)=>{
     const transaction=new Uint8Array(args[2])[0]===128;
+    if(!transaction&&window.failNextCustodySign){window.failNextCustodySign=false;throw Error('fixture lost post-commit readback');}
     if(transaction){
       window.assetSignAttempts++;
       const key=scopeKey(window.auditScope);
@@ -39,12 +40,16 @@ const subtle=new Proxy(native.subtle,{get(target,property){
       if(window.signMode==='fail')throw Error('fixture native signer failure');
       if(window.signMode==='hold'){window.signEntered=true;await new Promise(resolve=>window.releaseSigning=resolve);}
     }
-    const signature=await target.sign(...args);if(transaction)window.assetSignatures++;return signature;
+    const signature=await target.sign(...args);if(transaction){window.assetSignatures++;window.lastNativeSignature=[...new Uint8Array(signature)];}return signature;
   };
 }});
 const makeStore=()=>createBuyerStorage({crypto:{subtle,getRandomValues:native.getRandomValues.bind(native)}});
 const originalAdd=IDBObjectStore.prototype.add;
 IDBObjectStore.prototype.add=function(value,key){
+  if(this.name==='signing'&&value.phase==='ready'){
+    window.readyWriteAttempts=(window.readyWriteAttempts??0)+1;
+    if(window.loseNativeReadback){window.loseNativeReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});}
+  }
   if(this.name==='signing'&&value.phase===window.writeFailure)throw new DOMException('fixture quota','QuotaExceededError');
   return originalAdd.call(this,value,key);
 };

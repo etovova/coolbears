@@ -110,9 +110,13 @@ try{
   const abort=await failed('failed-replace-abort'),abortRows=await oldRows(abort),abortReport=await replace(),signs=await page.evaluate(()=>assetSignAttempts);
   await page.evaluate(()=>window.writeFailure='claimed');await assert.rejects(native(abort,abortReport));
   assert.equal(await page.evaluate(()=>assetSignAttempts),signs);assert.equal((await page.evaluate(s=>store.read(s),abort)).items[0].attempts.length,1);
-  assert.deepEqual(await oldRows(abort),abortRows);await page.evaluate(()=>window.writeFailure=null);await native(abort,abortReport);
+  assert.deepEqual(await oldRows(abort),abortRows);await page.evaluate(()=>window.writeFailure='ready');await assert.rejects(native(abort,abortReport));
+  await page.evaluate(()=>window.writeFailure=null);const beforeNativeRecovery=fixture.calls.length,beforeWalletRecovery=await count();
+  const restoredNative=await page.evaluate(s=>store.recoverAssetSigning(s),abort);assert.equal(restoredNative.status,'asset-partial-saved');
+  assert.equal(restoredNative.claim.attempt,2);assert.deepEqual(await oldRows(abort),abortRows);
+  assert.equal(fixture.calls.length,beforeNativeRecovery);assert.equal(await count(),beforeWalletRecovery);
   assert.equal(await page.evaluate(()=>assetSignAttempts),signs+1);
-  report.cases.push('aborted native intent atomically retains failed order, paid fee and rows and produces no signature before explicit successful retry');
+  report.cases.push('aborted second native intent creates no signature; later ready-write abort recovers the original result with no re-sign, wallet or RPC while preserving first paid failure and replacement provenance');
 
   const ambiguous=await failed('failed-replace-unknown'),ambiguousRows=await oldRows(ambiguous),ambiguousReport=await replace();
   await page.evaluate(()=>window.writeFailure='ready');await assert.rejects(native(ambiguous,ambiguousReport));

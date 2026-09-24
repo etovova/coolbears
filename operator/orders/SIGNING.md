@@ -59,12 +59,14 @@ transaction signing callback exposed to callers and no private-key export.
 The internal random custody challenges remain separate from transaction signing.
 
 A missing completion response after ready commit is recovered by reading the
-identical saved bytes. `prepareAssetSigning` refuses a second call for that
+identical saved bytes. The retained-result extension in [NATIVE_RECOVERY.md](NATIVE_RECOVERY.md)
+can also persist the exact original native result after a ready-write failure
+while the originating storage instance still holds it. `prepareAssetSigning` refuses a second call for that
 revision. If signing fails, the tab closes, or ready persistence fails after the
 claim, the order stays unresolved; `readAssetSigning` returns
 `asset-signing-unknown` with `request: null`. It never re-signs, resets the attempt,
-changes the asset, replaces a blockhash or discards history. Recovery of this
-unresolved claim is a future trusted, explicit path; there is no retry shortcut.
+changes the asset, replaces a blockhash or discards history. If that instance no longer holds the result, the unresolved claim stays blocked;
+there is no retry shortcut.
 A failure before the atomic claim commits leaves the initial order untouched
 and must not reach the native transaction signer.
 
