@@ -9,6 +9,7 @@ import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
 import {failureRecord} from './failure-record.mjs';
 import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmission} from './response-recovery.mjs';
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
+import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission} from './prewallet-recovery.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -109,7 +110,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       requireThat(claim.attempt===i+1&&equal(Object.keys(records[0]).sort(),(i===0?['phase','record']:['phase','record','replacement']).sort()),'ASSET_CLAIM_HISTORY');
       requireThat(equal(events[claim.orderRevision],{type:'prepare',revision:claim.orderRevision-1,index:0,blockhash:claim.blockhash,
         lastValidBlockHeight:claim.lastValidBlockHeight,messageSha256:claim.messageSha256,...(i===1?{retry:true}:{})}),'ASSET_CLAIM_HISTORY');
-      signingState(order,records);walletState(order,records,events);submissionState(order,records,events);
+      prewalletState(order,records,events);signingState(order,records);walletState(order,records,events);submissionState(order,records,events);
       if(i===1){
         validateReplacementClaim(order,claim,records[0].replacement);
         const source=submissionState(order,batches[0],events);
@@ -140,21 +141,37 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     return batches;
   }
   const current=records=>groups(records).at(-1)??[];
+  const hasPrewallet=records=>records.at(-1)?.phase==='prewallet-recovered';
+  function prewalletState(order,records,events){
+    records=current(records);if(!hasPrewallet(records))return null;
+    const saved=records.at(-1),r=saved.record,claim=records[0]?.record,ready=records[1]?.phase==='ready'?records[1]:null;
+    requireThat(records.length===(ready?3:2)&&equal(Object.keys(saved).sort(),['phase','record'])
+      &&r?.version===1&&equal(Object.keys(r).sort(),['orderRevision','report','version'])
+      &&Number.isSafeInteger(r.orderRevision)&&r.orderRevision>claim.orderRevision&&r.orderRevision<=order.revision,'CORRUPT_PREWALLET_RECOVERY');
+    let prior=events[0].order;for(let n=1;n<r.orderRevision;n++)prior=model.transitionOrder(prior,events[n]);
+    validatePrewalletRecovery(r.report,{order:prior,claim,request:ready?.record??null});
+    requireThat(r.report.status==='prewallet-recovered'&&order.items[0].attempts[claim.attempt-1].state===r.report.result.status
+      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:0,attempt:claim.attempt,proof:r.report.result.proof}),'PREWALLET_HISTORY');
+    return{status:r.report.result.status,report:structuredClone(r.report),
+      ...(r.report.result.status==='failed'?{feeLamports:r.report.result.evidence.feeLamports}:{}),
+      retryAuthorized:false,readyToSubmit:false,salesOpen:false};
+  }
   function signingState(order, records) {
     records=current(records);
     requireThat(records.length <= 6, 'CORRUPT_ASSET_SIGNING');
     if (!records.length) return null;
-    const [claimed, ready] = records;
-    requireThat(claimed?.phase === 'claimed' && (!ready || ready.phase === 'ready'), 'CORRUPT_ASSET_SIGNING');
+    const claimed=records[0],ready=records[1]?.phase==='ready'?records[1]:undefined,closed=hasPrewallet(records);
+    requireThat(claimed?.phase === 'claimed' && (!records[1]||ready||closed), 'CORRUPT_ASSET_SIGNING');
     validateAssetClaim(order, claimed.record);
     if (ready) validateAssetRequest(order, claimed.record, ready.record);
-    return { status: ready ? 'asset-partial-saved' : 'asset-signing-unknown',
+    return { status:closed?'asset-signing-reconciled':ready ? 'asset-partial-saved' : 'asset-signing-unknown',
       claim: structuredClone(claimed.record), request: ready ? structuredClone(ready.record) : null,
       mode: 'offline-devnet-asset-signing', networkVerified: false, blockhashVerified: false, guardPriceVerified: false,
       readyToSign: false, readyToSubmit: false, salesOpen: false };
   }
   function walletState(order, records, events) {
     records=current(records);
+    if(hasPrewallet(records))return null;
     if (records.length < 3) return null;
     const assetClaim=records[0].record,number=assetClaim.attempt;
     const claim = records[2]?.record, response = records[3]?.record;
@@ -243,6 +260,14 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     const input={order:structuredClone(saved.order),claim:structuredClone(records[0].record),
       request:structuredClone(records[1].record),walletClaim:structuredClone(wallet.claim)};
     validateMissingBuyerResponse(input);return{status:'wallet-response-unknown',input};
+  }
+  function prewalletRecoveryState(saved){
+    if(!saved.order)return null;
+    const records=current(saved.signing),terminal=prewalletState(saved.order,records,saved.events);
+    if(terminal)return terminal;
+    if(!records.length||records.length>2)return null;
+    const input={order:structuredClone(saved.order),claim:structuredClone(records[0].record),request:records[1]?.record?structuredClone(records[1].record):null};
+    validatePrewalletInput(input);return{status:'prewallet-unknown',input};
   }
   async function snapshot(scope, scopeKey) { return (await snapshotData(scope, scopeKey)).order; }
   async function locked(input, action) {
@@ -407,6 +432,10 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       return locked(input,async(scope,scopeKey)=>{
         const saved=await snapshotData(scope,scopeKey);
         if(!saved.order)return null;
+        if(hasPrewallet(current(saved.signing))){
+          nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
+          return signingState(saved.order,saved.signing);
+        }
         const retained=nativeResults.get(scopeKey);
         return retained?persistNativeResult(scope,scopeKey,saved,retained):signingState(saved.order,saved.signing);
       });
@@ -447,6 +476,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const records=current(before.signing),number=records[0]?.record?.attempt;
         requireThat(before.order && records.length >= 3, 'WALLET_CLAIM_REQUIRED');
         const state = walletState(before.order, before.signing, before.events);
+        requireThat(state,'WALLET_CLAIM_REQUIRED');
         requireThat(frozen.claimId === state.claim.claimId, 'WALLET_CLAIM_MISMATCH');
         if (state.response) {
           requireThat(state.response.transactionBase64 === frozen.transactionBase64, 'BUYER_RESPONSE_CONFLICT');
@@ -472,6 +502,35 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     },
     readBuyerResponseRecovery(input){
       return locked(input,async(scope,scopeKey)=>responseRecoveryState(await snapshotData(scope,scopeKey)));
+    },
+    readPrewalletRecovery(input){
+      return locked(input,async(scope,scopeKey)=>{
+        const state=prewalletRecoveryState(await snapshotData(scope,scopeKey));
+        if(['verified','failed'].includes(state?.status)){nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);}
+        return state;
+      });
+    },
+    savePrewalletRecovery(input,report){
+      const frozen=structuredClone(report);
+      return locked(input,async(scope,scopeKey)=>{
+        const before=await snapshotData(scope,scopeKey),state=prewalletRecoveryState(before);
+        requireThat(state?.status==='prewallet-unknown','PREWALLET_REQUIRED');
+        validatePrewalletRecovery(frozen,state.input);requireThat(frozen.status==='prewallet-recovered','PREWALLET_NOT_VERIFIED');
+        const retained=nativeResults.get(scopeKey);
+        if(retained)requireThat(equal(retained.request,prewalletSubmission(state.input,frozen.response).request),'ASSET_REQUEST_CONFLICT');
+        const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:frozen.result.proof};
+        const order=bounded(model.transitionOrder(before.order,event));
+        const record={phase:'prewallet-recovered',record:{version:1,orderRevision:order.revision,report:frozen}};
+        await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
+          requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
+          tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
+          tx.objectStore('signing').add(record,[scopeKey,0,number,6]);resolve(true);
+        },abort));
+        const after=await snapshotData(scope,scopeKey);
+        requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'PREWALLET_NOT_SAVED');
+        nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
+        return prewalletRecoveryState(after);
+      });
     },
     // Both events and all evidence commit together; a discovered response is never sendable.
     saveRecoveredBuyerResponse(input,report){
@@ -536,7 +595,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         let order=saved.order;
         if(Number.isSafeInteger(revision)){order=saved.events[0].order;for(let n=1;n<=revision;n++)order=model.transitionOrder(order,saved.events[n]);}
         return{order:structuredClone(order),signing:signingState(order,records),wallet:walletState(order,records,saved.events),
-          submission:submissionState(order,records,saved.events)};
+          submission:submissionState(order,records,saved.events),...(hasPrewallet(records)?{prewallet:prewalletState(order,records,saved.events)}:{})};
       });
     },
     // Caller is the trusted recovery adapter. CAS + exact proof binding, never retry authorization.
