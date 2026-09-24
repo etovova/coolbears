@@ -38,6 +38,10 @@ function keyShape(record, scopeKey, item) {
 }
 export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks } = {}) {
   let opening, connection, closed = false;
+  // Only results actually returned by this instance's original native sign call.
+  // No caller-supplied bytes, keys, re-signing or eviction of unresolved results.
+  // This is volatile recovery, not persistence or device-loss recovery.
+  const nativeResults = new Map(), nativeSlots = new Set(), MAX_NATIVE_RESULTS = 50;
   const requireCapabilities = () => requireThat(!closed && indexedDB?.open && crypto?.subtle && locks?.request && globalThis.isSecureContext !== false, 'STORAGE_UNAVAILABLE');
   function database() {
     requireCapabilities();
@@ -272,6 +276,28 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         ...(expiry||failed?{retryAuthorized:false}:{}),...(failed?{feeLamports:frozen.evidence.feeLamports}:{}),readyToSubmit:false,salesOpen:false};
     });
   }
+  async function persistNativeResult(scope,scopeKey,saved,retained){
+    const records=current(saved.signing),claim=records[0]?.record;
+    requireThat(equal(records[0],retained.claimed),'ASSET_CLAIM_CHANGED');
+    validateAssetRequest(saved.order,claim,retained.request);
+    if(records[1]){
+      // A lost commit acknowledgment, or a later wallet step, is read-only.
+      requireThat(equal(records[1],{phase:'ready',record:retained.request}),'ASSET_REQUEST_CONFLICT');
+    }else{
+      requireThat(records.length===1&&saved.order.items[0].attempts.at(-1)?.state==='wallet-pending','ASSET_CLAIM_CHANGED');
+      await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
+        requireThat(equal(validate(data,scope,scopeKey),saved.order)&&equal(data[3],saved.signing),'ASSET_CLAIM_CHANGED');
+        tx.objectStore('signing').add({phase:'ready',record:retained.request},[scopeKey,0,claim.attempt,1]);resolve(true);
+      },abort));
+      const after=await snapshotData(scope,scopeKey);
+      requireThat(equal(after.order,saved.order)&&equal(after.signing,[...saved.signing,{phase:'ready',record:retained.request}]),'ASSET_REQUEST_NOT_SAVED');
+      saved=after;
+    }
+    // Never discard the only retained result until durable bytes were read back.
+    nativeResults.delete(scopeKey);
+    nativeSlots.delete(scopeKey);
+    return signingState(saved.order,saved.signing);
+  }
   async function prepareSigning(input,candidate,replacementReport,acknowledgedFeeLamports){
       const frozen=structuredClone(candidate),report=replacementReport&&structuredClone(replacementReport);
       return locked(input, async (scope, scopeKey) => {
@@ -285,33 +311,31 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,prior),'REPLACEMENT_HISTORY');
           validateReplacementAcknowledgment(source.input,prior,acknowledgedFeeLamports);
         }else requireThat(before.signing.length===0,'ASSET_SIGNING_EXISTS');
+        requireThat(!nativeSlots.has(scopeKey)&&nativeSlots.size<MAX_NATIVE_RESULTS,'NATIVE_RESULTS_PENDING');
         const prepared = prepareAssetClaim(before.order, frozen),number=prepared.claim.attempt;
         requireThat(number===(report?2:1),'REPLACEMENT_NOT_READY');
         bounded(prepared.order);
         const claimed = { phase: 'claimed', record: prepared.claim,...(report?{replacement:report.record}:{}) };
-        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
-          requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3],before.signing), 'STALE_REVISION');
-          tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
-          tx.objectStore('orders').put(prepared.order, scopeKey);
-          tx.objectStore('signing').add(claimed, [scopeKey, 0, number, 0]);
-          resolve(true);
-        }, abort));
-        // Native signing starts only after the intent has committed and been read back.
-        const saved = await snapshotData(scope, scopeKey);
-        requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [...before.signing,claimed]), 'ASSET_CLAIM_CHANGED');
-        const message = validateAssetClaim(saved.order, prepared.claim);
-        let signature;
-        try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[0].privateKey, message)); }
-        catch { throw Error('ASSET_SIGNING_FAILED'); }
-        const request = finalizeAssetRequest(saved.order, prepared.claim, signature);
-        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
-          requireThat(equal(validate(data, scope, scopeKey), saved.order) && equal(data[3], saved.signing), 'ASSET_CLAIM_CHANGED');
-          tx.objectStore('signing').add({ phase: 'ready', record: request }, [scopeKey, 0, number, 1]);
-          resolve(true);
-        }, abort));
-        const final = await snapshotData(scope, scopeKey);
-        requireThat(equal(final.order, saved.order) && equal(final.signing, [...before.signing,claimed, {phase:'ready',record:request}]), 'ASSET_REQUEST_NOT_SAVED');
-        return signingState(final.order, final.signing);
+        nativeSlots.add(scopeKey);
+        try {
+          await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
+            requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3],before.signing), 'STALE_REVISION');
+            tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
+            tx.objectStore('orders').put(prepared.order, scopeKey);
+            tx.objectStore('signing').add(claimed, [scopeKey, 0, number, 0]);
+            resolve(true);
+          }, abort));
+          // Native signing starts only after the intent has committed and been read back.
+          const saved = await snapshotData(scope, scopeKey);
+          requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [...before.signing,claimed]), 'ASSET_CLAIM_CHANGED');
+          const message = validateAssetClaim(saved.order, prepared.claim);
+          let signature;
+          try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[0].privateKey, message)); }
+          catch { throw Error('ASSET_SIGNING_FAILED'); }
+          const request = finalizeAssetRequest(saved.order, prepared.claim, signature);
+          const retained=structuredClone({claimed,request});nativeResults.set(scopeKey,retained);
+          return await persistNativeResult(scope,scopeKey,saved,retained);
+        } finally { if(!nativeResults.has(scopeKey))nativeSlots.delete(scopeKey); }
       });
   }
   return {
@@ -375,6 +399,16 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       return locked(input, async (scope, scopeKey) => {
         const current = await snapshotData(scope, scopeKey);
         return current.order ? signingState(current.order, current.signing) : null;
+      });
+    },
+    // Recover the exact original result only; this never calls the transaction
+    // signer, invokes a wallet, refreshes a hash or changes the order/events.
+    recoverAssetSigning(input) {
+      return locked(input,async(scope,scopeKey)=>{
+        const saved=await snapshotData(scope,scopeKey);
+        if(!saved.order)return null;
+        const retained=nativeResults.get(scopeKey);
+        return retained?persistNativeResult(scope,scopeKey,saved,retained):signingState(saved.order,saved.signing);
       });
     },
     // Consume the single wallet invocation before opening it. The order becomes
