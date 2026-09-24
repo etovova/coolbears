@@ -130,6 +130,7 @@ jobs:
       - run: node operator/tests/order-replacement.runtime.mjs
       - run: node operator/tests/order-failure-recovery.runtime.mjs
       - run: node operator/tests/order-failed-replacement.runtime.mjs
+      - run: node operator/tests/order-response-recovery.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
@@ -166,6 +167,8 @@ jobs:
         run: node operator/tests/order-failure-recovery.browser.mjs
       - name: Buyer reviewed replacement after paid failure
         run: node operator/tests/order-failed-replacement.browser.mjs
+      - name: Buyer missing response discovery and atomic recovery
+        run: node operator/tests/order-response-recovery.browser.mjs
       - name: Buyer HTTPS checker through workerd and SQLite
         run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
@@ -189,4 +192,5 @@ jobs:
             operator/build/buyer-replacement-chromium/
             operator/build/buyer-failure-recovery-chromium/
             operator/build/buyer-failed-replacement-chromium/
+            operator/build/buyer-response-recovery-chromium/
           retention-days: 14

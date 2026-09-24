@@ -11,6 +11,8 @@ import { preparationFor, validatePreparation } from '../preparation.mjs';
 import { validateAssetRequest } from '../signing.mjs';
 import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../submission.mjs';
 import { recoverBuyerOrder } from '../recovery.mjs';
+import {discoverBuyerResponse} from '../discover-response.mjs';
+import {validateMissingBuyerResponse,recoveredSubmission,responseRecoveryKey,responseRecoveryRecord,restoreResponseRecovery,restoreDiscoveredSubmission} from '../response-recovery.mjs';
 import {reviewBuyerExpiry} from '../review-expiry.mjs';
 import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
 import {failureKey,failureRecord,restoreFailureReport} from '../failure-record.mjs';
@@ -41,7 +43,7 @@ export function validateBuyerGatewayConfig(input){
   return structuredClone(input);
 }
 function authorize(request,config,env){
-  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/review-expiry','/api/buyer/replace'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/recover-response','/api/buyer/review-expiry','/api/buyer/replace'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
   need(request.method==='POST','METHOD',405);
   need(request.headers.get('origin')===config.origin&&!request.headers.has('cookie')&&!request.headers.has('authorization')
     &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
@@ -88,16 +90,18 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[0]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='recover-response'?'version nonce order claim request walletClaim':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[0]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         if(route==='review-expiry')need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
         if(route==='replace')need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
         const submission={order,claim,request:partial,response:body.response};
+        const missing={order,claim,request:partial,walletClaim:body.walletClaim};
         let signed;
         try{
           if(route==='prepare'){model.validateOrder(order);need(order.revision===0&&!order.paused&&order.items.every(i=>i.attempts.length===0),'REQUEST',400);}
+          else if(route==='recover-response')validateMissingBuyerResponse(missing);
           else if(route==='replace')signed=validateReplacementSource(submission);
           else if(route!=='check')signed=validateBuyerSubmission(submission);
           else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
@@ -110,6 +114,26 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const retiredKey=expiryKey(order,number),retired=await this.storage.get(retiredKey);
         const failedKey=failureKey(order,number),failed=await this.storage.get(failedKey);
         need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
+        const discoveredKey=responseRecoveryKey(order,number),discovered=await this.storage.get(discoveredKey);
+        if(discovered!==undefined){
+          need(retired===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          let restored,full;
+          try{
+            if(route==='recover-response'){restored=restoreResponseRecovery(missing,discovered);full=recoveredSubmission(missing,restored.response).input;}
+            else if(route==='recover'){restored=restoreDiscoveredSubmission(submission,discovered);full=submission;}
+            else if(route==='replace'){
+              need(discovered.proof.kind==='failed'&&failed!==undefined,'ATTEMPT_RECOVERED',409);
+              const active=structuredClone(submission);active.order.items[0].attempts[0].state='unknown';active.order.items[0].attempts[0].proof=null;
+              const result=restoreDiscoveredSubmission(active,discovered);
+              need(JSON.stringify(failureRecord(active,result))===JSON.stringify(failed),'TERMINAL_RECORD_CONFLICT',409);
+            }else throw new BuyerCheckError('ATTEMPT_RECOVERED',409);
+            if(restored){
+              const result=route==='recover-response'?restored.result:restored;
+              need(result.status==='failed'?JSON.stringify(failureRecord(full,result))===JSON.stringify(failed):failed===undefined,'TERMINAL_RECORD_CONFLICT',409);
+            }
+          }catch(e){if(e instanceof BuyerCheckError)throw e;throw new BuyerCheckError('RESPONSE_RECORD_CONFLICT',409);}
+          if(restored)return reply(200,{version:1,nonce:body.nonce,report:restored});
+        }
         if(failed!==undefined&&route!=='replace'){
           need(route==='recover','ATTEMPT_FAILED',409);
           let report;try{report=restoreFailureReport(submission,failed);}catch{throw new BuyerCheckError('FAILURE_RECORD_CONFLICT',409);}
@@ -149,7 +173,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
           return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
         }
-        if(['check','send','review-expiry'].includes(route)){
+        if(['check','send','review-expiry','recover-response'].includes(route)){
           try{validateBlockhashAnchor(savedPreparation?.anchor,claim);}catch{throw new BuyerCheckError('BLOCKHASH_ANCHOR_REQUIRED',409);}
         }
         if(route==='send'){
@@ -165,7 +189,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const endpoint=new URL('https://devnet.helius-rpc.com/');endpoint.searchParams.set('api-key',this.env.BUYER_HELIUS_API_KEY);
         const fetchImpl=async(url,init)=>{
             try{
-              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(route==='review-expiry'&&EXPIRY_METHODS.has(rpc.method))||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
+              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(route==='review-expiry'&&EXPIRY_METHODS.has(rpc.method))||(route==='recover-response'&&rpc.method==='getSignaturesForAddress')||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
               if(rpc.method==='sendTransaction'){
                 need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
                 const consumed=await this.storage.get(sendKey);
@@ -218,6 +242,24 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           });
           need(JSON.stringify(await this.storage.get(replaceKey))===JSON.stringify(record),'REPLACEMENT_NOT_SAVED',503);settled=true;
           return reply(200,{version:1,nonce:body.nonce,report:replacementReport(submission,record)});
+        }
+        if(route==='recover-response'){
+          const report=await discoverBuyerResponse({input:missing,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='response-recovered'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+            const record=responseRecoveryRecord(missing,report),full=recoveredSubmission(missing,report.response).input;
+            const failure=report.result.status==='failed'?failureRecord(full,report.result):undefined;
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(discoveredKey)===undefined&&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined,'RESPONSE_RECORD_CONFLICT',409);
+              await tx.put(discoveredKey,record);if(failure)await tx.put(failedKey,failure);
+              need(JSON.stringify(await tx.get(discoveredKey))===JSON.stringify(record)
+                &&JSON.stringify(await tx.get(failedKey))===JSON.stringify(failure),'RESPONSE_NOT_SAVED',503);
+            });
+            need(JSON.stringify(await this.storage.get(discoveredKey))===JSON.stringify(record)
+              &&JSON.stringify(await this.storage.get(failedKey))===JSON.stringify(failure),'RESPONSE_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
         }
         if(route==='recover'){
           const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl});

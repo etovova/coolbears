@@ -1,3 +1,7 @@
+**PR50:** [восстановление потерянного ответа кошелька](RESPONSE_RECOVERY.md) находит точные
+подписанные байты только вместе с окончательным результатом. Ответ и исход
+сохраняются атомарно; отсутствие истории не разрешает повтор. Ниже — история этапов.
+
 # Browser custody and order storage
 
 **PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
