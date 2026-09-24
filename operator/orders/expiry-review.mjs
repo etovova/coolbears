@@ -6,7 +6,7 @@ import {anchorKey} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),need=(v)=>{if(!v)throw Error('EXPIRY_RESPONSE');};
 const uint=n=>Number.isSafeInteger(n)&&n>=0;
 const exact=(v,fields)=>v&&Object.keys(v).sort().join(' ')===fields.split(' ').sort().join(' ');
-export const expiryKey=order=>anchorKey(order).replace('buyer-blockhash:v1:','buyer-expiry:v1:');
+export const expiryKey=(order,attempt=1)=>anchorKey(order,attempt).replace('buyer-blockhash:v1:','buyer-expiry:v1:');
 const identity=input=>{
   const b=submissionBinding(input);
   return{orderIdentitySha256:input.claim.orderIdentitySha256,requestId:b.requestId,transactionSha256:b.transactionSha256,signature:b.signature};
@@ -25,7 +25,7 @@ export function validateBuyerExpiryResult(report,input){
     &&uint(e.blockHeight)&&e.blockHeight>e.lastValidBlockHeight
     &&uint(e.historyPages)&&e.historyPages>=1&&e.historyPages<=10&&typeof e.historySha256==='string'&&/^[a-f0-9]{64}$/.test(e.historySha256)
     &&p.slot===e.slot&&p.blockHeight===e.blockHeight&&p.statusSlot>=p.accountSlot);
-  model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:1,proof:p});
+  model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:p});
   return report;
 }
 export function expiryRecord(input,report){

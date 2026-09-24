@@ -23,9 +23,11 @@ const subtle=new Proxy(native.subtle,{get(target,property){
       const key=scopeKey(window.auditScope);
       const order=await raw(['orders'],'readonly',tx=>tx.objectStore('orders').get(key));
       const rows=await raw(['signing'],'readonly',tx=>tx.objectStore('signing').getAll(IDBKeyRange.bound([key],[key,[]])));
-      const observed={revision:order?.revision,state:order?.items[0].attempts[0]?.state,phases:rows.map(r=>r.phase)};
+      const observed={revision:order?.revision,state:order?.items[0].attempts.at(-1)?.state,phases:rows.map(r=>r.phase)};
       window.persistedBeforeSign.push(observed);
-      if(observed.revision!==1||observed.state!=='wallet-pending'||rows.length!==1||rows[0].phase!=='claimed')throw Error('SIGN_BEFORE_COMMIT');
+      const claimed=rows.at(-1),number=order?.items[0].attempts.length;
+      if(observed.revision!==claimed?.record?.orderRevision||observed.state!=='wallet-pending'||claimed.phase!=='claimed'
+        ||claimed.record.attempt!==number||(number===1?rows.length!==1:!claimed.replacement||order.items[0].attempts[0].state!=='expired'))throw Error('SIGN_BEFORE_COMMIT');
       if(window.signMode==='fail')throw Error('fixture native signer failure');
       if(window.signMode==='hold'){window.signEntered=true;await new Promise(resolve=>window.releaseSigning=resolve);}
     }

@@ -2,6 +2,7 @@
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
 import {validateCostApproval} from './cost-approval.mjs';
 import {validateBuyerExpiryResult} from './expiry-review.mjs';
+import {validateReplacementResult} from './replacement.mjs';
 const need=(v,code)=>{if(!v)throw Error(code);};
 export function createBuyerSender({storage,scope,transport,storageManager=globalThis.navigator?.storage}={}){
   need(storage&&transport&&typeof transport.send==='function'&&typeof transport.recover==='function','SENDER_CONFIGURATION');
@@ -25,7 +26,7 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
       need(!busy,'BUSY');busy=true;
       try{
         const state=await storage.readBuyerSubmission(frozenScope);need(state,'SAVED_RESPONSE_REQUIRED');
-        if(['verified','expired'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[0].attempts[0].signature,readyToSubmit:false,salesOpen:false};
+        if(['verified','expired'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[0].attempts.at(-1).signature,readyToSubmit:false,salesOpen:false};
         const report=validateBuyerResult(await transport.recover(state.input),state.input,{recovery:true});
         return report.status==='verified'?await storage.saveBuyerProof(frozenScope,report):report;
       }finally{busy=false;}
@@ -38,6 +39,14 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
         need(typeof transport.reviewExpiry==='function'&&typeof storage.saveBuyerExpiry==='function','EXPIRY_CONFIGURATION');
         const report=validateBuyerExpiryResult(await transport.reviewExpiry(state.input),state.input);
         return report.status==='expired'?await storage.saveBuyerExpiry(frozenScope,report):report;
+      }finally{busy=false;}
+    },
+    async prepareReplacement({authorizeReplacement=false}={}){
+      need(authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED');need(!busy,'BUSY');busy=true;
+      try{
+        const state=await storage.readBuyerSubmission(frozenScope);need(state?.status==='expired'&&state.input.claim.attempt===1&&!state.input.order.paused,'REPLACEMENT_NOT_READY');
+        need(typeof transport.replace==='function','REPLACEMENT_CONFIGURATION');
+        return validateReplacementResult(await transport.replace(state.input),state.input);
       }finally{busy=false;}
     },
   });

@@ -46,12 +46,12 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
       claim = structuredClone(claim); request = structuredClone(request);
       validateAssetRequest(order, claim, request);
       blockhashAnchor = validateBlockhashAnchor(structuredClone(blockhashAnchor), claim);
-      need(!order.paused && order.items[0].attempts.length === 1 && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
+      need(!order.paused && order.items[0].attempts.length === claim.attempt && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
       if (signedMode) {
         response = verifyBuyerSigningResponse(order, claim, request, structuredClone(response));
-        need(order.revision >= 3 && order.items[0].attempts[0].state === 'unknown'
-          && order.items[0].attempts[0].signature === response.signature, 'SAVED_RESPONSE_REQUIRED');
-      } else need(order.revision === 1 && order.items[0].attempts[0].state === 'wallet-pending', 'PREPARED_ORDER_REQUIRED');
+        need(order.revision >= claim.orderRevision+2 && order.items[0].attempts.at(-1).state === 'unknown'
+          && order.items[0].attempts.at(-1).signature === response.signature, 'SAVED_RESPONSE_REQUIRED');
+      } else need(order.revision === claim.orderRevision && order.items[0].attempts.at(-1).state === 'wallet-pending', 'PREPARED_ORDER_REQUIRED');
     } else need(order.revision === 0 && !order.paused && order.items.every(item => item.attempts.length === 0), 'FRESH_ORDER_REQUIRED');
     need([order.buyer, ...order.items.map(item => item.asset)].every(address => PublicKey.isOnCurve(new PublicKey(address).toBytes())), 'UNSIGNABLE_ADDRESS');
     rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true });

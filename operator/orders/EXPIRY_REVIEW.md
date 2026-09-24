@@ -1,3 +1,8 @@
+**PR47:** [одна новая попытка после сохранённого доказательства истечения](REPLACEMENT.md)
+получает новый hash, отдельные записи и свежее согласие на расходы. Первая
+подпись, claims и история сохраняются; третья попытка не разрешена. Продажи
+закрыты, цена 0,2 SOL. Ниже — история предыдущих этапов.
+
 # Explicit buyer expiry review
 
 PR46 closes a saved, fully signed first-item attempt only after a trusted RPC

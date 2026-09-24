@@ -8,10 +8,10 @@ const model=createOrderModel(policy),need=(v,code)=>{if(!v)throw Error(code);};
 export const signedBytesId=bytes=>bytesToHex(sha256(new TextEncoder().encode(bytes)));
 export function validateBuyerSubmission({order,claim,request,response}){
   model.validateOrder(order);
-  need(order.cluster==='devnet'&&order.revision>=3&&order.items[0].attempts.length===1
-    &&order.items[0].attempts[0].state==='unknown'&&order.items.slice(1).every(i=>!i.attempts.length),'SIGNED_ORDER_REQUIRED');
+  need(order.cluster==='devnet'&&order.revision>=claim.orderRevision+2&&order.items[0].attempts.length===claim.attempt
+    &&order.items[0].attempts.at(-1).state==='unknown'&&order.items.slice(1).every(i=>!i.attempts.length),'SIGNED_ORDER_REQUIRED');
   const signed=verifyBuyerSigningResponse(order,claim,request,response);
-  need(order.items[0].attempts[0].signature===signed.signature,'SAVED_RESPONSE_REQUIRED');
+  need(order.items[0].attempts.at(-1).signature===signed.signature,'SAVED_RESPONSE_REQUIRED');
   return signed;
 }
 export function submissionBinding(input){const signed=validateBuyerSubmission(input);return{
@@ -25,7 +25,7 @@ export function validateBuyerResult(report,input,{recovery=false}={}){
     need(['verified','unknown'].includes(report.status),'SUBMISSION_RESPONSE');
     if(report.status==='verified'){
       need(report.proof?.kind==='verified'&&report.chainVerified===true,'SUBMISSION_RESPONSE');
-      model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:1,proof:report.proof});
+      model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:report.proof});
     }else need(report.chainVerified===false&&!report.proof,'SUBMISSION_RESPONSE');
   }else need(report.status==='accepted'&&report.chainVerified===false&&!report.proof,'SUBMISSION_RESPONSE');
   return report;
