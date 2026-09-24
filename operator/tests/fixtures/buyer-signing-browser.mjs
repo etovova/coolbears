@@ -27,7 +27,15 @@ const subtle=new Proxy(native.subtle,{get(target,property){
       window.persistedBeforeSign.push(observed);
       const claimed=rows.at(-1),number=order?.items[0].attempts.length;
       if(observed.revision!==claimed?.record?.orderRevision||observed.state!=='wallet-pending'||claimed.phase!=='claimed'
-        ||claimed.record.attempt!==number||(number===1?rows.length!==1:!claimed.replacement||order.items[0].attempts[0].state!=='expired'))throw Error('SIGN_BEFORE_COMMIT');
+        ||claimed.record.attempt!==number||(number===1?rows.length!==1:!claimed.replacement||!['expired','failed'].includes(order.items[0].attempts[0].state)))throw Error('SIGN_BEFORE_COMMIT');
+      if(number===2&&order.items[0].attempts[0].state==='failed'){
+        const replacement=claimed.replacement,reviewed=rows.find(r=>r.phase==='failure-reviewed')?.record.report;
+        if(replacement.version!==2||!reviewed||typeof replacement.acknowledgedFeeLamports!=='string'
+          ||replacement.acknowledgedFeeLamports!==reviewed.evidence.feeLamports
+          ||JSON.stringify(replacement.prior.evidence)!==JSON.stringify(reviewed.evidence)
+          ||JSON.stringify(replacement.prior.proof)!==JSON.stringify(reviewed.proof)
+          ||JSON.stringify(reviewed.proof)!==JSON.stringify(order.items[0].attempts[0].proof))throw Error('SIGN_BEFORE_FEE_REVIEW');
+      }
       if(window.signMode==='fail')throw Error('fixture native signer failure');
       if(window.signMode==='hold'){window.signEntered=true;await new Promise(resolve=>window.releaseSigning=resolve);}
     }
