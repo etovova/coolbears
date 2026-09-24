@@ -15,6 +15,8 @@ import {discoverBuyerResponse} from '../discover-response.mjs';
 import {validateMissingBuyerResponse,recoveredSubmission,responseRecoveryKey,responseRecoveryRecord,restoreResponseRecovery,restoreDiscoveredSubmission,responseRecoveryReport} from '../response-recovery.mjs';
 import {validatePrewalletInput,prewalletRecoveryKey,prewalletRecoveryRecord,restorePrewalletRecovery,restorePrewalletSubmission,prewalletFailurePrior} from '../prewallet-recovery.mjs';
 import {discoverPrewalletResult} from '../discover-prewallet.mjs';
+import {prewalletExpiryKey,prewalletExpiryRecord,restorePrewalletExpiry} from '../prewallet-expiry.mjs';
+import {reviewPrewalletExpiry} from '../review-prewallet-expiry.mjs';
 import {reviewBuyerExpiry} from '../review-expiry.mjs';
 import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
 import {failureKey,failureRecord,restoreFailureReport} from '../failure-record.mjs';
@@ -45,7 +47,7 @@ export function validateBuyerGatewayConfig(input){
   return structuredClone(input);
 }
 function authorize(request,config,env){
-  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/recover-response','/api/buyer/recover-prewallet','/api/buyer/review-expiry','/api/buyer/replace'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/recover-response','/api/buyer/recover-prewallet','/api/buyer/review-prewallet-expiry','/api/buyer/review-expiry','/api/buyer/replace'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
   need(request.method==='POST','METHOD',405);
   need(request.headers.get('origin')===config.origin&&!request.headers.has('cookie')&&!request.headers.has('authorization')
     &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
@@ -92,8 +94,8 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='prepare'?'version nonce order':route==='recover-response'?'version nonce order claim request walletClaim':['check','recover-prewallet'].includes(route)?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[0]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
-        if(route==='review-expiry')need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='recover-response'?'version nonce order claim request walletClaim':['check','recover-prewallet'].includes(route)?'version nonce order claim request':route==='review-prewallet-expiry'?'version nonce order claim request authorizeExpiryReview':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[0]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        if(['review-expiry','review-prewallet-expiry'].includes(route))need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
         if(route==='replace')need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
@@ -105,7 +107,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         try{
           if(route==='prepare'){model.validateOrder(order);need(order.revision===0&&!order.paused&&order.items.every(i=>i.attempts.length===0),'REQUEST',400);}
           else if(route==='recover-response')validateMissingBuyerResponse(missing);
-          else if(route==='recover-prewallet')validatePrewalletInput(prewallet);
+          else if(['recover-prewallet','review-prewallet-expiry'].includes(route))validatePrewalletInput(prewallet);
           else if(route==='replace')signed=validateReplacementSource(submission);
           else if(route!=='check')signed=validateBuyerSubmission(submission);
           else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
@@ -121,6 +123,14 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
         const discoveredKey=responseRecoveryKey(order,number),discovered=await this.storage.get(discoveredKey);
         const prewalletKey=prewalletRecoveryKey(order,number),prewalletRecord=await this.storage.get(prewalletKey);
+        const prewalletRetiredKey=prewalletExpiryKey(order,number),prewalletRetired=await this.storage.get(prewalletRetiredKey);
+        if(prewalletRetired!==undefined){
+          need(retired===undefined&&failed===undefined&&discovered===undefined&&prewalletRecord===undefined
+            &&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          need(route==='review-prewallet-expiry','ATTEMPT_EXPIRED',409);
+          let report;try{report=restorePrewalletExpiry(prewallet,prewalletRetired);}catch{throw new BuyerCheckError('PREWALLET_EXPIRY_CONFLICT',409);}
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
         let prewalletPrior;
         if(prewalletRecord!==undefined){
           need(retired===undefined&&failed===undefined&&discovered===undefined&&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
@@ -136,7 +146,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           }catch(e){if(e instanceof BuyerCheckError)throw e;throw new BuyerCheckError('PREWALLET_RECORD_CONFLICT',409);}
           if(restored)return reply(200,{version:1,nonce:body.nonce,report:restored});
         }
-        if(route==='recover-prewallet')need(retired===undefined&&failed===undefined&&discovered===undefined
+        if(['recover-prewallet','review-prewallet-expiry'].includes(route))need(retired===undefined&&failed===undefined&&discovered===undefined
           &&await this.storage.get(sendKey)===undefined,'PREWALLET_RECORD_CONFLICT',409);
         if(discovered!==undefined){
           need(retired===undefined,'TERMINAL_RECORD_CONFLICT',409);
@@ -182,7 +192,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           }
         }
         if(number===2&&route!=='recover'){
-          try{validateReplacementClaim(order,claim,replacement);
+          try{need(await this.storage.get(prewalletExpiryKey(order))===undefined,'REPLACEMENT_REQUIRED',409);validateReplacementClaim(order,claim,replacement);
             const firstFailed=order.items[0].attempts[0].state==='failed';
             if(replacement.version===3){
               need(firstFailed&&JSON.stringify(replacement.prewallet)===JSON.stringify(await this.storage.get(prewalletRecoveryKey(order)))
@@ -204,7 +214,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
           return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
         }
-        if(['check','send','review-expiry','recover-response','recover-prewallet'].includes(route)){
+        if(['check','send','review-expiry','recover-response','recover-prewallet','review-prewallet-expiry'].includes(route)){
           try{validateBlockhashAnchor(savedPreparation?.anchor,claim);}catch{throw new BuyerCheckError('BLOCKHASH_ANCHOR_REQUIRED',409);}
         }
         if(route==='send'){
@@ -220,7 +230,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const endpoint=new URL('https://devnet.helius-rpc.com/');endpoint.searchParams.set('api-key',this.env.BUYER_HELIUS_API_KEY);
         const fetchImpl=async(url,init)=>{
             try{
-              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(route==='review-expiry'&&EXPIRY_METHODS.has(rpc.method))||(['recover-response','recover-prewallet'].includes(route)&&rpc.method==='getSignaturesForAddress')||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
+              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(['review-expiry','review-prewallet-expiry'].includes(route)&&EXPIRY_METHODS.has(rpc.method))||(['recover-response','recover-prewallet'].includes(route)&&rpc.method==='getSignaturesForAddress')||(route==='send'&&allowSubmission&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
               if(rpc.method==='sendTransaction'){
                 need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
                 const consumed=await this.storage.get(sendKey);
@@ -278,6 +288,21 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           need(JSON.stringify(await this.storage.get(replaceKey))===JSON.stringify(record),'REPLACEMENT_NOT_SAVED',503);settled=true;
           return reply(200,{version:1,nonce:body.nonce,report:replacementReport(submission,record)});
         }
+        if(route==='review-prewallet-expiry'){
+          const report=await reviewPrewalletExpiry({input:prewallet,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='prewallet-expired'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=prewalletExpiryRecord(prewallet,report);
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(prewalletRetiredKey)===undefined&&await tx.get(prewalletKey)===undefined&&await tx.get(discoveredKey)===undefined
+                &&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined&&await tx.get(sendKey)===undefined,'PREWALLET_EXPIRY_CONFLICT',409);
+              need(JSON.stringify(await tx.get(number===2?replaceKey:blockKey))===JSON.stringify(number===2?replacement:savedPreparation),'BLOCKHASH_ANCHOR_REQUIRED',409);
+              await tx.put(prewalletRetiredKey,record);need(JSON.stringify(await tx.get(prewalletRetiredKey))===JSON.stringify(record),'PREWALLET_EXPIRY_NOT_SAVED',503);
+            });
+            need(JSON.stringify(await this.storage.get(prewalletRetiredKey))===JSON.stringify(record),'PREWALLET_EXPIRY_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
         if(route==='recover-prewallet'){
           const report=await discoverPrewalletResult({input:prewallet,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl});
           settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
@@ -285,7 +310,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
             settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=prewalletRecoveryRecord(prewallet,report);
             await this.storage.transaction(async tx=>{
               need(await tx.get(prewalletKey)===undefined&&await tx.get(discoveredKey)===undefined&&await tx.get(failedKey)===undefined
-                &&await tx.get(retiredKey)===undefined&&await tx.get(sendKey)===undefined,'PREWALLET_RECORD_CONFLICT',409);
+                &&await tx.get(retiredKey)===undefined&&await tx.get(sendKey)===undefined&&await tx.get(prewalletRetiredKey)===undefined,'PREWALLET_RECORD_CONFLICT',409);
               need(JSON.stringify(await tx.get(number===2?replaceKey:blockKey))===JSON.stringify(number===2?replacement:savedPreparation),'BLOCKHASH_ANCHOR_REQUIRED',409);
               await tx.put(prewalletKey,record);need(JSON.stringify(await tx.get(prewalletKey))===JSON.stringify(record),'PREWALLET_NOT_SAVED',503);
             });

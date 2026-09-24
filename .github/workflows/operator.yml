@@ -133,6 +133,7 @@ jobs:
       - run: node operator/tests/order-response-recovery.runtime.mjs
       - run: node operator/tests/order-prewallet-recovery.runtime.mjs
       - run: node operator/tests/order-prewallet-replacement.runtime.mjs
+      - run: node operator/tests/order-prewallet-expiry.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
@@ -175,6 +176,8 @@ jobs:
         run: node operator/tests/order-prewallet-recovery.browser.mjs
       - name: Buyer reviewed replacement after a recovered prewallet failure
         run: node operator/tests/order-prewallet-replacement.browser.mjs
+      - name: Buyer unsigned expiry retirement without a fabricated signature
+        run: node operator/tests/order-prewallet-expiry.browser.mjs
       - name: Buyer HTTPS checker through workerd and SQLite
         run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
@@ -204,4 +207,5 @@ jobs:
             operator/build/buyer-response-recovery-chromium/
             operator/build/buyer-prewallet-recovery-chromium/
             operator/build/buyer-prewallet-replacement-chromium/
+            operator/build/buyer-prewallet-expiry-chromium/
           retention-days: 14

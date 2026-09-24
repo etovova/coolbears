@@ -10,6 +10,7 @@ import {failureRecord} from './failure-record.mjs';
 import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmission} from './response-recovery.mjs';
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
 import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
+import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -142,7 +143,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     return batches;
   }
   const current=records=>groups(records).at(-1)??[];
-  const hasPrewallet=records=>records.at(-1)?.phase==='prewallet-recovered';
+  const hasPrewallet=records=>['prewallet-recovered','prewallet-expired'].includes(records.at(-1)?.phase);
   function prewalletState(order,records,events){
     records=current(records);if(!hasPrewallet(records))return null;
     const saved=records.at(-1),r=saved.record,claim=records[0]?.record,ready=records[1]?.phase==='ready'?records[1]:null;
@@ -150,11 +151,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       &&r?.version===1&&equal(Object.keys(r).sort(),['orderRevision','report','version'])
       &&Number.isSafeInteger(r.orderRevision)&&r.orderRevision>claim.orderRevision&&r.orderRevision<=order.revision,'CORRUPT_PREWALLET_RECOVERY');
     let prior=events[0].order;for(let n=1;n<r.orderRevision;n++)prior=model.transitionOrder(prior,events[n]);
-    validatePrewalletRecovery(r.report,{order:prior,claim,request:ready?.record??null});
-    requireThat(r.report.status==='prewallet-recovered'&&order.items[0].attempts[claim.attempt-1].state===r.report.result.status
-      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:0,attempt:claim.attempt,proof:r.report.result.proof}),'PREWALLET_HISTORY');
-    return{status:r.report.result.status,report:structuredClone(r.report),
-      ...(r.report.result.status==='failed'?{feeLamports:r.report.result.evidence.feeLamports}:{}),
+    const expired=saved.phase==='prewallet-expired';
+    (expired?validatePrewalletExpiry:validatePrewalletRecovery)(r.report,{order:prior,claim,request:ready?.record??null});
+    const result=expired?{status:'expired',proof:r.report.proof}:r.report.result;
+    requireThat(r.report.status===saved.phase&&order.items[0].attempts[claim.attempt-1].state===result.status
+      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:0,attempt:claim.attempt,proof:result.proof}),'PREWALLET_HISTORY');
+    return{status:result.status,report:structuredClone(r.report),
+      ...(result.status==='failed'?{feeLamports:r.report.result.evidence.feeLamports}:{}),
       retryAuthorized:false,readyToSubmit:false,salesOpen:false};
   }
   function signingState(order, records) {
@@ -285,6 +288,29 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     return locks.request(`coolbears:buyer-order:v1:${scopeKey}`, { mode: 'exclusive', ifAvailable: true }, async lock => {
       requireThat(lock, 'ORDER_BUSY');
       return action(scope, scopeKey);
+    });
+  }
+  function savePrewalletTerminal(input,report,expired){
+    const frozen=structuredClone(report);
+    return locked(input,async(scope,scopeKey)=>{
+      const before=await snapshotData(scope,scopeKey),state=prewalletRecoveryState(before);
+      requireThat(state?.status==='prewallet-unknown','PREWALLET_REQUIRED');
+      (expired?validatePrewalletExpiry:validatePrewalletRecovery)(frozen,state.input);
+      requireThat(frozen.status===(expired?'prewallet-expired':'prewallet-recovered'),'PREWALLET_NOT_VERIFIED');
+      const retained=nativeResults.get(scopeKey);
+      if(retained&&!expired)requireThat(equal(retained.request,prewalletSubmission(state.input,frozen.response).request),'ASSET_REQUEST_CONFLICT');
+      const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:expired?frozen.proof:frozen.result.proof};
+      const order=bounded(model.transitionOrder(before.order,event));
+      const record={phase:expired?'prewallet-expired':'prewallet-recovered',record:{version:1,orderRevision:order.revision,report:frozen}};
+      await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
+        requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
+        tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
+        tx.objectStore('signing').add(record,[scopeKey,0,number,6]);resolve(true);
+      },abort));
+      const after=await snapshotData(scope,scopeKey);
+      requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'PREWALLET_NOT_SAVED');
+      nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
+      return prewalletRecoveryState(after);
     });
   }
   // Trusted adapter only. Evidence + unchanged order/event CAS; never a retry grant.
@@ -516,31 +542,15 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     readPrewalletRecovery(input){
       return locked(input,async(scope,scopeKey)=>{
         const state=prewalletRecoveryState(await snapshotData(scope,scopeKey));
-        if(['verified','failed'].includes(state?.status)){nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);}
+        if(['verified','failed','expired'].includes(state?.status)){nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);}
         return state;
       });
     },
     savePrewalletRecovery(input,report){
-      const frozen=structuredClone(report);
-      return locked(input,async(scope,scopeKey)=>{
-        const before=await snapshotData(scope,scopeKey),state=prewalletRecoveryState(before);
-        requireThat(state?.status==='prewallet-unknown','PREWALLET_REQUIRED');
-        validatePrewalletRecovery(frozen,state.input);requireThat(frozen.status==='prewallet-recovered','PREWALLET_NOT_VERIFIED');
-        const retained=nativeResults.get(scopeKey);
-        if(retained)requireThat(equal(retained.request,prewalletSubmission(state.input,frozen.response).request),'ASSET_REQUEST_CONFLICT');
-        const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:frozen.result.proof};
-        const order=bounded(model.transitionOrder(before.order,event));
-        const record={phase:'prewallet-recovered',record:{version:1,orderRevision:order.revision,report:frozen}};
-        await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
-          requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
-          tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-          tx.objectStore('signing').add(record,[scopeKey,0,number,6]);resolve(true);
-        },abort));
-        const after=await snapshotData(scope,scopeKey);
-        requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'PREWALLET_NOT_SAVED');
-        nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
-        return prewalletRecoveryState(after);
-      });
+      return savePrewalletTerminal(input,report,false);
+    },
+    savePrewalletExpiry(input,report){
+      return savePrewalletTerminal(input,report,true);
     },
     readPrewalletReplacement(input){
       return locked(input,async(scope,scopeKey)=>{

@@ -1,11 +1,22 @@
 import {validatePrewalletRecovery} from './prewallet-recovery.mjs';
+import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
 import {validateReplacementResult,validateReplacementAcknowledgment} from './replacement.mjs';
 const need=(v,c)=>{if(!v)throw Error(c);};
 export function createBuyerPrewalletRecovery({storage,scope,transport}={}){
   need(typeof storage?.readPrewalletRecovery==='function'&&typeof storage?.savePrewalletRecovery==='function'
     &&typeof transport?.recoverPrewallet==='function','PREWALLET_CONFIGURATION');
   const frozen=structuredClone(scope);let busy=false;
-  return Object.freeze({async prepareReplacement({authorizeReplacement=false,acknowledgedFeeLamports}={}){
+  return Object.freeze({async reviewExpiry({authorizeExpiryReview=false}={}){
+    need(authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED');need(!busy,'BUSY');busy=true;
+    try{
+      need(typeof storage.savePrewalletExpiry==='function'&&typeof transport.reviewPrewalletExpiry==='function','PREWALLET_EXPIRY_CONFIGURATION');
+      const state=await storage.readPrewalletRecovery(frozen);need(state,'PREWALLET_REQUIRED');
+      if(state.status==='expired')return{status:'already-recorded',outcome:'expired',retryAuthorized:false,readyToSubmit:false,salesOpen:false};
+      need(state.status==='prewallet-unknown','PREWALLET_REQUIRED');
+      const report=validatePrewalletExpiry(await transport.reviewPrewalletExpiry(state.input),state.input);
+      return report.status==='prewallet-expired'?await storage.savePrewalletExpiry(frozen,report):report;
+    }finally{busy=false;}
+  },async prepareReplacement({authorizeReplacement=false,acknowledgedFeeLamports}={}){
     need(authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED');need(!busy,'BUSY');busy=true;
     try{
       need(typeof storage.readPrewalletReplacement==='function'&&typeof transport.replace==='function','REPLACEMENT_CONFIGURATION');
@@ -19,7 +30,7 @@ export function createBuyerPrewalletRecovery({storage,scope,transport}={}){
   },async recover(){need(!busy,'BUSY');busy=true;
     try{
       const state=await storage.readPrewalletRecovery(frozen);need(state,'PREWALLET_REQUIRED');
-      if(['verified','failed'].includes(state.status))return{status:'already-recorded',outcome:state.status,
+      if(['verified','failed','expired'].includes(state.status))return{status:'already-recorded',outcome:state.status,
         ...(state.status==='failed'?{feeLamports:state.feeLamports}:{}),retryAuthorized:false,readyToSubmit:false,salesOpen:false};
       need(state.status==='prewallet-unknown','PREWALLET_REQUIRED');
       const report=validatePrewalletRecovery(await transport.recoverPrewallet(state.input),state.input);
