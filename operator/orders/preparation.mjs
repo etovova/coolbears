@@ -7,7 +7,7 @@ import {validateBlockhashAnchor} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),planner=createOrderPlanner(model);
 export function preparationFor(order,block,sourceSlot){
   const template=planner.buildOrderItemTemplate(order,0,block);
-  const candidate={orderRevision:0,itemIndex:0,blockhash:template.blockhash,lastValidBlockHeight:template.lastValidBlockHeight,
+  const candidate={orderRevision:order.revision,itemIndex:0,blockhash:template.blockhash,lastValidBlockHeight:template.lastValidBlockHeight,
     transactionBase64:Buffer.from(template.unsignedBytes).toString('base64')};
   const {claim}=prepareAssetClaim(order,candidate);
   const anchor={version:1,orderIdentitySha256:claim.orderIdentitySha256,messageSha256:claim.messageSha256,

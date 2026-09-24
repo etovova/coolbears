@@ -6,13 +6,14 @@ import { createOrderPlanner } from '../transaction-model.mjs';
 import { createAccountVerifier } from '../../deployment/accounts-model.mjs';
 import { createOrderChecker } from '../preflight-model.mjs';
 import {createCostQuote,costQuoteKey,validateCostApproval,enforceCostCeiling} from '../cost-approval.mjs';
-import { anchorKey, validateBlockhashAnchor } from '../blockhash-anchor.mjs';
+import { anchorKey, attemptKey, validateBlockhashAnchor } from '../blockhash-anchor.mjs';
 import { preparationFor, validatePreparation } from '../preparation.mjs';
 import { validateAssetRequest } from '../signing.mjs';
 import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../submission.mjs';
 import { recoverBuyerOrder } from '../recovery.mjs';
 import {reviewBuyerExpiry} from '../review-expiry.mjs';
 import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
+import {replacementKey,validateReplacementSource,validateReplacementPrior,replacementFor,replacementReport,validateReplacementClaim} from '../replacement.mjs';
 import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
 import { BuyerCheckError, need, exact, readJson } from './http.mjs';
 const model=createOrderModel(policy),planner=createOrderPlanner(model);
@@ -39,7 +40,7 @@ export function validateBuyerGatewayConfig(input){
   return structuredClone(input);
 }
 function authorize(request,config,env){
-  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/review-expiry'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/review-expiry','/api/buyer/replace'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
   need(request.method==='POST','METHOD',405);
   need(request.headers.get('origin')===config.origin&&!request.headers.has('cookie')&&!request.headers.has('authorization')
     &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
@@ -86,8 +87,9 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,route==='prepare'?'version nonce order':route==='check'?'version nonce order claim request':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement':'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         if(route==='review-expiry')need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
+        if(route==='replace')need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
@@ -95,26 +97,42 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         let signed;
         try{
           if(route==='prepare'){model.validateOrder(order);need(order.revision===0&&!order.paused&&order.items.every(i=>i.attempts.length===0),'REQUEST',400);}
+          else if(route==='replace')signed=validateReplacementSource(submission);
           else if(route!=='check')signed=validateBuyerSubmission(submission);
           else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
-          need(order.revision===1&&!order.paused&&order.items[0].attempts.length===1&&order.items[0].attempts[0].state==='wallet-pending'
+          need(order.revision===claim.orderRevision&&!order.paused&&order.items[0].attempts.length===claim.attempt&&order.items[0].attempts.at(-1).state==='wallet-pending'
             &&order.items.slice(1).every(item=>!item.attempts.length),'REQUEST',400);}
         }catch{throw new BuyerCheckError('REQUEST',400);}
         // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
-        const sendKey='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset]));
-        const retiredKey=expiryKey(order),retired=await this.storage.get(retiredKey);
-        if(retired!==undefined){
+        const number=claim?.attempt??1;
+        const sendKey=attemptKey('buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset])),number);
+        const retiredKey=expiryKey(order,number),retired=await this.storage.get(retiredKey);
+        if(retired!==undefined&&route!=='replace'){
           if(route==='review-expiry'){
             let report;try{report=restoreExpiryReport(submission,retired);}catch{throw new BuyerCheckError('EXPIRY_RECORD_CONFLICT',409);}
             return reply(200,{version:1,nonce:body.nonce,report});
           }
           need(route==='recover','ATTEMPT_EXPIRED',409);
         }
+        const replaceKey=replacementKey(order),replacement=(number===2||route==='replace')?await this.storage.get(replaceKey):undefined;
+        if(route==='replace'){
+          try{validateReplacementPrior(submission,retired);}catch{throw new BuyerCheckError('EXPIRY_RECORD_REQUIRED',409);}
+          if(replacement!==undefined){
+            let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(retired),'REPLACEMENT_CONFLICT',409);report=replacementReport(submission,replacement,true);}
+            catch{throw new BuyerCheckError('REPLACEMENT_CONFLICT',409);}
+            return reply(200,{version:1,nonce:body.nonce,report});
+          }
+        }
+        if(number===2&&route!=='recover'){
+          try{validateReplacementClaim(order,claim,replacement);
+            need(JSON.stringify(replacement.prior)===JSON.stringify(await this.storage.get(expiryKey(order))),'REPLACEMENT_REQUIRED',409);}
+          catch{throw new BuyerCheckError('REPLACEMENT_REQUIRED',409);}
+        }
         if(route==='send'){
           need(!order.paused,'ORDER_PAUSED',409);
           need(await this.storage.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
         }
-        const blockKey=anchorKey(order),savedPreparation=route==='recover'?undefined:await this.storage.get(blockKey);
+        const blockKey=anchorKey(order,number),savedPreparation=route==='recover'?undefined:number===2?{anchor:replacement.anchor}:await this.storage.get(blockKey);
         if(route==='prepare'&&savedPreparation!==undefined){
           try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
           return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
@@ -167,6 +185,22 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           need(JSON.stringify(await this.storage.get(blockKey))===JSON.stringify(record),'PREPARATION_UNCONFIRMED',503);
           settled=true;
           return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...record,restored:false,readyToSign:false,readyToSubmit:false,salesOpen:false}});
+        }
+        if(route==='replace'){
+          const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000});
+          await assertCluster(rpc,'devnet');
+          const floor=Math.max(retired.proof.slot,retired.proof.accountSlot,retired.proof.statusSlot);
+          const accounts=await rpc.call('getMultipleAccounts',[[claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:floor}]);
+          need(integer(accounts?.context?.slot)&&accounts.context.slot>=floor&&Array.isArray(accounts.value)&&accounts.value.length===1&&accounts.value[0]===null,'REPLACEMENT_ASSET_OBSERVED',409);
+          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:Math.max(floor,accounts.context.slot)}]);
+          need(integer(latest?.context?.slot)&&latest.context.slot>=Math.max(floor,accounts.context.slot),'RPC_CONTEXT',503);
+          const record=replacementFor(submission,retired,latest.value,latest.context.slot);
+          const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
+          need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
+          need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+          await this.storage.transaction(async tx=>{need(await tx.get(replaceKey)===undefined,'REPLACEMENT_CONFLICT',409);await tx.put(replaceKey,record);});
+          need(JSON.stringify(await this.storage.get(replaceKey))===JSON.stringify(record),'REPLACEMENT_NOT_SAVED',503);settled=true;
+          return reply(200,{version:1,nonce:body.nonce,report:replacementReport(submission,record)});
         }
         if(route==='recover'){
           const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl});

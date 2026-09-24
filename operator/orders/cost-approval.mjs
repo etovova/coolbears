@@ -37,7 +37,7 @@ export const costQuoteKey=id=>'buyer-cost:v1:'+id;
 export function createCostQuote(input,report){
   const {order,claim,request}=input;validateAssetRequest(order,claim,request);
   need(report.status==='wallet-check-passed'&&report.requestId===buyerRequestId(request)
-    &&report.orderRevision===1&&report.orderId===order.id&&report.readyToSign===true,'COST_QUOTE_INVALID');
+    &&report.orderRevision===claim.orderRevision&&report.orderId===order.id&&report.readyToSign===true,'COST_QUOTE_INVALID');
   const quote={version:1,kind:'coolbears-buyer-cost-quote',requestId:buyerRequestId(request),orderIdentitySha256:claim.orderIdentitySha256,
     checkedSlot:report.checkedSlot,issuedAt:report.checkedAt,expiresAt:report.checkedAt+300000,budget:checkedBudget(report,order)};
   quote.quoteId=quoteId(quote,order);validateCostQuote(quote,input);return quote;

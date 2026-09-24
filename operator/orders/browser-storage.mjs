@@ -5,7 +5,8 @@ import { createOrderModel } from './journal-model.mjs';
 import { prepareAssetClaim, validateAssetClaim, finalizeAssetRequest, validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
 import {validateCostApproval} from './cost-approval.mjs';
-import {validateBuyerExpiryResult} from './expiry-review.mjs';
+import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
+import {validateReplacementResult,validateReplacementClaim} from './replacement.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -95,14 +96,20 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     requireThat(replay.revision === 0 && !replay.paused && replay.items.every(item => !item.attempts.length), 'CORRUPT_ORDER_HISTORY');
     for (let i = 1; i < events.length; i++) replay = model.transitionOrder(replay, events[i]);
     requireThat(equal(replay, order), 'CORRUPT_ORDER_HISTORY');
-    if (signing.length) {
-      const claim = signing[0]?.record;
-      requireThat(equal(events[1], { type:'prepare', revision:0, index:0, blockhash:claim?.blockhash,
-        lastValidBlockHeight:claim?.lastValidBlockHeight, messageSha256:claim?.messageSha256 }), 'ASSET_CLAIM_HISTORY');
+    const batches=groups(signing);
+    if(signing.length)requireThat(batches.length===order.items[0].attempts.length,'ASSET_CLAIM_HISTORY');
+    for(const [i,records]of batches.entries()){
+      const claim=records[0]?.record;
+      requireThat(claim.attempt===i+1&&equal(Object.keys(records[0]).sort(),(i===0?['phase','record']:['phase','record','replacement']).sort()),'ASSET_CLAIM_HISTORY');
+      requireThat(equal(events[claim.orderRevision],{type:'prepare',revision:claim.orderRevision-1,index:0,blockhash:claim.blockhash,
+        lastValidBlockHeight:claim.lastValidBlockHeight,messageSha256:claim.messageSha256,...(i===1?{retry:true}:{})}),'ASSET_CLAIM_HISTORY');
+      signingState(order,records);walletState(order,records,events);submissionState(order,records,events);
+      if(i===1){
+        validateReplacementClaim(order,claim,records[0].replacement);
+        const source=submissionState(order,batches[0],events);
+        requireThat(source?.status==='expired'&&equal(records[0].replacement.prior,source.expiryRecord),'REPLACEMENT_HISTORY');
+      }
     }
-    signingState(order, signing);
-    walletState(order, signing, events);
-    submissionState(order, signing, events);
     return order;
   }
   async function proveKeys(order, records, scopeKey) {
@@ -120,7 +127,15 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       } catch { throw Error('ASSET_KEY_MISMATCH'); }
     }
   }
+  function groups(records){
+    requireThat(records.length<=12,'CORRUPT_ASSET_SIGNING');const batches=[];
+    for(const record of records){if(record?.phase==='claimed')batches.push([]);
+      requireThat(batches.length>0&&batches.length<=2,'CORRUPT_ASSET_SIGNING');batches.at(-1).push(record);}
+    return batches;
+  }
+  const current=records=>groups(records).at(-1)??[];
   function signingState(order, records) {
+    records=current(records);
     requireThat(records.length <= 6, 'CORRUPT_ASSET_SIGNING');
     if (!records.length) return null;
     const [claimed, ready] = records;
@@ -133,28 +148,30 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       readyToSign: false, readyToSubmit: false, salesOpen: false };
   }
   function walletState(order, records, events) {
+    records=current(records);
     if (records.length < 3) return null;
+    const assetClaim=records[0].record,number=assetClaim.attempt;
     const claim = records[2]?.record, response = records[3]?.record;
     const shape = (value, names) => value && equal(Object.keys(value).sort(), names.split(' ').sort());
     requireThat(records[2]?.phase === 'wallet-claimed'
       && ((claim.version===1&&shape(claim,'version claimId requestId orderRevision'))
         ||(claim.version===2&&shape(claim,'version claimId requestId orderRevision costApproval')))
       && /^[a-f0-9]{64}$/.test(claim.claimId) && claim.requestId === buyerRequestId(records[1].record)
-      && claim.orderRevision === 2 && order.revision >= 2, 'CORRUPT_WALLET_CLAIM');
+      && claim.orderRevision === assetClaim.orderRevision+1 && order.revision >= claim.orderRevision, 'CORRUPT_WALLET_CLAIM');
     if(claim.version===2)validateCostApproval(claim.costApproval,{order,claim:records[0].record,request:records[1].record});
-    requireThat(equal(events[2], {type:'unknown',revision:1,index:0,attempt:1}), 'WALLET_CLAIM_HISTORY');
+    requireThat(equal(events[claim.orderRevision], {type:'unknown',revision:assetClaim.orderRevision,index:0,attempt:number}), 'WALLET_CLAIM_HISTORY');
     if (response) {
       requireThat(records[3].phase === 'buyer-response'
         && shape(response, 'version claimId orderRevision transactionBase64 signature messageSha256')
         && response.version === 1 && response.claimId === claim.claimId
-        && Number.isSafeInteger(response.orderRevision) && response.orderRevision >= 3
+        && Number.isSafeInteger(response.orderRevision) && response.orderRevision > claim.orderRevision
         && response.orderRevision <= order.revision, 'CORRUPT_BUYER_RESPONSE');
       let before = events[0].order;
       for (let n = 1; n < response.orderRevision; n++) before = model.transitionOrder(before, events[n]);
       const verified = verifyBuyerSigningResponse(before, records[0].record, records[1].record,
         {transactionBase64:response.transactionBase64});
       requireThat(verified.signature === response.signature && verified.messageSha256 === response.messageSha256
-        && equal(events[response.orderRevision], {type:'signature',revision:before.revision,index:0,attempt:1,
+        && equal(events[response.orderRevision], {type:'signature',revision:before.revision,index:0,attempt:number,
           signature:response.signature,messageSha256:response.messageSha256}), 'BUYER_RESPONSE_HISTORY');
     }
     return {status:response ? 'buyer-response-saved' : 'wallet-response-unknown',
@@ -162,10 +179,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       readyToSign:false, readyToSubmit:false, salesOpen:false};
   }
   function submissionState(order,records,events) {
+    records=current(records);
     const wallet=walletState(order,records,events);
     if(!wallet?.response)return null;
     const input={order:structuredClone(order),claim:structuredClone(records[0].record),request:structuredClone(records[1].record),
       response:{transactionBase64:wallet.response.transactionBase64}};
+    const number=input.claim.attempt;let expiryEvidence=null;
     const reviewed=records.at(-1)?.phase==='expiry-reviewed'?records.at(-1).record:null;
     const sendClaim=records[4]?.phase==='expiry-reviewed'?null:records[4]?.record;
     if(sendClaim){
@@ -175,12 +194,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         &&sendClaim.transactionSha256===signedBytesId(wallet.response.transactionBase64)
         &&Number.isSafeInteger(sendClaim.orderRevision)&&sendClaim.orderRevision>wallet.response.orderRevision
         &&sendClaim.orderRevision<=order.revision,'CORRUPT_SEND_CLAIM');
-      requireThat(equal(events[sendClaim.orderRevision],{type:'unknown',revision:sendClaim.orderRevision-1,index:0,attempt:1}),'SEND_CLAIM_HISTORY');
+      requireThat(equal(events[sendClaim.orderRevision],{type:'unknown',revision:sendClaim.orderRevision-1,index:0,attempt:number}),'SEND_CLAIM_HISTORY');
       let prior=events[0].order;
       for(let i=1;i<sendClaim.orderRevision;i++)prior=model.transitionOrder(prior,events[i]);
       requireThat(!prior.paused,'SEND_CLAIM_HISTORY');validateBuyerSubmission({...input,order:prior});
     }
-    const outcome=order.items[0].attempts[0].state;
+    const outcome=order.items[0].attempts[number-1].state;
     requireThat(records.length===(sendClaim?5:4)+(reviewed?1:0),'CORRUPT_EXPIRY_REVIEW');
     if(reviewed){
       requireThat(records.length===(sendClaim?6:5)&&equal(Object.keys(reviewed).sort(),['version','orderRevision','report'].sort())
@@ -189,12 +208,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       let prior=events[0].order;
       for(let i=1;i<reviewed.orderRevision;i++)prior=model.transitionOrder(prior,events[i]);
       validateBuyerExpiryResult(reviewed.report,{...input,order:prior});
+      expiryEvidence=expiryRecord({...input,order:prior},reviewed.report);
       requireThat(reviewed.report.status==='expired'&&equal(events[reviewed.orderRevision],
-        {type:'reconcile',revision:prior.revision,index:0,attempt:1,proof:reviewed.report.proof}),'EXPIRY_REVIEW_HISTORY');
+        {type:'reconcile',revision:prior.revision,index:0,attempt:number,proof:reviewed.report.proof}),'EXPIRY_REVIEW_HISTORY');
     }
     requireThat(outcome!=='expired'||reviewed,'EXPIRY_REVIEW_REQUIRED');
     return {status:['verified','expired'].includes(outcome)?outcome:sendClaim?'send-claimed':'ready',
-      input,costApproval:wallet.claim.costApproval?structuredClone(wallet.claim.costApproval):null,sendClaim:sendClaim?structuredClone(sendClaim):null,readyToSubmit:false,salesOpen:false};
+      input,expiryRecord:expiryEvidence,costApproval:wallet.claim.costApproval?structuredClone(wallet.claim.costApproval):null,sendClaim:sendClaim?structuredClone(sendClaim):null,readyToSubmit:false,salesOpen:false};
   }
   async function snapshotData(scope, scopeKey) {
     const data = await transaction('readonly', (tx, resolve, abort) => load(tx, scopeKey, resolve, abort));
@@ -219,19 +239,60 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       requireThat(state&&!['verified','expired'].includes(state.status),'RECOVERY_STATE');
       if(expiry)validateBuyerExpiryResult(frozen,state.input);else validateBuyerResult(frozen,state.input,{recovery:true});
       requireThat(frozen.status===outcome,'RECOVERY_NOT_VERIFIED');
-      const event={type:'reconcile',revision:before.order.revision,index:0,attempt:1,proof:frozen.proof};
+      const number=state.input.claim.attempt;
+      const event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:frozen.proof};
       const order=bounded(model.transitionOrder(before.order,event));
       const record=expiry?{phase:'expiry-reviewed',record:{version:1,orderRevision:order.revision,report:frozen}}:null;
       await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
         requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
         tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-        if(record)tx.objectStore('signing').add(record,[scopeKey,0,1,5]);resolve(true);
+        if(record)tx.objectStore('signing').add(record,[scopeKey,0,number,5]);resolve(true);
       },abort));
       const after=await snapshotData(scope,scopeKey);
       requireThat(equal(after.order,order)&&equal(after.signing,record?[...before.signing,record]:before.signing),'PROOF_NOT_SAVED');
-      return {status:outcome,signature:order.items[0].attempts[0].signature,orderRevision:order.revision,
+      return {status:outcome,signature:order.items[0].attempts[number-1].signature,orderRevision:order.revision,
         ...(expiry?{retryAuthorized:false}:{}),readyToSubmit:false,salesOpen:false};
     });
+  }
+  async function prepareSigning(input,candidate,replacementReport){
+      const frozen=structuredClone(candidate),report=replacementReport&&structuredClone(replacementReport);
+      return locked(input, async (scope, scopeKey) => {
+        const before = await snapshotData(scope, scopeKey);
+        requireThat(before.order, 'MISSING_ORDER');
+        requireThat(frozen?.orderRevision===before.order.revision,'STALE_REVISION');
+        if(report){
+          const source=submissionState(before.order,before.signing,before.events);
+          requireThat(source?.status==='expired'&&source.input.claim.attempt===1,'REPLACEMENT_NOT_READY');
+          validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,source.expiryRecord),'REPLACEMENT_HISTORY');
+        }else requireThat(before.signing.length===0,'ASSET_SIGNING_EXISTS');
+        const prepared = prepareAssetClaim(before.order, frozen),number=prepared.claim.attempt;
+        requireThat(number===(report?2:1),'REPLACEMENT_NOT_READY');
+        bounded(prepared.order);
+        const claimed = { phase: 'claimed', record: prepared.claim,...(report?{replacement:report.record}:{}) };
+        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
+          requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3],before.signing), 'STALE_REVISION');
+          tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
+          tx.objectStore('orders').put(prepared.order, scopeKey);
+          tx.objectStore('signing').add(claimed, [scopeKey, 0, number, 0]);
+          resolve(true);
+        }, abort));
+        // Native signing starts only after the intent has committed and been read back.
+        const saved = await snapshotData(scope, scopeKey);
+        requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [...before.signing,claimed]), 'ASSET_CLAIM_CHANGED');
+        const message = validateAssetClaim(saved.order, prepared.claim);
+        let signature;
+        try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[0].privateKey, message)); }
+        catch { throw Error('ASSET_SIGNING_FAILED'); }
+        const request = finalizeAssetRequest(saved.order, prepared.claim, signature);
+        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
+          requireThat(equal(validate(data, scope, scopeKey), saved.order) && equal(data[3], saved.signing), 'ASSET_CLAIM_CHANGED');
+          tx.objectStore('signing').add({ phase: 'ready', record: request }, [scopeKey, 0, number, 1]);
+          resolve(true);
+        }, abort));
+        const final = await snapshotData(scope, scopeKey);
+        requireThat(equal(final.order, saved.order) && equal(final.signing, [...before.signing,claimed, {phase:'ready',record:request}]), 'ASSET_REQUEST_NOT_SAVED');
+        return signingState(final.order, final.signing);
+      });
   }
   return {
     async create(input) {
@@ -273,6 +334,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         requireThat(frozen?.revision === before.revision, 'STALE_REVISION');
         const next = bounded(model.transitionOrder(before, frozen));
         await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
+          requireThat(data[3].length===0||['pause','resume'].includes(frozen.type),'SIGNING_HISTORY_ADAPTER_REQUIRED');
           const current = validate(data, scope, scopeKey);
           requireThat(equal(current, before), 'STALE_REVISION');
           tx.objectStore('events').add(frozen, [scopeKey, next.revision]);
@@ -284,40 +346,10 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         return persisted;
       });
     },
-    // Fresh first item only. The persisted claim is consumed before asset signing.
-    async prepareAssetSigning(input, candidate) {
-      const frozen = structuredClone(candidate);
-      return locked(input, async (scope, scopeKey) => {
-        const before = await snapshotData(scope, scopeKey);
-        requireThat(before.order, 'MISSING_ORDER');
-        const prepared = prepareAssetClaim(before.order, frozen);
-        bounded(prepared.order);
-        requireThat(before.signing.length === 0, 'ASSET_SIGNING_EXISTS');
-        const claimed = { phase: 'claimed', record: prepared.claim };
-        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
-          requireThat(equal(validate(data, scope, scopeKey), before.order) && data[3].length === 0, 'STALE_REVISION');
-          tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
-          tx.objectStore('orders').put(prepared.order, scopeKey);
-          tx.objectStore('signing').add(claimed, [scopeKey, 0, 1, 0]);
-          resolve(true);
-        }, abort));
-        // Native signing starts only after the intent has committed and been read back.
-        const saved = await snapshotData(scope, scopeKey);
-        requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [claimed]), 'ASSET_CLAIM_CHANGED');
-        const message = validateAssetClaim(saved.order, prepared.claim);
-        let signature;
-        try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[0].privateKey, message)); }
-        catch { throw Error('ASSET_SIGNING_FAILED'); }
-        const request = finalizeAssetRequest(saved.order, prepared.claim, signature);
-        await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
-          requireThat(equal(validate(data, scope, scopeKey), saved.order) && equal(data[3], [claimed]), 'ASSET_CLAIM_CHANGED');
-          tx.objectStore('signing').add({ phase: 'ready', record: request }, [scopeKey, 0, 1, 1]);
-          resolve(true);
-        }, abort));
-        const final = await snapshotData(scope, scopeKey);
-        requireThat(equal(final.order, saved.order) && equal(final.signing, [claimed, {phase:'ready',record:request}]), 'ASSET_REQUEST_NOT_SAVED');
-        return signingState(final.order, final.signing);
-      });
+    prepareAssetSigning(input,candidate){return prepareSigning(input,candidate);},
+    prepareReplacementSigning(input,report,{authorizeReplacementSigning=false}={}){
+      requireThat(authorizeReplacementSigning===true,'EXPLICIT_REPLACEMENT_SIGNING_REQUIRED');
+      const frozen=structuredClone(report);return prepareSigning(input,frozen?.candidate,frozen);
     },
     readAssetSigning(input) {
       return locked(input, async (scope, scopeKey) => {
@@ -331,12 +363,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       const approval=structuredClone(costApproval);
       return locked(input, async (scope, scopeKey) => {
         const before = await snapshotData(scope, scopeKey);
-        requireThat(before.order?.revision === orderRevision && orderRevision === 1, 'STALE_REVISION');
-        requireThat(!before.order.paused && before.signing.length === 2
-          && before.order.items[0].attempts[0].state === 'wallet-pending'
-          && requestId === buyerRequestId(before.signing[1].record), 'WALLET_NOT_READY');
-        validateCostApproval(approval,{order:before.order,claim:before.signing[0].record,request:before.signing[1].record},{now:Date.now()});
-        const event = {type:'unknown',revision:1,index:0,attempt:1};
+        const records=current(before.signing),assetClaim=records[0]?.record,number=assetClaim?.attempt;
+        requireThat(before.order?.revision===orderRevision&&orderRevision===assetClaim?.orderRevision,'STALE_REVISION');
+        requireThat(!before.order.paused && records.length === 2
+          && before.order.items[0].attempts[number-1].state === 'wallet-pending'
+          && requestId === buyerRequestId(records[1].record), 'WALLET_NOT_READY');
+        validateCostApproval(approval,{order:before.order,claim:records[0].record,request:records[1].record},{now:Date.now()});
+        const event = {type:'unknown',revision:orderRevision,index:0,attempt:number};
         const order = bounded(model.transitionOrder(before.order, event));
         const claimId = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
         const claimed = {phase:'wallet-claimed',record:{version:2,claimId,requestId,orderRevision:order.revision,costApproval:approval}};
@@ -344,7 +377,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3], before.signing), 'STALE_REVISION');
           tx.objectStore('events').add(event, [scopeKey, order.revision]);
           tx.objectStore('orders').put(order, scopeKey);
-          tx.objectStore('signing').add(claimed, [scopeKey,0,1,2]); resolve(true);
+          tx.objectStore('signing').add(claimed, [scopeKey,0,number,2]); resolve(true);
         }, abort));
         const after = await snapshotData(scope, scopeKey);
         requireThat(equal(after.order, order) && equal(after.signing, [...before.signing,claimed]), 'WALLET_CLAIM_NOT_SAVED');
@@ -357,16 +390,17 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         && typeof frozen.transactionBase64 === 'string' && frozen.transactionBase64.length <= 1644, 'BUYER_RESPONSE_FIELDS');
       return locked(input, async (scope, scopeKey) => {
         const before = await snapshotData(scope, scopeKey);
-        requireThat(before.order && before.signing.length >= 3, 'WALLET_CLAIM_REQUIRED');
+        const records=current(before.signing),number=records[0]?.record?.attempt;
+        requireThat(before.order && records.length >= 3, 'WALLET_CLAIM_REQUIRED');
         const state = walletState(before.order, before.signing, before.events);
         requireThat(frozen.claimId === state.claim.claimId, 'WALLET_CLAIM_MISMATCH');
         if (state.response) {
           requireThat(state.response.transactionBase64 === frozen.transactionBase64, 'BUYER_RESPONSE_CONFLICT');
           return state; // Lost commit acknowledgment: read the same bytes, no event.
         }
-        const verified = verifyBuyerSigningResponse(before.order, before.signing[0].record, before.signing[1].record,
+        const verified = verifyBuyerSigningResponse(before.order, records[0].record, records[1].record,
           {transactionBase64:frozen.transactionBase64});
-        const event = {type:'signature',revision:before.order.revision,index:0,attempt:1,
+        const event = {type:'signature',revision:before.order.revision,index:0,attempt:number,
           signature:verified.signature,messageSha256:verified.messageSha256};
         const order = bounded(model.transitionOrder(before.order, event));
         const saved = {phase:'buyer-response',record:{version:1,claimId:frozen.claimId,orderRevision:order.revision,
@@ -375,7 +409,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3], before.signing), 'STALE_REVISION');
           tx.objectStore('events').add(event, [scopeKey, order.revision]);
           tx.objectStore('orders').put(order, scopeKey);
-          tx.objectStore('signing').add(saved, [scopeKey,0,1,3]); resolve(true);
+          tx.objectStore('signing').add(saved, [scopeKey,0,number,3]); resolve(true);
         }, abort));
         const after = await snapshotData(scope, scopeKey);
         requireThat(equal(after.order, order) && equal(after.signing, [...before.signing,saved]), 'BUYER_RESPONSE_NOT_SAVED');
@@ -389,14 +423,15 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         validateBuyerSubmission(state.input);
         validateCostApproval(state.costApproval,state.input,{now:Date.now()});
         requireThat(transactionSha256===signedBytesId(state.input.response.transactionBase64),'SEND_BYTES');
-        const event={type:'unknown',revision:before.order.revision,index:0,attempt:1};
+        const number=state.input.claim.attempt;
+        const event={type:'unknown',revision:before.order.revision,index:0,attempt:number};
         const order=bounded(model.transitionOrder(before.order,event));
         const record={phase:'send-claimed',record:{version:1,claimId:[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join(''),
-          orderRevision:order.revision,transactionSha256,signature:order.items[0].attempts[0].signature}};
+          orderRevision:order.revision,transactionSha256,signature:order.items[0].attempts[number-1].signature}};
         await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
           requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
           tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-          tx.objectStore('signing').add(record,[scopeKey,0,1,4]);resolve(true);
+          tx.objectStore('signing').add(record,[scopeKey,0,number,4]);resolve(true);
         },abort));
         const after=await snapshotData(scope,scopeKey);
         requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'SEND_CLAIM_NOT_SAVED');
@@ -406,6 +441,19 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     readBuyerSubmission(input) {
       return locked(input,async(scope,scopeKey)=>{const current=await snapshotData(scope,scopeKey);
         return current.order?submissionState(current.order,current.signing,current.events):null;});
+    },
+    // Read-only historical evidence, reconstructed before the next attempt.
+    readBuyerAttempt(input,number) {
+      requireThat([1,2].includes(number),'ATTEMPT_NUMBER');
+      return locked(input,async(scope,scopeKey)=>{
+        const saved=await snapshotData(scope,scopeKey),batches=groups(saved.signing),records=batches[number-1];
+        if(!records)return null;
+        const revision=batches[number]?.[0]?.record.orderRevision-1;
+        let order=saved.order;
+        if(Number.isSafeInteger(revision)){order=saved.events[0].order;for(let n=1;n<=revision;n++)order=model.transitionOrder(order,saved.events[n]);}
+        return{order:structuredClone(order),signing:signingState(order,records),wallet:walletState(order,records,saved.events),
+          submission:submissionState(order,records,saved.events)};
+      });
     },
     // Caller is the trusted recovery adapter. CAS + exact proof binding, never retry authorization.
     saveBuyerProof(input,report) {

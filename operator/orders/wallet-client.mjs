@@ -64,7 +64,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
   function state() {
     return {orderId:scope.id, connected:!!account, busy, disposed,
       status:saved?.status ?? partial?.status ?? 'not-prepared', canRecover:!!memory,
-      canRequestSignature:!disposed && !!account && !busy && !saved && order?.revision === 1
+      canRequestSignature:!disposed && !!account && !busy && !saved && order?.revision === partial?.claim?.orderRevision
         && !order.paused && partial?.status === 'asset-partial-saved',
       readyToSign:false, readyToSubmit:false, salesOpen:false};
   }
@@ -99,7 +99,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
       need(state().canRequestSignature,'NOT_READY');busy=true;costQuote=null;
       const generation=epoch;
       try{
-        await persistent();await load();need(!saved&&order.revision===1&&!order.paused&&partial?.status==='asset-partial-saved','NOT_READY');
+        await persistent();await load();need(!saved&&order.revision===partial?.claim?.orderRevision&&!order.paused&&partial?.status==='asset-partial-saved','NOT_READY');
         const before=structuredClone(order),bundle=structuredClone(partial),started=performance.now();
         const report=await bounded(checkPrepared({order:before,claim:bundle.claim,request:bundle.request}),35000,'PREFLIGHT_TIMEOUT');
         validateWalletCheck(report,before,bundle.request);
@@ -121,7 +121,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
         && compatibleBuyerWallet(selected), 'WALLET_CHANGED');
       try {
         await persistent(); await load();
-        need(!saved && order.revision === 1 && !order.paused && partial?.status === 'asset-partial-saved', 'NOT_READY');
+        need(!saved && order.revision === partial?.claim?.orderRevision && !order.paused && partial?.status === 'asset-partial-saved', 'NOT_READY');
         const before = structuredClone(order), bundle = structuredClone(partial);
         validateAssetRequest(before, bundle.claim, bundle.request); stableWallet();
         need(authorizeCost===true&&approvedQuote&&quoteId===approvedQuote.quoteId,'COST_APPROVAL_REQUIRED');

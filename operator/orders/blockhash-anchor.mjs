@@ -3,8 +3,9 @@
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 const need=(ok)=>{if(!ok)throw Object.assign(Error('BLOCKHASH_ANCHOR_REQUIRED'),{checkCode:'BLOCKHASH_ANCHOR_REQUIRED'});};
-export const anchorKey=order=>'buyer-blockhash:v1:'+bytesToHex(sha256(new TextEncoder().encode(JSON.stringify([
-  order.cluster,order.machine,order.collection,order.guard,order.buyer,order.items[0].asset]))));
+export const attemptKey=(key,attempt=1)=>attempt===1?key:key+':attempt:'+attempt;
+export const anchorKey=(order,attempt=1)=>attemptKey('buyer-blockhash:v1:'+bytesToHex(sha256(new TextEncoder().encode(JSON.stringify([
+  order.cluster,order.machine,order.collection,order.guard,order.buyer,order.items[0].asset])))),attempt);
 export function validateBlockhashAnchor(anchor,claim){
   const fields=['version','orderIdentitySha256','messageSha256','blockhash','lastValidBlockHeight','sourceSlot'];
   need(anchor&&Object.keys(anchor).length===fields.length&&fields.every(k=>Object.hasOwn(anchor,k))&&anchor.version===1
