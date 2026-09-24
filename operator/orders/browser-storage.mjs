@@ -259,6 +259,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       return locked(input, async (scope, scopeKey) => {
         const before = await snapshotData(scope, scopeKey);
         requireThat(before.order, 'MISSING_ORDER');
+        requireThat(frozen?.orderRevision===before.order.revision,'STALE_REVISION');
         if(report){
           const source=submissionState(before.order,before.signing,before.events);
           requireThat(source?.status==='expired'&&source.input.claim.attempt===1,'REPLACEMENT_NOT_READY');
