@@ -90,7 +90,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     if(mode.startsWith('expiry-')){
       const anchorSlot=generation===1?600:1200,horizon=generation===1?900:1600,height=generation===1?2100:2700;
       const row=(slot)=>({slot,signature:base58.deserialize(createHash('sha512').update('expiry-row:'+slot).digest())[0],err:null,confirmationStatus:'finalized'});
-      const assetFound=call.method==='getMultipleAccounts'&&[...submitted.values()].some(v=>v.asset===call.params[0][0]);
+      const assetFound=call.method==='getMultipleAccounts'&&[...submitted.values()].some(v=>v.asset===call.params[0][0]&&!v.executionFailed);
       const results={getGenesisHash:GENESIS_HASHES.devnet,
         getBlock:call.params[0]===anchorSlot?{blockhash:key(generation===1?'hash':'replacement-hash').publicKey.toBase58(),blockHeight:generation===1?1800:2300,parentSlot:anchorSlot-1}:
           {blockhash:key('expiry-horizon').publicKey.toBase58(),blockHeight:height,parentSlot:horizon-1},
@@ -104,10 +104,11 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     }
     if(['getSignatureStatuses','getTransaction'].includes(call.method)){
       const receiptSlot=found?.generation===2?1450:650,statusSlot=found?.generation===2?1500:700;
-      const failureMode=mode.startsWith('failure-'),pending=mode==='pending'||mode==='failure-pending';
+      const failureMode=mode.startsWith('failure-')||found?.executionFailed===true,pending=mode==='pending'||mode==='failure-pending';
       const failed=mode==='failed'||failureMode?{InstructionError:[0,{Custom:1}]}:null;
       let failureMeta;
       if(found&&failureMode){
+        if(call.method==='getTransaction')found.executionFailed=true;
         const tx=VersionedTransaction.deserialize(Buffer.from(found.bytes,'base64'));
         const preBalances=Array(tx.message.staticAccountKeys.length).fill(2000000);preBalances[0]=20000000000;preBalances[1]=0;
         const postBalances=[...preBalances];postBalances[0]-=10000;
@@ -119,8 +120,8 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result}),{headers:{'content-type':'application/json'}});
     }
     if(call.method==='getMultipleAccounts'&&call.params[0].length===1){
-      const value=[...submitted.values()].find(v=>v.asset===call.params[0][0]);let account=null;
-      if(value&&mode!=='absent-asset'&&(!mode.startsWith('failure-')||mode==='failure-asset')){
+      const value=[...submitted.values()].findLast(v=>v.asset===call.params[0][0]);let account=null;
+      if(value&&mode!=='absent-asset'&&((!mode.startsWith('failure-')&&!value.executionFailed)||mode==='failure-asset')){
         const data=getAssetV1AccountDataSerializer().serialize({key:Key.AssetV1,owner:mode==='wrong-owner'?key('stranger').publicKey.toBase58():value.buyer,
           updateAuthority:{__kind:'Collection',fields:[mode==='wrong-collection'?key('stranger').publicKey.toBase58():plan.roles.collection]},seq:none(),
           name:policy.hiddenName.replace('{index:04d}','0001'),uri:mode==='wrong-uri'?'https://foreign.test/1':policy.website+'/metadata/hidden/0001.json'});

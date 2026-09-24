@@ -1,3 +1,7 @@
+**PR49 update:** [Reviewed replacement after a paid failure](FAILED_REPLACEMENT.md)
+adds explicit paid-fee acknowledgment and one second attempt with fresh consent.
+Earlier stage-specific limits below describe PR47/PR48 behavior at that time.
+
 # Finalized failure and paid fee recovery — closed Devnet
 
 PR48 extends `sender.recover()` to record a proved failed transaction as a

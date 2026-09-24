@@ -1,3 +1,7 @@
+**PR49 update:** [Reviewed replacement after a paid failure](FAILED_REPLACEMENT.md)
+adds explicit paid-fee acknowledgment and one second attempt with fresh consent.
+Earlier stage-specific limits below describe PR47/PR48 behavior at that time.
+
 # Reviewed second attempt — closed Devnet
 
 PR47 connects a retained PR46 expiry proof to one replacement of the first item.

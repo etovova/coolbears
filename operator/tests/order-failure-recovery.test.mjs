@@ -128,6 +128,6 @@ test('transport binds fee/proof identity and sender recovers a lost local commit
   await assert.rejects(sender.recover(),/LOST_FAILURE_ACK/);const restored=await sender.recover();assert.equal(restored.status,'already-recorded');assert.equal(restored.outcome,'failed');
   assert.equal(restored.feeLamports,'10000');assert.equal(restored.retryAuthorized,false);assert.equal(calls,1);assert.equal(saves,1);
   await assert.rejects(sender.sendOnce({authorizeDevnetSend:true}),/PERSISTENT_STORAGE_REQUIRED|SEND_NOT_READY/);
-  await assert.rejects(sender.prepareReplacement({authorizeReplacement:true}),/REPLACEMENT_NOT_READY/);
+  await assert.rejects(sender.prepareReplacement({authorizeReplacement:true}),/PAID_FEE_ACKNOWLEDGMENT_REQUIRED/);
   await assert.rejects(sender.reviewExpiry({authorizeExpiryReview:true}),/EXPIRY_NOT_READY/);
 });

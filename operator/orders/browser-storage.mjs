@@ -7,7 +7,7 @@ import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submi
 import {validateCostApproval} from './cost-approval.mjs';
 import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
 import {failureRecord} from './failure-record.mjs';
-import {validateReplacementResult,validateReplacementClaim} from './replacement.mjs';
+import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -108,7 +108,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       if(i===1){
         validateReplacementClaim(order,claim,records[0].replacement);
         const source=submissionState(order,batches[0],events);
-        requireThat(source?.status==='expired'&&equal(records[0].replacement.prior,source.expiryRecord),'REPLACEMENT_HISTORY');
+        requireThat(source&&['expired','failed'].includes(source.status)&&equal(records[0].replacement.prior,source.status==='failed'?source.failureRecord:source.expiryRecord),'REPLACEMENT_HISTORY');
       }
     }
     return order;
@@ -258,7 +258,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         ...(expiry||failed?{retryAuthorized:false}:{}),...(failed?{feeLamports:frozen.evidence.feeLamports}:{}),readyToSubmit:false,salesOpen:false};
     });
   }
-  async function prepareSigning(input,candidate,replacementReport){
+  async function prepareSigning(input,candidate,replacementReport,acknowledgedFeeLamports){
       const frozen=structuredClone(candidate),report=replacementReport&&structuredClone(replacementReport);
       return locked(input, async (scope, scopeKey) => {
         const before = await snapshotData(scope, scopeKey);
@@ -266,8 +266,10 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         requireThat(frozen?.orderRevision===before.order.revision,'STALE_REVISION');
         if(report){
           const source=submissionState(before.order,before.signing,before.events);
-          requireThat(source?.status==='expired'&&source.input.claim.attempt===1,'REPLACEMENT_NOT_READY');
-          validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,source.expiryRecord),'REPLACEMENT_HISTORY');
+          requireThat(source&&['expired','failed'].includes(source.status)&&source.input.claim.attempt===1,'REPLACEMENT_NOT_READY');
+          const prior=source.status==='failed'?source.failureRecord:source.expiryRecord;
+          validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,prior),'REPLACEMENT_HISTORY');
+          validateReplacementAcknowledgment(source.input,prior,acknowledgedFeeLamports);
         }else requireThat(before.signing.length===0,'ASSET_SIGNING_EXISTS');
         const prepared = prepareAssetClaim(before.order, frozen),number=prepared.claim.attempt;
         requireThat(number===(report?2:1),'REPLACEMENT_NOT_READY');
@@ -351,9 +353,9 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       });
     },
     prepareAssetSigning(input,candidate){return prepareSigning(input,candidate);},
-    prepareReplacementSigning(input,report,{authorizeReplacementSigning=false}={}){
+    prepareReplacementSigning(input,report,{authorizeReplacementSigning=false,acknowledgedFeeLamports}={}){
       requireThat(authorizeReplacementSigning===true,'EXPLICIT_REPLACEMENT_SIGNING_REQUIRED');
-      const frozen=structuredClone(report);return prepareSigning(input,frozen?.candidate,frozen);
+      const frozen=structuredClone(report);return prepareSigning(input,frozen?.candidate,frozen,acknowledgedFeeLamports);
     },
     readAssetSigning(input) {
       return locked(input, async (scope, scopeKey) => {
