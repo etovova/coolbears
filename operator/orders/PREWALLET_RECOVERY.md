@@ -1,5 +1,9 @@
 # Positive finalized recovery before a local wallet claim
 
+The separate reviewed replacement adapter described in `PREWALLET_REPLACEMENT.md`
+now permits a second attempt after a retained failed outcome and exact paid-fee
+acknowledgment. Recovery itself still grants no signing, submission or retry.
+
 An existing native signing claim may have no durable partial, or a partial may
 exist without a wallet claim. This adapter can close the attempt only if a bounded
 read-only search finds the exact finalized transaction and independently verifies
@@ -33,7 +37,7 @@ history. On success the gateway transaction writes one permanent
 `buyer-prewallet-recovery:v1:` record containing claim hash, exact observed bytes,
 proof and failure evidence when applicable. Competing terminal/send records or a
 changed preparation anchor block the write. Readback precedes the response. The
-record blocks old checks, sends, expiry and replacement; a failed outcome does
+record blocks old checks, sends, expiry and unreviewed replacement; a failed outcome does
 not create the ordinary retry-authorizing failure record. Cached recovery works
 after SQLite restart, secret rotation, pause or a later saved matching partial.
 If a genuine wallet claim/response wins the local race, existing response/ordinary
@@ -68,7 +72,7 @@ key; it is never broadcast. No real wallet, phone, live Devnet or independent RP
 agreement is claimed. The trusted same-origin application/gateway/storage remain
 the boundary; normalized evidence is not an independent chain certificate.
 
-No negative-evidence retirement, retry permission, unprepared order recovery,
+No negative-evidence retirement, automatic retry permission, unprepared order recovery,
 third attempt, later item, full-order cost approval or purchase UI is added.
 Those remain separate work. Existing real journals, custody and locks are kept.
 

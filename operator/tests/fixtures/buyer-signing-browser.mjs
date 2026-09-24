@@ -30,8 +30,9 @@ const subtle=new Proxy(native.subtle,{get(target,property){
       if(observed.revision!==claimed?.record?.orderRevision||observed.state!=='wallet-pending'||claimed.phase!=='claimed'
         ||claimed.record.attempt!==number||(number===1?rows.length!==1:!claimed.replacement||!['expired','failed'].includes(order.items[0].attempts[0].state)))throw Error('SIGN_BEFORE_COMMIT');
       if(number===2&&order.items[0].attempts[0].state==='failed'){
-        const replacement=claimed.replacement,reviewed=rows.find(r=>r.phase==='failure-reviewed')?.record.report;
-        if(replacement.version!==2||!reviewed||typeof replacement.acknowledgedFeeLamports!=='string'
+        const replacement=claimed.replacement,prewallet=rows.find(r=>r.phase==='prewallet-recovered')?.record.report;
+        const reviewed=replacement.version===3?prewallet?.result:rows.find(r=>r.phase==='failure-reviewed')?.record.report;
+        if(![2,3].includes(replacement.version)||!reviewed||typeof replacement.acknowledgedFeeLamports!=='string'
           ||replacement.acknowledgedFeeLamports!==reviewed.evidence.feeLamports
           ||JSON.stringify(replacement.prior.evidence)!==JSON.stringify(reviewed.evidence)
           ||JSON.stringify(replacement.prior.proof)!==JSON.stringify(reviewed.proof)

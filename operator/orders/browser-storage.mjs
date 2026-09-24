@@ -9,7 +9,7 @@ import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
 import {failureRecord} from './failure-record.mjs';
 import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmission} from './response-recovery.mjs';
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
-import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission} from './prewallet-recovery.mjs';
+import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -113,8 +113,9 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       prewalletState(order,records,events);signingState(order,records);walletState(order,records,events);submissionState(order,records,events);
       if(i===1){
         validateReplacementClaim(order,claim,records[0].replacement);
-        const source=submissionState(order,batches[0],events);
-        requireThat(source&&['expired','failed'].includes(source.status)&&equal(records[0].replacement.prior,source.status==='failed'?source.failureRecord:source.expiryRecord),'REPLACEMENT_HISTORY');
+        const source=replacementState(order,batches[0],events);
+        requireThat(source&&['expired','failed'].includes(source.status)&&equal(records[0].replacement.prior,source.status==='failed'?source.failureRecord:source.expiryRecord)
+          &&equal(records[0].replacement.prewallet,source.prewalletRecord),'REPLACEMENT_HISTORY');
       }
     }
     return order;
@@ -270,6 +271,14 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     validatePrewalletInput(input);return{status:'prewallet-unknown',input};
   }
   async function snapshot(scope, scopeKey) { return (await snapshotData(scope, scopeKey)).order; }
+  function replacementState(order,records,events){
+    records=current(records);
+    if(!hasPrewallet(records))return submissionState(order,records,events);
+    const terminal=prewalletState(order,records,events);if(terminal.status!=='failed'||records[0].record.attempt!==1)return null;
+    const prior=structuredClone(order);prior.items[0].attempts=prior.items[0].attempts.slice(0,1);
+    if(order.items[0].attempts.length>1)prior.revision=records.at(-1).record.orderRevision;
+    return prewalletReplacementSource(prior,records[0].record,terminal.report);
+  }
   async function locked(input, action) {
     requireCapabilities();
     const scope = checkedScope(structuredClone(input)), scopeKey = JSON.stringify(scope);
@@ -330,10 +339,11 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         requireThat(before.order, 'MISSING_ORDER');
         requireThat(frozen?.orderRevision===before.order.revision,'STALE_REVISION');
         if(report){
-          const source=submissionState(before.order,before.signing,before.events);
+          const source=replacementState(before.order,before.signing,before.events);
           requireThat(source&&['expired','failed'].includes(source.status)&&source.input.claim.attempt===1,'REPLACEMENT_NOT_READY');
           const prior=source.status==='failed'?source.failureRecord:source.expiryRecord;
-          validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,prior),'REPLACEMENT_HISTORY');
+          validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,prior)
+            &&equal(report.record.prewallet,source.prewalletRecord),'REPLACEMENT_HISTORY');
           validateReplacementAcknowledgment(source.input,prior,acknowledgedFeeLamports);
         }else requireThat(before.signing.length===0,'ASSET_SIGNING_EXISTS');
         requireThat(!nativeSlots.has(scopeKey)&&nativeSlots.size<MAX_NATIVE_RESULTS,'NATIVE_RESULTS_PENDING');
@@ -530,6 +540,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'PREWALLET_NOT_SAVED');
         nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
         return prewalletRecoveryState(after);
+      });
+    },
+    readPrewalletReplacement(input){
+      return locked(input,async(scope,scopeKey)=>{
+        const saved=await snapshotData(scope,scopeKey);
+        if(!saved.order||saved.order.items[0].attempts.length!==1||!hasPrewallet(current(saved.signing)))return null;
+        return replacementState(saved.order,saved.signing,saved.events);
       });
     },
     // Both events and all evidence commit together; a discovered response is never sendable.

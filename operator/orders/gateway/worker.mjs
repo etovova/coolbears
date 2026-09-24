@@ -13,7 +13,7 @@ import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../su
 import { recoverBuyerOrder } from '../recovery.mjs';
 import {discoverBuyerResponse} from '../discover-response.mjs';
 import {validateMissingBuyerResponse,recoveredSubmission,responseRecoveryKey,responseRecoveryRecord,restoreResponseRecovery,restoreDiscoveredSubmission,responseRecoveryReport} from '../response-recovery.mjs';
-import {validatePrewalletInput,prewalletRecoveryKey,prewalletRecoveryRecord,restorePrewalletRecovery,restorePrewalletSubmission} from '../prewallet-recovery.mjs';
+import {validatePrewalletInput,prewalletRecoveryKey,prewalletRecoveryRecord,restorePrewalletRecovery,restorePrewalletSubmission,prewalletFailurePrior} from '../prewallet-recovery.mjs';
 import {discoverPrewalletResult} from '../discover-prewallet.mjs';
 import {reviewBuyerExpiry} from '../review-expiry.mjs';
 import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
@@ -114,24 +114,27 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         }catch{throw new BuyerCheckError('REQUEST',400);}
         // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
         const number=claim?.attempt??1;
-        const sendKey=attemptKey('buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset])),number);
+        const sendBase='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset]));
+        const sendKey=attemptKey(sendBase,number);
         const retiredKey=expiryKey(order,number),retired=await this.storage.get(retiredKey);
         const failedKey=failureKey(order,number),failed=await this.storage.get(failedKey);
         need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
         const discoveredKey=responseRecoveryKey(order,number),discovered=await this.storage.get(discoveredKey);
         const prewalletKey=prewalletRecoveryKey(order,number),prewalletRecord=await this.storage.get(prewalletKey);
+        let prewalletPrior;
         if(prewalletRecord!==undefined){
           need(retired===undefined&&failed===undefined&&discovered===undefined&&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
           let restored;
           try{
-            if(route==='recover-prewallet')restored=restorePrewalletRecovery(prewallet,prewalletRecord);
+            if(route==='replace')prewalletPrior=prewalletFailurePrior(submission,prewalletRecord);
+            else if(route==='recover-prewallet')restored=restorePrewalletRecovery(prewallet,prewalletRecord);
             else if(route==='recover')restored=restorePrewalletSubmission(submission,prewalletRecord);
             else if(route==='recover-response'){
               const full=recoveredSubmission(missing,prewalletRecord.response).input;
               restored=responseRecoveryReport(missing,{response:prewalletRecord.response,result:restorePrewalletSubmission(full,prewalletRecord),restored:true});
             }else throw new BuyerCheckError('ATTEMPT_RECOVERED',409);
           }catch(e){if(e instanceof BuyerCheckError)throw e;throw new BuyerCheckError('PREWALLET_RECORD_CONFLICT',409);}
-          return reply(200,{version:1,nonce:body.nonce,report:restored});
+          if(restored)return reply(200,{version:1,nonce:body.nonce,report:restored});
         }
         if(route==='recover-prewallet')need(retired===undefined&&failed===undefined&&discovered===undefined
           &&await this.storage.get(sendKey)===undefined,'PREWALLET_RECORD_CONFLICT',409);
@@ -167,12 +170,13 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           need(route==='recover','ATTEMPT_EXPIRED',409);
         }
         const replaceKey=replacementKey(order),replacement=(number===2||route==='replace')?await this.storage.get(replaceKey):undefined;
-        const prior=order.items[0].attempts[0]?.state==='failed'?failed:retired;
+        const prior=prewalletPrior??(order.items[0].attempts[0]?.state==='failed'?failed:retired);
         if(route==='replace'){
           try{validateReplacementPrior(submission,prior);}catch{throw new BuyerCheckError(prior?.proof?.kind==='failed'||order.items[0].attempts[0].state==='failed'?'FAILURE_RECORD_REQUIRED':'EXPIRY_RECORD_REQUIRED',409);}
           try{validateReplacementAcknowledgment(submission,prior,body.acknowledgedFeeLamports);}catch{throw new BuyerCheckError('PAID_FEE_ACKNOWLEDGMENT_REQUIRED',409);}
           if(replacement!==undefined){
-            let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(prior),'REPLACEMENT_CONFLICT',409);report=replacementReport(submission,replacement,true);}
+            let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(prior)
+              &&JSON.stringify(replacement.prewallet)===JSON.stringify(prewalletRecord),'REPLACEMENT_CONFLICT',409);report=replacementReport(submission,replacement,true);}
             catch{throw new BuyerCheckError('REPLACEMENT_CONFLICT',409);}
             return reply(200,{version:1,nonce:body.nonce,report});
           }
@@ -180,8 +184,15 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(number===2&&route!=='recover'){
           try{validateReplacementClaim(order,claim,replacement);
             const firstFailed=order.items[0].attempts[0].state==='failed';
-            need(await this.storage.get(firstFailed?expiryKey(order):failureKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
-            need(JSON.stringify(replacement.prior)===JSON.stringify(await this.storage.get(firstFailed?failureKey(order):expiryKey(order))),'REPLACEMENT_REQUIRED',409);}
+            if(replacement.version===3){
+              need(firstFailed&&JSON.stringify(replacement.prewallet)===JSON.stringify(await this.storage.get(prewalletRecoveryKey(order)))
+                &&await this.storage.get(expiryKey(order))===undefined&&await this.storage.get(failureKey(order))===undefined
+                &&await this.storage.get(responseRecoveryKey(order))===undefined&&await this.storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
+            }else{
+              need(await this.storage.get(prewalletRecoveryKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
+              need(await this.storage.get(firstFailed?expiryKey(order):failureKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
+              need(JSON.stringify(replacement.prior)===JSON.stringify(await this.storage.get(firstFailed?failureKey(order):expiryKey(order))),'REPLACEMENT_REQUIRED',409);
+            }}
           catch{throw new BuyerCheckError('REPLACEMENT_REQUIRED',409);}
         }
         if(route==='send'){
@@ -251,13 +262,17 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           const sourceFloor=Math.max(replacementSourceFloor(prior),accounts.context.slot);
           const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:sourceFloor}]);
           need(integer(latest?.context?.slot)&&latest.context.slot>=sourceFloor,'RPC_CONTEXT',503);
-          const record=replacementFor(submission,prior,latest.value,latest.context.slot,body.acknowledgedFeeLamports);
+          const record=replacementFor(submission,prior,latest.value,latest.context.slot,body.acknowledgedFeeLamports,prewalletRecord);
           const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
           need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
           need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
           await this.storage.transaction(async tx=>{
-            need(await tx.get(replaceKey)===undefined&&JSON.stringify(await tx.get(prior.proof.kind==='failed'?failedKey:retiredKey))===JSON.stringify(prior)
-              &&await tx.get(prior.proof.kind==='failed'?retiredKey:failedKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            need(await tx.get(replaceKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            if(prewalletRecord)need(JSON.stringify(await tx.get(prewalletKey))===JSON.stringify(prewalletRecord)
+              &&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined&&await tx.get(discoveredKey)===undefined
+              &&await tx.get(sendKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            else need(JSON.stringify(await tx.get(prior.proof.kind==='failed'?failedKey:retiredKey))===JSON.stringify(prior)
+              &&await tx.get(prior.proof.kind==='failed'?retiredKey:failedKey)===undefined&&await tx.get(prewalletKey)===undefined,'REPLACEMENT_CONFLICT',409);
             await tx.put(replaceKey,record);
           });
           need(JSON.stringify(await this.storage.get(replaceKey))===JSON.stringify(record),'REPLACEMENT_NOT_SAVED',503);settled=true;

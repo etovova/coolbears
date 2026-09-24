@@ -54,7 +54,7 @@ test('missing native bytes and saved partial both recover exact final outcome wi
     assert.equal(f.calls.length,count);assert.equal(f.calls.filter(c=>c.method==='sendTransaction').length,0);
   }
 });
-test('paid failed outcome preserves fee evidence in one record and cannot grant replacement',async()=>{
+test('paid failed outcome preserves fee evidence in one record and requires separate exact fee acknowledgment',async()=>{
   const h=harness(),id='prewallet-failure',full=f.signedInput(id),input=pre(id);await h.prepare(input);
   f.receipt(full.response.transactionBase64);f.setMode('failure-finalized');
   const found=await report(await h.call('recover-prewallet',input));assert.equal(found.result.status,'failed');assert.equal(found.result.evidence.feeLamports,'10000');
@@ -63,7 +63,7 @@ test('paid failed outcome preserves fee evidence in one record and cannot grant 
   assert.equal((await report(await h.call('recover-prewallet',input))).restored,true);
   assert.equal((await report(await h.call('recover',full))).evidence.feeLamports,'10000');
   const source=closeAttempt(f,full,found.result);
-  assert.equal((await h.call('replace',source,{authorizeReplacement:true,acknowledgedFeeLamports:'10000'})).status,409);assert.equal(f.calls.length,before);
+  assert.equal((await h.call('replace',source,{authorizeReplacement:true,acknowledgedFeeLamports:'0'})).status,409);assert.equal(f.calls.length,before);
 });
 test('second native claim recovers only with genuine first fee proof and acknowledged replacement anchor',async()=>{
   const h=harness(),full=f.signedInput('prewallet-second');await h.prepare(full);f.receipt(full.response.transactionBase64);f.setMode('failure-finalized');
