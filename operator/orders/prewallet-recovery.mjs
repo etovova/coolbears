@@ -2,7 +2,8 @@
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {VersionedTransaction} from '@solana/web3.js';
 import {createOrderModel} from './journal-model.mjs';
-import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse} from './signing.mjs';
+import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
+import {validateHistoricalFailure} from './failure-record.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),need=(v,code='PREWALLET_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
@@ -67,4 +68,23 @@ export function restorePrewalletSubmission(input,record){
 export function restorePrewalletRecovery(input,record){
   validatePrewalletInput(input);const full=prewalletSubmission(input,record?.response);
   return prewalletRecoveryReport(input,{response:record.response,result:restorePrewalletSubmission(full,record),restored:true});
+}
+export function prewalletFailurePrior(input,record){
+  need(record?.version===1&&shape(record,'version claimSha256 response proof evidence')
+    &&record.claimSha256===signedBytesId(JSON.stringify(input.claim))&&same(record.response,input.response)
+    &&input.claim.attempt===1&&input.order.items[0].attempts.length===1,'PREWALLET_FAILURE_REQUIRED');
+  return validateHistoricalFailure(input,{version:1,identity:{orderIdentitySha256:input.claim.orderIdentitySha256,
+    requestId:buyerRequestId(input.request),transactionSha256:signedBytesId(input.response.transactionBase64),signature:input.order.items[0].attempts[0].signature},
+    proof:structuredClone(record.proof),evidence:structuredClone(record.evidence)});
+}
+export function prewalletReplacementSource(order,claim,report){
+  need(report?.status==='prewallet-recovered'&&report.result?.status==='failed','PREWALLET_FAILURE_REQUIRED');
+  const record={version:1,claimSha256:report.claimSha256,response:structuredClone(report.response),
+    proof:structuredClone(report.result.proof),evidence:structuredClone(report.result.evidence)};
+  return prewalletFailureSource(order,claim,record);
+}
+export function prewalletFailureSource(order,claim,record){
+  const tx=VersionedTransaction.deserialize(Buffer.from(record.response.transactionBase64,'base64'));
+  const input={order:structuredClone(order),claim:structuredClone(claim),request:finalizeAssetRequest(order,claim,tx.signatures[1]),response:record.response};
+  return{status:'failed',input,prewalletRecord:record,failureRecord:prewalletFailurePrior(input,record)};
 }

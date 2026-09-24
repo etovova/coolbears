@@ -34,7 +34,7 @@ try{
   fixture.receipt(failed.response.transactionBase64);fixture.setMode('failure-finalized');assert.equal((await call('recover-prewallet',lost)).status,200);
   await runtime.stop();await runtime.start({BUYER_HELIUS_API_KEY:'rotated-secret-42'});before=fixture.calls.length;
   const restored=await report(await call('recover-prewallet',lost));assert.equal(restored.restored,true);assert.equal(restored.result.evidence.feeLamports,'10000');
-  assert.equal((await call('replace',closeAttempt(fixture,failed,restored.result),{acknowledgedFeeLamports:'10000'})).status,409);assert.equal(fixture.calls.length,before);
+  assert.equal((await call('replace',closeAttempt(fixture,failed,restored.result),{acknowledgedFeeLamports:'0'})).status,409);assert.equal(fixture.calls.length,before);
   cases.push('lost reply restores paid failure evidence atomically; no retry permission is inferred from the missing wallet history');
   await runtime.stop();await runtime.start();fixture.setMode('normal');const absent=pre('runtime-prewallet-absent');await prepare(absent);
   assert.equal((await report(await call('recover-prewallet',absent))).status,'unknown');

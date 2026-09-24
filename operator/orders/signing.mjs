@@ -72,7 +72,7 @@ export function validateAssetClaim(order, claim) {
   context(order); exact(claim, BINDING);
   need(claim.version === 1 && claim.kind === CLAIM && claim.itemIndex === 0 && [1,2].includes(claim.attempt)
     && Number.isSafeInteger(claim.orderRevision)&&order.revision>=claim.orderRevision
-    &&(claim.attempt===1?claim.orderRevision===1:claim.orderRevision>=5), 'ASSET_CLAIM_BINDING');
+    &&(claim.attempt===1?claim.orderRevision===1:claim.orderRevision>=3), 'ASSET_CLAIM_BINDING');
   if(claim.attempt===2)need(['expired','failed'].includes(order.items[0].attempts[0].state)
     &&order.items[0].attempts[0].blockhash!==claim.blockhash,'REPLACEMENT_HASH_REQUIRED');
   need(order.items[0].attempts.length<=2&&order.items.slice(1).every(item=>!item.attempts.length),'ASSET_CLAIM_BINDING');
