@@ -102,6 +102,12 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       if(!Object.hasOwn(results,call.method))throw Error('forbidden expiry RPC '+call.method);
       return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result:results[call.method]}),{headers:{'content-type':'application/json'}});
     }
+    if(call.method==='getSignaturesForAddress'){
+      const result=[...submitted.entries()].filter(([,v])=>v.asset===call.params[0]).map(([signature,v])=>({signature,slot:v.generation===2?1450:650,
+        err:mode.startsWith('failure-')||v.executionFailed?{InstructionError:[0,{Custom:1}]}:null,
+        confirmationStatus:mode==='pending'||mode==='failure-pending'?'confirmed':'finalized'})).sort((a,b)=>b.slot-a.slot);
+      return new ResponseType(JSON.stringify({jsonrpc:'2.0',id:call.id,result}),{headers:{'content-type':'application/json'}});
+    }
     if(['getSignatureStatuses','getTransaction'].includes(call.method)){
       const receiptSlot=found?.generation===2?1450:650,statusSlot=found?.generation===2?1500:700;
       const failureMode=mode.startsWith('failure-')||found?.executionFailed===true,pending=mode==='pending'||mode==='failure-pending';

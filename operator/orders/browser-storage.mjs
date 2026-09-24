@@ -7,6 +7,7 @@ import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submi
 import {validateCostApproval} from './cost-approval.mjs';
 import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
 import {failureRecord} from './failure-record.mjs';
+import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmission} from './response-recovery.mjs';
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
@@ -226,6 +227,19 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     if (order) await proveKeys(order, data[1], scopeKey);
     return { order, keys: data[1], events: data[2], signing: data[3] };
   }
+  function responseRecoveryState(saved){
+    if(!saved.order)return null;
+    const records=current(saved.signing),wallet=walletState(saved.order,records,saved.events);
+    if(!wallet)return null;
+    if(wallet.response){
+      const state=submissionState(saved.order,records,saved.events);
+      return ['verified','failed'].includes(state.status)?{status:state.status,
+        ...(state.status==='failed'?{feeLamports:state.failureRecord.evidence.feeLamports}:{})}:null;
+    }
+    const input={order:structuredClone(saved.order),claim:structuredClone(records[0].record),
+      request:structuredClone(records[1].record),walletClaim:structuredClone(wallet.claim)};
+    validateMissingBuyerResponse(input);return{status:'wallet-response-unknown',input};
+  }
   async function snapshot(scope, scopeKey) { return (await snapshotData(scope, scopeKey)).order; }
   async function locked(input, action) {
     requireCapabilities();
@@ -420,6 +434,36 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const after = await snapshotData(scope, scopeKey);
         requireThat(equal(after.order, order) && equal(after.signing, [...before.signing,saved]), 'BUYER_RESPONSE_NOT_SAVED');
         return walletState(after.order, after.signing, after.events);
+      });
+    },
+    readBuyerResponseRecovery(input){
+      return locked(input,async(scope,scopeKey)=>responseRecoveryState(await snapshotData(scope,scopeKey)));
+    },
+    // Both events and all evidence commit together; a discovered response is never sendable.
+    saveRecoveredBuyerResponse(input,report){
+      const frozen=structuredClone(report);
+      return locked(input,async(scope,scopeKey)=>{
+        const before=await snapshotData(scope,scopeKey),state=responseRecoveryState(before);
+        requireThat(state?.status==='wallet-response-unknown','MISSING_RESPONSE_REQUIRED');
+        validateResponseRecovery(frozen,state.input);requireThat(frozen.status==='response-recovered','RESPONSE_NOT_VERIFIED');
+        const recovered=recoveredSubmission(state.input,frozen.response),number=state.input.claim.attempt;
+        const event={type:'reconcile',revision:recovered.input.order.revision,index:0,attempt:number,proof:frozen.result.proof};
+        const order=bounded(model.transitionOrder(recovered.input.order,event));
+        const response={phase:'buyer-response',record:{version:1,claimId:state.input.walletClaim.claimId,
+          orderRevision:recovered.input.order.revision,transactionBase64:frozen.response.transactionBase64,
+          signature:recovered.event.signature,messageSha256:recovered.event.messageSha256}};
+        const failure=frozen.result.status==='failed'?{phase:'failure-reviewed',record:{version:1,orderRevision:order.revision,report:frozen.result}}:null;
+        await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
+          requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
+          tx.objectStore('events').add(recovered.event,[scopeKey,recovered.input.order.revision]);
+          tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
+          tx.objectStore('signing').add(response,[scopeKey,0,number,3]);
+          if(failure)tx.objectStore('signing').add(failure,[scopeKey,0,number,5]);resolve(true);
+        },abort));
+        const after=await snapshotData(scope,scopeKey);
+        requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,response,...(failure?[failure]:[])]),'RESPONSE_RECOVERY_NOT_SAVED');
+        return{status:frozen.result.status,signature:recovered.event.signature,orderRevision:order.revision,
+          ...(failure?{feeLamports:frozen.result.evidence.feeLamports}:{}),retryAuthorized:false,readyToSubmit:false,salesOpen:false};
       });
     },
     claimBuyerSubmission(input,{orderRevision,transactionSha256}={}) {

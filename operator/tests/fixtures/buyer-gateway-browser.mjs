@@ -13,7 +13,9 @@ window.openGatewayClient=async(scope,secret)=>{
     'solana:signTransaction':{supportedTransactionVersions:[0],signTransaction:async input=>{
       window.walletCalls++;if(input.account!==account||input.chain!=='solana:devnet')throw Error('WRONG_INPUT');
       const saved=await store.readBuyerResponse(scope);if(saved.status!=='wallet-response-unknown'||!saved.claim.costApproval)throw Error('WALLET_BEFORE_CLAIM');
-      const tx=VersionedTransaction.deserialize(input.transaction);tx.sign([buyer]);return[{signedTransaction:tx.serialize()}];
+      const tx=VersionedTransaction.deserialize(input.transaction);tx.sign([buyer]);
+      if(window.discardWalletResponse){window.fixtureSignedBytes=Buffer.from(tx.serialize()).toString('base64');throw Error('fixture lost wallet response');}
+      return[{signedTransaction:tx.serialize()}];
     }},'solana:signAndSendTransaction':{signAndSendTransaction:()=>{throw Error('SEND_FORBIDDEN');}}
   }};
   window.client=createBuyerWalletClient({storage:store,scope,checkPrepared:createBuyerCheckClient(),walletTimeoutMs:3000,
@@ -43,3 +45,12 @@ import {createBuyerPreparationClient} from '../../orders/gateway/preparation-cli
 window.prepareThroughGateway=createBuyerPreparationClient();
 
 window.approveFixtureCost=async()=>{const quote=await client.quoteCost();window.costConsent={authorizeCost:true,quoteId:quote.quoteId,maxTotalLamports:quote.budget.totalLamports};return quote;};
+
+import {createBuyerResponseRecovery} from '../../orders/response-recovery-client.mjs';
+window.openResponseRecovery=scope=>{
+  window.responseRecovery=createBuyerResponseRecovery({scope,transport:createBuyerSubmissionTransport(),storage:{
+    readBuyerResponseRecovery:store.readBuyerResponseRecovery,
+    saveRecoveredBuyerResponse:async(...args)=>{const value=await store.saveRecoveredBuyerResponse(...args);
+      if(window.loseResponseRecoveryAck)throw Error('LOST_RESPONSE_RECOVERY_ACK');return value;}}});
+};
+window.responseTransport=createBuyerSubmissionTransport();
