@@ -46,6 +46,16 @@ const subtle=new Proxy(native.subtle,{get(target,property){
           ||JSON.stringify(replacement.prior.evidence)!==JSON.stringify(retired.evidence)
           ||JSON.stringify(retired.proof)!==JSON.stringify(order.items[0].attempts[0].proof))throw Error('SIGN_BEFORE_UNSIGNED_EXPIRY_REVIEW');
       }
+      if(number===2&&claimed.replacement?.version===5){
+        const replacement=claimed.replacement,retired=rows.find(r=>r.phase==='response-expired')?.record.report;
+        if(!retired||retired.status!=='response-expired'||retired.proof.signature!==null
+          ||order.items[0].attempts[0].signature!==null||replacement.acknowledgedFeeLamports!==undefined
+          ||replacement.prewallet!==undefined||JSON.stringify(replacement.prior.proof)!==JSON.stringify(retired.proof)
+          ||JSON.stringify(replacement.prior.evidence)!==JSON.stringify(retired.evidence)
+          ||JSON.stringify(retired.proof)!==JSON.stringify(order.items[0].attempts[0].proof)
+          ||JSON.stringify(replacement.responseExpiry)!==JSON.stringify({request:rows[1]?.record,walletClaim:rows[2]?.record})
+          ||rows[1]?.phase!=='ready'||rows[2]?.phase!=='wallet-claimed'||rows[3]?.phase!=='response-expired')throw Error('SIGN_BEFORE_RESPONSE_EXPIRY_REVIEW');
+      }
       if(window.signMode==='fail')throw Error('fixture native signer failure');
       if(window.signMode==='hold'){window.signEntered=true;await new Promise(resolve=>window.releaseSigning=resolve);}
     }

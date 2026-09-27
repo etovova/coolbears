@@ -1,3 +1,8 @@
+**Next addition:** [Reviewed response-expiry replacement](RESPONSE_EXPIRY_REPLACEMENT.md)
+adds a separate explicitly authorized second attempt with the genuine retained
+wallet claim and fresh cost consent. The expiry review itself still grants no
+replacement. The stage-specific limits below describe PR56.
+
 # Expiry review after a lost wallet response
 
 A consumed wallet invocation can leave the order unknown without saved buyer

@@ -9,6 +9,7 @@ import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
 import {failureRecord} from './failure-record.mjs';
 import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmission} from './response-recovery.mjs';
 import {validateResponseExpiry} from './response-expiry.mjs';
+import {responseExpiryReplacementSource} from './response-expiry-replacement.mjs';
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
 import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
 import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
@@ -20,6 +21,7 @@ const MAX_REVISION = 1024, MAX_BYTES = 262144;
 const requireThat = (ok, code) => { if (!ok) throw Error(code); };
 const fields = ['id', 'cluster', 'buyer', 'machine', 'collection', 'guard'];
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const responseExpiryProvenance=source=>source.input.walletClaim?{request:source.input.request,walletClaim:source.input.walletClaim}:undefined;
 function checkedScope(input) {
   // The validation placeholder must be distinct even when buyer is the owner.
   const scope = Object.fromEntries(fields.map(key => [key, input?.[key]]));
@@ -118,7 +120,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         validateReplacementClaim(order,claim,records[0].replacement);
         const source=replacementState(order,batches[0],events);
         requireThat(source&&['expired','failed'].includes(source.status)&&equal(records[0].replacement.prior,source.status==='failed'?source.failureRecord:source.expiryRecord)
-          &&equal(records[0].replacement.prewallet,source.prewalletRecord),'REPLACEMENT_HISTORY');
+          &&equal(records[0].replacement.prewallet,source.prewalletRecord)
+          &&equal(records[0].replacement.responseExpiry,responseExpiryProvenance(source)),'REPLACEMENT_HISTORY');
       }
     }
     return order;
@@ -300,10 +303,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
   async function snapshot(scope, scopeKey) { return (await snapshotData(scope, scopeKey)).order; }
   function replacementState(order,records,events){
     records=current(records);
-    if(!hasPrewallet(records))return submissionState(order,records,events);
-    const terminal=prewalletState(order,records,events);if(!['expired','failed'].includes(terminal.status)||records[0].record.attempt!==1)return null;
+    const responseExpired=hasResponseExpiry(records);
+    if(!hasPrewallet(records)&&!responseExpired)return submissionState(order,records,events);
+    const terminal=responseExpired?responseExpiryState(order,records,events):prewalletState(order,records,events);
+    if(!['expired','failed'].includes(terminal.status)||records[0].record.attempt!==1)return null;
     const prior=structuredClone(order);prior.items[0].attempts=prior.items[0].attempts.slice(0,1);
     if(order.items[0].attempts.length>1)prior.revision=records.at(-1).record.orderRevision;
+    if(responseExpired)return responseExpiryReplacementSource(prior,records[0].record,terminal.report,records[1].record,records[2].record);
     return terminal.status==='expired'
       ?prewalletExpiryReplacementSource(prior,records[0].record,terminal.report,records[1]?.phase==='ready'?records[1].record:null)
       :prewalletReplacementSource(prior,records[0].record,terminal.report);
@@ -395,7 +401,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(source&&['expired','failed'].includes(source.status)&&source.input.claim.attempt===1,'REPLACEMENT_NOT_READY');
           const prior=source.status==='failed'?source.failureRecord:source.expiryRecord;
           validateReplacementResult(report,source.input);requireThat(equal(report.record.prior,prior)
-            &&equal(report.record.prewallet,source.prewalletRecord),'REPLACEMENT_HISTORY');
+            &&equal(report.record.prewallet,source.prewalletRecord)
+            &&equal(report.record.responseExpiry,responseExpiryProvenance(source)),'REPLACEMENT_HISTORY');
           validateReplacementAcknowledgment(source.input,prior,acknowledgedFeeLamports);
         }else requireThat(before.signing.length===0,'ASSET_SIGNING_EXISTS');
         requireThat(!nativeSlots.has(scopeKey)&&nativeSlots.size<MAX_NATIVE_RESULTS,'NATIVE_RESULTS_PENDING');
@@ -565,6 +572,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     },
     readBuyerResponseRecovery(input){
       return locked(input,async(scope,scopeKey)=>responseRecoveryState(await snapshotData(scope,scopeKey)));
+    },
+    readBuyerResponseReplacement(input){
+      return locked(input,async(scope,scopeKey)=>{
+        const saved=await snapshotData(scope,scopeKey);
+        if(!saved.order||saved.order.items[0].attempts.length!==1||!hasResponseExpiry(current(saved.signing)))return null;
+        return replacementState(saved.order,saved.signing,saved.events);
+      });
     },
     // Expiry evidence consumes no wallet response and grants no replacement/send permission.
     saveBuyerResponseExpiry(input,report){

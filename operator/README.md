@@ -1,3 +1,5 @@
+**Current addition:** [Reviewed replacement after a lost wallet response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) retains the real wallet claim, consent and original null-signature expiry. A separate explicit preparation permits one second attempt; new signing requires fresh cost approval. Sales stay closed at 0.2 SOL. The sections below retain earlier milestones.
+
 **PR49:** [новая попытка после подтверждённой ошибки](orders/FAILED_REPLACEMENT.md) требует явного
 подтверждения уплаченной комиссии и отдельного свежего согласия на расходы.
 Первая подпись, комиссия и история сохраняются; третья попытка заблокирована.
