@@ -1,4 +1,6 @@
-**Current addition:** [Expiry after a lost wallet response](orders/RESPONSE_EXPIRY.md) preserves the actual wallet claim and consent. Only a bounded finalized absence review can retire it; incomplete history stays unknown. No new signature, send or replacement is authorized. The sections below retain earlier milestones.
+**Current addition:** [Reviewed replacement after a lost response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) prepares one second attempt from the retained response-expiry record and genuine wallet claim. Separate native signing and fresh cost approval remain required. Sales stay closed; missing custody, later items, purchase UI and real setup remain unfinished. The sections below retain earlier milestones.
+
+**PR56:** [Expiry after a lost wallet response](orders/RESPONSE_EXPIRY.md) preserves the actual wallet claim and consent. Only a bounded finalized absence review can retire it; incomplete history stays unknown. The review itself authorizes no new signature, send or replacement.
 
 **PR46:** [явная проверка истечения попытки покупателя](orders/EXPIRY_REVIEW.md) сохраняет
 доказательство в SQLite и браузерном журнале. Старые claims не освобождаются;

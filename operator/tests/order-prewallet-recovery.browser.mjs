@@ -19,13 +19,17 @@ const bytes=await readFile(bundle);
 await promisify(execFile)('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',path.join(parent,'key.pem'),'-out',path.join(parent,'cert.pem'),'-days','1','-subj','/CN=127.0.0.1']);
 let runtime,origin,loseFailureReply=false,context,page;
 const report={passed:false,engine:'chromium',transport:'HTTPS to local workerd with real SQLite',tlsCertificate:'disposable self-signed test only',
-  realWallets:false,physicalPhones:false,liveRpc:false,persistencePermission:'fixture only',transactionsSent:0,cases:[],pageErrors:[],externalRequests:0};
+  realWallets:false,physicalPhones:false,liveRpc:false,persistencePermission:'fixture only',transactionsSent:0,cases:[],pageErrors:[],externalRequests:0,httpFailures:[]};
 const server=createServer({key:await readFile(path.join(parent,'key.pem')),cert:await readFile(path.join(parent,'cert.pem'))},async(req,res)=>{
   try{
     if(['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/recover-prewallet','/api/buyer/review-expiry','/api/buyer/replace'].includes(req.url)){
       const parts=[];for await(const chunk of req)parts.push(chunk);
       const response=await runtime.dispatch(origin+req.url,{method:req.method,headers:req.headers,body:Buffer.concat(parts)});
       const body=await response.text();
+      if(response.status!==200){
+        let code;try{const value=JSON.parse(body).code;if(typeof value==='string'&&/^[A-Z_]+$/.test(value))code=value;}catch{}
+        report.httpFailures.push({route:req.url,status:response.status,...(code?{code}:{})});
+      }
       if(loseFailureReply&&req.url==='/api/buyer/recover-prewallet'&&response.status===200){res.writeHead(503,{'content-type':'application/json'});res.end('{}');return;}
       res.writeHead(response.status,Object.fromEntries(response.headers));res.end(body);
     }else if(req.url==='/fixture.js'){res.writeHead(200,{'content-type':'text/javascript'});res.end(bytes);}
@@ -131,9 +135,11 @@ try{
 
   const late=await setup('prewallet-late-wallet',{native:true,observed:false}),beforeWallet=await page.evaluate(s=>store.readPrewalletRecovery(s),late.scope);
   await walletSign(late.scope);fixture.receipt(late.bytes);
+  // The preceding sign-only preflight consumes the existing gateway RPC interval.
+  await spaced();
   const stale=await page.evaluate(v=>responseTransport.recoverPrewallet(v),beforeWallet.input);
   assert.notEqual(await page.evaluate(({s,r})=>code(store.savePrewalletRecovery(s,r)),{s:late.scope,r:stale}),'UNEXPECTED_SUCCESS');
-  const walletRows=await rows(late.scope),walletCalls=fixture.calls.length;assert.equal((await page.evaluate(()=>sender.recover())).status,'verified');assert.equal(fixture.calls.length,walletCalls);
+  const walletRows=await rows(late.scope),walletCalls=fixture.calls.length;await spaced();assert.equal((await page.evaluate(()=>sender.recover())).status,'verified');assert.equal(fixture.calls.length,walletCalls);
   assert.deepEqual((await rows(late.scope)).slice(0,4),walletRows);assert.equal((await rows(late.scope)).some(r=>r.phase==='prewallet-recovered'),false);
   report.cases.push('genuine later wallet claim and response remain intact; stale prewallet save fails and ordinary recovery reuses the retained proof');
 
