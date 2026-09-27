@@ -134,6 +134,7 @@ jobs:
       - run: node operator/tests/order-prewallet-recovery.runtime.mjs
       - run: node operator/tests/order-prewallet-replacement.runtime.mjs
       - run: node operator/tests/order-prewallet-expiry.runtime.mjs
+      - run: node operator/tests/order-prewallet-expiry-replacement.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
@@ -162,6 +163,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-owner-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Buyer reviewed replacement after unsigned expiry
+        run: node operator/tests/order-prewallet-expiry-replacement.browser.mjs
       - name: Buyer single-use submission and finalized recovery
         run: node operator/tests/order-submission.browser.mjs
       - name: Buyer reviewed replacement across browser and gateway restarts
@@ -208,4 +211,5 @@ jobs:
             operator/build/buyer-prewallet-recovery-chromium/
             operator/build/buyer-prewallet-replacement-chromium/
             operator/build/buyer-prewallet-expiry-chromium/
+            operator/build/buyer-prewallet-expiry-replacement-chromium/
           retention-days: 14

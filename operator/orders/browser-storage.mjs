@@ -11,6 +11,7 @@ import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmissio
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
 import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
 import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
+import {prewalletExpiryReplacementSource} from './prewallet-expiry-replacement.mjs';
 const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
@@ -277,10 +278,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
   function replacementState(order,records,events){
     records=current(records);
     if(!hasPrewallet(records))return submissionState(order,records,events);
-    const terminal=prewalletState(order,records,events);if(terminal.status!=='failed'||records[0].record.attempt!==1)return null;
+    const terminal=prewalletState(order,records,events);if(!['expired','failed'].includes(terminal.status)||records[0].record.attempt!==1)return null;
     const prior=structuredClone(order);prior.items[0].attempts=prior.items[0].attempts.slice(0,1);
     if(order.items[0].attempts.length>1)prior.revision=records.at(-1).record.orderRevision;
-    return prewalletReplacementSource(prior,records[0].record,terminal.report);
+    return terminal.status==='expired'
+      ?prewalletExpiryReplacementSource(prior,records[0].record,terminal.report,records[1]?.phase==='ready'?records[1].record:null)
+      :prewalletReplacementSource(prior,records[0].record,terminal.report);
   }
   async function locked(input, action) {
     requireCapabilities();

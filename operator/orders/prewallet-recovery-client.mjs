@@ -19,12 +19,17 @@ export function createBuyerPrewalletRecovery({storage,scope,transport}={}){
   },async prepareReplacement({authorizeReplacement=false,acknowledgedFeeLamports}={}){
     need(authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED');need(!busy,'BUSY');busy=true;
     try{
-      need(typeof storage.readPrewalletReplacement==='function'&&typeof transport.replace==='function','REPLACEMENT_CONFIGURATION');
+      need(typeof storage.readPrewalletReplacement==='function','REPLACEMENT_CONFIGURATION');
       const source=await storage.readPrewalletReplacement(frozen);
-      need(source?.status==='failed'&&source.prewalletRecord&&source.input.claim.attempt===1&&!source.input.order.paused,'REPLACEMENT_NOT_READY');
-      validateReplacementAcknowledgment(source.input,source.failureRecord,acknowledgedFeeLamports);
-      const report=validateReplacementResult(await transport.replace(source.input,{acknowledgedFeeLamports}),source.input);
-      need(JSON.stringify(report.record.prewallet)===JSON.stringify(source.prewalletRecord)
+      need((source?.status==='expired'?source.expiryRecord:source?.status==='failed'&&source.prewalletRecord)
+        &&source.input.claim.attempt===1&&!source.input.order.paused,'REPLACEMENT_NOT_READY');
+      const expired=source.status==='expired',prior=expired?source.expiryRecord:source.failureRecord;
+      need(expired?typeof transport.replacePrewalletExpiry==='function':typeof transport.replace==='function','REPLACEMENT_CONFIGURATION');
+      validateReplacementAcknowledgment(source.input,prior,acknowledgedFeeLamports);
+      const report=validateReplacementResult(await (expired?transport.replacePrewalletExpiry(source.input)
+        :transport.replace(source.input,{acknowledgedFeeLamports})),source.input);
+      need(JSON.stringify(report.record.prior)===JSON.stringify(prior)
+        &&JSON.stringify(report.record.prewallet)===JSON.stringify(source.prewalletRecord)
         &&report.record.acknowledgedFeeLamports===acknowledgedFeeLamports,'REPLACEMENT_HISTORY');return report;
     }finally{busy=false;}
   },async recover(){need(!busy,'BUSY');busy=true;

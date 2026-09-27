@@ -38,6 +38,14 @@ const subtle=new Proxy(native.subtle,{get(target,property){
           ||JSON.stringify(replacement.prior.proof)!==JSON.stringify(reviewed.proof)
           ||JSON.stringify(reviewed.proof)!==JSON.stringify(order.items[0].attempts[0].proof))throw Error('SIGN_BEFORE_FEE_REVIEW');
       }
+      if(number===2&&claimed.replacement?.version===4){
+        const replacement=claimed.replacement,retired=rows.find(r=>r.phase==='prewallet-expired')?.record.report;
+        if(!retired||retired.status!=='prewallet-expired'||retired.proof.signature!==null
+          ||order.items[0].attempts[0].signature!==null||replacement.acknowledgedFeeLamports!==undefined
+          ||replacement.prewallet!==undefined||JSON.stringify(replacement.prior.proof)!==JSON.stringify(retired.proof)
+          ||JSON.stringify(replacement.prior.evidence)!==JSON.stringify(retired.evidence)
+          ||JSON.stringify(retired.proof)!==JSON.stringify(order.items[0].attempts[0].proof))throw Error('SIGN_BEFORE_UNSIGNED_EXPIRY_REVIEW');
+      }
       if(window.signMode==='fail')throw Error('fixture native signer failure');
       if(window.signMode==='hold'){window.signEntered=true;await new Promise(resolve=>window.releaseSigning=resolve);}
     }
@@ -47,6 +55,9 @@ const subtle=new Proxy(native.subtle,{get(target,property){
 const makeStore=()=>createBuyerStorage({crypto:{subtle,getRandomValues:native.getRandomValues.bind(native)}});
 const originalAdd=IDBObjectStore.prototype.add;
 IDBObjectStore.prototype.add=function(value,key){
+  if(this.name==='signing'&&value.phase==='claimed'&&window.loseNativeClaimReadback){
+    window.loseNativeClaimReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});
+  }
   if(this.name==='signing'&&['prewallet-recovered','prewallet-expired'].includes(value.phase)&&window.losePrewalletReadback){
     window.losePrewalletReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});
   }
