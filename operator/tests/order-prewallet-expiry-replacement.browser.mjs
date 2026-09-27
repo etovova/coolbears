@@ -21,13 +21,17 @@ const bytes=await readFile(bundle);
 await promisify(execFile)('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',path.join(parent,'key.pem'),'-out',path.join(parent,'cert.pem'),'-days','1','-subj','/CN=127.0.0.1']);
 let runtime,origin,loseReplacementReply=false,context,page;
 const report={passed:false,engine:'chromium',transport:'HTTPS to local workerd with real SQLite',tlsCertificate:'disposable self-signed test only',
-  realWallets:false,physicalPhones:false,liveRpc:false,persistencePermission:'fixture only',transactionsSent:0,cases:[],pageErrors:[],externalRequests:0};
+  realWallets:false,physicalPhones:false,liveRpc:false,persistencePermission:'fixture only',transactionsSent:0,cases:[],pageErrors:[],externalRequests:0,httpFailures:[]};
 const server=createServer({key:await readFile(path.join(parent,'key.pem')),cert:await readFile(path.join(parent,'cert.pem'))},async(req,res)=>{
   try{
     if(['/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/recover-prewallet','/api/buyer/review-prewallet-expiry','/api/buyer/replace-prewallet-expiry','/api/buyer/review-expiry','/api/buyer/replace'].includes(req.url)){
       const parts=[];for await(const chunk of req)parts.push(chunk);
       const response=await runtime.dispatch(origin+req.url,{method:req.method,headers:req.headers,body:Buffer.concat(parts)});
       const body=await response.text();
+      if(response.status!==200){
+        let code;try{const value=JSON.parse(body).code;if(typeof value==='string'&&/^[A-Z_]+$/.test(value))code=value;}catch{}
+        report.httpFailures.push({route:req.url,status:response.status,...(code?{code}:{})});
+      }
       if(loseReplacementReply&&req.url==='/api/buyer/replace-prewallet-expiry'&&response.status===200){res.writeHead(503,{'content-type':'application/json'});res.end('{}');return;}
       res.writeHead(response.status,Object.fromEntries(response.headers));res.end(body);
     }else if(req.url==='/fixture.js'){res.writeHead(200,{'content-type':'text/javascript'});res.end(bytes);}
@@ -46,7 +50,8 @@ const spaced=()=>new Promise(r=>setTimeout(r,250));
 const rows=s=>page.evaluate(s=>raw(['signing'],'readonly',tx=>tx.objectStore('signing').getAll(IDBKeyRange.bound([scopeKey(s)],[scopeKey(s),[]]))),s);
 const read=s=>page.evaluate(s=>store.read(s),s);
 const stats=()=>page.evaluate(()=>({native:assetSignAttempts,wallet:walletCalls}));
-const replace=()=>page.evaluate(()=>prewalletRecovery.prepareReplacement({authorizeReplacement:true}));
+// Distinct reviewed actions respect the gateway's existing 200 ms request spacing.
+const replace=async()=>{await spaced();return page.evaluate(()=>prewalletRecovery.prepareReplacement({authorizeReplacement:true}));};
 const nativePrepare=(s,r)=>page.evaluate(({s,r})=>store.prepareReplacementSigning(s,r,{authorizeReplacementSigning:true}),{s,r});
 const attempts=s=>page.evaluate(async s=>[await store.readBuyerAttempt(s,1),await store.readBuyerAttempt(s,2)],s);
 async function open(scope){await page.evaluate(s=>{window.auditScope=s;openSender(s);openPrewalletRecovery(s);},scope);}
