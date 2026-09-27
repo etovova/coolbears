@@ -1,3 +1,5 @@
+**Current addition:** [Expiry after a lost wallet response](../RESPONSE_EXPIRY.md) preserves the actual wallet claim and consent. Only a bounded finalized absence review can retire it; incomplete history stays unknown. No new signature, send or replacement is authorized. The sections below retain earlier milestones.
+
 **PR50:** [восстановление потерянного ответа кошелька](../RESPONSE_RECOVERY.md) находит точные
 подписанные байты только вместе с окончательным результатом. Ответ и исход
 сохраняются атомарно; отсутствие истории не разрешает повтор. Ниже — история этапов.

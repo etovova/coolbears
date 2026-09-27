@@ -1,3 +1,5 @@
+**Current addition:** [Expiry after a lost wallet response](RESPONSE_EXPIRY.md) preserves the actual wallet claim and consent. Only a bounded finalized absence review can retire it; incomplete history stays unknown. No new signature, send or replacement is authorized. The sections below retain earlier milestones.
+
 **Retained native results:** [локальное восстановление](NATIVE_RECOVERY.md) сохраняет
 уже полученную подпись после сбоя записи, без повторного подписания. Несохранённые
 байты после потери экземпляра хранилища остаются unknown; нового retry grant нет.

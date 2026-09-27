@@ -58,6 +58,9 @@ IDBObjectStore.prototype.add=function(value,key){
   if(this.name==='signing'&&value.phase==='claimed'&&window.loseNativeClaimReadback){
     window.loseNativeClaimReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});
   }
+  if(this.name==='signing'&&value.phase==='response-expired'&&window.loseResponseExpiryReadback){
+    window.loseResponseExpiryReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});
+  }
   if(this.name==='signing'&&['prewallet-recovered','prewallet-expired'].includes(value.phase)&&window.losePrewalletReadback){
     window.losePrewalletReadback=false;this.transaction.addEventListener('complete',()=>{window.failNextCustodySign=true;});
   }

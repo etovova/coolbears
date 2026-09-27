@@ -1,3 +1,5 @@
+**Current addition:** [Expiry after a lost wallet response](orders/RESPONSE_EXPIRY.md) preserves the actual wallet claim and consent. Only a bounded finalized absence review can retire it; incomplete history stays unknown. No new signature, send or replacement is authorized. The sections below retain earlier milestones.
+
 **PR46:** [явная проверка истечения попытки покупателя](orders/EXPIRY_REVIEW.md) сохраняет
 доказательство в SQLite и браузерном журнале. Старые claims не освобождаются;
 новая подпись и повторная отправка этим этапом не разрешаются. Ниже — история этапов.
