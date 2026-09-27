@@ -80,7 +80,7 @@ try{
   assert.equal(fixture.calls.length,savedCalls);assert.deepEqual(await rows(first.scope),original);assert.deepEqual(await stats(),{native:0,wallet:0});
   report.cases.push('explicit unsigned replacement rejects fee fields; lost HTTP reply restores the same reviewed candidate after browser/SQLite restart without signatures or rewriting first history');
 
-  assert.equal(await page.evaluate(({s,r})=>code(store.prepareReplacementSigning(s,r)),{s:first.scope,r:next}),'EXPLICIT_REPLACEMENT_SIGNING_REQUIRED');
+  await assert.rejects(page.evaluate(({s,r})=>store.prepareReplacementSigning(s,r),{s:first.scope,r:next}),/EXPLICIT_REPLACEMENT_SIGNING_REQUIRED/);
   const partial=await nativePrepare(first.scope,next);assert.equal(partial.claim.orderRevision,3);assert.equal((await stats()).native,1);
   assert.deepEqual((await rows(first.scope)).slice(0,original.length),original);
   const committed=await page.evaluate(()=>persistedBeforeSign.at(-1));assert.deepEqual(committed.phases,['claimed','prewallet-expired','claimed']);assert.equal(committed.revision,3);
@@ -131,8 +131,9 @@ try{
   const unknown=await setup('prewallet-expiry-replacement-unknown'),unknownRows=await rows(unknown.scope),unknownCalls=fixture.calls.length;
   assert.equal(await page.evaluate(()=>code(prewalletRecovery.prepareReplacement({authorizeReplacement:true}))),'REPLACEMENT_NOT_READY');assert.equal(fixture.calls.length,unknownCalls);assert.deepEqual(await rows(unknown.scope),unknownRows);
   const claimed=await setup('prewallet-expiry-replacement-wallet-claimed',{native:true});history.set(false);
-  await page.evaluate(()=>window.discardWalletResponse=true);await assert.rejects(walletSign(claimed.scope));await page.evaluate(()=>window.discardWalletResponse=false);
+  await page.evaluate(()=>window.discardWalletResponse=true);await assert.rejects(walletSign(claimed.scope),/WALLET_RESPONSE_UNKNOWN/);await page.evaluate(()=>window.discardWalletResponse=false);
   const walletRows=await rows(claimed.scope),walletCalls=fixture.calls.length;
+  assert.equal(walletRows.at(-1).phase,'wallet-claimed');
   assert.equal(await page.evaluate(()=>code(prewalletRecovery.prepareReplacement({authorizeReplacement:true}))),'REPLACEMENT_NOT_READY');assert.equal(fixture.calls.length,walletCalls);assert.deepEqual(await rows(claimed.scope),walletRows);
   report.cases.push('unknown native state and missing response after an actual wallet claim cannot enter unsigned-expiry replacement or perform extra RPC');
   assert.deepEqual(runtime.errors,[]);assert.deepEqual(report.pageErrors,[]);assert.equal(report.externalRequests,0);assert.equal(fixture.calls.filter(c=>c.method==='sendTransaction').length,0);report.passed=true;

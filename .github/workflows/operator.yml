@@ -163,6 +163,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-owner-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-owner-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Buyer reviewed replacement after unsigned expiry
+        run: node operator/tests/order-prewallet-expiry-replacement.browser.mjs
       - name: Buyer single-use submission and finalized recovery
         run: node operator/tests/order-submission.browser.mjs
       - name: Buyer reviewed replacement across browser and gateway restarts
@@ -179,8 +181,6 @@ jobs:
         run: node operator/tests/order-prewallet-replacement.browser.mjs
       - name: Buyer unsigned expiry retirement without a fabricated signature
         run: node operator/tests/order-prewallet-expiry.browser.mjs
-      - name: Buyer reviewed replacement after unsigned expiry
-        run: node operator/tests/order-prewallet-expiry-replacement.browser.mjs
       - name: Buyer HTTPS checker through workerd and SQLite
         run: node operator/tests/order-gateway.browser.mjs
       - name: Buyer sign-only wallet handoff and response recovery
