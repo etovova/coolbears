@@ -71,8 +71,8 @@ try{
   const order=await read(missing.scope);assert.equal(order.revision,2);assert.equal(order.items[0].attempts[0].signature,null);assert.equal(order.items[0].attempts[0].state,'expired');
   count=fixture.calls.length;await restart(missing.scope);assert.equal((await review()).status,'already-recorded');assert.equal(fixture.calls.length,count);
   assert.equal(await page.evaluate(()=>code(sender.sendOnce({authorizeDevnetSend:true}))),'SEND_NOT_READY');
-  assert.equal(await page.evaluate(()=>code(prewalletRecovery.prepareReplacement({authorizeReplacement:true}))),'REPLACEMENT_NOT_READY');
-  report.cases.push('explicit review after full restart retires the missing native result with a null signature and original claim intact; no wallet, send or replacement permission');
+  assert.equal(await page.evaluate(()=>code(prewalletRecovery.prepareReplacement())),'EXPLICIT_REPLACEMENT_REQUIRED');
+  report.cases.push('explicit review after full restart retires the missing native result with a null signature and original claim intact; no wallet, send or implicit replacement permission');
 
   const partial=await setup('prewallet-expiry-partial',{native:true}),partialRows=await rows(partial.scope);loseFailureReply=true;
   assert.equal(await reviewError(),'SUBMISSION_HTTP');loseFailureReply=false;count=fixture.calls.length;await restart(partial.scope);

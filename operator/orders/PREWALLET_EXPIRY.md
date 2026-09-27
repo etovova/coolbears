@@ -8,8 +8,9 @@ claim/message, custody loss, or an already recorded wallet invocation.
 `prewalletRecovery.reviewExpiry({authorizeExpiryReview:true})` reads the actual
 claim and optional partial, calls `/api/buyer/review-prewallet-expiry`, and saves
 only a validated terminal result. Missing explicit review fails before HTTP.
-The adapter neither signs nor sends, obtains no new blockhash, and grants no
-replacement. A separate replacement implementation is still required.
+The review adapter neither signs nor sends, obtains no new blockhash, and grants
+no replacement. A separate explicit step is documented in
+[PREWALLET_EXPIRY_REPLACEMENT.md](PREWALLET_EXPIRY_REPLACEMENT.md).
 
 The gateway requires the existing durable preparation or genuine second-attempt
 replacement anchor. It verifies the Devnet genesis, finalized anchor block/hash,
@@ -42,8 +43,8 @@ archive availability and a history boundary are not independent chain certificat
 One durable `buyer-prewallet-expiry:v1:` record binds the exact claim hash and
 proof/evidence. Conflicting send, recovery, failure or ordinary expiry records
 fail closed. A lost response, SQLite restart, credential rotation, pause or late
-partial can restore that record without RPC. Old check/send/recovery routes and
-replacement remain blocked. A second retirement requires the genuine existing
+partial can restore that record without RPC. Old check/send/recovery routes
+remain blocked. A second retirement requires the genuine existing
 replacement and preserves the first outcome and any charged fee.
 
 IndexedDB appends one reconcile event and one `prewallet-expired` row at the
