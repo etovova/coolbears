@@ -76,8 +76,10 @@ fixtures. No real wallets, physical phones, Devnet requests or network submissio
 
 First item, attempts one/two only. Missing native partial, absent wallet claim,
 unsigned attempts, absent/unavailable history and nonfinalized outcomes remain
-unresolved. A missing response that was never broadcast cannot be found this
-way; it does not receive a new signing opportunity. This is not custody export
+unresolved by this positive-discovery route. A missing response that was never
+broadcast cannot be found this way. A separate [explicit expiry review](RESPONSE_EXPIRY.md)
+can retire the attempt after bounded finalized absence checks; it does not grant
+a new signing opportunity. This is not custody export
 or device-loss recovery. Later items, cumulative order consent, purchase UI and
 real private setup remain separate. The application, origin, RPC and storage
 are trusted; normalized records are not independent chain certificates.

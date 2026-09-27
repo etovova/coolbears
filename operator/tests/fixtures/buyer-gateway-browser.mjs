@@ -50,6 +50,8 @@ import {createBuyerResponseRecovery} from '../../orders/response-recovery-client
 window.openResponseRecovery=scope=>{
   window.responseRecovery=createBuyerResponseRecovery({scope,transport:createBuyerSubmissionTransport(),storage:{
     readBuyerResponseRecovery:store.readBuyerResponseRecovery,
+    saveBuyerResponseExpiry:async(...args)=>{const value=await store.saveBuyerResponseExpiry(...args);
+      if(window.loseResponseExpiryAck)throw Error('LOST_RESPONSE_EXPIRY_ACK');return value;},
     saveRecoveredBuyerResponse:async(...args)=>{const value=await store.saveRecoveredBuyerResponse(...args);
       if(window.loseResponseRecoveryAck)throw Error('LOST_RESPONSE_RECOVERY_ACK');return value;}}});
 };

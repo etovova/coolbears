@@ -8,6 +8,7 @@ import {validateCostApproval} from './cost-approval.mjs';
 import {validateBuyerExpiryResult,expiryRecord} from './expiry-review.mjs';
 import {failureRecord} from './failure-record.mjs';
 import {validateMissingBuyerResponse,validateResponseRecovery,recoveredSubmission} from './response-recovery.mjs';
+import {validateResponseExpiry} from './response-expiry.mjs';
 import {validateReplacementResult,validateReplacementClaim,validateReplacementAcknowledgment} from './replacement.mjs';
 import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
 import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
@@ -145,6 +146,24 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
   }
   const current=records=>groups(records).at(-1)??[];
   const hasPrewallet=records=>['prewallet-recovered','prewallet-expired'].includes(records.at(-1)?.phase);
+  const hasResponseExpiry=records=>records.at(-1)?.phase==='response-expired';
+  function responseExpiryState(order,records,events){
+    records=current(records);if(!hasResponseExpiry(records))return null;
+    const saved=records.at(-1),r=saved.record,claim=records[0]?.record;
+    requireThat(records.length===4&&records[1]?.phase==='ready'&&records[2]?.phase==='wallet-claimed'
+      &&equal(Object.keys(saved).sort(),['phase','record'])&&r?.version===1
+      &&equal(Object.keys(r).sort(),['orderRevision','report','version'])
+      &&Number.isSafeInteger(r.orderRevision)&&r.orderRevision>records[2].record.orderRevision
+      &&r.orderRevision<=order.revision,'CORRUPT_RESPONSE_EXPIRY');
+    let prior=events[0].order;for(let n=1;n<r.orderRevision;n++)prior=model.transitionOrder(prior,events[n]);
+    validateResponseExpiry(r.report,{order:prior,claim,request:records[1].record,walletClaim:records[2].record});
+    const attempt=order.items[0].attempts[claim.attempt-1];
+    requireThat(r.report.status==='response-expired'&&attempt.state==='expired'&&attempt.signature===null
+      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:0,attempt:claim.attempt,proof:r.report.proof}),
+      'RESPONSE_EXPIRY_HISTORY');
+    return{status:'expired',report:structuredClone(r.report),signature:null,orderRevision:r.orderRevision,
+      retryAuthorized:false,readyToSubmit:false,salesOpen:false};
+  }
   function prewalletState(order,records,events){
     records=current(records);if(!hasPrewallet(records))return null;
     const saved=records.at(-1),r=saved.record,claim=records[0]?.record,ready=records[1]?.phase==='ready'?records[1]:null;
@@ -165,7 +184,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     records=current(records);
     requireThat(records.length <= 6, 'CORRUPT_ASSET_SIGNING');
     if (!records.length) return null;
-    const claimed=records[0],ready=records[1]?.phase==='ready'?records[1]:undefined,closed=hasPrewallet(records);
+    const claimed=records[0],ready=records[1]?.phase==='ready'?records[1]:undefined,closed=hasPrewallet(records)||hasResponseExpiry(records);
     requireThat(claimed?.phase === 'claimed' && (!records[1]||ready||closed), 'CORRUPT_ASSET_SIGNING');
     validateAssetClaim(order, claimed.record);
     if (ready) validateAssetRequest(order, claimed.record, ready.record);
@@ -179,7 +198,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     if(hasPrewallet(records))return null;
     if (records.length < 3) return null;
     const assetClaim=records[0].record,number=assetClaim.attempt;
-    const claim = records[2]?.record, response = records[3]?.record;
+    const claim = records[2]?.record, expired=hasResponseExpiry(records),response = expired?undefined:records[3]?.record;
     const shape = (value, names) => value && equal(Object.keys(value).sort(), names.split(' ').sort());
     requireThat(records[2]?.phase === 'wallet-claimed'
       && ((claim.version===1&&shape(claim,'version claimId requestId orderRevision'))
@@ -202,7 +221,10 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         && equal(events[response.orderRevision], {type:'signature',revision:before.revision,index:0,attempt:number,
           signature:response.signature,messageSha256:response.messageSha256}), 'BUYER_RESPONSE_HISTORY');
     }
-    return {status:response ? 'buyer-response-saved' : 'wallet-response-unknown',
+    if(expired)responseExpiryState(order,records,events);
+    else if(!response)requireThat(records.length===3&&order.items[0].attempts[number-1].state==='unknown'
+      &&order.items[0].attempts[number-1].signature===null,'MISSING_RESPONSE_HISTORY');
+    return {status:expired?'response-expired':response ? 'buyer-response-saved' : 'wallet-response-unknown',
       claim:structuredClone(claim), response:response ? structuredClone(response) : null,
       readyToSign:false, readyToSubmit:false, salesOpen:false};
   }
@@ -257,6 +279,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     if(!saved.order)return null;
     const records=current(saved.signing),wallet=walletState(saved.order,records,saved.events);
     if(!wallet)return null;
+    if(wallet.status==='response-expired')return responseExpiryState(saved.order,records,saved.events);
     if(wallet.response){
       const state=submissionState(saved.order,records,saved.events);
       return ['verified','failed'].includes(state.status)?{status:state.status,
@@ -471,7 +494,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       return locked(input,async(scope,scopeKey)=>{
         const saved=await snapshotData(scope,scopeKey);
         if(!saved.order)return null;
-        if(hasPrewallet(current(saved.signing))){
+        if(hasPrewallet(current(saved.signing))||hasResponseExpiry(current(saved.signing))){
           nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
           return signingState(saved.order,saved.signing);
         }
@@ -517,6 +540,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const state = walletState(before.order, before.signing, before.events);
         requireThat(state,'WALLET_CLAIM_REQUIRED');
         requireThat(frozen.claimId === state.claim.claimId, 'WALLET_CLAIM_MISMATCH');
+        requireThat(state.status!=='response-expired','RESPONSE_EXPIRED');
         if (state.response) {
           requireThat(state.response.transactionBase64 === frozen.transactionBase64, 'BUYER_RESPONSE_CONFLICT');
           return state; // Lost commit acknowledgment: read the same bytes, no event.
@@ -541,6 +565,27 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     },
     readBuyerResponseRecovery(input){
       return locked(input,async(scope,scopeKey)=>responseRecoveryState(await snapshotData(scope,scopeKey)));
+    },
+    // Expiry evidence consumes no wallet response and grants no replacement/send permission.
+    saveBuyerResponseExpiry(input,report){
+      const frozen=structuredClone(report);
+      return locked(input,async(scope,scopeKey)=>{
+        const before=await snapshotData(scope,scopeKey),state=responseRecoveryState(before);
+        requireThat(state?.status==='wallet-response-unknown','MISSING_RESPONSE_REQUIRED');
+        validateResponseExpiry(frozen,state.input);requireThat(frozen.status==='response-expired','RESPONSE_EXPIRY_NOT_VERIFIED');
+        const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:frozen.proof};
+        const order=bounded(model.transitionOrder(before.order,event));
+        const record={phase:'response-expired',record:{version:1,orderRevision:order.revision,report:frozen}};
+        await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
+          requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
+          tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
+          tx.objectStore('signing').add(record,[scopeKey,0,number,6]);resolve(true);
+        },abort));
+        const after=await snapshotData(scope,scopeKey);
+        requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'RESPONSE_EXPIRY_NOT_SAVED');
+        nativeResults.delete(scopeKey);nativeSlots.delete(scopeKey);
+        return responseRecoveryState(after);
+      });
     },
     readPrewalletRecovery(input){
       return locked(input,async(scope,scopeKey)=>{
@@ -625,7 +670,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         let order=saved.order;
         if(Number.isSafeInteger(revision)){order=saved.events[0].order;for(let n=1;n<=revision;n++)order=model.transitionOrder(order,saved.events[n]);}
         return{order:structuredClone(order),signing:signingState(order,records),wallet:walletState(order,records,saved.events),
-          submission:submissionState(order,records,saved.events),...(hasPrewallet(records)?{prewallet:prewalletState(order,records,saved.events)}:{})};
+          submission:submissionState(order,records,saved.events),...(hasPrewallet(records)?{prewallet:prewalletState(order,records,saved.events)}:{}),
+          ...(hasResponseExpiry(records)?{responseExpiry:responseExpiryState(order,records,saved.events)}:{})};
       });
     },
     // Caller is the trusted recovery adapter. CAS + exact proof binding, never retry authorization.
