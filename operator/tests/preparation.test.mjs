@@ -66,6 +66,9 @@ test('metadata base rejects HTTP, credentials and overlong URIs', () => {
     assert.throws(() => makePreparation({ metadataBase }));
   }
   assert.throws(() => makePreparation({ collection: 'not-a-public-key' }));
+  for (const collection of [null, false, 0, [], {}]) {
+    assert.throws(() => makePreparation({ collection }), /Collection must/);
+  }
 });
 
 test('real SDK serializes the CLI configuration and royalty instructions without network calls', async () => {

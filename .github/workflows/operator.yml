@@ -1,5 +1,7 @@
 name: Verify new CoolBears operator
 on:
+  pull_request:
+    paths: ['operator/**', 'metadata/**', 'scripts/hidden-metadata.mjs', '.github/workflows/operator.yml']
   push:
     branches: [main, official-release]
     paths: ['operator/**', 'metadata/**', 'scripts/hidden-metadata.mjs', '.github/workflows/operator.yml']

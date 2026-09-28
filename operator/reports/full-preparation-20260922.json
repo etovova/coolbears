@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "status": "offline-preparation-verified",
+  "metadataDocuments": 10000,
+  "machineItems": 9999,
+  "hiddenMetadataSha256": "007c963f94f9704ae522b374e505dc0a1db57397602a6af11e5d9cb44ac62f3c",
+  "reservedIndex": 0,
+  "reservedOwner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+  "reservedAssetCreated": false,
+  "priceLamports": "500000000",
+  "royaltyBasisPoints": 700,
+  "maxPerOrder": 50,
+  "earliestRevealDate": "2027-01-01",
+  "collectionAddressProvided": false,
+  "networkRequests": 0,
+  "transactionsSent": 0,
+  "salesOpen": false,
+  "readyToDeploy": false,
+  "unverified": [
+    "network and funding",
+    "collection existence and authorities",
+    "reserved asset creation",
+    "machine creation and insertion",
+    "production RPC and order recovery",
+    "private reveal mapping"
+  ]
+}
