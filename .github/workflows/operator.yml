@@ -145,6 +145,11 @@ jobs:
         env:
           COOLBEARS_TEST_STORAGE_MODE: hidden-settings
         run: node operator/tests/deployment-gateway.runtime.mjs
+      - name: Mainnet Hidden Settings owner gateway with intercepted upstream
+        env:
+          COOLBEARS_TEST_STORAGE_MODE: hidden-settings
+          COOLBEARS_TEST_CLUSTER: mainnet-beta
+        run: node operator/tests/deployment-gateway.runtime.mjs
 
   owner-console-browser:
     name: Owner and buyer signing in Chromium / ${{ matrix.group }}
@@ -189,6 +194,11 @@ jobs:
         run: node operator/tests/order-buyer-console-integration.browser.mjs
       - name: Hidden Settings buyer interface with isolated legacy custody
         if: matrix.group == 'console'
+        run: node operator/tests/hidden-buyer-console-integration.browser.mjs
+      - name: Mainnet Hidden Settings buyer interface with a synthetic sign-only wallet
+        if: matrix.group == 'console'
+        env:
+          COOLBEARS_BUYER_FIXTURE_CLUSTER: mainnet-beta
         run: node operator/tests/hidden-buyer-console-integration.browser.mjs
       - name: Buyer expiry review after a lost wallet response
         if: matrix.group == 'expiry'
@@ -248,6 +258,7 @@ jobs:
             operator/build/owner-console-chromium/
             operator/build/buyer-storage-chromium/
             operator/build/hidden-buyer-console-integration-chromium/
+            operator/build/hidden-buyer-console-integration-mainnet-chromium/
             operator/build/buyer-signing-chromium/
             operator/build/buyer-native-recovery-chromium/
             operator/build/buyer-wallet-chromium/

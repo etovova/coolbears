@@ -6,13 +6,16 @@ export function mountPrivateBuyerConsole({controller,registry,document=globalThi
   const el=id=>document.getElementById(id),set=(id,value)=>el(id).textContent=value??'',enable=(id,on)=>el(id).disabled=!on;
   let wallets=[],connectedWallet=null,lastQuote=null,lastTerminal=null,lastAccounts='',lastOrders='',lastScope=null,localError=null,disposed=false;
   const option=(select,label,value)=>{const node=document.createElement('option');node.textContent=label;node.value=value;select.append(node);};
-  function refreshWallets(){const chosen=wallets[Number(el('wallets').value)];wallets=registry.get().filter(compatibleBuyerWallet);
+  function refreshWallets(){const chosen=wallets[Number(el('wallets').value)],cluster=controller.state().cluster;wallets=registry.get().filter(wallet=>compatibleBuyerWallet(wallet,cluster));
     if(connectedWallet&&!wallets.includes(connectedWallet)){connectedWallet=null;controller.disconnectWallet();}
     el('wallets').replaceChildren();option(el('wallets'),'Choose a compatible wallet','');wallets.forEach((w,i)=>option(el('wallets'),w.name,String(i)));
     const index=wallets.indexOf(chosen);if(index>=0)el('wallets').value=String(index);render();}
   function render(){
     if(disposed)return;let s;try{s=controller.state();}catch{el('workspace').hidden=true;set('configuration','Saved progress could not be read. No purchase action is enabled.');return;}
-    el('workspace').hidden=false;set('configuration','Private Devnet candidate. Sending remains disabled.');
+    const network=s.cluster==='mainnet-beta'?'Mainnet':'Devnet';
+    el('workspace').hidden=false;set('configuration',`Private ${network} candidate. Sending remains disabled.`);
+    set('network-banner',`Sales are closed · Item price 0.2 SOL · ${network}`);
+    set('wallet-network',`Only wallets that support signing a ${network} transaction without sending it appear here.`);
     el('busy').hidden=!s.busy;el('workspace').setAttribute('aria-busy',String(s.busy));
     el('error').hidden=!(s.error||localError);set('error',s.error||localError);set('account',s.selectedAccount?'Selected: '+s.selectedAccount:'No exact account selected.');
     const accountKey=JSON.stringify(s.accounts);if(accountKey!==lastAccounts){lastAccounts=accountKey;el('accounts').replaceChildren();option(el('accounts'),'Choose an exact account','');

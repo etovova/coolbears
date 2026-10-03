@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Keypair, SystemProgram, TransactionMessage, VersionedTransaction } from '@solana/web3.js';
+import { inspectSignedDeploymentTransaction } from '../deployment/signing.mjs';
 import { createDeploymentRpc, assertCluster, GENESIS_HASHES } from '../deployment/rpc.mjs';
 
 const secret = 'PRIVATE_RPC_SENTINEL';
@@ -12,6 +14,46 @@ const safeFailure = code => error => {
   assert.ok(!String(error).includes('https://'));
   return true;
 };
+
+test('explicit Mainnet transport reads require their own opt-in and cannot use a Devnet default', async () => {
+  const fetchImpl = () => assert.fail('No fetch expected');
+  for (const options of [{ cluster: 'mainnet-beta' }, { authorizeMainnet: true }, { authorizeMainnetSend: true },
+    { cluster: 'mainnet-beta', authorizeMainnet: 'true' }, { cluster: 'mainnet-beta', authorizeMainnetSend: true }]) {
+    assert.throws(() => createDeploymentRpc({ endpoint, fetchImpl, ...options }), safeFailure('CONFIGURATION'));
+  }
+  assert.throws(() => createDeploymentRpc({ endpoint, cluster: 'mainnet' }), safeFailure('CLUSTER'));
+  const calls = [], rpc = createDeploymentRpc({ endpoint, cluster: 'mainnet-beta', authorizeMainnet: true,
+    fetchImpl: async (_url, init) => { const request = JSON.parse(init.body); calls.push(request); return reply(request, GENESIS_HASHES['mainnet-beta']); } });
+  assert.equal(calls.length, 0); assert.equal(await assertCluster(rpc, 'mainnet-beta'), GENESIS_HASHES['mainnet-beta']);
+  assert.equal(calls.length, 1); await assert.rejects(rpc.call('sendTransaction'), safeFailure('METHOD'));
+});
+
+test('Mainnet submission needs separate authorization and a fresh matching full genesis', async () => {
+  // Disposable deterministic fixture keys; no production signing or network.
+  const owner = Keypair.fromSeed(new Uint8Array(32).fill(73)), receiver = Keypair.fromSeed(new Uint8Array(32).fill(74));
+  const tx = new VersionedTransaction(new TransactionMessage({ payerKey: owner.publicKey,
+    recentBlockhash: receiver.publicKey.toBase58(), instructions: [SystemProgram.transfer({ fromPubkey: owner.publicKey,
+      toPubkey: receiver.publicKey, lamports: 1 })] }).compileToV0Message());
+  tx.sign([owner]); const bytes = Buffer.from(tx.serialize()).toString('base64');
+  const submission = { transactionBase64: bytes, minContextSlot: 9 }, signed = inspectSignedDeploymentTransaction(bytes);
+  const params = [bytes, { encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 9 }];
+  assert.throws(() => createDeploymentRpc({ endpoint, cluster: 'mainnet-beta', authorizeMainnet: true, submission }), safeFailure('CONFIGURATION'));
+  for (const genesis of [GENESIS_HASHES.devnet, GENESIS_HASHES['mainnet-beta'].slice(0, 32), GENESIS_HASHES['mainnet-beta']]) {
+    const calls = [], rpc = createDeploymentRpc({ endpoint, cluster: 'mainnet-beta', authorizeMainnet: true, authorizeMainnetSend: true, submission,
+      fetchImpl: async (_url, init) => { const request = JSON.parse(init.body); calls.push(request); return reply(request,
+        request.method === 'getGenesisHash' ? genesis : signed.signature); } });
+    await assert.rejects(rpc.call('sendTransaction', params), safeFailure('METHOD')); assert.equal(calls.length, 0);
+    await rpc.call('getGenesisHash');
+    if (genesis === GENESIS_HASHES['mainnet-beta']) {
+      assert.equal(await rpc.call('sendTransaction', params), signed.signature);
+      await assert.rejects(rpc.call('sendTransaction', params), safeFailure('METHOD')); assert.equal(calls.length, 2);
+    } else { await assert.rejects(rpc.call('sendTransaction', params), safeFailure('METHOD')); assert.equal(calls.length, 1); }
+  }
+  const retry = createDeploymentRpc({ endpoint, cluster: 'mainnet-beta', authorizeMainnet: true,
+    failedRetry: { transactionBase64: bytes }, fetchImpl: async (_url, init) => reply(JSON.parse(init.body), GENESIS_HASHES['mainnet-beta']) });
+  await retry.call('getGenesisHash'); await retry.call('coolbears_authorizeFailedRetry', [bytes]);
+  await assert.rejects(retry.call('sendTransaction', params), safeFailure('METHOD'));
+});
 
 test('explicit read-only client uses one endpoint, sequential IDs and no automatic I/O', async () => {
   const calls = [];

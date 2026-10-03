@@ -9,7 +9,8 @@ import { verifySigningResponse } from './signing.mjs';
 import { assertCluster } from './rpc.mjs';
 import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 
-export async function simulateDeploymentStep({ directory, stepId, mode, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
+export async function simulateDeploymentStep({ directory, stepId, mode, endpoint, fetchImpl, timeoutMs,
+  trustedHiddenCommitmentSha256, authorizeMainnet = false } = {}) {
   let rpc, phase = 'journal', previousRequests = 0;
   try {
     need(['unsigned', 'signed'].includes(mode), 'EXPLICIT_SIMULATION_MODE_REQUIRED');
@@ -20,7 +21,7 @@ export async function simulateDeploymentStep({ directory, stepId, mode, endpoint
       verifySigningResponse(attempt.request, { transactionBase64: attempt.signed.transactionBase64 });
     } else need(!attempt?.signed || ['failed', 'expired'].includes(attempt.state), 'UNSIGNED_MODE_HAS_OWNER_SIGNATURE');
     const startedAt = performance.now();
-    const preflight = await preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 });
+    const preflight = await preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256, authorizeMainnet });
     previousRequests = preflight.networkRequests;
     if (preflight.status !== 'read-checks-passed') return { ...preflight, mode, simulationVerified: false };
     need(preflight.expectedRevision === baseline.revision && preflight.expectedHeadHash === baseline.headHash
@@ -36,7 +37,7 @@ export async function simulateDeploymentStep({ directory, stepId, mode, endpoint
         && tx.signatures.every(signature => signature.every(byte => byte === 0)), 'RETRY_TEMPLATE_REQUIRED');
     }
     rpc = await createScopedDeploymentRpc({ manifest: baseline.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, allowSimulation: true, trustedHiddenCommitmentSha256 });
+      totalTimeoutMs: 30000, allowSimulation: true, trustedHiddenCommitmentSha256, authorizeMainnet });
     phase = 'network';
     await assertCluster(rpc, preflight.cluster);
     phase = 'simulation';

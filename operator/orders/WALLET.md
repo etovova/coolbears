@@ -1,3 +1,14 @@
+Mainnet support is offline and opt-in. Trusted application constructors require
+`authorizeMainnet: true` for a validated `mainnet-beta` scope; its wallet chain
+is `solana:mainnet`. Devnet remains the default and rejects Mainnet grants.
+Mainnet check and result reports must bind the full static genesis hash as well
+as the selected cluster. A Devnet report, signing claim or persisted scope cannot
+be relabeled for Mainnet. Wallet/cost consent remains separate, and sending needs
+the matching `authorizeMainnetSend: true`; the old Devnet flag does not grant it.
+The private console selects its profile only from strictly validated compiled
+configuration and still disables sending. These changes activate no network,
+public interface or sales. See [offline network boundaries](../MAINNET.md).
+
 **PR50:** [восстановление потерянного ответа кошелька](RESPONSE_RECOVERY.md) находит точные
 подписанные байты только вместе с окончательным результатом. Ответ и исход
 сохраняются атомарно; отсутствие истории не разрешает повтор. Ниже — история этапов.

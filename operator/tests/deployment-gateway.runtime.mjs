@@ -10,27 +10,29 @@ import { Keypair, VersionedTransaction } from '@solana/web3.js';
 import { policy as approved } from '../prepare.mjs';
 import { buildDeploymentPlan, deploymentManifestFromPlan } from '../deployment/plan.mjs';
 import { compileDeploymentRpcPolicy } from '../deployment/compile-rpc-policy.mjs';
-import { GENESIS_HASHES } from '../deployment/rpc.mjs';
+import { networkProfile } from '../deployment/network.mjs';
 import { inspectSignedDeploymentTransaction } from '../deployment/signing.mjs';
 const key = n => Keypair.fromSeed(createHash('sha256').update(`gateway-runtime-${n}`).digest());
 const owner = key('owner'), collection = key('collection');
 const storageMode = process.env.COOLBEARS_TEST_STORAGE_MODE ?? 'config-lines';
 assert.ok(['config-lines', 'hidden-settings'].includes(storageMode), 'INVALID_TEST_STORAGE_MODE');
 const hidden = storageMode === 'hidden-settings';
+const cluster = process.env.COOLBEARS_TEST_CLUSTER ?? 'devnet';
+const profile = networkProfile(cluster), mainnet = cluster === 'mainnet-beta';
 const hiddenCommitmentSha256 = createHash('sha256').update('gateway-runtime TEST commitment, not production').digest('hex');
 const savedOwner = approved.owner; approved.owner = owner.publicKey.toBase58();
-const plan = await buildDeploymentPlan({ cluster: 'devnet', collection: collection.publicKey.toBase58(),
+const plan = await buildDeploymentPlan({ cluster, collection: collection.publicKey.toBase58(),
   reservedAsset: key('asset').publicKey.toBase58(), machine: key('machine').publicKey.toBase58(),
   blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000',
   ...(hidden ? { storageMode, hiddenCommitmentSha256 } : {}) });
-const policy = await compileDeploymentRpcPolicy(deploymentManifestFromPlan('runtime-gateway-fixture', plan), { allowSimulation: true });
+const policy = await compileDeploymentRpcPolicy(deploymentManifestFromPlan('runtime-gateway-fixture', plan), { allowSimulation: true, authorizeMainnet: mainnet, ...(mainnet && hidden ? { trustedHiddenCommitmentSha256: hiddenCommitmentSha256 } : {}) });
 assert.equal(policy.version, hidden ? 2 : 1);
 assert.equal(policy.messageIdentities.length, hidden ? 3 : 1431);
 assert.equal(plan.machineSpace, hidden ? 652 : 871827);
 approved.owner = savedOwner;
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const bundled = await build({ stdin: { contents: `import { makeGateway } from './operator/deployment/gateway/worker.mjs';
-const { worker, DeploymentGate } = makeGateway(${JSON.stringify(policy)}, { allowSubmission: true });
+const { worker, DeploymentGate } = makeGateway(${JSON.stringify(policy)}, { allowSubmission: ${!mainnet}, allowMainnet: ${mainnet}, allowMainnetSubmission: ${mainnet}${mainnet && hidden ? `, trustedHiddenCommitmentSha256: ${JSON.stringify(hiddenCommitmentSha256)}` : ''} });
 export { DeploymentGate }; export default worker;`, resolveDir: root, sourcefile: 'gateway-fixture.mjs' },
   bundle: true, write: false, platform: 'browser', format: 'esm', target: 'es2022', external: ['node:*'] });
 const contents = bundled.outputFiles[0].text;
@@ -41,7 +43,7 @@ const name = 'coolbears-deployment-rpc-runtime', endpoint = 'https://private-ope
 const token = 'W'.repeat(43), secret = 'runtime-private-sentinel', calls = [], errors = [];
 let mf, mode = 'normal', sendPhase = false, failedBytes, expiryHash, fundingSignature;
 async function outbound(request) {
-  const url = new URL(request.url); assert.equal(url.hostname, 'devnet.helius-rpc.com');
+  const url = new URL(request.url); assert.equal(url.hostname, new URL(profile.rpcUpstream).hostname);
   assert.equal(url.searchParams.get('api-key'), secret); assert.equal(request.headers.has('authorization'), false);
   const rpc = await request.json(); calls.push({ method: rpc.method, at: Date.now() });
   assert.ok(['getGenesisHash', 'getMultipleAccounts', 'getFeeForMessage', 'simulateTransaction', 'sendTransaction', 'getSignatureStatuses', 'getTransaction',
@@ -49,7 +51,7 @@ async function outbound(request) {
   if (mode === '429') return new RuntimeResponse(secret, { status: 429, headers: { 'retry-after': '5' } });
   if (mode === 'send-lost' && rpc.method === 'sendTransaction') return new RuntimeResponse(secret, { status: 503 });
   let result;
-  if (rpc.method === 'getGenesisHash') result = GENESIS_HASHES.devnet;
+  if (rpc.method === 'getGenesisHash') result = profile.genesisHash;
   if (rpc.method === 'getMultipleAccounts') result = { context: { slot: 9 }, value: [null, null, null, null, null,
     { data: [Buffer.alloc(plan.machineSpace).toString('base64'), 'base64'] }, null] };
   if (rpc.method === 'getFeeForMessage') result = { context: { slot: 9 }, value: 10000 };
@@ -179,9 +181,9 @@ try {
   assert.ok(calls.slice(1).every((call, i) => call.at - calls[i].at >= 195));
   assert.deepEqual(errors, []);
   const version = JSON.parse(await readFile(path.join(root, 'node_modules/miniflare/package.json'), 'utf8')).version;
-  console.log(JSON.stringify({ passed: true, engine: 'workerd', miniflare: version, storage: 'SQLite', cases,
+  console.log(JSON.stringify({ passed: true, engine: 'workerd', miniflare: version, storage: 'SQLite', cases, cluster,
     ...(hidden ? { storageMode, policyVersion: 2, canonicalMessages: plan.steps.length, machineBytes: plan.machineSpace,
       privateMappingVerified: false } : {}),
     upstreamRequests: calls.length, bundleBytes: Buffer.byteLength(contents), bundleSha256: createHash('sha256').update(contents).digest('hex'),
-    fixtureSubmissions: 5, outboundNetwork: 'intercepted fixtures only', cloudflareDeployed: false, liveDevnet: false, transactionsSent: 0 }));
+    fixtureSubmissions: 5, outboundNetwork: 'intercepted fixtures only', cloudflareDeployed: false, liveDevnet: false, liveMainnet: false, transactionsSent: 0 }));
 } finally { if (mf) await mf.dispose(); await rm(persist, { recursive: true, force: true }); }

@@ -14,7 +14,7 @@ function source(input,allowPaused){
   need(isResponseExpiryReplacementInput(input));
   const {order,claim}=input;model.validateOrder(order);
   const first=order.items[claim.itemIndex].attempts[0];
-  need((allowPaused||!order.paused)&&order.cluster==='devnet'&&claim.attempt===1
+  need((allowPaused||!order.paused)&&claim.attempt===1
     &&order.items[claim.itemIndex].attempts.length===1
     &&first.state==='expired'&&first.signature===null&&first.proof?.signature===null);
   assertCurrentItem(order,claim.itemIndex);return input;

@@ -11,13 +11,12 @@ import { Keypair, VersionedTransaction } from '@solana/web3.js';
 import { policy } from '../prepare.mjs';
 import { createDeploymentSignerVault } from '../deployment/vault.mjs';
 import { createDeploymentBundle } from '../deployment/vault-store.mjs';
-import { prepareDeploymentSigning } from '../deployment/handoff.mjs';
 import { readDeploymentJournal, appendDeploymentEvent } from '../deployment/journal.mjs';
 import { GENESIS_HASHES } from '../deployment/rpc.mjs';
-import { startSigningConsole } from '../deployment/owner-console/server.mjs';
-import { runOwnerConsole } from '../deployment/owner-console/cli.mjs';
-import { createSigningSession } from '../deployment/owner-console/session.mjs';
 import { createOwnerClient, compatibleOwnerWallet } from '../deployment/owner-console/client.mjs';
+import { networkProfile } from '../deployment/network.mjs';
+import { insertionAccounts } from './fixtures/group-accounts.mjs';
+import { seedVerifiedPrefix } from './fixtures/group-journal.mjs';
 const key = n => Keypair.fromSeed(createHash('sha256').update(`owner-console-${n}`).digest());
 const owner = key('owner'), passphrase = Buffer.from('owner-console-fixture-passphrase');
 const endpoint = 'https://private-rpc.test/?key=PRIVATE_SENTINEL', stepId = 'collection-create';
@@ -32,38 +31,60 @@ function networkFetch(url, init = {}) {
     req.on('error', reject); req.setTimeout(30000, () => req.destroy(Error('Local HTTP timeout'))); req.end(init.body);
   });
 }
-let fixture;
+const fixtures = new Map();
+let prepareDeploymentSigning, startSigningConsole, runOwnerConsole, createSigningSession, prepareDeploymentGroup;
 before(async () => {
   policy.owner = owner.publicKey.toBase58();
   globalThis.fetch = () => assert.fail('Unstubbed network');
-  fixture = await createDeploymentSignerVault({ id: 'owner-console-fixture', cluster: 'devnet',
-    blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000', passphrase });
+  // The native account verifier intentionally snapshots its immutable policy.
+  // Install this test's synthetic owner before loading that production module.
+  ({ prepareDeploymentSigning } = await import('../deployment/handoff.mjs'));
+  ({ startSigningConsole } = await import('../deployment/owner-console/server.mjs'));
+  ({ runOwnerConsole } = await import('../deployment/owner-console/cli.mjs'));
+  ({ createSigningSession } = await import('../deployment/owner-console/session.mjs'));
+  ({ prepareDeploymentGroup } = await import('../deployment/group.mjs'));
+  for (const cluster of ['devnet', 'mainnet-beta']) fixtures.set(cluster,
+    await createDeploymentSignerVault({ id: `owner-console-${cluster}-fixture`, cluster,
+      blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000', passphrase }));
 });
 after(() => { policy.owner = originalOwner; globalThis.fetch = originalFetch; });
-function rpc() {
-  const calls = []; let fail = false;
-  return { calls, block: () => { fail = true; }, fetchImpl: async (url, init) => {
+function rpc(cluster = 'devnet', manifest) {
+  const calls = []; let fail = false, genesis = GENESIS_HASHES[cluster];
+  return { calls, block: () => { fail = true; }, wrongGenesis: () => { genesis = GENESIS_HASHES.devnet; }, fetchImpl: async (url, init) => {
     assert.equal(url, endpoint); const request = JSON.parse(init.body); calls.push(request.method);
-    const result = { getGenesisHash: GENESIS_HASHES.devnet,
-      getMultipleAccounts: { context: { slot: 510 }, value: [{ executable: true }, { executable: true }, { executable: true }, null, null, null, null] },
+    const result = { getGenesisHash: genesis,
+      getMultipleAccounts: { context: { slot: 510 }, value: manifest ? insertionAccounts(manifest) : [{ executable: true }, { executable: true }, { executable: true }, null, null, null, null] },
       getBalance: { context: { slot: 511 }, value: 10000000000 }, getMinimumBalanceForRentExemption: 5000000000,
       getLatestBlockhash: { context: { slot: 512 }, value: { blockhash: key('fresh').publicKey.toBase58(), lastValidBlockHeight: 2000 } },
       getFeeForMessage: { context: { slot: 513 }, value: 10000 },
       isBlockhashValid: { context: { slot: 514 }, value: !fail }, getBlockHeight: 1500,
       simulateTransaction: { context: { slot: 514 }, value: { err: null, unitsConsumed: 5000 } },
     }[request.method];
+    if (manifest && result?.context) result.context.slot = 600;
     assert.notEqual(result, undefined);
     return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result }));
   } };
 }
-async function harness(t, start = true) {
+async function harness(t, start = true, cluster = 'devnet', groupCount = 0) {
   const parent = await mkdtemp(path.join(tmpdir(), 'owner-console-'));
   const directory = path.join(parent, 'bundle');
+  const fixture = fixtures.get(cluster);
   const { journalDirectory } = await createDeploymentBundle({ directory, ...fixture });
+  if (groupCount) await seedVerifiedPrefix({ fixture, passphrase, owner, journalDirectory });
   for (const name of ['index.html', 'style.css', 'app.js']) await writeFile(path.join(parent, name), name);
-  const upstream = rpc();
-  const prepared = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl: upstream.fetchImpl });
-  const options = { directory, endpoint, fetchImpl: upstream.fetchImpl, port: 0, assetsDirectory: pathToFileURL(parent + '/') };
+  const upstream = rpc(cluster, groupCount ? fixture.manifest : undefined);
+  let prepared;
+  try {
+    prepared = groupCount ? await prepareDeploymentGroup({ directory, count: groupCount, endpoint, fetchImpl: upstream.fetchImpl,
+      authorizeMainnet: cluster === 'mainnet-beta' })
+      : await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl: upstream.fetchImpl,
+        authorizeMainnet: cluster === 'mainnet-beta' });
+  } catch (error) {
+    if (groupCount) console.error(JSON.stringify({ fixture: 'owner-group-preflight', cluster, rpcMethods: upstream.calls }));
+    throw error;
+  }
+  const options = { directory, endpoint, fetchImpl: upstream.fetchImpl, port: 0, assetsDirectory: pathToFileURL(parent + '/'),
+    authorizeMainnetSigning: cluster === 'mainnet-beta' };
   let server = start ? await startSigningConsole(options) : null;
   t.after(async () => { await server?.close(); await rm(parent, { recursive: true, force: true }); });
   const events = [], values = new Map();
@@ -84,22 +105,26 @@ async function harness(t, start = true) {
     snapshot: () => readDeploymentJournal(journalDirectory),
   };
 }
-function wallet(events, mode = 'normal') {
-  const account = { address: owner.publicKey.toBase58(), publicKey: owner.publicKey.toBytes(), chains: ['solana:devnet'], features: ['solana:signTransaction'] };
+function wallet(events, mode = 'normal', cluster = 'devnet') {
+  const chain = networkProfile(cluster).walletChain;
+  const account = { address: owner.publicKey.toBase58(), publicKey: owner.publicKey.toBytes(), chains: [chain], features: ['solana:signTransaction'] };
   let changed;
-  const value = { name: 'Fixture Wallet', chains: ['solana:devnet'], accounts: [account], features: {
+  const value = { name: 'Fixture Wallet', chains: [chain], accounts: [account], features: {
     'standard:connect': { async connect() { events.push('connect'); return { accounts: value.accounts }; } },
     'standard:events': { on(_name, callback) { changed = callback; return () => {}; } },
     'solana:signAndSendTransaction': { signAndSendTransaction() { assert.fail('Broadcast forbidden'); } },
-    'solana:signTransaction': { supportedTransactionVersions: [0], async signTransaction(input) {
-      events.push('wallet-sign'); assert.equal(input.chain, 'solana:devnet'); assert.equal(input.account, account);
+    'solana:signTransaction': { supportedTransactionVersions: [0], async signTransaction(...inputs) {
+      events.push('wallet-sign');
       if (mode === 'cancel') throw Object.assign(Error(), { code: 4001 });
       if (mode === 'unknown') throw Error('Disconnected');
-      const tx = VersionedTransaction.deserialize(input.transaction);
-      if (mode === 'changed') tx.message.recentBlockhash = key('changed').publicKey.toBase58();
-      tx.sign([owner]);
-      if (mode === 'cleared') tx.signatures[1].fill(0);
-      return [{ signedTransaction: tx.serialize() }];
+      return inputs.map(input => {
+        assert.equal(input.chain, chain); assert.equal(input.account, account);
+        const tx = VersionedTransaction.deserialize(input.transaction);
+        if (mode === 'changed') tx.message.recentBlockhash = key('changed').publicKey.toBase58();
+        tx.sign([owner]);
+        if (mode === 'cleared') tx.signatures[1].fill(0);
+        return { signedTransaction: tx.serialize() };
+      });
     } },
   } };
   return { value, change() { value.accounts = []; changed?.({ accounts: [] }); } };
@@ -219,4 +244,107 @@ test('durable wallet claim blocks a second server/profile and survives restart; 
   await assert.rejects(appendDeploymentEvent(h.journalDirectory, { type: 'cancelled', stepId, attempt: 1 }, { expectedRevision: snap.revision }));
   assert.equal((await restarted.decline(state.requestId, claimed.claimId)).walletRequested, false);
   assert.equal((await h.snapshot()).revision, 3);
+});
+
+test('Mainnet session and CLI require a distinct grant before RPC or wallet claims; invalid flags cannot authorize it', async t => {
+  const h = await harness(t, false, 'mainnet-beta'), before = await h.snapshot(), calls = h.upstream.calls.length;
+  for (const authorizeMainnetSigning of [undefined, false, 'true', 1]) {
+    await assert.rejects(createSigningSession({ ...h.options, authorizeMainnetSigning }),
+      error => error.code === 'MAINNET_SIGN_AUTHORIZATION');
+  }
+  await assert.rejects(startSigningConsole({ ...h.options, authorizeMainnetSigning: false }),
+    error => error.code === 'MAINNET_SIGN_AUTHORIZATION');
+  for (const args of [
+    ['prepare-next', h.directory],
+    ['prepare-next', h.directory, '--devnet-send'],
+    ['prepare-next', h.directory, '--devnet-sign'],
+    ['prepare-next', h.directory, '--mainnet-sign', '--mainnet-sign'],
+    ['prepare-next', h.directory, '--mainnet-sign', '--devnet-send'],
+    ['prepare-group', h.directory, '2'],
+    ['serve', h.directory],
+    ['import-response', h.directory, '/missing-response', '--devnet-send'],
+  ]) {
+    let message = '';
+    assert.equal(await runOwnerConsole(args, { input: { isTTY: false }, output: { write: () => {} },
+      errorOutput: { write: value => { message += value; } }, env: {} }), 1);
+    assert.match(message, /stopped/);
+  }
+  assert.equal(h.upstream.calls.length, calls); assert.deepEqual(await h.snapshot(), before);
+  const state = await (await createSigningSession(h.options)).state();
+  assert.equal(state.cluster, 'mainnet-beta'); assert.equal(state.walletChain, 'solana:mainnet');
+  const devnet = await harness(t, false);
+  await assert.rejects(createSigningSession({ ...devnet.options, authorizeMainnetSigning: true }),
+    error => error.code === 'MAINNET_SIGN_AUTHORIZATION');
+});
+
+for (const groupCount of [0, 2]) test(`Mainnet owner ${groupCount ? 'insertion group' : 'single request'} uses the journal network, sign-only wallet API and cluster-bound recovery`, async t => {
+    const h = await harness(t, true, 'mainnet-beta', groupCount), client = createOwnerClient(h);
+    await client.load();
+    assert.equal(client.state().cluster, 'mainnet-beta');
+    assert.equal(compatibleOwnerWallet(wallet([]).value, 'mainnet-beta'), false);
+    assert.equal(compatibleOwnerWallet(wallet([], 'normal', 'mainnet-beta').value, 'mainnet-beta'), true);
+    await assert.rejects(client.connect(wallet(h.events).value), error => error.code === 'WALLET_UNSUPPORTED');
+    await client.connect(wallet(h.events, 'normal', 'mainnet-beta').value);
+    await client.sign();
+    assert.equal(h.events.filter(value => value === 'wallet-sign').length, 1);
+    assert.ok(!h.upstream.calls.includes('sendTransaction'));
+    const response = client.exportResponse(); assert.equal(response.cluster, 'mainnet-beta');
+    const signed = await h.snapshot(); await h.restart();
+    const restarted = createOwnerClient(h); await restarted.load(); await restarted.recover();
+    assert.deepEqual(await h.snapshot(), signed); assert.equal(h.events.filter(value => value === 'wallet-sign').length, 1);
+    const responsePath = path.join(path.dirname(h.directory), 'mainnet-response.PRIVATE.json');
+    await writeFile(responsePath, JSON.stringify(response), { mode: 0o600 });
+    let report = '';
+    assert.equal(await runOwnerConsole(['import-response', h.directory, responsePath], {
+      output: { write: () => assert.fail('Missing Mainnet grant') }, errorOutput: { write: () => {} }, env: {} }), 1);
+    assert.equal(await runOwnerConsole(['import-response', h.directory, responsePath, '--mainnet-sign'], {
+      output: { write: value => { report += value; } }, errorOutput: { write: () => assert.fail('Mainnet recovery failed') }, env: {} }), 0);
+    assert.equal(JSON.parse(report).cluster, 'mainnet-beta'); assert.equal(JSON.parse(report).alreadySaved, true);
+    await writeFile(responsePath, JSON.stringify({ ...response, cluster: 'devnet' }), { mode: 0o600 });
+    assert.equal(await runOwnerConsole(['import-response', h.directory, responsePath, '--mainnet-sign'], {
+      output: { write: () => assert.fail('Wrong network import') }, errorOutput: { write: () => {} }, env: {} }), 1);
+    assert.deepEqual(await h.snapshot(), signed);
+});
+
+test('forged state, preflight and stored network labels never reach a Mainnet wallet', async t => {
+  const h = await harness(t, false, 'mainnet-beta'), session = await createSigningSession(h.options), view = await session.state();
+  const basicStorage = { ready: async () => {}, get: async () => null, put: async () => assert.fail('Unexpected persistence') };
+  const unknown = createOwnerClient({ api: async () => ({ ...view, cluster: 'testnet' }), storage: basicStorage });
+  await assert.rejects(unknown.load(), error => error.code === 'STATE');
+  const missingChain = createOwnerClient({ api: async () => ({ ...view, walletChain: undefined }), storage: basicStorage });
+  await assert.rejects(missingChain.load(), error => error.code === 'STATE');
+  for (const mutate of [checked => ({ ...checked, cluster: 'devnet' }),
+    checked => ({ ...checked, walletChain: 'solana:devnet' }),
+    checked => ({ ...checked, request: { ...checked.request, cluster: 'devnet' } })]) {
+    const events = [], client = createOwnerClient({ api: async route => route === '/api/state' ? view : mutate({ ...view,
+      request: h.prepared.request, simulationVerified: true, claimId: 'c'.repeat(64), expiresAt: Date.now() + 20000 }), storage: basicStorage });
+    await client.load(); await client.connect(wallet(events, 'normal', 'mainnet-beta').value);
+    await assert.rejects(client.sign()); assert.ok(!events.includes('wallet-sign'));
+  }
+  const wrongRecord = createOwnerClient({ api: async () => view, storage: { ...basicStorage,
+    get: async () => ({ requestId: view.requestId, request: h.prepared.request, cluster: 'devnet', status: 'wallet-pending' }) } });
+  await assert.rejects(wrongRecord.load(), error => error.code === 'REQUEST_CHANGED');
+  h.upstream.wrongGenesis();
+  await assert.rejects(session.check(view.requestId), error => error.code === 'PREFLIGHT_BLOCKED');
+  assert.equal((await h.snapshot()).revision, 1);
+});
+
+test('Mainnet wallet change during durable intent persistence blocks signing and retains its consumed claim', async t => {
+  const h = await harness(t, true, 'mainnet-beta'), w = wallet(h.events, 'normal', 'mainnet-beta');
+  const storage = { ...h.storage, async put(id, value) {
+    await h.storage.put(id, value);
+    if (value.status === 'wallet-pending') w.change();
+  } };
+  const client = createOwnerClient({ api: h.api, storage });
+  await client.load(); await client.connect(w.value);
+  await assert.rejects(client.sign(), error => error.code === 'WALLET_CHANGED');
+  assert.equal(h.events.includes('wallet-sign'), false); assert.equal(h.events.includes('/api/decline'), false);
+  const saved = await h.snapshot(), attempt = saved.steps[0].attempts[0];
+  assert.equal(saved.revision, 2); assert.equal(attempt.state, 'wallet-pending');
+  assert.match(attempt.walletClaim, /^[a-f0-9]{64}$/); assert.equal(attempt.signed, null);
+  assert.equal(h.values.get(client.state().requestId).status, 'wallet-pending');
+  const restarted = createOwnerClient(h); await restarted.load();
+  await restarted.connect(wallet(h.events, 'normal', 'mainnet-beta').value);
+  assert.equal(restarted.state().canSign, false); await assert.rejects(restarted.sign(), error => error.code === 'NOT_READY');
+  assert.deepEqual(await h.snapshot(), saved); assert.equal(h.events.includes('wallet-sign'), false);
 });

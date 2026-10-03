@@ -10,11 +10,16 @@ import { createSigningRequest } from './signing.mjs';
 import { MAX_SIGNING_GROUP, signingGroupId } from './group-signing.mjs';
 const need = ok => { if (!ok) throw Error('GROUP_CHECK_BLOCKED'); };
 
-export async function checkDeploymentGroup({ directory, count, groupId, endpoint, fetchImpl, timeoutMs } = {}) {
+export async function checkDeploymentGroup({ directory, count, groupId, endpoint, fetchImpl, timeoutMs,
+  authorizeMainnet = false, expectedBinding } = {}) {
   try {
+    const expected = expectedBinding === undefined ? null : structuredClone(expectedBinding);
+    if (expectedBinding !== undefined) need(expected && typeof expected === 'object' && !Array.isArray(expected)
+      && Object.keys(expected).sort().join(' ') === 'deploymentId expectedHeadHash expectedRevision manifestSha256');
     const { snapshot, journalDirectory } = await readDeploymentBundle(directory);
+    if (expected) need(expected.deploymentId === snapshot.manifest.id && expected.manifestSha256 === snapshot.manifestSha256
+      && expected.expectedRevision === snapshot.revision && expected.expectedHeadHash === snapshot.headHash);
     const plan = await validateCanonicalDeploymentManifest(snapshot.manifest);
-    need(plan.cluster === 'devnet');
     const action = nextDeploymentAction(snapshot), index = snapshot.steps.findIndex(step => step.id === action.stepId);
     let requests;
     if (groupId !== undefined) {
@@ -29,10 +34,10 @@ export async function checkDeploymentGroup({ directory, count, groupId, endpoint
     const steps = plan.steps.slice(index, index + count);
     need(steps.every((step, offset) => step.kind === 'insert' && step.requiredSigners.length === 1
       && step.requiredSigners[0] === plan.roles.owner && (groupId !== undefined || snapshot.steps[index + offset].attempts.length === 0)));
-    const rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
+    const rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs, authorizeMainnet,
       totalTimeoutMs: 30000, allowSimulation: true });
     const started = performance.now();
-    await assertCluster(rpc, 'devnet');
+    const genesisHash = await assertCluster(rpc, plan.cluster);
     let slot = await checkDeploymentState(rpc, plan, index - 1);
     const balance = await rpc.call('getBalance', [plan.roles.owner, { commitment: 'finalized', minContextSlot: slot }]);
     slot = rpcContext(balance, slot); const funds = rpcAmount(balance.value);
@@ -43,7 +48,7 @@ export async function checkDeploymentGroup({ directory, count, groupId, endpoint
         const tx = VersionedTransaction.deserialize(Buffer.from(step.transactionBase64, 'base64'));
         tx.message.recentBlockhash = latest.value.blockhash;
         return createSigningRequest({ deploymentId: snapshot.manifest.id, stepId: step.id, attempt: 1,
-          cluster: 'devnet', owner: plan.roles.owner, transactionBase64: Buffer.from(tx.serialize()).toString('base64'),
+          cluster: plan.cluster, owner: plan.roles.owner, transactionBase64: Buffer.from(tx.serialize()).toString('base64'),
           lastValidBlockHeight: latest.value.lastValidBlockHeight });
       });
     }
@@ -74,6 +79,7 @@ export async function checkDeploymentGroup({ directory, count, groupId, endpoint
     await assertJournalUnchanged(journalDirectory, snapshot);
     need(performance.now() - started <= 30000);
     return { snapshot, journalDirectory, requests, groupId: id, checkedSlot: slot,
+      ...(plan.cluster === 'mainnet-beta' ? { cluster: plan.cluster, genesisHash } : {}),
       networkRequests: rpc.requests, totalFeesLamports: totalFees.toString(), simulationVerified: true };
   } catch { throw Object.assign(Error('Group preflight did not pass.'), { code: 'PREFLIGHT_BLOCKED' }); }
 }
@@ -85,6 +91,7 @@ export async function prepareDeploymentGroup(options) {
     groupId: checked.groupId, requests: checked.requests }, { expectedRevision: checked.snapshot.revision });
   need(deploymentGroupAttempts(saved, checked.groupId).length === checked.requests.length);
   return { status: 'group-saved', groupId: checked.groupId, stepId, count: checked.requests.length,
+    ...(checked.snapshot.manifest.cluster === 'mainnet-beta' ? { cluster: checked.cluster, genesisHash: checked.genesisHash } : {}),
     revision: saved.revision, headHash: saved.headHash, simulationVerified: true,
     estimatedGroupFeesLamports: checked.totalFeesLamports, networkRequests: checked.networkRequests,
     budgetComplete: false, ownerSignatureCreated: false, transactionsSent: 0, salesOpen: false };

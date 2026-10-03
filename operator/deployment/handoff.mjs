@@ -5,6 +5,8 @@ import { openDeploymentSignerVault } from './vault.mjs';
 import { simulateDeploymentStep } from './simulation.mjs';
 import { readDeploymentJournal, appendDeploymentEvent, nextDeploymentAction, sha256Json } from './journal.mjs';
 import { verifySigningResponse } from './signing.mjs';
+import { networkProfile } from './network.mjs';
+import { validateHiddenCommitmentSha256 } from '../storage-mode.mjs';
 
 export class DeploymentHandoffError extends Error {
   constructor(code) { super(`DEPLOYMENT_HANDOFF_${code}`); this.name = 'DeploymentHandoffError'; this.code = `DEPLOYMENT_HANDOFF_${code}`; }
@@ -53,6 +55,7 @@ function preflightMatches(report, snapshot, stepId) {
   need(report.deploymentId === snapshot.manifest.id && report.manifestSha256 === snapshot.manifestSha256
     && report.expectedRevision === snapshot.revision && report.expectedHeadHash === snapshot.headHash
     && report.stepId === stepId && report.cluster === snapshot.manifest.cluster
+    && report.genesisHash === networkProfile(snapshot.manifest.cluster).genesisHash
     && report.source === 'refreshed-unsigned-template', 'PREFLIGHT_BINDING_MISMATCH');
   need(report.transactionsSent === 0 && report.journalWrites === 0 && report.readyToSubmit === false
     && report.budget?.complete === false && report.simulationVerified === true
@@ -62,16 +65,21 @@ function preflightMatches(report, snapshot, stepId) {
 export async function prepareDeploymentSigning(input) {
   let signer, ownedPassphrase;
   try {
-    const args = options(input, ['directory', 'stepId', 'passphrase', 'endpoint', 'fetchImpl', 'timeoutMs', 'retry', 'expectedBinding'],
+    const args = options(input, ['directory', 'stepId', 'passphrase', 'endpoint', 'fetchImpl', 'timeoutMs', 'retry', 'expectedBinding',
+      'authorizeMainnet', 'trustedHiddenCommitmentSha256'],
       ['directory', 'stepId', 'passphrase', 'endpoint']);
     const fields = ['deploymentId', 'manifestSha256', 'expectedRevision', 'expectedHeadHash'];
     const expected = args.expectedBinding === undefined ? null : options(args.expectedBinding, fields, fields);
     const retry = args.retry ?? false;
     need(typeof retry === 'boolean', 'INVALID_INPUT');
+    const authorizeMainnet = args.authorizeMainnet === undefined ? false : args.authorizeMainnet;
+    need(typeof authorizeMainnet === 'boolean', 'INVALID_INPUT');
     need(args.passphrase instanceof Uint8Array && args.passphrase.length >= 16 && args.passphrase.length <= 1024, 'INVALID_INPUT');
     ownedPassphrase = new Uint8Array(args.passphrase);
     const bundle = await readDeploymentBundle(args.directory);
     const baseline = bundle.snapshot, action = nextDeploymentAction(baseline);
+    const profile = networkProfile(baseline.manifest.cluster);
+    need(authorizeMainnet === (profile.cluster === 'mainnet-beta'), 'MAINNET_AUTHORIZATION_REQUIRED');
     // Pin selection before the owner enters a password. A newer retry of the
     // same step must not inherit an old CLI selection after a concurrent edit.
     if (expected) need(expected.deploymentId === baseline.manifest.id
@@ -80,12 +88,19 @@ export async function prepareDeploymentSigning(input) {
     need(action.stepId === args.stepId, 'STEP_NOT_CURRENT');
     need(action.type === 'prepare' || action.type === 'retry-review', 'RECONCILIATION_REQUIRED');
     need(action.type !== 'retry-review' || retry, 'EXPLICIT_RETRY_REQUIRED');
+    if (profile.cluster === 'mainnet-beta' && baseline.manifest.steps[2]?.expected?.storageMode === 'hidden-settings') {
+      let trusted;
+      try { trusted = validateHiddenCommitmentSha256(args.trustedHiddenCommitmentSha256); }
+      catch { throw new DeploymentHandoffError('HIDDEN_COMMITMENT_REQUIRED'); }
+      need(trusted === baseline.manifest.steps[2].expected.hiddenSettings.hash, 'HIDDEN_COMMITMENT_REQUIRED');
+    }
     // Authenticate and validate the vault before making any network request.
     signer = await openDeploymentSignerVault({ vault: bundle.vault, manifest: baseline.manifest, passphrase: ownedPassphrase });
     ownedPassphrase.fill(0);
     sameSnapshot(await readDeploymentJournal(bundle.journalDirectory), baseline);
     const preflight = await simulateDeploymentStep({ directory: bundle.journalDirectory, stepId: args.stepId, mode: 'unsigned',
-      endpoint: args.endpoint, fetchImpl: args.fetchImpl, timeoutMs: args.timeoutMs });
+      endpoint: args.endpoint, fetchImpl: args.fetchImpl, timeoutMs: args.timeoutMs,
+      authorizeMainnet, trustedHiddenCommitmentSha256: args.trustedHiddenCommitmentSha256 });
     preflightMatches(preflight, baseline, args.stepId);
     sameSnapshot(await readDeploymentJournal(bundle.journalDirectory), baseline);
     const attempt = (currentAttempt(baseline, args.stepId)?.number ?? 0) + 1;

@@ -96,7 +96,7 @@ function applyGroupEvent(snapshot, event) {
   if (event.type === 'prepare-group') {
     exact(event, 'type stepId groupId requests');
     const requests = validateSigningGroup(event.requests), action = nextDeploymentAction(snapshot);
-    requireThat(snapshot.manifest.cluster === 'devnet' && action.type === 'prepare' && action.stepId === event.stepId
+    requireThat(action.type === 'prepare' && action.stepId === event.stepId
       && requests[0].stepId === event.stepId && signingGroupId(requests) === event.groupId, 'GROUP_NOT_READY');
     const index = snapshot.steps.findIndex(step => step.id === event.stepId);
     requireThat(index >= 3, 'GROUP_INSERT_ONLY');

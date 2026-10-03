@@ -1,7 +1,8 @@
 // A separate private operator gateway. No imports from the deployed laboratory Worker.
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createRequestValidator, validRecoverySignature } from '../request-policy.mjs';
-import { createDeploymentRpc, DeploymentRpcError, GENESIS_HASHES } from '../rpc.mjs';
+import { createDeploymentRpc, DeploymentRpcError } from '../rpc.mjs';
+import { networkProfile, networkSendAuthorized } from '../network.mjs';
 import { verifyFinalizedFailedTransaction } from '../receipt.mjs';
 import { VersionedTransaction } from '@solana/web3.js';
 import { anchorFromLatestBlockhash, validateHashAnchor, verifyExpiredTransaction,
@@ -11,7 +12,8 @@ const HEADERS = { 'content-type': 'application/json; charset=utf-8', 'cache-cont
 const KEY = 'operator-rpc-limits:v1', INTERVAL = 200, HOLD = 15000;
 const integer = n => Number.isSafeInteger(n) && n >= 0;
 const object = v => v && typeof v === 'object' && !Array.isArray(v);
-const sameClaim = (a, b) => a?.identity === b?.identity && a?.signature === b?.signature && a?.transactionSha256 === b?.transactionSha256;
+const sameClaim = (a, b) => a?.identity === b?.identity && a?.signature === b?.signature
+  && a?.transactionSha256 === b?.transactionSha256 && a?.cluster === b?.cluster && a?.genesisHash === b?.genesisHash;
 class GatewayError extends Error {
   constructor(category, status = 503, retryAfter) { super(category); Object.assign(this, { category, status, retryAfter }); }
 }
@@ -64,11 +66,19 @@ async function requestBody(request) {
     })(), new Promise((_, reject) => { timer = setTimeout(() => { cancel(); reject(new GatewayError('REQUEST_TIMEOUT', 408)); }, 4000); })]);
   } finally { clearTimeout(timer); cancel(); try { reader.releaseLock(); } catch {} }
 }
-function ledger(value, now) {
+function ledger(value, now, profile) {
   const day = Math.floor(now / 86400000);
-  if (value === undefined) return { version: 1, day, used: 0, simulations: 0, nextAt: 0, holdUntil: 0, cooldownUntil: 0 };
-  if (!object(value) || Object.keys(value).sort().join(',') !== 'cooldownUntil,day,holdUntil,nextAt,simulations,used,version'
-    || value.version !== 1 || !Object.values(value).every(integer) || value.simulations > value.used) fail('LEDGER');
+  const mainnet = profile.cluster === 'mainnet-beta';
+  if (value === undefined) return { version: mainnet ? 2 : 1,
+    ...(mainnet ? { cluster: profile.cluster, genesisHash: profile.genesisHash } : {}),
+    day, used: 0, simulations: 0, nextAt: 0, holdUntil: 0, cooldownUntil: 0 };
+  const keys = mainnet ? 'cluster,cooldownUntil,day,genesisHash,holdUntil,nextAt,simulations,used,version'
+    : 'cooldownUntil,day,holdUntil,nextAt,simulations,used,version';
+  if (!object(value) || Object.keys(value).sort().join(',') !== keys
+    || value.version !== (mainnet ? 2 : 1)
+    || (mainnet && (value.cluster !== profile.cluster || value.genesisHash !== profile.genesisHash))
+    || !['day', 'used', 'simulations', 'nextAt', 'holdUntil', 'cooldownUntil'].every(key => integer(value[key]))
+    || value.simulations > value.used) fail('LEDGER');
   // Clock rollback does not grant another daily allowance.
   return day > value.day ? { ...value, day, used: 0, simulations: 0 } : { ...value };
 }
@@ -78,28 +88,58 @@ function retrySeconds(value, now) {
   return Number.isFinite(seconds) ? Math.max(1, Math.min(300, seconds)) : 5;
 }
 
-export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
+export function makeGateway(inputPolicy, { allowSubmission = false, allowMainnet = false, allowMainnetSubmission = false, trustedHiddenCommitmentSha256 } = {}) {
   const compiledPolicy = JSON.parse(JSON.stringify(inputPolicy));
-  if (allowSubmission && compiledPolicy.allowSimulation !== true) fail('CONFIGURATION');
+  let profile;
+  try { profile = networkProfile(compiledPolicy.cluster); } catch { fail('CONFIGURATION'); }
+  if ([allowSubmission, allowMainnet, allowMainnetSubmission].some(value => typeof value !== 'boolean')
+    || (profile.cluster === 'devnet' && (allowMainnet || allowMainnetSubmission))
+    || (profile.cluster === 'mainnet-beta' && (!allowMainnet || allowSubmission))) fail('CONFIGURATION');
+  if (profile.cluster === 'mainnet-beta' && compiledPolicy.version === 2
+    && (typeof trustedHiddenCommitmentSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(trustedHiddenCommitmentSha256)
+      || trustedHiddenCommitmentSha256 === '0'.repeat(64)
+      || trustedHiddenCommitmentSha256 !== compiledPolicy.hiddenCommitmentSha256)) fail('CONFIGURATION');
+  const submissionEnabled = networkSendAuthorized(profile.cluster, { authorizeDevnetSend: allowSubmission, authorizeMainnetSend: allowMainnetSubmission });
+  if (submissionEnabled && compiledPolicy.allowSimulation !== true) fail('CONFIGURATION');
   // Private deploy-time configuration; there is no request-time policy registration API.
-  const validate = createRequestValidator(compiledPolicy, { allowSubmission });
+  const validate = createRequestValidator(compiledPolicy, { allowSubmission: submissionEnabled });
+  const mainnet = profile.cluster === 'mainnet-beta';
+  const networkRecord = value => mainnet ? { ...value, cluster: profile.cluster, genesisHash: profile.genesisHash } : value;
+  const validNetworkRecord = value => object(value) && (mainnet
+    ? value.cluster === profile.cluster && value.genesisHash === profile.genesisHash
+    : !Object.hasOwn(value, 'cluster') && !Object.hasOwn(value, 'genesisHash'));
+  const hashAnchor = value => {
+    if (!mainnet || value === undefined) return value;
+    if (!validNetworkRecord(value)) fail('LEDGER');
+    const { cluster, genesisHash, ...anchor } = value;
+    return anchor;
+  };
   class DeploymentGate {
     constructor(state, env, { fetchImpl = (...args) => globalThis.fetch(...args), clock = Date.now,
       pause = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
       this.storage = state.storage; this.env = env; this.fetchImpl = fetchImpl;
       this.clock = clock; this.pause = pause; this.busy = false; this.genesisVerified = false;
     }
+    async bindNetwork() {
+      // Mainnet state is explicitly bound. Existing Devnet v1 ledgers/claims
+      // stay byte-compatible in their original Durable Object namespace.
+      await this.storage.transaction(async tx => {
+        const previous = await tx.get(KEY);
+        const value = ledger(previous, this.clock(), profile);
+        if (previous === undefined && profile.cluster === 'mainnet-beta') await tx.put(KEY, value);
+      });
+    }
     async reserve(method) {
       const daily = cap(this.env.DAILY_CREDIT_CAP, 20000, 5000), simulations = cap(this.env.DAILY_SIMULATION_CAP, 5000, 2000);
       // Paced starts support sequential client calls without forcing automatic retries.
-      const initial = ledger(await this.storage.get(KEY), this.clock());
+      const initial = ledger(await this.storage.get(KEY), this.clock(), profile);
       const blockedUntil = Math.max(initial.holdUntil, initial.cooldownUntil);
       if (blockedUntil > this.clock()) fail('COOLDOWN', 429, Math.ceil((blockedUntil - this.clock()) / 1000));
       const wait = initial.nextAt - this.clock();
       if (wait > INTERVAL) fail('COOLDOWN', 429, Math.ceil(wait / 1000));
       if (wait > 0) await this.pause(wait);
       await this.storage.transaction(async tx => {
-        const now = this.clock(), value = ledger(await tx.get(KEY), now);
+        const now = this.clock(), value = ledger(await tx.get(KEY), now, profile);
         const until = Math.max(value.nextAt, value.holdUntil, value.cooldownUntil);
         if (until > now) fail('COOLDOWN', 429, Math.ceil((until - now) / 1000));
         if (value.used >= daily || (method === 'simulateTransaction' && value.simulations >= simulations)) fail('DAILY_LIMIT', 429, Math.max(1, Math.ceil(((value.day + 1) * 86400000 - now) / 1000)));
@@ -111,9 +151,10 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
     }
     async upstream(method, params) {
       let gatewayFailure;
-      const endpoint = new URL('https://devnet.helius-rpc.com/');
+      const endpoint = new URL(profile.rpcUpstream);
       endpoint.searchParams.set('api-key', this.env.HELIUS_API_KEY);
-      const rpc = createDeploymentRpc({ endpoint: endpoint.href, allowSimulation: true, timeoutMs: 12000,
+      const rpc = createDeploymentRpc({ endpoint: endpoint.href, cluster: profile.cluster, authorizeMainnet: allowMainnet,
+        authorizeMainnetSend: allowMainnetSubmission, allowSimulation: true, timeoutMs: 12000,
         allowExpiryReads: ['getBlock', 'getFirstAvailableBlock', 'getSignaturesForAddress'].includes(method),
         ...(method === 'sendTransaction' ? { submission: { transactionBase64: params[0], minContextSlot: params[1].minContextSlot } } : {}),
         fetchImpl: async (url, init) => {
@@ -135,7 +176,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           } finally {
             if (reserved) try {
               await this.storage.transaction(async tx => {
-                const now = this.clock(), value = ledger(await tx.get(KEY), now);
+                const now = this.clock(), value = ledger(await tx.get(KEY), now, profile);
                 value.holdUntil = 0; value.nextAt = Math.max(value.nextAt, now + INTERVAL);
                 value.cooldownUntil = Math.max(value.cooldownUntil, now + cooldown * 1000);
                 await tx.put(KEY, value);
@@ -146,7 +187,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
       try {
         if (method === 'sendTransaction') {
           const genesis = await rpc.call('getGenesisHash', []);
-          if (genesis !== GENESIS_HASHES.devnet) fail('GENESIS', 502);
+          if (genesis !== profile.genesisHash) fail('GENESIS', 502);
         }
         return await rpc.call(method, params);
       } catch (error) {
@@ -157,23 +198,23 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
     }
     async validateRequest(method, params) {
       if (['coolbears_authorizeFailedRetry', 'coolbears_authorizeExpiredRetry'].includes(method)) {
-        if (!allowSubmission || !Array.isArray(params) || params.length !== 1) fail('POLICY', 400);
+        if (!submissionEnabled || !Array.isArray(params) || params.length !== 1) fail('POLICY', 400);
         try {
-          return { reviewFailure: method === 'coolbears_authorizeFailedRetry', reviewExpiry: method === 'coolbears_authorizeExpiredRetry', claim: validate('sendTransaction', [params[0], {
-            encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 0 }]) };
+          return { reviewFailure: method === 'coolbears_authorizeFailedRetry', reviewExpiry: method === 'coolbears_authorizeExpiredRetry', claim: networkRecord(validate('sendTransaction', [params[0], {
+            encoding: 'base64', skipPreflight: false, preflightCommitment: 'confirmed', maxRetries: 0, minContextSlot: 0 }])) };
         } catch { fail('POLICY', 400); }
       }
       // Recovery for signatures previously claimed here needs no redeployment.
       // An unrecognized signature never enables arbitrary history scans.
-      try { return validate(method, params); } catch {
-        if (!allowSubmission || !['getSignatureStatuses', 'getTransaction'].includes(method)) fail('POLICY', 400);
+      try { const claim = validate(method, params); return claim ? networkRecord(claim) : claim; } catch {
+        if (!submissionEnabled || !['getSignatureStatuses', 'getTransaction'].includes(method)) fail('POLICY', 400);
         const signature = method === 'getTransaction' ? params?.[0] : params?.[0]?.[0];
         if (!validRecoverySignature(signature)) fail('POLICY', 400);
         const identity = await this.storage.get(`deployment-signature:v1:${signature}`);
         if (!compiledPolicy.messageIdentities.includes(identity)) fail('POLICY', 400);
         const claim = await this.storage.get(`deployment-attempt:v1:${signature}`)
           ?? await this.storage.get(`deployment-send:v1:${identity}`);
-        if (claim?.signature !== signature || claim?.identity !== identity) fail('POLICY', 400);
+        if (claim?.signature !== signature || claim?.identity !== identity || !validNetworkRecord(claim)) fail('POLICY', 400);
         try { createRequestValidator({ ...compiledPolicy, recoverySignatures: [signature] })(method, params); }
         catch { fail('POLICY', 400); }
       }
@@ -181,6 +222,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
     async eligibleReplacement(tx, claim) {
       const previous = await tx.get(`deployment-send:v1:${claim.identity}`);
       if (previous !== undefined) {
+        if (!validNetworkRecord(previous)) fail('LEDGER');
         const failure = await tx.get(`deployment-failed:v1:${previous.signature}`);
         const expiry = await tx.get(`deployment-expired:v1:${previous.signature}`);
         if (!this.matchesFailure(previous, failure) && !this.matchesExpiry(previous, expiry)) fail('ALREADY_CLAIMED', 409);
@@ -212,9 +254,9 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
       catch { fail('HASH_ANCHOR_INVALID', 502); }
       await this.storage.transaction(async tx => {
         const key = `deployment-hash:v1:${anchor.blockhash}`, previous = await tx.get(key);
-        if (previous === undefined) await tx.put(key, anchor);
+        if (previous === undefined) await tx.put(key, networkRecord(anchor));
         else {
-          try { validateHashAnchor(previous); } catch { fail('LEDGER'); }
+          try { validateHashAnchor(hashAnchor(previous)); } catch { fail('LEDGER'); }
           if (previous.blockhash !== anchor.blockhash || previous.lastValidBlockHeight !== anchor.lastValidBlockHeight) fail('LEDGER');
           // Keep the first observation. Finalized getBlock must later match it.
         }
@@ -228,9 +270,9 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
       if (expiry !== undefined && (!sameClaim(previous, claim) || !this.matchesExpiry(claim, expiry))) fail('LEDGER');
       if (expiry === undefined) {
         const hash = VersionedTransaction.deserialize(Buffer.from(transactionBase64, 'base64')).message.recentBlockhash;
-        const anchor = await this.storage.get(`deployment-hash:v1:${hash}`);
+        const anchor = hashAnchor(await this.storage.get(`deployment-hash:v1:${hash}`));
         let proof;
-        try { proof = await verifyExpiredTransaction({ transactionBase64, anchor, call: (method, params) => this.upstream(method, params) }); }
+        try { proof = await verifyExpiredTransaction({ transactionBase64, cluster: profile.cluster, authorizeMainnet: allowMainnet, anchor, call: (method, params) => this.upstream(method, params) }); }
         catch (error) { if (error instanceof DeploymentExpiryError) fail(error.code, 409); throw error; }
         expiry = { version: 1, kind: 'finalized-expiry', ...claim, ...proof };
         await this.storage.transaction(async tx => {
@@ -245,26 +287,24 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           await tx.put(expiryKey, expiry);
         });
       }
-      return { status: 'retry-authorized', kind: 'expired', cluster: 'devnet', signature: claim.signature,
+      return { status: 'retry-authorized', kind: 'expired', cluster: profile.cluster, signature: claim.signature,
         transactionSha256: claim.transactionSha256, ...Object.fromEntries(EXPIRY_FIELDS.map(key => [key, expiry[key]])) };
     }
     matchesFailure(claim, failure) {
       return object(claim) && object(failure) && failure.version === 1 && failure.kind === 'finalized-failure'
-        && failure.identity === claim.identity && failure.signature === claim.signature
-        && failure.transactionSha256 === claim.transactionSha256 && integer(failure.slot) && failure.slot > 0
+        && sameClaim(claim, failure) && integer(failure.slot) && failure.slot > 0
         && typeof failure.errorSha256 === 'string' && /^[0-9a-f]{64}$/.test(failure.errorSha256);
     }
     async authorizeFailedRetry(claim, transactionBase64) {
       const key = `deployment-send:v1:${claim.identity}`, failureKey = `deployment-failed:v1:${claim.signature}`;
-      const matches = current => current?.identity === claim.identity && current.signature === claim.signature
-        && current.transactionSha256 === claim.transactionSha256;
+      const matches = current => sameClaim(current, claim);
       if (!matches(await this.storage.get(key))) fail('CLAIM_MISMATCH', 409);
       let failure = await this.storage.get(failureKey);
       if (failure !== undefined && !this.matchesFailure(claim, failure)) fail('LEDGER');
       if (failure === undefined) {
-        // Always verify Devnet afresh. The custom method itself never reaches
+        // Always verify the compiled network afresh. The custom method itself never reaches
         // Helius; each bounded upstream read is charged by the existing ledger.
-        if (await this.upstream('getGenesisHash', []) !== GENESIS_HASHES.devnet) fail('GENESIS', 502);
+        if (await this.upstream('getGenesisHash', []) !== profile.genesisHash) fail('GENESIS', 502);
         const statusResult = await this.upstream('getSignatureStatuses', [[claim.signature], { searchTransactionHistory: true }]);
         const transactionResult = await this.upstream('getTransaction', [claim.signature, { commitment: 'finalized', encoding: 'base64', maxSupportedTransactionVersion: 0 }]);
         let receipt;
@@ -277,7 +317,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           await tx.put(failureKey, failure);
         });
       }
-      return { status: 'retry-authorized', cluster: 'devnet', signature: claim.signature,
+      return { status: 'retry-authorized', cluster: profile.cluster, signature: claim.signature,
         transactionSha256: claim.transactionSha256, slot: failure.slot };
     }
     async fetch(request) {
@@ -291,6 +331,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
           || body.jsonrpc !== '2.0' || !integer(body.id) || body.id < 1) fail('REQUEST', 400);
         id = body.id;
         const claim = await this.validateRequest(body.method, body.params);
+        await this.bindNetwork();
         if (claim?.reviewFailure || claim?.reviewExpiry) {
           const result = claim.reviewFailure ? await this.authorizeFailedRetry(claim.claim, body.params[0])
             : await this.authorizeExpiredRetry(claim.claim, body.params[0]);
@@ -301,11 +342,11 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
         if (!this.genesisVerified || body.method === 'getGenesisHash') {
           this.genesisVerified = false;
           result = await this.upstream('getGenesisHash', []);
-          if (result !== GENESIS_HASHES.devnet) fail('GENESIS', 502);
+          if (result !== profile.genesisHash) fail('GENESIS', 502);
           this.genesisVerified = true;
         }
         if (body.method !== 'getGenesisHash') result = await this.upstream(body.method, body.params);
-        if (allowSubmission && body.method === 'getLatestBlockhash') await this.rememberHash(result, body.params);
+        if (submissionEnabled && body.method === 'getLatestBlockhash') await this.rememberHash(result, body.params);
         return new Response(JSON.stringify({ jsonrpc: '2.0', id, result }), { headers: HEADERS });
       } catch (error) { return errorResponse(error, id); }
       finally { if (ownsBusy) this.busy = false; }
@@ -314,7 +355,7 @@ export function makeGateway(inputPolicy, { allowSubmission = false } = {}) {
   const worker = { async fetch(request, env) {
     try {
       authorize(request, env);
-      return await env.DEPLOYMENT_GATE.get(env.DEPLOYMENT_GATE.idFromName('closed-devnet-operator-v1')).fetch(request);
+      return await env.DEPLOYMENT_GATE.get(env.DEPLOYMENT_GATE.idFromName(profile.cluster === 'devnet' ? 'closed-devnet-operator-v1' : 'closed-mainnet-operator-v2')).fetch(request);
     } catch (error) { return errorResponse(error); }
   } };
   return { worker, DeploymentGate };

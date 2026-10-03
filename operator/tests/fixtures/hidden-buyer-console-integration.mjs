@@ -2,15 +2,16 @@
 // Production console, browser IndexedDB/Web Locks and all adapters stay intact.
 import {createBuyerStorage} from '../../orders/browser-storage.mjs';
 import config from 'private-console:config';
+const authorizeMainnet=config.cluster==='mainnet-beta';
 await import('./buyer-console-integration.mjs');
 const fields=['id','cluster','buyer','machine','collection','guard'];
 const hiddenOptions={storageMode:config.storageMode,hiddenCommitmentSha256:config.hiddenCommitmentSha256};
 window.integration.scope=order=>Object.fromEntries([...fields,'storageMode','hiddenCommitmentSha256'].map(key=>[key,order[key]]));
-window.integration.storage=createBuyerStorage({storageOptions:hiddenOptions});
-window.integration.legacy=createBuyerStorage();
+window.integration.storage=createBuyerStorage({cluster:config.cluster,authorizeMainnet,storageOptions:hiddenOptions});
+window.integration.legacy=createBuyerStorage({cluster:config.cluster,authorizeMainnet});
 window.integration.legacyScope=scope=>Object.fromEntries(fields.map(key=>[key,scope[key]]));
 window.integration.wrongProfile=async scope=>{
-  const wrong=createBuyerStorage({storageOptions:{...hiddenOptions,hiddenCommitmentSha256:'b'.repeat(64)}});
+  const wrong=createBuyerStorage({cluster:config.cluster,authorizeMainnet,storageOptions:{...hiddenOptions,hiddenCommitmentSha256:'b'.repeat(64)}});
   try { await wrong.read(scope); return 'UNEXPECTED_SUCCESS'; }
   catch(error){return error.message;}
   finally{wrong.close();}

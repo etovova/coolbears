@@ -40,7 +40,7 @@ const bundle=await build({entryPoints:['operator/tests/fixtures/buyer-console-in
   platform:'browser',format:'esm',target:'es2022',inject:['scripts/browser-buffer.mjs'],plugins:[fixturePolicyPlugin(fixture),{
     name:'private-console-integration-inputs',setup(b){
       b.onResolve({filter:/^private-console:/},args=>({path:args.path,namespace:'console-fixture'}));
-      b.onLoad({filter:/.*/,namespace:'console-fixture'},args=>({contents:'export default '+JSON.stringify(args.path==='private-console:config'?fixture.config(origin):[...fixture.owner.secretKey]),loader:'js'}));
+      b.onLoad({filter:/.*/,namespace:'console-fixture'},args=>({contents:'export const authorizeMainnet=false;export default '+JSON.stringify(args.path==='private-console:config'?fixture.config(origin):[...fixture.owner.secretKey]),loader:'js'}));
     },
   }]});bytes=bundle.outputFiles[0].contents;
 runtime=await buyerGatewayRuntime({fixture,origin,persist:path.join(parent,'sqlite'),allowSubmission:false});

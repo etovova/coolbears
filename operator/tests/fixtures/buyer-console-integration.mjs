@@ -3,6 +3,9 @@
 import {getWallets} from '@wallet-standard/app';
 import {Keypair,VersionedTransaction} from '@solana/web3.js';
 import secret from 'private-console:fixture-wallet';
+import config from 'private-console:config';
+import {networkProfile} from '../../deployment/network.mjs';
+const network=networkProfile(config.cluster);
 const counterKey='fixture:private-console-integration:counters';
 const counters=JSON.parse(localStorage.getItem(counterKey)||'null')??{native:0,wallet:0,send:0,connect:0,persist:0};
 const count=key=>{counters[key]++;localStorage.setItem(counterKey,JSON.stringify(counters));};
@@ -30,13 +33,13 @@ SubtleCrypto.prototype.sign=async function(...args){
   return nativeSign.apply(this,args);
 };
 const buyer=Keypair.fromSecretKey(new Uint8Array(secret)),account={address:buyer.publicKey.toBase58(),publicKey:buyer.publicKey.toBytes(),
-  chains:['solana:devnet'],features:['solana:signTransaction']};
+  chains:[network.walletChain],features:['solana:signTransaction']};
 const wallet={version:'1.0.0',name:'Disposable console integration wallet',icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',
-  accounts:[account],chains:['solana:devnet'],features:{
+  accounts:[account],chains:[network.walletChain],features:{
     'standard:connect':{version:'1.0.0',connect:async()=>{count('connect');return{accounts:[account]};}},
     'standard:events':{version:'1.0.0',on:()=>()=>{}},
     'solana:signTransaction':{version:'1.0.0',supportedTransactionVersions:[0],signTransaction:async input=>{
-      if(input.account!==account||input.chain!=='solana:devnet')throw Error('WRONG_SYNTHETIC_ACCOUNT');
+      if(input.account!==account||input.chain!==network.walletChain)throw Error('WRONG_SYNTHETIC_ACCOUNT');
       const saved=await journal(),claim=saved.signing.at(-1);
       if(claim?.phase!=='wallet-claimed'||!claim.record.costApproval||saved.orders[0]?.items[0]?.attempts.at(-1)?.state!=='unknown')throw Error('WALLET_BEFORE_DURABLE_CONSENT');
       count('wallet');const tx=VersionedTransaction.deserialize(input.transaction);tx.sign([buyer]);

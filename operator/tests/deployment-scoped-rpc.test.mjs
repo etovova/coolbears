@@ -150,9 +150,38 @@ test('concurrent first reads share one genesis check and snapshot their paramete
   assert.equal(calls.length, 3); assert.equal(calls[1].params[0], plan.roles.owner);
 });
 
-test('noncanonical manifest and mainnet configuration fail before network', async () => {
+test('noncanonical manifest and Mainnet without explicit read authorization fail before network', async () => {
   const changed = structuredClone(manifest); changed.steps[0].expected.uri = 'https://PRIVATE_SENTINEL.invalid';
   await assert.rejects(createScopedDeploymentRpc({ manifest: changed, endpoint }), safe('DEPLOYMENT_INTENT_INVALID'));
   const mainnet = structuredClone(manifest); mainnet.cluster = 'mainnet-beta';
-  await assert.rejects(createScopedDeploymentRpc({ manifest: mainnet, endpoint }), safe('CLUSTER'));
+  await assert.rejects(createScopedDeploymentRpc({ manifest: mainnet, endpoint }), safe('CONFIGURATION'));
+  await assert.rejects(createScopedDeploymentRpc({ manifest, endpoint, authorizeMainnet: true }), safe('CONFIGURATION'));
+});
+
+test('explicit Mainnet scoped reads bind the canonical manifest to matching full genesis and remain closed', async () => {
+  const mainnet = structuredClone(manifest); mainnet.cluster = 'mainnet-beta';
+  for (const genesis of [GENESIS_HASHES.devnet, GENESIS_HASHES['mainnet-beta']]) {
+    const calls = [], rpc = await createScopedDeploymentRpc({ manifest: mainnet, endpoint, authorizeMainnet: true,
+      fetchImpl: async (_url, init) => { const request = JSON.parse(init.body); calls.push(request);
+        return new Response(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: request.method === 'getGenesisHash' ? genesis : null })); } });
+    assert.equal(rpc.cluster, 'mainnet-beta'); assert.equal(rpc.salesOpen, false); assert.equal(rpc.readyToSubmit, false);
+    await assert.rejects(rpc.call('sendTransaction', []), safe('METHOD')); assert.equal(calls.length, 0);
+    const params = [plan.roles.owner, { commitment: 'finalized' }];
+    if (genesis === GENESIS_HASHES.devnet) {
+      await assert.rejects(rpc.call('getBalance', params), safe('GENESIS')); assert.equal(calls.length, 1);
+    } else { assert.equal(await rpc.call('getBalance', params), null); assert.equal(calls.length, 2); }
+  }
+});
+
+test('Mainnet hidden scoped transport requires an externally trusted matching commitment', async () => {
+  const digest = createHash('sha256').update('scoped Mainnet synthetic commitment').digest('hex');
+  const mainnetPlan = await buildDeploymentPlan({ cluster: 'mainnet-beta', collection: collection.publicKey.toBase58(),
+    reservedAsset: asset.publicKey.toBase58(), machine: machine.publicKey.toBase58(), blockhash: hash,
+    lastValidBlockHeight: 1000, machineRentLamports: '5000000000', storageMode: 'hidden-settings', hiddenCommitmentSha256: digest });
+  const candidate = deploymentManifestFromPlan('mainnet-hidden-fixture', mainnetPlan);
+  await assert.rejects(createScopedDeploymentRpc({ manifest: candidate, endpoint, authorizeMainnet: true }), safe('CONFIGURATION'));
+  await assert.rejects(createScopedDeploymentRpc({ manifest: candidate, endpoint, authorizeMainnet: true,
+    trustedHiddenCommitmentSha256: 'a'.repeat(64) }), safe('DEPLOYMENT_INTENT_INVALID'));
+  const { rpc } = await harness({ manifest: candidate, authorizeMainnet: true, trustedHiddenCommitmentSha256: digest });
+  assert.equal(rpc.cluster, 'mainnet-beta'); assert.equal(rpc.requests, 0);
 });

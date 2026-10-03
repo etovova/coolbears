@@ -11,6 +11,7 @@ import { createDeploymentBundle } from '../deployment/vault-store.mjs';
 import { compileDeploymentRpcPolicy } from '../deployment/compile-rpc-policy.mjs';
 import { appendDeploymentEvent } from '../deployment/journal.mjs';
 import { inspectPrivateReadiness, runPrivateReadiness } from '../private-readiness.mjs';
+import { networkProfile } from '../deployment/network.mjs';
 
 let temp,options,fixture,ownerPolicy,originalFetch,networkCalls=0,ownerBefore;
 const owner=Keypair.fromSeed(new Uint8Array(32).fill(201));
@@ -22,6 +23,14 @@ export { DeploymentGate };
 export default worker;
 `;
 const buyerEntry="import config from './config.json' with {type:'json'};\nimport {makeBuyerGateway} from '../worker.mjs';\nconst {worker,BuyerCheckGate}=makeBuyerGateway(config);\nexport {BuyerCheckGate};\nexport default worker;\n";
+const ownerNetworkEntry=(submission,mainnet,mainnetSubmission,commitment)=>`import policy from './policy.json' with { type: 'json' };
+import { makeGateway } from '../worker.mjs';
+const { worker, DeploymentGate } = makeGateway(policy, { allowSubmission: ${submission}, allowMainnet: ${mainnet}, allowMainnetSubmission: ${mainnetSubmission}${commitment===undefined?'':', trustedHiddenCommitmentSha256: '+JSON.stringify(commitment)} });
+export { DeploymentGate };
+export default worker;
+`;
+const buyerMainnetEntry=commitment=>"import config from './config.json' with {type:'json'};\nimport {makeBuyerGateway} from '../worker.mjs';\nconst {worker,BuyerCheckGate}=makeBuyerGateway(config,{allowMainnet:true"+
+  (commitment===undefined?'':',trustedHiddenCommitmentSha256:'+JSON.stringify(commitment))+"});\nexport {BuyerCheckGate};\nexport default worker;\n";
 before(async()=>{
   originalFetch=globalThis.fetch;globalThis.fetch=()=>{networkCalls++;throw Error('network forbidden');};
   ownerBefore=policy.owner;policy.owner=owner.publicKey.toBase58();
@@ -184,4 +193,103 @@ test('legacy readiness rejects a crossed hidden buyer profile even when all acco
     assert.equal(result.status,'blocked');assert.equal(result.checks.buyerGateway.code,'BUYER_STORAGE_PROFILE_MISMATCH');
     assert.equal(result.binding,null);assert.deepEqual(await files(),before);
   });
+});
+
+test('legacy readiness accepts the newly prepared Devnet read-only entry without changing the report shape',async()=>{
+  await mutation(options.ownerGatewayDirectory,'entry.mjs',()=>ownerNetworkEntry(false,false,false),async()=>{
+    const before=await files(),result=await inspectPrivateReadiness(options);safe(result);
+    assert.equal(result.status,'offline-bindings-verified');assert.equal(result.binding.cluster,'devnet');
+    assert.equal(Object.hasOwn(result.binding,'genesisHash'),false);assert.deepEqual(await files(),before);
+  });
+});
+
+async function mainnetReadinessFixture(t){
+  const root=await mkdtemp(join(tmpdir(),'coolbears-mainnet-readiness-TEST-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const selected={bundleDirectory:join(root,'bundle'),ownerGatewayDirectory:join(root,'owner'),buyerGatewayDirectory:join(root,'buyer')};
+  const trustedHiddenCommitmentSha256='3'.repeat(64);
+  const created=await createDeploymentSignerVault({id:'mainnet-readiness-TEST',cluster:'mainnet-beta',
+    blockhash:new PublicKey(new Uint8Array(32).fill(19)).toBase58(),lastValidBlockHeight:2000,
+    machineRentLamports:'3962400',passphrase:phrase,storageMode:'hidden-settings',hiddenCommitmentSha256:trustedHiddenCommitmentSha256});
+  await createDeploymentBundle({directory:selected.bundleDirectory,...created});
+  const machine=created.manifest.steps[2].expected;
+  const pinned=await compileDeploymentRpcPolicy(created.manifest,{allowSimulation:true,authorizeMainnet:true,trustedHiddenCommitmentSha256});
+  const config={version:2,cluster:'mainnet-beta',origin:'https://mainnet-readiness.test',machine:machine.machine,
+    collection:machine.collection,guard:machine.guard,genesisHash:networkProfile('mainnet-beta').genesisHash,
+    storageMode:'hidden-settings',hiddenCommitmentSha256:trustedHiddenCommitmentSha256};
+  for(const directory of [selected.ownerGatewayDirectory,selected.buyerGatewayDirectory])await mkdir(directory,{mode:0o700});
+  for(const [directory,file,value]of [[selected.ownerGatewayDirectory,'policy.json',JSON.stringify(pinned)],
+    [selected.ownerGatewayDirectory,'entry.mjs',ownerNetworkEntry(false,true,false,trustedHiddenCommitmentSha256)],
+    [selected.buyerGatewayDirectory,'config.json',JSON.stringify(config)],[selected.buyerGatewayDirectory,'entry.mjs',buyerMainnetEntry(trustedHiddenCommitmentSha256)]])
+    await writeFile(join(directory,file),value,{mode:0o600});
+  return{root,selected,created,pinned,config,trustedHiddenCommitmentSha256};
+}
+
+test('Mainnet readiness binds the full shared genesis, closed gateway entries and explicit external hidden digest offline',async t=>{
+  const f=await mainnetReadinessFixture(t),input={...f.selected,trustedHiddenCommitmentSha256:f.trustedHiddenCommitmentSha256};
+  const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+  assert.equal(result.status,'offline-bindings-verified');assert.ok(Object.values(result.checks).every(value=>value.status==='verified'));
+  assert.equal(result.binding.cluster,'mainnet-beta');assert.equal(result.binding.genesisHash,networkProfile('mainnet-beta').genesisHash);
+  assert.equal(result.binding.hiddenCommitmentSha256,f.trustedHiddenCommitmentSha256);assert.equal(result.binding.privateMappingVerified,false);
+  assert.equal(JSON.stringify(result).includes(f.root),false);assert.equal(JSON.stringify(result).includes(f.created.vault.ciphertextBase64),false);
+  assert.deepEqual(await files(f.root),before);
+  for(const digest of [undefined,'4'.repeat(64)]){
+    const missing=await inspectPrivateReadiness({...input,trustedHiddenCommitmentSha256:digest});safe(missing);
+    assert.equal(missing.status,'blocked');assert.equal(missing.binding,null);
+    assert.equal(missing.checks.bundle.code,'BUNDLE_TRUSTED_HIDDEN_COMMITMENT_REQUIRED');
+    assert.deepEqual(await files(f.root),before);
+  }
+  for(const value of ['',true,'0'.repeat(64),'3'.repeat(63),f.trustedHiddenCommitmentSha256.toUpperCase()+'A']){
+    const invalid=await inspectPrivateReadiness({...input,trustedHiddenCommitmentSha256:value});safe(invalid);
+    assert.equal(invalid.code,'ARGUMENTS_INVALID');assert.equal(invalid.binding,null);assert.deepEqual(await files(f.root),before);
+  }
+  let text='';const output={write:value=>{text+=value;}};
+  assert.equal(await runPrivateReadiness(['inspect',...Object.values(f.selected)],{output,env:{}}),1);
+  assert.equal(JSON.parse(text).checks.bundle.code,'BUNDLE_TRUSTED_HIDDEN_COMMITMENT_REQUIRED');
+  text='';assert.equal(await runPrivateReadiness(['inspect',...Object.values(f.selected)],{output,
+    env:{COOLBEARS_HIDDEN_COMMITMENT_SHA256:f.trustedHiddenCommitmentSha256,COOLBEARS_CLUSTER:'devnet'}}),0);
+  assert.equal(JSON.parse(text).binding.cluster,'mainnet-beta');assert.deepEqual(await files(f.root),before);
+});
+
+test('Mainnet readiness rejects crossed gateway scope and any send-enabled or noncanonical prepared entry',async t=>{
+  const f=await mainnetReadinessFixture(t),input={...f.selected,trustedHiddenCommitmentSha256:f.trustedHiddenCommitmentSha256};
+  for(const entry of [ownerNetworkEntry(true,true,false),ownerNetworkEntry(false,true,true),ownerEntry(true),
+    ownerNetworkEntry(false,true,true,f.trustedHiddenCommitmentSha256)])
+    await mutation(f.selected.ownerGatewayDirectory,'entry.mjs',()=>entry,async()=>{
+      const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+      assert.equal(result.checks.ownerGateway.code,'OWNER_SUBMISSION_ENABLED');assert.equal(result.binding,null);
+      assert.deepEqual(await files(f.root),before);
+    });
+  for(const entry of [ownerEntry(false),ownerNetworkEntry(false,false,false),ownerNetworkEntry(false,true,false),
+    ownerNetworkEntry(false,true,false,'4'.repeat(64)),ownerNetworkEntry(false,true,false,f.trustedHiddenCommitmentSha256)+'signTransaction();\n'])
+    await mutation(f.selected.ownerGatewayDirectory,'entry.mjs',()=>entry,async()=>{
+      const result=await inspectPrivateReadiness(input);safe(result);assert.equal(result.checks.ownerGateway.status,'blocked');
+      assert.equal(result.binding,null);
+    });
+  const buyerSource=buyerMainnetEntry(f.trustedHiddenCommitmentSha256);
+  for(const entry of [buyerEntry,buyerMainnetEntry(undefined),buyerMainnetEntry('4'.repeat(64)),
+    buyerSource.replace('{allowMainnet:true,','{allowMainnet:true,allowMainnetSubmission:true,'),buyerSource+'signTransaction();\n'])
+    await mutation(f.selected.buyerGatewayDirectory,'entry.mjs',()=>entry,async()=>{
+      const result=await inspectPrivateReadiness(input);safe(result);assert.equal(result.checks.buyerGateway.status,'blocked');
+      assert.equal(result.binding,null);
+    });
+  await mutation(f.selected.ownerGatewayDirectory,'policy.json',()=>JSON.stringify({...f.pinned,cluster:'devnet'}),async()=>{
+    const result=await inspectPrivateReadiness(input);safe(result);assert.equal(result.checks.ownerGateway.status,'blocked');
+    assert.equal(result.binding,null);
+  });
+  await mutation(f.selected.buyerGatewayDirectory,'config.json',()=>{
+    const crossed={...f.config,cluster:'devnet'};delete crossed.genesisHash;return JSON.stringify(crossed);
+  },async()=>{
+    await mutation(f.selected.buyerGatewayDirectory,'entry.mjs',()=>buyerEntry,async()=>{
+      const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+      assert.equal(result.checks.buyerGateway.code,'BUYER_NETWORK_SCOPE_MISMATCH');assert.equal(result.binding,null);
+      assert.deepEqual(await files(f.root),before);
+    });
+  });
+  for(const genesisHash of [undefined,networkProfile('devnet').genesisHash,'secret-sentinel'])
+    await mutation(f.selected.buyerGatewayDirectory,'config.json',()=>JSON.stringify({...f.config,genesisHash}),async()=>{
+      const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+      assert.equal(result.checks.buyerGateway.code,'BUYER_GATEWAY_INVALID');assert.equal(result.binding,null);
+      assert.deepEqual(await files(f.root),before);
+    });
 });

@@ -4,10 +4,10 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import { Miniflare, Response as RuntimeResponse } from 'miniflare';
 export const fixturePolicyPlugin=fixture=>({name:'disposable-owner-policy',setup(b){b.onLoad({filter:/metadata\/policy\.json$/},()=>({contents:JSON.stringify(fixture.policy),loader:'json'}));}});
-export async function buyerGatewayRuntime({fixture,origin,persist,allowSubmission=false}){
+export async function buyerGatewayRuntime({fixture,origin,persist,allowSubmission=false,authorizeMainnet=false,allowMainnetSubmission=false,trustedHiddenCommitmentSha256}){
   const root=path.resolve(new URL('../../..',import.meta.url).pathname),name='buyer-check-runtime';
   const bundled=await build({stdin:{contents:`import {makeBuyerGateway} from './operator/orders/gateway/worker.mjs';
-const {worker,BuyerCheckGate}=makeBuyerGateway(${JSON.stringify(fixture.config(origin))},{allowSubmission:${allowSubmission}});
+const {worker,BuyerCheckGate}=makeBuyerGateway(${JSON.stringify(fixture.config(origin))},${JSON.stringify({allowSubmission,allowMainnet:authorizeMainnet,allowMainnetSubmission,trustedHiddenCommitmentSha256})});
 export {BuyerCheckGate}; export default worker;`,resolveDir:root,sourcefile:'buyer-gateway-fixture.mjs'},
     bundle:true,write:false,platform:'browser',format:'esm',target:'es2022',external:['node:*'],plugins:[fixturePolicyPlugin(fixture)]});
   const contents=bundled.outputFiles[0].text;

@@ -2,6 +2,7 @@
 import {PublicKey} from '@solana/web3.js';
 import {compatibleBuyerWallet} from '../wallet-client.mjs';
 import {validateConsoleConfig,consoleStorageOptions} from './config.mjs';
+import {networkProfile} from '../../deployment/network.mjs';
 const need=(v,c)=>{if(!v)throw Error(c);},copy=v=>structuredClone(v);
 const terminal=s=>['verified','failed','expired'].includes(s);
 const lamports=v=>{need(typeof v==='string'&&/^(0|[1-9][0-9]{0,19})$/.test(v),'INVALID_COST_LIMIT');return BigInt(v);};
@@ -20,7 +21,7 @@ export function explainConsoleError(error){
 }
 export function createPrivateBuyerController({config,storage,index,prepare,makePorts,storageManager=globalThis.navigator?.storage,
   crypto=globalThis.crypto,clock=()=>Date.now(),onChange=()=>{},sendingEnabled=false}={}){
-  config=validateConsoleConfig(config);need(storage?.readRecoverySnapshot&&index?.list&&index?.save&&typeof prepare==='function'&&typeof makePorts==='function','CONSOLE_CONFIGURATION');
+  config=validateConsoleConfig(config);const network=networkProfile(config.cluster);need(storage?.readRecoverySnapshot&&index?.list&&index?.save&&typeof prepare==='function'&&typeof makePorts==='function','CONSOLE_CONFIGURATION');
   let scope=null,ports=null,evidence=null,summary=null,quote=null,quoteRevision=null,busy=false,error=null,result=null,reviewedReplacement=null,loaded=false;
   let wallet=null,account=null,accounts=[],off=null,epoch=0,disposed=false;
   const emit=()=>{try{onChange(state());}catch{}};
@@ -28,7 +29,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
   const noPendingMemory=()=>need(!ports?.wallet.state().canRecover,'RETAINED_RESPONSE_PENDING');
   const bind=()=>{noPendingMemory();ports?.wallet.dispose?.();ports=scope?makePorts(copy(scope)):null;};
   const invalidate=()=>{epoch++;account=null;accounts=[];clearQuote();reviewedReplacement=null;ports?.wallet.dispose?.();error='The wallet account changed. Reconnect the exact account to continue.';emit();};
-  const walletAccounts=selected=>selected.accounts.filter(a=>a.chains?.includes('solana:devnet')&&a.features?.includes('solana:signTransaction')
+  const walletAccounts=selected=>selected.accounts.filter(a=>a.chains?.includes(network.walletChain)&&a.features?.includes('solana:signTransaction')
     &&new PublicKey(a.publicKey).toBase58()===a.address);
   async function connectPortWallet(){
     const selected=wallet,buyer=account?.address,generation=epoch;need(selected&&buyer===scope?.buyer,'WRONG_WALLET');
@@ -46,7 +47,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
     const freshQuote=quote&&quoteRevision===order?.revision&&quote.expiresAt>clock();
     const canQuote=available&&selected&&!order?.paused&&ports?.wallet.state().canRequestSignature===true;
     const canReplace=available&&!pendingResponse&&!order?.paused&&['failed','expired'].includes(latest?.state)&&latest.number===1;
-    return{configured:true,busy,disposed,error,result:copy(result),scope:scope?{id:scope.id,buyer:scope.buyer}:null,
+    return{configured:true,cluster:network.cluster,busy,disposed,error,result:copy(result),scope:scope?{id:scope.id,buyer:scope.buyer}:null,
       saved:index.list(),accounts:accounts.map(a=>({address:a.address})),selectedAccount:account?.address??null,walletName:wallet?.name??null,
       salesOpen:false,unitPriceSol:'0.2',sendingEnabled:sendingEnabled===true,custody:evidence?.custody?.status??null,
       paused:order?.paused??false,quantity:order?.quantity??null,verified:order?.items.filter(i=>i.attempts.at(-1)?.state==='verified').length??0,
@@ -90,7 +91,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
     async refresh(){return run(async()=>{await refresh();return stateUnlocked();});},
     async requestPersistence({authorizePersistence=false}={}){return run(async()=>{consent(authorizePersistence,'PERSISTENCE');
       need(typeof storageManager?.persist==='function'&&await storageManager.persist()===true&&await storageManager.persisted()===true,'PERSISTENT_STORAGE_REQUIRED');return true;});},
-    async connectWallet(selected){return run(async()=>{noPendingMemory();need(compatibleBuyerWallet(selected),'WALLET_UNSUPPORTED');off?.();ports?.wallet.dispose?.();clearQuote();
+    async connectWallet(selected){return run(async()=>{noPendingMemory();need(compatibleBuyerWallet(selected,network.cluster),'WALLET_UNSUPPORTED');off?.();ports?.wallet.dispose?.();clearQuote();
       const generation=++epoch;wallet=selected;account=null;accounts=[];off=null;
       await selected.features['standard:connect'].connect();need(epoch===generation,'WALLET_CHANGED');
       accounts=walletAccounts(selected);need(accounts.length>0,'WALLET_ACCOUNT_REQUIRED');
@@ -113,7 +114,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
       need(quote&&quote.quoteId===quoteId&&quote.expiresAt>clock()&&lamports(maxTotalLamports)>=lamports(quote.budget.totalLamports),'COST_APPROVAL_REQUIRED');clearQuote();
       return updateAfter(()=>ports.wallet.signOnly({authorizeCost:true,quoteId,maxTotalLamports}));});},
     async send({authorizeSend=false}={}){return run(async()=>{consent(authorizeSend,'SEND');need(sendingEnabled===true,'SEND_DISABLED');await refresh();enabled('canSend');
-      return updateAfter(async()=>{const value=await ports.sender.sendOnce({authorizeDevnetSend:true});result=summarize(value);return copy(result);});});},
+      return updateAfter(async()=>{const value=await ports.sender.sendOnce(network.cluster==='mainnet-beta'?{authorizeMainnetSend:true}:{authorizeDevnetSend:true});result=summarize(value);return copy(result);});});},
     async recover({authorizeOutcomeCheck=false}={}){return run(async()=>{consent(authorizeOutcomeCheck,'OUTCOME_CHECK');await refresh();enabled('canRecover');clearQuote();
       return updateAfter(async()=>{let value;if(evidence.custody.status!=='available')value=await ports.custody.check({authorizeCheck:true});
         else if(evidence.submission)value=await ports.sender.recover();else if(evidence.responseRecovery)value=await ports.response.recoverMissingResponse();else value=await ports.prewallet.recover();

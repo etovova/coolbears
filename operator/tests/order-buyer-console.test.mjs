@@ -6,8 +6,64 @@ import {createPrivateBuyerConsole} from '../orders/buyer-console/factory.mjs';
 import {createScopeIndex,validateConsoleConfig} from '../orders/buyer-console/config.mjs';
 import {lamportsFromSol,solFromLamports} from '../orders/buyer-console/view.mjs';
 import {createBuyerWalletClient} from '../orders/wallet-client.mjs';
+import {networkProfile} from '../deployment/network.mjs';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {mkdtemp,writeFile,readFile,stat,rm} from 'node:fs/promises';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
 const prepare=c=>c.prepare({authorizePreparation:true});
 const sign=(c,q)=>c.sign({authorizeCost:true,quoteId:q.quoteId,maxTotalLamports:q.budget.totalLamports});
+test('Mainnet private config requires exact genesis and explicit factory grant, while production sends stay disabled',async()=>{
+  const mainnet={...consoleConfig,cluster:'mainnet-beta',genesisHash:networkProfile('mainnet-beta').genesisHash};
+  assert.equal(validateConsoleConfig(mainnet).genesisHash,mainnet.genesisHash);
+  for(const change of [{genesisHash:undefined},{genesisHash:networkProfile('devnet').genesisHash},{authorizeMainnet:true},{rpcUpstream:'https://forbidden.test'}])
+    assert.throws(()=>validateConsoleConfig({...mainnet,...change}),/CONSOLE_CONFIGURATION/);
+  assert.throws(()=>validateConsoleConfig({...consoleConfig,genesisHash:networkProfile('devnet').genesisHash}),/CONSOLE_CONFIGURATION/);
+  assert.throws(()=>createPrivateBuyerConsole(mainnet),/CONSOLE_NETWORK_AUTHORIZATION/);
+  assert.throws(()=>createPrivateBuyerConsole(consoleConfig,{authorizeMainnet:true}),/CONSOLE_NETWORK_AUTHORIZATION/);
+  const previous={location:Object.getOwnPropertyDescriptor(globalThis,'location'),localStorage:Object.getOwnPropertyDescriptor(globalThis,'localStorage')};
+  Object.defineProperty(globalThis,'location',{configurable:true,value:{origin:consoleConfig.origin}});
+  Object.defineProperty(globalThis,'localStorage',{configurable:true,value:{getItem:()=>null,setItem:()=>assert.fail('unexpected index write')}});
+  try{const client=createPrivateBuyerConsole(mainnet,{authorizeMainnet:true,sendingEnabled:true});
+    assert.equal(client.state().cluster,'mainnet-beta');assert.equal(client.state().sendingEnabled,false);
+    await assert.rejects(client.send({authorizeSend:true}),/SEND_DISABLED/);client.dispose();
+  }finally{for(const [key,descriptor]of Object.entries(previous))if(descriptor)Object.defineProperty(globalThis,key,descriptor);else delete globalThis[key];}
+});
+test('Mainnet controller selects only its static wallet chain and forwards only the matching fixture send grant',async()=>{
+  const f=buyerConsoleFixture({cluster:'mainnet-beta',sendingEnabled:true});
+  await assert.rejects(f.controller.connectWallet({...f.wallet,chains:['solana:devnet']}),/WALLET_UNSUPPORTED/);assert.equal(f.calls.wallet,0);
+  let flags;const make=f.options.makePorts;f.options.makePorts=scope=>{const ports=make(scope),send=ports.sender.sendOnce;
+    ports.sender.sendOnce=options=>{flags=options;return send(options);};return ports;};
+  const c=createPrivateBuyerController(f.options);await c.connectWallet(f.wallet);await c.selectAccount(f.account.address);
+  await c.requestPersistence({authorizePersistence:true});await c.create({quantity:1,authorizeCreate:true});await prepare(c);await sign(c,await c.quoteCost());
+  assert.equal(c.state().cluster,'mainnet-beta');assert.equal(f.calls.send,0);await c.send({authorizeSend:true});
+  assert.deepEqual(flags,{authorizeMainnetSend:true});assert.equal(f.calls.send,1);
+});
+test('network-scoped private indexes preserve identical order IDs without accepting crossed genesis config',async()=>{
+  const values=new Map(),localStorage={getItem:key=>values.get(key)??null,setItem:(key,value)=>values.set(key,value)},locks={request:async(_key,_options,fn)=>fn()};
+  const mainnet={...consoleConfig,cluster:'mainnet-beta',genesisHash:networkProfile('mainnet-beta').genesisHash};
+  const dev=createScopeIndex({config:consoleConfig,localStorage,locks}),main=createScopeIndex({config:mainnet,localStorage,locks});
+  await dev.save({id:'same-order',buyer:consoleKey(5)});assert.deepEqual(main.list(),[]);
+  await main.save({id:'same-order',buyer:consoleKey(6)});assert.equal(dev.list()[0].buyer,consoleKey(5));assert.equal(main.list()[0].buyer,consoleKey(6));assert.equal(values.size,2);
+});
+test('private builder rejects missing/crossed grants before creating output and packages an explicit read-only Mainnet candidate',async()=>{
+  const parent=await mkdtemp(join(tmpdir(),'private-console-mainnet-'));
+  try{
+    const mainnet={...consoleConfig,cluster:'mainnet-beta',genesisHash:networkProfile('mainnet-beta').genesisHash},file=join(parent,'mainnet.json'),devnetFile=join(parent,'devnet.json');
+    await writeFile(file,JSON.stringify(mainnet));await writeFile(devnetFile,JSON.stringify(consoleConfig));
+    const run=promisify(execFile),builder=new URL('../orders/buyer-console/build.mjs',import.meta.url).pathname;
+    for(const args of [['--config',file],['--mainnet','--config',devnetFile],['--mainnet']]){
+      const output=join(parent,'blocked-'+args.length+'-'+(args[0]==='--mainnet'?'main':'default'));
+      await assert.rejects(run(process.execPath,[builder,...args,'--out',output]),error=>error.stderr.includes('PRIVATE_CONSOLE_BUILD_FAILED'));
+      await assert.rejects(stat(output),{code:'ENOENT'});
+    }
+    const output=join(parent,'candidate'),result=await run(process.execPath,[builder,'--mainnet','--config',file,'--out',output]);
+    const report=JSON.parse(result.stdout);assert.equal(report.cluster,'mainnet-beta');assert.equal(report.genesisHash,mainnet.genesisHash);assert.equal(report.salesOpen,false);assert.equal(report.sendingEnabled,false);
+    const html=await readFile(join(output,'index.html'),'utf8');assert.ok(!html.includes('Test network only'));assert.ok(!html.includes('Devnet transaction'));
+    assert.match(html,/Network not configured/);assert.match(await readFile(join(output,'_headers'),'utf8'),/Cache-Control: no-store/);
+  }finally{await rm(parent,{recursive:true,force:true});}
+});
 test('no creation, persistence, preparation, signing, sends or replacement effects without separate consent',async()=>{
   const f=buyerConsoleFixture(),c=f.controller;
   for(const call of [()=>c.requestPersistence(),()=>c.create({quantity:1}),()=>c.prepare(),()=>c.sign(),()=>c.send(),()=>c.recover(),()=>c.reviewExpiry(),()=>c.reviewReplacement(),()=>c.prepareReviewedReplacement()])await assert.rejects(call(),/EXPLICIT_/);

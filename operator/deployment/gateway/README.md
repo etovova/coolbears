@@ -1,12 +1,26 @@
-# Private Devnet operator gateway
+# Private operator gateway
+
+Devnet remains the default. Mainnet support is an offline candidate and does not
+select a network, deploy a Worker, open sales or send a transaction by itself.
+The network comes only from the canonical private journal. Its full genesis and
+fixed Helius upstream must match; request bodies and environment endpoints cannot
+change it. Existing Devnet Durable Object state keeps its v1 namespace and records.
+Mainnet uses `closed-mainnet-operator-v2` with a cluster/genesis-bound v2 ledger.
+
+For an explicitly approved Mainnet journal, offline preparation uses `--mainnet`
+for reads. `--mainnet-send` is a separate submission grant and implies read consent;
+it also requires `--allow-simulation`. The old `--allow-submission` grant applies
+only to Devnet. Hidden Mainnet preparation additionally requires the externally
+approved `COOLBEARS_HIDDEN_COMMITMENT_SHA256`; the journal's declared hash does not
+approve itself. All gateway submission options remain false by default.
 
 This is a separate candidate for the full closed deployment. It does not modify
 `coolbears-devnet-rpc`, its ledger, browser CORS, secrets, routes or Helius plan.
 Nothing here deploys a Worker, creates blockchain accounts, signs or sends a transaction.
 
 The server independently enforces the same compiled policy as the PR30 client:
-seven exact accounts, one payer, known rent sizes and all 1431 canonical message
-identities. Only the recent blockhash is normalized. Simulations require a
+seven exact accounts, one payer, known rent sizes and all canonical message
+identities: 1431 for config lines, 3 for hidden settings. Only the recent blockhash is normalized. Simulations require a
 compile-time opt-in, exact transaction bytes and valid nonempty signatures.
 Recovery signatures are fixed from the existing private journal. With submission enabled, signatures claimed durably by this gateway also remain
 readable across all attempts without recompilation. Runtime policy inputs,
@@ -54,7 +68,7 @@ unsigned simulation remain separate checks after real configuration exists.
 - HTTPS POST `/rpc`, numeric JSON-RPC id, 8 KiB streamed request cap / 4 s deadline.
 - Constant-length digest comparison of the bearer credential. Origin/cookie
   requests are rejected and no browser CORS authorization is issued.
-- Fixed Devnet Helius upstream and server-side genesis verification after each
+- Fixed selected-network Helius upstream and server-side genesis verification after each
   object recreation. Caller headers and bearer token never reach Helius.
 - One operation in flight, at least 200 ms between upstream calls. A concurrent
   direct caller receives `BUSY`; the supplied operator adapter serializes calls.
@@ -91,12 +105,13 @@ and simulation remain mandatory. Each window and total elapsed time are recorded
 node --test operator/tests/deployment-gateway.test.mjs
 node --test operator/tests/deployment-budget-simulation.test.mjs
 node operator/tests/deployment-gateway.runtime.mjs
+COOLBEARS_TEST_CLUSTER=mainnet-beta COOLBEARS_TEST_STORAGE_MODE=hidden-settings node operator/tests/deployment-gateway.runtime.mjs
 ```
 
 The workerd test bundles a disposable fixture, intercepts every outbound HTTP
 request, and exercises actual SQLite persistence across runtime restarts. The
 full budget integration uses virtual time and rotates all 15 window hashes.
-Neither test uses live Devnet, owner signatures or a deployed Cloudflare endpoint.
+Neither test uses live Devnet/Mainnet, owner signatures or a deployed Cloudflare endpoint.
 A separate CI job installs the pinned root and operator dependencies for workerd.
 
 Primary references: [Durable Object storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/),
@@ -111,7 +126,8 @@ compile-time opt-in добавляет проверку всех подписе�
 См. [порядок, команды и ограничения](../SENDING.md). Эта версия не развёрнута;
 рабочий лабораторный Worker не менялся. PR34 добавляет [явное разрешение повтора после finalized failure](../RETRY.md),
 с независимой серверной проверкой receipt и сохранением всей истории.
-Метод `coolbears_authorizeFailedRetry` доступен только при `allowSubmission`;
+Метод `coolbears_authorizeFailedRetry` доступен только при явном разрешении
+отправки выбранной сети (`allowSubmission` в Devnet, `allowMainnetSubmission` в Mainnet);
 он не передаётся upstream. Подтверждённый failed допускает одну новую подпись,
 не удаляя предыдущий claim. Для истечения PR35 добавляет отдельный метод `coolbears_authorizeExpiredRetry`
 и [проверку истории payer](../EXPIRY.md). Gateway заранее сохраняет первый ответ

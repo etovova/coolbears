@@ -21,9 +21,9 @@ async function readBody(req, limit = 4096) {
 function exact(value, fields) { return value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === fields.length && fields.every(key => Object.hasOwn(value, key)); }
 export async function startSigningConsole({ directory, endpoint, fetchImpl, timeoutMs, port = 8788,
-  assetsDirectory = new URL('./build/', import.meta.url) } = {}) {
+  assetsDirectory = new URL('./build/', import.meta.url), authorizeMainnetSigning = false, trustedHiddenCommitmentSha256 } = {}) {
   need(Number.isInteger(port) && port >= 0 && port <= 65535, 'PORT');
-  const session = await createSigningSession({ directory, endpoint, fetchImpl, timeoutMs });
+  const session = await createSigningSession({ directory, endpoint, fetchImpl, timeoutMs, authorizeMainnetSigning, trustedHiddenCommitmentSha256 });
   const assets = new Map();
   for (const [url, name, type] of [['/', 'index.html', 'text/html; charset=utf-8'], ['/app.js', 'app.js', 'text/javascript; charset=utf-8'], ['/style.css', 'style.css', 'text/css; charset=utf-8']])
     assets.set(url, { bytes: await readFile(new URL(name, assetsDirectory)), type });

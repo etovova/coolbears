@@ -34,7 +34,7 @@ for(const quantity of [1,50]) test(`exact first message of ${quantity}-item orde
 
 test('network and order history labels cannot turn stale/paused/retry input into a fresh signing claim',()=>{
   const f=fixture();
-  assert.throws(()=>prepareAssetClaim({...f.order,cluster:'mainnet-beta'},f.input),/DEVNET_ONLY/);
+  assert.throws(()=>validateAssetClaim({...f.prepared.order,cluster:'mainnet-beta'},f.prepared.claim),/ASSET_CLAIM_BINDING/);
   assert.throws(()=>prepareAssetClaim(f.order,{...f.input,orderRevision:1}),/STALE_REVISION/);
   assert.throws(()=>prepareAssetClaim({...f.order,paused:true},f.input),/FRESH_ORDER_REQUIRED/);
   assert.throws(()=>prepareAssetClaim(f.prepared.order,{...f.input,orderRevision:1}),/FRESH_ORDER_REQUIRED/);

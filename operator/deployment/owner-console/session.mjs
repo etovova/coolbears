@@ -7,27 +7,33 @@ import { acceptDeploymentSigningResponse } from '../handoff.mjs';
 import { validateSigningRequest, verifySigningResponse } from '../signing.mjs';
 import { deploymentQueueStatus } from '../queue.mjs';
 import { createGroupSigningSession } from './group-session.mjs';
+import { networkProfile } from '../network.mjs';
 const need = (value, code) => { if (!value) throw Object.assign(Error('Signing session unavailable.'), { code }); };
-export async function createSigningSession({ directory, endpoint, fetchImpl, timeoutMs } = {}) {
+export async function createSigningSession({ directory, endpoint, fetchImpl, timeoutMs, authorizeMainnetSigning = false,
+  trustedHiddenCommitmentSha256 } = {}) {
   const first = await readDeploymentBundle(directory), snapshot = first.snapshot;
-  need(snapshot.manifest.cluster === 'devnet', 'CLUSTER');
+  const profile = networkProfile(snapshot.manifest.cluster);
+  need(typeof authorizeMainnetSigning === 'boolean'
+    && authorizeMainnetSigning === (profile.cluster === 'mainnet-beta'), 'MAINNET_SIGN_AUTHORIZATION');
   const action = nextDeploymentAction(snapshot);
   const initial = snapshot.steps.find(step => step.id === action.stepId)?.attempts.at(-1);
-  if (initial?.groupId) return createGroupSigningSession({ directory, groupId: initial.groupId, endpoint, fetchImpl, timeoutMs });
+  if (initial?.groupId) return createGroupSigningSession({ directory, groupId: initial.groupId, endpoint, fetchImpl, timeoutMs, authorizeMainnetSigning });
   need(initial && ['wallet-pending', 'signed', 'unknown'].includes(initial.state), 'NO_PENDING_REQUEST');
   const request = structuredClone(initial.request);
   validateSigningRequest(request);
+  need(request.cluster === profile.cluster && request.deploymentId === snapshot.manifest.id
+    && request.owner === snapshot.manifest.owner, 'REQUEST_CHANGED');
   const requestId = sha256Json(request), manifestSha256 = snapshot.manifestSha256;
   let busy = false;
   async function current() {
     const bundle = await readDeploymentBundle(directory), saved = bundle.snapshot;
     const attempt = saved.steps.find(step => step.id === request.stepId)?.attempts.at(-1);
-    need(saved.manifestSha256 === manifestSha256 && attempt?.number === request.attempt
+    need(saved.manifestSha256 === manifestSha256 && saved.manifest.cluster === profile.cluster && attempt?.number === request.attempt
       && sha256Json(attempt.request) === requestId, 'REQUEST_CHANGED');
     return { snapshot: saved, attempt, journalDirectory: bundle.journalDirectory };
   }
   const stateOf = (attempt, saved) => ({ requestId, manifestSha256, deploymentId: request.deploymentId,
-    stepId: request.stepId, attempt: request.attempt, owner: request.owner, cluster: 'devnet',
+    stepId: request.stepId, attempt: request.attempt, owner: request.owner, cluster: profile.cluster, walletChain: profile.walletChain,
     messageSha256: request.messageSha256, state: attempt.state, signed: !!attempt.signed, walletRequested: !!attempt.walletClaim,
     ...(attempt.signed ? { signature: attempt.signed.signature } : {}),
     progress: deploymentQueueStatus(saved).progress,
@@ -40,8 +46,9 @@ export async function createSigningSession({ directory, endpoint, fetchImpl, tim
         const before = await current();
         need(before.attempt.state === 'wallet-pending' && !before.attempt.signed && !before.attempt.walletClaim, 'ALREADY_HANDLED');
         const report = await simulateDeploymentStep({ directory: before.journalDirectory, stepId: request.stepId,
-          mode: 'unsigned', endpoint, fetchImpl, timeoutMs });
-        need(report.status === 'simulation-passed' && report.mode === 'unsigned' && report.cluster === 'devnet'
+          mode: 'unsigned', endpoint, fetchImpl, timeoutMs, authorizeMainnet: authorizeMainnetSigning, trustedHiddenCommitmentSha256 });
+        need(report.status === 'simulation-passed' && report.mode === 'unsigned' && report.cluster === profile.cluster
+          && report.genesisHash === profile.genesisHash
           && report.manifestSha256 === manifestSha256 && report.expectedRevision === before.snapshot.revision
           && report.expectedHeadHash === before.snapshot.headHash && report.candidate?.transactionBase64 === request.transactionBase64,
         'PREFLIGHT_BLOCKED');

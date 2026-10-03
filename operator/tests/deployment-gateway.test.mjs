@@ -7,13 +7,15 @@ import { buildDeploymentPlan, deploymentManifestFromPlan } from '../deployment/p
 import { compileDeploymentRpcPolicy } from '../deployment/compile-rpc-policy.mjs';
 import { createScopedDeploymentRpc } from '../deployment/scoped-rpc.mjs';
 import { GENESIS_HASHES } from '../deployment/rpc.mjs';
+import { networkProfile } from '../deployment/network.mjs';
 import { makeGateway } from '../deployment/gateway/worker.mjs';
 import { createGatewayFetch } from '../deployment/gateway/client.mjs';
 import { inspectSignedDeploymentTransaction } from '../deployment/signing.mjs';
 const endpoint = 'https://operator.test/rpc', token = 'T'.repeat(43), secret = 'PRIVATE_SENTINEL';
 const key = n => Keypair.fromSeed(createHash('sha256').update(`operator-gateway:${n}`).digest());
 const owner = key('owner'), collection = key('collection');
-let manifest, compiled, plan, originalOwner, originalFetch;
+const mainnetHiddenHash = createHash('sha256').update('Mainnet gateway TEST commitment').digest('hex');
+let manifest, compiled, mainnetCompiled, mainnetHiddenCompiled, plan, originalOwner, originalFetch;
 before(async () => {
   originalOwner = approved.owner; approved.owner = owner.publicKey.toBase58();
   originalFetch = globalThis.fetch; globalThis.fetch = () => assert.fail('Live network forbidden');
@@ -22,6 +24,13 @@ before(async () => {
     blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000' });
   manifest = deploymentManifestFromPlan('gateway-fixture', plan);
   compiled = await compileDeploymentRpcPolicy(manifest, { allowSimulation: true });
+  mainnetCompiled = await compileDeploymentRpcPolicy({ ...manifest, cluster: 'mainnet-beta' }, { allowSimulation: true, authorizeMainnet: true });
+  const hiddenPlan = await buildDeploymentPlan({ cluster: 'mainnet-beta', collection: collection.publicKey.toBase58(),
+    reservedAsset: key('asset').publicKey.toBase58(), machine: key('machine').publicKey.toBase58(),
+    blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000',
+    storageMode: 'hidden-settings', hiddenCommitmentSha256: mainnetHiddenHash });
+  mainnetHiddenCompiled = await compileDeploymentRpcPolicy(deploymentManifestFromPlan('gateway-hidden-fixture', hiddenPlan),
+    { allowSimulation: true, authorizeMainnet: true, trustedHiddenCommitmentSha256: mainnetHiddenHash });
 });
 after(() => { approved.owner = originalOwner; globalThis.fetch = originalFetch; });
 function memory() {
@@ -29,22 +38,23 @@ function memory() {
   return { values, async get(key) { return structuredClone(values.get(key)); },
     async put(key, value) { values.set(key, structuredClone(value)); }, async transaction(fn) { return fn(this); } };
 }
-function harness({ storage = memory(), vars = {}, responder, candidate = compiled, allowSubmission = false } = {}) {
+function harness({ storage = memory(), vars = {}, responder, candidate = compiled, allowSubmission = false, allowMainnet = false, allowMainnetSubmission = false, trustedHiddenCommitmentSha256 } = {}) {
   let now = 1800000000000;
   const env = { OPERATOR_RPC_TOKEN: token, HELIUS_API_KEY: secret, ...vars }, calls = [];
-  const { DeploymentGate, worker } = makeGateway(candidate, { allowSubmission });
+  const profile = networkProfile(candidate.cluster), namespaces = [];
+  const { DeploymentGate, worker } = makeGateway(candidate, { allowSubmission, allowMainnet, allowMainnetSubmission, trustedHiddenCommitmentSha256 });
   const options = { clock: () => now, pause: async ms => { now += ms; }, fetchImpl: async (url, init) => {
-    assert.equal(new URL(url).hostname, 'devnet.helius-rpc.com');
+    assert.equal(new URL(url).hostname, new URL(profile.rpcUpstream).hostname);
     assert.equal(new URL(url).searchParams.get('api-key'), secret);
     assert.equal(new Headers(init.headers).has('authorization'), false); assert.equal(init.redirect, 'manual');
     const rpc = JSON.parse(init.body); calls.push({ ...rpc, at: now });
     const response = responder && await responder(rpc, init);
     return response ?? new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id,
-      result: rpc.method === 'getGenesisHash' ? GENESIS_HASHES.devnet : null }));
+      result: rpc.method === 'getGenesisHash' ? profile.genesisHash : null }));
   } };
   let gate = new DeploymentGate({ storage }, env, options);
-  env.DEPLOYMENT_GATE = { idFromName: name => name, get: () => gate };
-  return { calls, storage, env, advance: ms => { now += ms; }, restart: () => { gate = new DeploymentGate({ storage }, env, options); },
+  env.DEPLOYMENT_GATE = { idFromName: name => { namespaces.push(name); return name; }, get: () => gate };
+  return { calls, namespaces, storage, env, advance: ms => { now += ms; }, restart: () => { gate = new DeploymentGate({ storage }, env, options); },
     async fetch(url, init) { return worker.fetch(new Request(url, init), env); },
     async call(method = 'getGenesisHash', params = [], extra = {}) {
       return worker.fetch(new Request(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...extra.headers },
@@ -52,6 +62,71 @@ function harness({ storage = memory(), vars = {}, responder, candidate = compile
     } };
 }
 const category = async response => (await response.json()).error.data.category;
+
+test('Mainnet factory opt-ins cannot be inferred from policy or an old Devnet submission flag', () => {
+  for (const options of [{}, { allowSubmission: true }, { allowMainnet: true, allowSubmission: true },
+    { allowMainnet: 'true' }, { allowMainnetSubmission: true }]) {
+    assert.throws(() => makeGateway(mainnetCompiled, options), error => error.category === 'CONFIGURATION');
+  }
+  for (const options of [{ allowMainnet: true }, { allowMainnetSubmission: true }]) {
+    assert.throws(() => makeGateway(compiled, options), error => error.category === 'CONFIGURATION');
+  }
+});
+
+test('Mainnet hidden gateway requires separate external hash approval instead of trusting its policy hash', async () => {
+  for (const trustedHiddenCommitmentSha256 of [undefined, null, 'a'.repeat(64), '0'.repeat(64), mainnetHiddenHash.toUpperCase()]) {
+    assert.throws(() => makeGateway(mainnetHiddenCompiled, { allowMainnet: true, trustedHiddenCommitmentSha256 }),
+      error => error.category === 'CONFIGURATION');
+  }
+  const h = harness({ candidate: mainnetHiddenCompiled, allowMainnet: true, trustedHiddenCommitmentSha256: mainnetHiddenHash });
+  assert.equal((await h.call()).status, 200); assert.equal(h.calls.length, 1);
+  assert.equal(h.storage.values.get('operator-rpc-limits:v1').genesisHash, GENESIS_HASHES['mainnet-beta']);
+});
+
+test('explicit Mainnet read gateway pins upstream and namespace, checks full genesis, and refuses sends', async () => {
+  const h = harness({ candidate: mainnetCompiled, allowMainnet: true,
+    vars: { RPC_ENDPOINT: 'https://evil.test/', CLUSTER: 'devnet' } });
+  assert.equal((await h.call('getBalance', [compiled.owner, { commitment: 'finalized' }])).status, 200);
+  assert.deepEqual(h.calls.map(call => call.method), ['getGenesisHash', 'getBalance']);
+  assert.deepEqual(h.namespaces, ['closed-mainnet-operator-v2']);
+  const value = h.storage.values.get('operator-rpc-limits:v1');
+  assert.equal(value.version, 2); assert.equal(value.cluster, 'mainnet-beta'); assert.equal(value.genesisHash, GENESIS_HASHES['mainnet-beta']);
+  const before = h.calls.length; assert.equal((await h.call('sendTransaction', signedSubmission().params)).status, 400);
+  assert.equal(h.calls.length, before); assert.equal([...h.storage.values.keys()].some(key => key.startsWith('deployment-send:')), false);
+  const wrong = harness({ candidate: mainnetCompiled, allowMainnet: true, responder: rpc => new Response(JSON.stringify({
+    jsonrpc: '2.0', id: rpc.id, result: GENESIS_HASHES.devnet })) });
+  assert.equal(await category(await wrong.call('getBalance', [compiled.owner, { commitment: 'finalized' }])), 'GENESIS');
+  assert.deepEqual(wrong.calls.map(call => call.method), ['getGenesisHash']);
+});
+
+test('Mainnet durable ledger rejects old Devnet state or changed cluster/genesis before IO or claims', async () => {
+  const legacy = harness(); await legacy.call();
+  const unchanged = structuredClone([...legacy.storage.values]);
+  const mainnet = harness({ storage: legacy.storage, candidate: mainnetCompiled, allowMainnet: true, allowMainnetSubmission: true });
+  assert.equal(await category(await mainnet.call('sendTransaction', signedSubmission().params)), 'LEDGER');
+  assert.equal(mainnet.calls.length, 0); assert.deepEqual([...legacy.storage.values], unchanged);
+  for (const changed of [{ cluster: 'devnet' }, { genesisHash: GENESIS_HASHES.devnet }, { version: 1 }]) {
+    const h = harness({ candidate: mainnetCompiled, allowMainnet: true, allowMainnetSubmission: true }); await h.call();
+    const value = h.storage.values.get('operator-rpc-limits:v1'); h.storage.values.set('operator-rpc-limits:v1', { ...value, ...changed }); h.restart();
+    const before = h.calls.length; assert.equal(await category(await h.call('sendTransaction', signedSubmission().params)), 'LEDGER');
+    assert.equal(h.calls.length, before); assert.equal([...h.storage.values.keys()].some(key => key.startsWith('deployment-send:')), false);
+  }
+});
+
+test('Mainnet submission claims preserve network binding across restart and cannot accept copied Devnet claims', async () => {
+  const item = signedSubmission();
+  const h = harness({ candidate: mainnetCompiled, allowMainnet: true, allowMainnetSubmission: true,
+    responder: rpc => rpc.method === 'sendTransaction' ? new Response(JSON.stringify({ jsonrpc: '2.0', id: rpc.id, result: item.signature })) : undefined });
+  assert.equal((await h.call('sendTransaction', item.params)).status, 200);
+  const claim = h.storage.values.get(`deployment-send:v1:${h.storage.values.get(`deployment-signature:v1:${item.signature}`)}`);
+  assert.equal(claim.cluster, 'mainnet-beta'); assert.equal(claim.genesisHash, GENESIS_HASHES['mainnet-beta']);
+  h.restart(); const before = h.calls.length; assert.equal((await h.call('sendTransaction', item.params)).status, 409);
+  assert.equal(h.calls.length, before);
+  delete claim.cluster; delete claim.genesisHash;
+  h.storage.values.set(`deployment-send:v1:${claim.identity}`, claim); h.restart();
+  assert.equal(await category(await h.call('sendTransaction', signedSubmission(key('new-mainnet-hash').publicKey.toBase58()).params)), 'LEDGER');
+  assert.equal(h.calls.length, before);
+});
 
 test('auth, browser headers, HTTP path, batch and write requests fail before upstream or credits', async () => {
   const h = harness();

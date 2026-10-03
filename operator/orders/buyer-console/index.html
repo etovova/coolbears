@@ -2,14 +2,14 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; worker-src 'none'">
 <title>CoolBears · Private buyer candidate</title><link rel="stylesheet" href="style.css"><script type="module" src="app.js"></script></head>
-<body><main><header><p class="eyebrow">CoolBears / private Devnet candidate</p><h1>Review each step.<br>Keep your progress.</h1>
-<p class="banner">Sales are closed · Item price 0.2 SOL · Test network only</p><p>This private candidate cannot send transactions. Signing and sending are separate steps. Up to 50 items are processed one at a time, each with a fresh cost review.</p></header>
+<body><main><header><p class="eyebrow">CoolBears / private buyer candidate</p><h1>Review each step.<br>Keep your progress.</h1>
+<p id="network-banner" class="banner">Sales are closed · Item price 0.2 SOL · Network not configured</p><p>This private candidate cannot send transactions. Signing and sending are separate steps. Up to 50 items are processed one at a time, each with a fresh cost review.</p></header>
 <p id="configuration" class="notice" role="status">Loading the private candidate…</p><p id="busy" class="notice" role="status" hidden>Checking or saving progress… Keep this page open.</p><p id="error" class="error" role="alert" hidden></p>
 <div id="workspace" hidden>
 <section><h2>1. Browser and wallet</h2><p>Progress and asset keys stay in this browser profile. Clearing site data, losing the profile or moving to another device can prevent continuation. A wallet connection alone does not restore these keys.</p>
 <label class="check"><input id="storage-consent" type="checkbox">I understand the browser storage requirement.</label><button id="persist">Allow persistent storage</button>
 <div class="row"><label>Wallet<select id="wallets"><option value="">Choose a compatible wallet</option></select></label><button id="connect">Connect selected wallet</button></div>
-<p class="muted">Only wallets that support signing a Devnet transaction without sending it appear here.</p>
+<p id="wallet-network" class="muted">A configured network is required before selecting a sign-only wallet.</p>
 <div class="row"><label>Exact account<select id="accounts"><option value="">Choose an account</option></select></label><button id="choose-account">Use this account</button></div><p id="account" class="mono"></p></section>
 <section><h2>2. Create or resume</h2><div class="row"><label>Items (1–50)<input id="quantity" type="number" min="1" max="50" step="1" value="1"></label><button id="create">Create order in this browser</button></div>
 <div class="row"><label>Saved order<select id="orders"></select></label><button id="resume-order">Open saved order</button><button id="refresh">Refresh saved progress</button><button id="new-order">Start a different order</button></div>
@@ -21,7 +21,7 @@
 <label class="check"><input id="cost-consent" type="checkbox">I approve this exact estimate and maximum total for one transaction.</label>
 <button id="sign">Ask wallet to sign only</button><p class="muted">A wallet cancellation or missing response can leave the outcome unknown. Check the saved outcome before another attempt. If a returned signature could not be saved, save the retained response before reconnecting or reloading this page.</p><button id="wallet-response-recovery">Save retained wallet response</button></section>
 <section><h2>4. Send and check outcome</h2><p class="notice">Sending is unavailable in this private candidate. A saved signature does not mean the transaction was sent or the item was received.</p>
-<label class="check"><input id="send-consent" type="checkbox" disabled>I separately authorize this single Devnet send.</label><button id="send" disabled>Send unavailable</button>
+<label class="check"><input id="send-consent" type="checkbox" disabled>I separately authorize this single send on the displayed network.</label><button id="send" disabled>Send unavailable</button>
 <button id="recover">Check retained outcome</button><p id="outcome" role="status"></p></section>
 <section><h2>5. Review an unresolved attempt</h2><p>Unknown is not a failed purchase. An expiry review must establish that the old attempt can no longer succeed before a replacement is possible. A confirmed failure may still have charged a network fee.</p>
 <label class="check"><input id="expiry-consent" type="checkbox">Check whether this exact unresolved attempt has expired.</label><button id="expiry">Review expiry</button>

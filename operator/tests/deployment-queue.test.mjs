@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { Keypair } from '@solana/web3.js';
+import { Keypair, VersionedTransaction } from '@solana/web3.js';
 import { policy } from '../prepare.mjs';
 import { createDeploymentSignerVault, openDeploymentSignerVault } from '../deployment/vault.mjs';
 import { createDeploymentBundle } from '../deployment/vault-store.mjs';
@@ -19,30 +19,35 @@ const passphrase = Buffer.from('queue-fixture-passphrase-only'), stepId = 'colle
 const endpoint = 'https://queue-fixture.test/rpc', token = 't'.repeat(43);
 const originalOwner = policy.owner, originalFetch = globalThis.fetch;
 let fixture, request, runOwnerConsole, network;
+const fixtures = new Map(), requests = new Map();
 before(async () => {
   policy.owner = key('owner').publicKey.toBase58();
   globalThis.fetch = (...args) => network(...args);
   ({ runOwnerConsole } = await import('../deployment/owner-console/cli.mjs'));
-  fixture = await createDeploymentSignerVault({ id: 'queue-fixture', cluster: 'devnet',
-    blockhash: key('old').publicKey.toBase58(), lastValidBlockHeight: 1000,
-    machineRentLamports: '5000000000', passphrase });
-  const signer = await openDeploymentSignerVault({ ...fixture, passphrase });
-  try { request = signer.partialSign({ stepId, transactionBase64: fixture.manifest.steps[0].transactionBase64,
-    lastValidBlockHeight: 1000, attempt: 1 }); } finally { signer.dispose(); }
+  for (const cluster of ['devnet', 'mainnet-beta']) {
+    const value = await createDeploymentSignerVault({ id: `queue-${cluster}-fixture`, cluster,
+      blockhash: key('old').publicKey.toBase58(), lastValidBlockHeight: 1000,
+      machineRentLamports: '5000000000', passphrase });
+    fixtures.set(cluster, value);
+    const signer = await openDeploymentSignerVault({ ...value, passphrase });
+    try { requests.set(cluster, signer.partialSign({ stepId, transactionBase64: value.manifest.steps[0].transactionBase64,
+      lastValidBlockHeight: 1000, attempt: 1 })); } finally { signer.dispose(); }
+  }
+  fixture = fixtures.get('devnet'); request = requests.get('devnet');
 });
 after(() => { policy.owner = originalOwner; globalThis.fetch = originalFetch; });
-async function harness(t) {
+async function harness(t, cluster = 'devnet') {
   network = () => assert.fail('Unexpected network access');
   const parent = await mkdtemp(path.join(tmpdir(), 'queue-fixture-'));
   t.after(() => rm(parent, { recursive: true, force: true }));
   const directory = path.join(parent, 'bundle');
-  const { journalDirectory } = await createDeploymentBundle({ directory, ...fixture });
+  const { journalDirectory } = await createDeploymentBundle({ directory, ...fixtures.get(cluster) });
   const snapshot = () => readDeploymentJournal(journalDirectory);
   return { directory, journalDirectory, snapshot, async append(type, fields = {}) {
     const before = await snapshot();
     return appendDeploymentEvent(journalDirectory, { type, stepId, attempt: 1, ...fields }, { expectedRevision: before.revision });
   }, async prepare() {
-    return appendDeploymentEvent(journalDirectory, { type: 'prepare', stepId, request, retry: false }, { expectedRevision: 0 });
+    return appendDeploymentEvent(journalDirectory, { type: 'prepare', stepId, request: requests.get(cluster), retry: false }, { expectedRevision: 0 });
   } };
 }
 class Input extends EventEmitter {
@@ -66,12 +71,12 @@ function io(onPrompt) {
     get stdout() { return stdout; }, get stderr() { return stderr; }, get prompts() { return prompts; },
     async finish() { await pending; } };
 }
-function rpc() {
+function rpc(cluster = 'devnet') {
   const calls = [];
   network = async (url, init) => {
     assert.equal(url, endpoint); assert.equal(new Headers(init.headers).get('authorization'), `Bearer ${token}`);
     const value = JSON.parse(init.body); calls.push(value.method);
-    const result = { getGenesisHash: GENESIS_HASHES.devnet,
+    const result = { getGenesisHash: GENESIS_HASHES[cluster],
       getMultipleAccounts: { context: { slot: 510 }, value: [{ executable: true }, { executable: true }, { executable: true }, null, null, null, null] },
       getBalance: { context: { slot: 511 }, value: 10000000000 }, getMinimumBalanceForRentExemption: 5000000000,
       getLatestBlockhash: { context: { slot: 512 }, value: { blockhash: key('fresh').publicKey.toBase58(), lastValidBlockHeight: 2000 } },
@@ -148,5 +153,32 @@ test('claimed or unknown wallet response never offers signing, sending or automa
   assert.equal(complete.progress.verifiedSteps, 1431); assert.equal(complete.next.action, 'complete');
   assert.equal(complete.readyToOpenSales, false); assert.equal(complete.freshChainCheck, false);
   assert.deepEqual(complete.next.commands, []);
-  display.manifest.cluster = 'mainnet-beta'; assert.throws(() => deploymentQueueStatus(display), /DEVNET_ONLY/);
+  display.manifest.cluster = 'mainnet-beta'; assert.equal(deploymentQueueStatus(display).cluster, 'mainnet-beta');
+  display.manifest.cluster = 'testnet'; assert.throws(() => deploymentQueueStatus(display), error => error.code === 'DEPLOYMENT_NETWORK_INVALID');
+});
+
+test('Mainnet queue recommends separate sign/send grants and CLI prepares only after explicit sign authorization', async t => {
+  const h = await harness(t, 'mainnet-beta'), initial = await readDeploymentQueue(h.directory);
+  assert.equal(initial.cluster, 'mainnet-beta');
+  assert.deepEqual(initial.next.commands[0].args, ['prepare', '<bundle>', stepId, '--mainnet-sign']);
+  for (const flags of [[], ['--devnet-send'], ['--mainnet-sign', '--mainnet-sign']]) {
+    const denied = io();
+    assert.equal(await runOwnerConsole(['prepare-next', h.directory, ...flags], denied), 1);
+    assert.equal(denied.prompts, 0); assert.equal((await h.snapshot()).revision, 0);
+  }
+  const calls = rpc('mainnet-beta'), term = io(() => {});
+  term.env = { COOLBEARS_RPC_URL: endpoint, COOLBEARS_OPERATOR_RPC_TOKEN: token };
+  assert.equal(await runOwnerConsole(['prepare-next', h.directory, '--mainnet-sign'], term), 0); await term.finish();
+  assert.equal(term.prompts, 1); assert.equal(JSON.parse(term.stdout).cluster, 'mainnet-beta');
+  assert.ok(!calls.includes('sendTransaction'));
+  const pending = await readDeploymentQueue(h.directory);
+  assert.deepEqual(pending.next.commands[0].args, ['serve', '<bundle>', '--mainnet-sign']);
+  const attempt = (await h.snapshot()).steps[0].attempts[0];
+  const tx = VersionedTransaction.deserialize(Buffer.from(attempt.request.transactionBase64, 'base64')); tx.sign([key('owner')]);
+  await h.append('signed', { transactionBase64: Buffer.from(tx.serialize()).toString('base64') });
+  const signed = await readDeploymentQueue(h.directory);
+  assert.deepEqual(signed.next.commands[0].args, ['send-one', '<bundle>', stepId, '--mainnet-send']);
+  assert.equal(signed.readyToSubmit, false); assert.equal(signed.salesOpen, false);
+  await h.append('claim-send');
+  assert.deepEqual((await readDeploymentQueue(h.directory)).next.commands[0].args, ['resume', '<bundle>', stepId, '--mainnet']);
 });

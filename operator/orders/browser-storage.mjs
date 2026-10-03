@@ -17,6 +17,7 @@ import {validateReplacementResult,validateReplacementClaim,validateReplacementAc
 import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
 import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
 import {prewalletExpiryReplacementSource} from './prewallet-expiry-replacement.mjs';
+import {networkProfile} from '../deployment/network.mjs';
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
 const MAX_REVISION = 1024, MAX_BYTES = 262144;
@@ -30,7 +31,11 @@ function keyShape(record, scopeKey, item) {
   requireThat(key instanceof CryptoKey && key.type === 'private' && !key.extractable && key.algorithm.name === 'Ed25519' && equal([...key.usages], ['sign']), 'INVALID_ASSET_KEY');
   requireThat(pub instanceof CryptoKey && pub.type === 'public' && pub.algorithm.name === 'Ed25519' && equal([...pub.usages], ['verify']), 'INVALID_ASSET_KEY');
 }
-export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks, storageOptions = {} } = {}) {
+export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks, storageOptions = {}, cluster = 'devnet', authorizeMainnet = false } = {}) {
+  const network=networkProfile(cluster);
+  requireThat(typeof authorizeMainnet==='boolean','STORAGE_CONFIGURATION');
+  requireThat(network.cluster!=='mainnet-beta'||authorizeMainnet,'MAINNET_OPT_IN_REQUIRED');
+  requireThat(network.cluster==='mainnet-beta'||!authorizeMainnet,'MAINNET_SCOPE_REQUIRED');
   const model = createOrderModel(policy, storageOptions);
   const hidden = storageOptions.storageMode === 'hidden-settings';
   const profile = hidden ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: storageOptions.hiddenCommitmentSha256 } : {};
@@ -43,7 +48,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     const candidates = Array.from({ length: 8 }, (_, index) => base58.deserialize(new Uint8Array(32).fill(index + 1))[0]);
     const placeholder = candidates.find(value => ![...Object.values(scope), policy.owner].includes(value));
     model.createOrder({ ...scope, quantity: 1, available: 1, assets: [placeholder] });
-    requireThat(scope.cluster === 'devnet', 'DEVNET_ONLY');
+    requireThat(scope.cluster === network.cluster, 'ORDER_NETWORK_SCOPE_MISMATCH');
     return scope;
   }
   function bounded(order) {
@@ -279,7 +284,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     if (ready) validateAssetRequest(order, claimed.record, ready.record);
     return { status:closed?'asset-signing-reconciled':ready ? 'asset-partial-saved' : 'asset-signing-unknown',
       claim: structuredClone(claimed.record), request: ready ? structuredClone(ready.record) : null,
-      mode: 'offline-devnet-asset-signing', networkVerified: false, blockhashVerified: false, guardPriceVerified: false,
+      mode: `offline-${network.cluster}-asset-signing`, networkVerified: false, blockhashVerified: false, guardPriceVerified: false,
       readyToSign: false, readyToSubmit: false, salesOpen: false };
   }
   function walletState(order, records, events) {

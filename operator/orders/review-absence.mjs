@@ -33,15 +33,15 @@ function inspectHistoryTransaction(value,row,buyer,asset){
   need(!keys.includes(asset),'EXPIRY_TRANSACTION_OBSERVED');
   return createHash('sha256').update(bytes).digest('hex');
 }
-export async function reviewUnknownSignatureAbsence({input,blockhashAnchor,endpoint,fetchImpl,timeoutMs=12000}){
+export async function reviewUnknownSignatureAbsence({input,blockhashAnchor,endpoint,fetchImpl,timeoutMs=12000,authorizeMainnet=false}){
   const value=structuredClone(input);let rpc;
   try{
     const anchor=validateBlockhashAnchor(structuredClone(blockhashAnchor),value.claim);need(positive(anchor.sourceSlot),'EXPIRY_ANCHOR_REQUIRED');
-    rpc=createDeploymentRpc({endpoint,fetchImpl,timeoutMs,totalTimeoutMs:30000,allowExpiryReads:true,maxResponseBytes:65536});
+    rpc=createDeploymentRpc({authorizeMainnet,cluster:value.order.cluster,endpoint,fetchImpl,timeoutMs,totalTimeoutMs:30000,allowExpiryReads:true,maxResponseBytes:65536});
     const started=performance.now();
     const call=async(method,params=[])=>{need(performance.now()-started<25000&&rpc.requests<34,'EXPIRY_REVIEW_LIMIT');
       const result=await rpc.call(method,params);need(performance.now()-started<25000,'EXPIRY_REVIEW_LIMIT');return result;};
-    need(await call('getGenesisHash')===GENESIS_HASHES.devnet,'EXPIRY_WRONG_CLUSTER');
+    need(await call('getGenesisHash')===GENESIS_HASHES[value.order.cluster],'EXPIRY_WRONG_CLUSTER');
     const first=header(await call('getBlock',[anchor.sourceSlot,blockOptions]),anchor.sourceSlot);
     need(first.blockhash===anchor.blockhash&&first.blockHeight<=anchor.lastValidBlockHeight,'EXPIRY_ANCHOR_MISMATCH');
     const valid=await call('isBlockhashValid',[anchor.blockhash,{commitment:'finalized',minContextSlot:anchor.sourceSlot}]);
@@ -75,7 +75,7 @@ export async function reviewUnknownSignatureAbsence({input,blockhashAnchor,endpo
     const evidence={blockhash:anchor.blockhash,anchorSlot:anchor.sourceSlot,slot,blockHeight:last.blockHeight,
       lastValidBlockHeight:anchor.lastValidBlockHeight,historyPages:pages,historyTransactions:transactions,historySha256:digest.digest('hex')};
     // statusSlot names the final account/history context, not a lookup of an invented signature.
-    const proof={kind:'expired',cluster:'devnet',machine:value.order.machine,collection:value.order.collection,buyer:value.order.buyer,
+    const proof={kind:'expired',cluster:value.order.cluster,machine:value.order.machine,collection:value.order.collection,buyer:value.order.buyer,
       asset:value.claim.asset,blockhash:value.claim.blockhash,messageSha256:value.claim.messageSha256,commitment:'finalized',slot,
       signature:null,blockhashValid:false,blockHeight:last.blockHeight,signatureAbsent:true,statusSlot:accountSlot,
       accountAbsent:true,accountSlot,addressHistoryEmpty:true};

@@ -6,7 +6,6 @@ const need = value => { if (!value) throw Error('INVALID_SIGNING_GROUP'); };
 export function validateSigningGroup(requests) {
   need(Array.isArray(requests) && requests.length >= 2 && requests.length <= MAX_SIGNING_GROUP);
   const normalized = Array.from(requests, validateSigningRequest), first = normalized[0];
-  need(first.cluster === 'devnet');
   let previous;
   for (const request of normalized) {
     need(/^insert-\d{4}$/.test(request.stepId) && request.attempt === 1

@@ -16,7 +16,8 @@ export async function readOrderFile(filename) {
   } finally { await file.close(); }
 }
 export async function runOrderCheck(args, { env = process.env, output = process.stdout, fetchImpl } = {}) {
-  let storageOptions={};
+  let storageOptions={},authorizeMainnet=false;
+  if(args[0]==='preflight'&&args[1]==='--mainnet'){authorizeMainnet=true;args=['preflight',...args.slice(2)];}
   if(args[0]==='preflight'&&args[1]==='--storage-profile'&&args.length===4){
     try{storageOptions=validateOrderStorageOptions(await readOrderFile(args[2]));args=['preflight',args[3]];}
     catch{output.write(JSON.stringify({status:'blocked',code:'ORDER_STORAGE_PROFILE',transactionsSent:0})+'\n');return 1;}
@@ -26,7 +27,7 @@ export async function runOrderCheck(args, { env = process.env, output = process.
   }
   const {preflightOrder}=createOrderPreflight(storageOptions);
   const report = await preflightOrder({ readOrder: () => readOrderFile(args[1]),
-    endpoint: env.COOLBEARS_BUYER_RPC_URL, fetchImpl });
+    endpoint: env.COOLBEARS_BUYER_RPC_URL, fetchImpl, authorizeMainnet });
   // CLI is a diagnostic, not a handoff file. Do not print executable bytes,
   // private filesystem paths, RPC URL, credentials or arbitrary provider text.
   const { candidate, ...summary } = report;
