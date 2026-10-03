@@ -54,6 +54,10 @@ function showWallets() {
     ? `Нужен кошелёк с отдельной подписью ${cluster === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : 'Запрос загружается'; $('wallets').append(option); }
   render();
 }
+async function loadRequest() {
+  try { await client.load(); }
+  finally { showWallets(); }
+}
 async function api(path, body) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
     headers: { authorization: `Bearer ${token}`, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
@@ -69,11 +73,11 @@ else {
   $('connect').onclick = () => action(() => client.connect(wallets[Number($('wallets').value)]));
   $('sign').onclick = () => action(() => client.sign());
   $('recover').onclick = () => action(() => client.recover());
-  $('reload').onclick = () => action(async () => { await client.load(); showWallets(); });
+  $('reload').onclick = () => action(loadRequest);
   $('export').onclick = () => {
     const blob = new Blob([JSON.stringify(client.exportResponse())], { type: 'application/json' });
     const url = URL.createObjectURL(blob), link = document.createElement('a');
     link.href = url; link.download = 'coolbears-owner-signature.PRIVATE.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  showWallets(); await action(async () => { await client.load(); showWallets(); });
+  showWallets(); await action(loadRequest);
 }
