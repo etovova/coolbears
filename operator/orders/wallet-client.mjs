@@ -64,7 +64,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
   function state() {
     return {orderId:scope.id, connected:!!account, busy, disposed,
       status:saved?.status ?? partial?.status ?? 'not-prepared', canRecover:!!memory,
-      canRequestSignature:!disposed && !!account && !busy && !saved && order?.revision === partial?.claim?.orderRevision
+      canRequestSignature:!disposed && !!account && !busy && !saved && !!order && order.revision === partial?.claim?.orderRevision
         && !order.paused && partial?.status === 'asset-partial-saved',
       readyToSign:false, readyToSubmit:false, salesOpen:false};
   }

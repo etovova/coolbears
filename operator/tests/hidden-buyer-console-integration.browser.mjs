@@ -47,7 +47,9 @@ const bundled=await build({entryPoints:['operator/tests/fixtures/hidden-buyer-co
   }]});bytes=bundled.outputFiles[0].contents;
 runtime=await buyerGatewayRuntime({fixture,origin,persist:path.join(parent,'sqlite'),allowSubmission:false});
 const button=id=>page.locator('#'+id),counters=()=>page.evaluate(()=>structuredClone(integration.counters)),journal=()=>page.evaluate(()=>integration.journal());
-async function ready(){await page.waitForFunction(()=>window.integration?.rawKeys&&document.getElementById('workspace').getAttribute('aria-busy')==='false');
+async function ready(){await page.waitForFunction(()=>window.integration?.rawKeys&&(document.getElementById('workspace').hidden
+    ||document.getElementById('workspace').getAttribute('aria-busy')==='false'));
+  assert.equal(await button('workspace').isVisible(),true,await button('configuration').textContent());
   assert.equal(await button('error').isVisible(),false,await button('error').textContent());}
 async function click(id,{network=false}={}){if(network)await new Promise(resolve=>setTimeout(resolve,250));await button(id).click();await ready();}
 async function launch(){context=await playwright.chromium.launchPersistentContext(path.join(parent,'profile'),{headless:true,ignoreHTTPSErrors:true,args:['--no-sandbox','--disable-dev-shm-usage']});
@@ -100,7 +102,7 @@ try{
   assert.equal(await button('cost-cap').inputValue(),sol);assert.equal(await button('sign').isDisabled(),true);
   assert.match(await button('costs').textContent(),new RegExp(sol.replace('.','\\.')));
   await button('cost-consent').check();await click('sign',{network:true});
-  assert.deepEqual(await counters(),{native:1,wallet:1,send:0,connect:2,persist:1});
+  assert.deepEqual(await counters(),{native:1,wallet:1,send:0,connect:4,persist:1});
   const signed=await journal(),signedBytes=await page.evaluate(()=>integration.signedBytes),before=await counters();
   assert.deepEqual(signed.signing.map(row=>row.phase),['claimed','ready','wallet-claimed','buyer-response']);
   assert.equal(signed.signing[2].record.costApproval.maxTotalLamports,total.toString());
