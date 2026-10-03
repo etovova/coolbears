@@ -21,7 +21,7 @@ export function validateReplacementSource(input){
   if(isResponseExpiryReplacementInput(input))return validateResponseExpiryReplacementSource(input);
   if(isPrewalletExpiryReplacementInput(input))return validatePrewalletExpiryReplacementSource(input);
   const {order,claim,request,response}=input;model.validateOrder(order);assertCurrentItem(order,claim.itemIndex);
-  need(!order.paused&&order.cluster==='devnet'&&order.items[claim.itemIndex].attempts.length===1&&['expired','failed'].includes(order.items[claim.itemIndex].attempts[0].state)
+  need(!order.paused&&order.items[claim.itemIndex].attempts.length===1&&['expired','failed'].includes(order.items[claim.itemIndex].attempts[0].state)
     &&claim.attempt===1);
   const signed=verifyBuyerEvidence(order,claim,request,response);
   need(order.items[claim.itemIndex].attempts[0].signature===signed.signature);return signed;

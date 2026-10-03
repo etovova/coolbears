@@ -5,7 +5,8 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import {checkedBudget,createCostQuote,validateCostApproval,enforceCostCeiling} from './cost-approval.mjs';
-const feature = 'solana:signTransaction', chain = 'solana:devnet';
+import {networkProfile} from '../deployment/network.mjs';
+const feature = 'solana:signTransaction';
 const need = (ok, code) => { if (!ok) throw Error(code); };
 const hash = value => bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(value))));
 async function bounded(promise, ms, code) {
@@ -13,21 +14,24 @@ async function bounded(promise, ms, code) {
   try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(Error(code)), ms); })]); }
   finally { clearTimeout(timer); }
 }
-export function compatibleBuyerWallet(wallet) {
+export function compatibleBuyerWallet(wallet, cluster = 'devnet') {
+  let chain; try { chain = networkProfile(cluster).walletChain; } catch { return false; }
   return wallet?.chains?.includes(chain) && typeof wallet.features?.['standard:connect']?.connect === 'function'
     && typeof wallet.features?.['standard:events']?.on === 'function'
     && typeof wallet.features?.[feature]?.signTransaction === 'function'
     && wallet.features[feature].supportedTransactionVersions?.includes(0);
 }
-function accountFor(wallet, buyer) {
+function accountFor(wallet, buyer, chain) {
   return wallet?.accounts?.find(account => {
     try { return account.address === buyer && new PublicKey(account.publicKey).toBase58() === buyer
       && account.chains.includes(chain) && account.features.includes(feature); } catch { return false; }
   });
 }
 export function validateWalletCheck(report, order, request, now = Date.now()) {
-  need(report?.status === 'wallet-check-passed' && report.mode === 'closed-devnet-sign-only-check'
-    && report.cluster === 'devnet' && report.orderId === order.id && report.orderRevision === order.revision
+  const network = networkProfile(order.cluster);
+  need(report?.status === 'wallet-check-passed' && report.mode === `closed-${network.cluster}-sign-only-check`
+    && report.cluster === network.cluster && report.orderId === order.id && report.orderRevision === order.revision
+    && (network.cluster!=='mainnet-beta'||report.genesisHash===network.genesisHash)
     && report.orderSha256 === hash(order) && report.requestId === buyerRequestId(request)
     && report.candidate?.transactionBase64 === request.transactionBase64
     && report.candidate.messageSha256 === request.messageSha256
@@ -44,10 +48,13 @@ export function validateWalletCheck(report, order, request, now = Date.now()) {
   checkedBudget(report,order);
 }
 export function createBuyerWalletClient({ storage, scope, checkPrepared,
-  storageManager = globalThis.navigator?.storage, onChange = () => {}, walletTimeoutMs = 120000 } = {}) {
+  storageManager = globalThis.navigator?.storage, onChange = () => {}, walletTimeoutMs = 120000, authorizeMainnet = false } = {}) {
   need(storage && typeof checkPrepared === 'function' && Number.isSafeInteger(walletTimeoutMs)
     && walletTimeoutMs >= 20 && walletTimeoutMs <= 180000, 'CLIENT_CONFIGURATION');
-  scope = structuredClone(scope); need(scope.cluster === 'devnet', 'DEVNET_ONLY');
+  scope = structuredClone(scope); const network = networkProfile(scope.cluster), chain = network.walletChain;
+  need(typeof authorizeMainnet === 'boolean', 'CLIENT_CONFIGURATION');
+  need(network.cluster !== 'mainnet-beta' || authorizeMainnet, 'MAINNET_OPT_IN_REQUIRED');
+  need(network.cluster === 'mainnet-beta' || !authorizeMainnet, 'MAINNET_SCOPE_REQUIRED');
   let wallet, account, off, order, partial, saved, memory, costQuote, busy = false, epoch = 0, disposed = false;
   const notify = () => { try { onChange(); } catch {} };
   const changed = () => { epoch++; account = null; costQuote = null; notify(); };
@@ -57,6 +64,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
   }
   async function load() {
     order = await storage.read(scope); need(order, 'MISSING_ORDER');
+    need(['id','cluster','buyer','machine','collection','guard'].every(field=>order[field]===scope[field]),'ORDER_SCOPE_MISMATCH');
     partial = await storage.readAssetSigning(scope);
     saved = await storage.readBuyerResponse(scope);
     return state();
@@ -85,12 +93,12 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
       await persistent(); return true;
     },
     async connect(selected) {
-      need(!disposed && !busy && compatibleBuyerWallet(selected), 'WALLET_UNSUPPORTED'); busy = true;
+      need(!disposed && !busy && compatibleBuyerWallet(selected, network.cluster), 'WALLET_UNSUPPORTED'); busy = true;
       off?.(); wallet = null; account = null; const generation = ++epoch;
       try {
         await bounded(selected.features['standard:connect'].connect(), 15000, 'WALLET_CONNECT_TIMEOUT');
         need(!disposed && epoch === generation, 'WALLET_CHANGED');
-        account = accountFor(selected, scope.buyer); need(account, 'WRONG_WALLET');
+        account = accountFor(selected, scope.buyer, chain); need(account, 'WRONG_WALLET');
         wallet = selected; off = selected.features['standard:events'].on('change', changed);
       } finally { busy = false; notify(); }
       return state();
@@ -117,8 +125,8 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
       const approvedQuote=costQuote&&structuredClone(costQuote);
       const selected = wallet, selectedAccount = account, generation = epoch;
       const stableWallet = () => need(!disposed && selected === wallet && epoch === generation
-        && account === selectedAccount && accountFor(selected, scope.buyer) === selectedAccount
-        && compatibleBuyerWallet(selected), 'WALLET_CHANGED');
+        && account === selectedAccount && accountFor(selected, scope.buyer, chain) === selectedAccount
+        && compatibleBuyerWallet(selected, network.cluster), 'WALLET_CHANGED');
       try {
         await persistent(); await load();
         need(!saved && order.revision === partial?.claim?.orderRevision && !order.paused && partial?.status === 'asset-partial-saved', 'NOT_READY');

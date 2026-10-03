@@ -9,14 +9,16 @@ import {createBuyerPrewalletRecovery} from '../prewallet-recovery-client.mjs';
 import {createBuyerCustodyRecovery} from '../custody-recovery-client.mjs';
 import {createPrivateBuyerController} from './controller.mjs';
 import {createScopeIndex,validateConsoleConfig,consoleStorageOptions} from './config.mjs';
-export function createPrivateBuyerConsole(config,{onChange=()=>{}}={}){
-  config=validateConsoleConfig(config);
+import {networkProfile} from '../../deployment/network.mjs';
+export function createPrivateBuyerConsole(config,{onChange=()=>{},authorizeMainnet=false}={}){
+  config=validateConsoleConfig(config);const network=networkProfile(config.cluster);
+  if(typeof authorizeMainnet!=='boolean'||(network.cluster==='mainnet-beta')!==authorizeMainnet)throw Error('CONSOLE_NETWORK_AUTHORIZATION');
   if(globalThis.location?.origin!==config.origin)throw Error('CONSOLE_ORIGIN');
-  const storage=createBuyerStorage({storageOptions:consoleStorageOptions(config)}),transport=createBuyerSubmissionTransport({origin:config.origin}),
+  const storage=createBuyerStorage({cluster:network.cluster,authorizeMainnet,storageOptions:consoleStorageOptions(config)}),transport=createBuyerSubmissionTransport({origin:config.origin}),
     checkPrepared=createBuyerCheckClient({origin:config.origin}),prepare=createBuyerPreparationClient({origin:config.origin});
   // Neither build configuration, query strings nor UI options can enable sending.
   return createPrivateBuyerController({config,storage,index:createScopeIndex({config}),prepare,onChange,sendingEnabled:false,
-    makePorts:scope=>({wallet:createBuyerWalletClient({storage,scope,checkPrepared,onChange}),
-      sender:createBuyerSender({storage,scope,transport}),response:createBuyerResponseRecovery({storage,scope,transport}),
+    makePorts:scope=>({wallet:createBuyerWalletClient({storage,scope,authorizeMainnet,checkPrepared,onChange}),
+      sender:createBuyerSender({storage,scope,authorizeMainnet,transport}),response:createBuyerResponseRecovery({storage,scope,transport}),
       prewallet:createBuyerPrewalletRecovery({storage,scope,transport}),custody:createBuyerCustodyRecovery({storage,scope,transport})})});
 }

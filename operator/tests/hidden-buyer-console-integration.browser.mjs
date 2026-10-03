@@ -15,12 +15,14 @@ import {buyerGatewayRuntime,fixturePolicyPlugin} from './fixtures/buyer-gateway-
 import {baseAssetBytes,CORE_CREATE_LAMPORTS} from '../orders/mint-cost.mjs';
 const playwright=await import(process.env.COOLBEARS_PLAYWRIGHT||'playwright');
 const parent=await mkdtemp(path.join(tmpdir(),'coolbears-hidden-console-chromium-'));
-const output=path.resolve('operator/build/hidden-buyer-console-integration-chromium');await mkdir(output,{recursive:true});
+const cluster=process.env.COOLBEARS_BUYER_FIXTURE_CLUSTER??'devnet';assert.ok(['devnet','mainnet-beta'].includes(cluster));
+const authorizeMainnet=cluster==='mainnet-beta';
+const output=path.resolve('operator/build/hidden-buyer-console-integration-'+(authorizeMainnet?'mainnet-':'')+'chromium');await mkdir(output,{recursive:true});
 const hash=createHash('sha256').update('SYNTHETIC HIDDEN CHROMIUM PRIVATE MAPPING FIXTURE ONLY').digest('hex');
-const fixture=hiddenBuyerGatewayFixture({syntheticOwner:true,redeemed:999,hiddenCommitmentSha256:hash});
+const fixture=hiddenBuyerGatewayFixture({syntheticOwner:true,redeemed:999,hiddenCommitmentSha256:hash,cluster});
 await promisify(execFile)('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',path.join(parent,'key.pem'),'-out',path.join(parent,'cert.pem'),'-days','1','-subj','/CN=127.0.0.1']);
 let runtime,origin,bytes,context,page;
-const report={passed:false,engine:'chromium',storageMode:'hidden-settings',
+const report={passed:false,engine:'chromium',cluster,storageMode:'hidden-settings',
   adapters:'production console/factory, actual IndexedDB/Web Locks and HTTPS gateway',transport:'local workerd/SQLite with synthetic upstream RPC',
   realWallets:false,physicalPhones:false,liveRpc:false,transactionsSent:0,externalRequests:0,pageErrors:[],httpFailures:[],cases:[]};
 const httpRoutes=[];
@@ -43,9 +45,10 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin=`https:/
 const bundled=await build({entryPoints:['operator/tests/fixtures/hidden-buyer-console-integration.mjs'],bundle:true,write:false,
   platform:'browser',format:'esm',target:'es2022',inject:['scripts/browser-buffer.mjs'],plugins:[fixturePolicyPlugin(fixture),{
     name:'hidden-console-fixture-inputs',setup(b){b.onResolve({filter:/^private-console:/},args=>({path:args.path,namespace:'hidden-console-fixture'}));
-      b.onLoad({filter:/.*/,namespace:'hidden-console-fixture'},args=>({contents:'export default '+JSON.stringify(args.path==='private-console:config'?fixture.config(origin):[...fixture.owner.secretKey]),loader:'js'}));},
+      b.onLoad({filter:/.*/,namespace:'hidden-console-fixture'},args=>({contents:'export const authorizeMainnet='+JSON.stringify(authorizeMainnet)+';export default '+JSON.stringify(args.path==='private-console:config'?fixture.config(origin):[...fixture.owner.secretKey]),loader:'js'}));},
   }]});bytes=bundled.outputFiles[0].contents;
-runtime=await buyerGatewayRuntime({fixture,origin,persist:path.join(parent,'sqlite'),allowSubmission:false});
+runtime=await buyerGatewayRuntime({fixture,origin,persist:path.join(parent,'sqlite'),allowSubmission:false,authorizeMainnet,
+  ...(authorizeMainnet?{trustedHiddenCommitmentSha256:hash}:{})});
 const button=id=>page.locator('#'+id),counters=()=>page.evaluate(()=>structuredClone(integration.counters)),journal=()=>page.evaluate(()=>integration.journal());
 async function ready(){await page.waitForFunction(()=>window.integration?.rawKeys&&(document.getElementById('workspace').hidden
     ||document.getElementById('workspace').getAttribute('aria-busy')==='false'));
@@ -57,6 +60,10 @@ async function launch(){context=await playwright.chromium.launchPersistentContex
   page=await context.newPage();page.on('pageerror',error=>report.pageErrors.push(error.message));await page.goto(origin);await ready();}
 try{
   await runtime.start();await launch();
+  assert.match(await button('configuration').textContent(),authorizeMainnet?/Mainnet/:/Devnet/);
+  assert.match(await button('network-banner').textContent(),authorizeMainnet?/Mainnet/:/Devnet/);
+  assert.match(await button('wallet-network').textContent(),authorizeMainnet?/Mainnet/:/Devnet/);
+  assert.equal(await button('wallets').locator('option').count(),2);
   assert.deepEqual(await counters(),{native:0,wallet:0,send:0,connect:0,persist:0});assert.equal(httpRoutes.length,0);
   assert.equal(await button('send').isDisabled(),true);
   await button('storage-consent').check();await click('persist');await button('wallets').selectOption('0');await click('connect');

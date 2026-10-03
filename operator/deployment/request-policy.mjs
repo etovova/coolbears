@@ -5,6 +5,7 @@ import { base58 } from '@metaplex-foundation/umi/serializers';
 import { ed25519 } from '@noble/curves/ed25519';
 import { DeploymentRpcError } from './rpc.mjs';
 import { inspectSignedDeploymentTransaction } from './signing.mjs';
+import { networkProfile } from './network.mjs';
 export const PROGRAMS = ['CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d',
   'CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J', 'CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ'];
 const ZERO_HASH = '11111111111111111111111111111111';
@@ -58,6 +59,7 @@ export function createRequestValidator(input, { allowSubmission = false } = {}) 
   need(typeof allowSubmission === 'boolean', 'CONFIGURATION');
   let policy;
   try { policy = JSON.parse(JSON.stringify(input)); } catch { throw new DeploymentRpcError('CONFIGURATION'); }
+  try { networkProfile(policy?.cluster); } catch { throw new DeploymentRpcError('CONFIGURATION'); }
   // A hidden policy is a separate, explicitly versioned profile. The compiler
   // rebuilds the complete canonical SDK plan before producing either profile;
   // this runtime never infers authorization from an arbitrary message count.
@@ -65,7 +67,7 @@ export function createRequestValidator(input, { allowSubmission = false } = {}) 
   const messageCount = hidden ? 3 : 1431;
   need(exact(policy, ['version', 'cluster', 'owner', 'accounts', 'sizes', 'messageIdentities', 'allowSimulation', 'recoverySignatures',
     ...(hidden ? ['storageMode', 'hiddenCommitmentSha256'] : [])])
-    && (hidden || policy.version === 1) && policy.cluster === 'devnet' && address(policy.owner)
+    && (hidden || policy.version === 1) && address(policy.owner)
     && (!hidden || (typeof policy.hiddenCommitmentSha256 === 'string' && /^[0-9a-f]{64}$/.test(policy.hiddenCommitmentSha256)
       && policy.hiddenCommitmentSha256 !== '0'.repeat(64)
       && Array.isArray(policy.sizes) && policy.sizes.includes(652) && !policy.sizes.includes(871827)))

@@ -8,12 +8,12 @@ import {validatePrewalletInput,prewalletSubmission,prewalletRecoveryReport} from
 import {recoverBuyerOrder} from './recovery.mjs';
 const need=(v,code)=>{if(!v)throw Object.assign(Error(code),{checkCode:code});};
 const uint=v=>Number.isSafeInteger(v)&&v>=0;
-export async function discoverPrewalletResult({input,blockhashAnchor,endpoint,fetchImpl,timeoutMs=12000}){
+export async function discoverPrewalletResult({input,blockhashAnchor,endpoint,fetchImpl,timeoutMs=12000,authorizeMainnet=false}){
   const frozen=structuredClone(input);validatePrewalletInput(frozen);validateBlockhashAnchor(blockhashAnchor,frozen.claim);
   let rpc,extra=0;const started=performance.now();
   try{
-    rpc=createDeploymentRpc({endpoint,fetchImpl,timeoutMs,totalTimeoutMs:30000,allowExpiryReads:true,maxResponseBytes:65536});
-    await assertCluster(rpc,'devnet');
+    rpc=createDeploymentRpc({authorizeMainnet,cluster:frozen.order.cluster,endpoint,fetchImpl,timeoutMs,totalTimeoutMs:30000,allowExpiryReads:true,maxResponseBytes:65536});
+    await assertCluster(rpc,frozen.order.cluster);
     const rows=await rpc.call('getSignaturesForAddress',[frozen.claim.asset,{commitment:'finalized',limit:10,minContextSlot:blockhashAnchor.sourceSlot}]);
     need(Array.isArray(rows)&&rows.length<10,'RESPONSE_HISTORY_LIMIT');
     const seen=new Set();let previous=Number.MAX_SAFE_INTEGER,matched;
@@ -40,7 +40,7 @@ export async function discoverPrewalletResult({input,blockhashAnchor,endpoint,fe
     const recovered=prewalletSubmission(frozen,matched.response);
     // The discovery and receipt stages share one monotonic deadline.
     const boundedFetch=(...args)=>{need(performance.now()-started<30000,'RESPONSE_DEADLINE');return fetchImpl(...args);};
-    const result=await recoverBuyerOrder({input:recovered,endpoint,fetchImpl:boundedFetch,timeoutMs});extra=result.networkRequests;
+    const result=await recoverBuyerOrder({input:recovered,endpoint,fetchImpl:boundedFetch,timeoutMs,authorizeMainnet});extra=result.networkRequests;
     need(['verified','failed'].includes(result.status),result.code??'RESPONSE_NOT_VERIFIED');
     need(performance.now()-started<30000&&result.proof.slot===matched.row.slot,'RESPONSE_NOT_VERIFIED');
     if(result.status==='verified')need(matched.row.err===null&&matched.transaction.meta?.err===null,'RESPONSE_HISTORY_CONFLICT');

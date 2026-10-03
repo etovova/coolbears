@@ -14,6 +14,7 @@ const messages = {
 function render() {
   if (!client) return;
   const state = client.state();
+  $('network').textContent = state.cluster === 'mainnet-beta' ? 'MAINNET' : state.cluster === 'devnet' ? 'DEVNET' : '—';
   $('groupInfo').hidden = !state.groupId;
   if (state.groupId) $('groupInfo').textContent = `Группа: ${state.groupSize} операции. `
     + state.groupStates.map(item => `${item.stepId}: ${item.state}`).join('; ')
@@ -46,10 +47,16 @@ async function action(task) {
   finally { uiBusy = false; render(); }
 }
 function showWallets() {
-  wallets = registry.get().filter(compatibleOwnerWallet); $('wallets').replaceChildren();
+  const cluster = client?.state().cluster;
+  wallets = cluster ? registry.get().filter(wallet => compatibleOwnerWallet(wallet, cluster)) : []; $('wallets').replaceChildren();
   for (const [index, wallet] of wallets.entries()) { const option = document.createElement('option'); option.value = String(index); option.textContent = wallet.name; $('wallets').append(option); }
-  if (!wallets.length) { const option = document.createElement('option'); option.textContent = 'Нужен кошелёк с отдельной подписью Devnet'; $('wallets').append(option); }
+  if (!wallets.length) { const option = document.createElement('option'); option.textContent = cluster
+    ? `Нужен кошелёк с отдельной подписью ${cluster === 'mainnet-beta' ? 'Mainnet' : 'Devnet'}` : 'Запрос загружается'; $('wallets').append(option); }
   render();
+}
+async function loadRequest() {
+  try { await client.load(); }
+  finally { showWallets(); }
 }
 async function api(path, body) {
   const response = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
@@ -66,11 +73,11 @@ else {
   $('connect').onclick = () => action(() => client.connect(wallets[Number($('wallets').value)]));
   $('sign').onclick = () => action(() => client.sign());
   $('recover').onclick = () => action(() => client.recover());
-  $('reload').onclick = () => action(() => client.load());
+  $('reload').onclick = () => action(loadRequest);
   $('export').onclick = () => {
     const blob = new Blob([JSON.stringify(client.exportResponse())], { type: 'application/json' });
     const url = URL.createObjectURL(blob), link = document.createElement('a');
     link.href = url; link.download = 'coolbears-owner-signature.PRIVATE.json'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  showWallets(); await action(() => client.load());
+  showWallets(); await action(loadRequest);
 }

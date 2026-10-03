@@ -2,13 +2,14 @@
 // independent chain proof: every listed action must recheck its own bindings.
 import { nextDeploymentAction } from './journal.mjs';
 import { readDeploymentBundle } from './vault-store.mjs';
+import { networkProfile } from './network.mjs';
 
 export const queueBinding = snapshot => ({ deploymentId: snapshot.manifest.id,
   manifestSha256: snapshot.manifestSha256, expectedRevision: snapshot.revision,
   expectedHeadHash: snapshot.headHash });
 
 export function deploymentQueueStatus(snapshot) {
-  if (snapshot.manifest.cluster !== 'devnet') throw Error('DEVNET_ONLY');
+  const profile = networkProfile(snapshot.manifest.cluster);
   const next = nextDeploymentAction(snapshot);
   const index = snapshot.steps.findIndex(step => step.id === next.stepId);
   const attempt = snapshot.steps[index]?.attempts.at(-1);
@@ -26,12 +27,14 @@ export function deploymentQueueStatus(snapshot) {
   // Argument arrays only, not shell strings. <bundle> is replaced locally by
   // the operator. No path, endpoint, credential, request bytes or key material.
   const command = (script, ...args) => ({ script, args });
-  const commands = action === 'prepare' ? [command(owner, 'prepare', '<bundle>', next.stepId)]
-    : action === 'manual-retry' ? [command(owner, 'prepare-retry', '<bundle>', next.stepId)]
-    : ['sign', 'recover-wallet-response'].includes(action) ? [command(owner, 'serve', '<bundle>')]
-    : action === 'send-once' ? [command(sender, 'send-one', '<bundle>', next.stepId, '--devnet-send')]
-    : action === 'reconcile' ? [command(sender, 'resume', '<bundle>', next.stepId)] : [];
-  return { mode: 'offline-deployment-queue', ...queueBinding(snapshot), cluster: 'devnet',
+  const signingFlags = profile.cluster === 'mainnet-beta' ? ['--mainnet-sign'] : [];
+  const commands = action === 'prepare' ? [command(owner, 'prepare', '<bundle>', next.stepId, ...signingFlags)]
+    : action === 'manual-retry' ? [command(owner, 'prepare-retry', '<bundle>', next.stepId, ...signingFlags)]
+    : ['sign', 'recover-wallet-response'].includes(action) ? [command(owner, 'serve', '<bundle>', ...signingFlags)]
+    : action === 'send-once' ? [command(sender, 'send-one', '<bundle>', next.stepId, profile.cluster === 'mainnet-beta' ? '--mainnet-send' : '--devnet-send')]
+    : action === 'reconcile' ? [command(sender, 'resume', '<bundle>', next.stepId,
+      ...(profile.cluster === 'mainnet-beta' ? ['--mainnet'] : []))] : [];
+  return { mode: 'offline-deployment-queue', ...queueBinding(snapshot), cluster: profile.cluster,
     progress: { totalSteps: snapshot.steps.length, verifiedSteps,
       remainingSteps: snapshot.steps.length - verifiedSteps, currentStepNumber: index < 0 ? null : index + 1 },
     next: { action, stepId: next.stepId ?? null, attempt: attempt?.number ?? null,

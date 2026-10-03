@@ -117,9 +117,22 @@ try {
   await page.evaluate(s=>store.create(s),other); assert.equal((await read(page,other)).buyer,other.buyer); assert.equal((await read(page)).revision,2);
   assert.equal(await code(page,'read',{...scope,collection:address(7)}),'UNEXPECTED_SUCCESS');
   assert.equal(await read(page,{...scope,collection:address(7)}),null);
-  assert.equal(await code(page,'create',{...input,cluster:'mainnet-beta'}),'DEVNET_ONLY');
+  assert.equal(await code(page,'create',{...input,cluster:'mainnet-beta'}),'ORDER_NETWORK_SCOPE_MISMATCH');
   for (const quantity of [0,51,1.5]) assert.equal(await code(page,'create',{...input,id:'bad',quantity}), 'INVALID_QUANTITY');
-  report.cases.push('buyer/deployment scope isolation, Devnet gate and quantity bounds before key creation');
+  report.cases.push('buyer/deployment scope isolation, selected network gate and quantity bounds before key creation');
+
+  const networkScopes=await page.evaluate(async s=>{
+    const mainnet=makeStore({cluster:'mainnet-beta',authorizeMainnet:true}),mainScope={...s,cluster:'mainnet-beta',quantity:1,available:1};
+    const created=await mainnet.create(mainScope);
+    return {cluster:created.cluster,devnetRevision:(await store.read(s)).revision,
+      mainnetReadsDevnet:await code(mainnet.read(s)),devnetReadsMainnet:await code(store.read(mainScope)),
+      mainnetAfterReload:(await makeStore({cluster:'mainnet-beta',authorizeMainnet:true}).read(mainScope)).items[0].asset,
+      asset:created.items[0].asset,devnetAsset:(await store.read(s)).items[0].asset};
+  },scope);
+  assert.equal(networkScopes.cluster,'mainnet-beta');assert.equal(networkScopes.devnetRevision,2);
+  assert.equal(networkScopes.mainnetReadsDevnet,'ORDER_NETWORK_SCOPE_MISMATCH');assert.equal(networkScopes.devnetReadsMainnet,'ORDER_NETWORK_SCOPE_MISMATCH');
+  assert.equal(networkScopes.mainnetAfterReload,networkScopes.asset);assert.notEqual(networkScopes.asset,networkScopes.devnetAsset);
+  report.cases.push('Mainnet and Devnet custody with identical IDs and roles remain isolated across store reload, locks and cached key possession');
 
   const fault = {...input,id:'rollback',quantity:2};
   const faultResult = await page.evaluate(async s => {

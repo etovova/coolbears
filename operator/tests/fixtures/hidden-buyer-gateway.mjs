@@ -9,12 +9,14 @@ import {preparationFor} from '../../orders/preparation.mjs';
 import {anchorKey} from '../../orders/blockhash-anchor.mjs';
 import {baseAssetBytes,CORE_CREATE_LAMPORTS} from '../../orders/mint-cost.mjs';
 import {GENESIS_HASHES} from '../../deployment/rpc.mjs';
+import {networkProfile} from '../../deployment/network.mjs';
 import {hiddenAccountFixtures,fixtureRpcAccount} from './hidden-accounts.mjs';
 import {MPL_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-core';
 import {base58} from '@metaplex-foundation/umi/serializers';
 import {getAssetV1AccountDataSerializer} from '../../node_modules/@metaplex-foundation/mpl-core/dist/src/generated/types/assetV1AccountData.js';
 const key=label=>Keypair.fromSeed(createHash('sha256').update('hidden-buyer-gateway:'+label).digest());
-export function hiddenBuyerGatewayFixture({syntheticOwner=false,redeemed=999,hiddenCommitmentSha256='a'.repeat(64)}={}){
+export function hiddenBuyerGatewayFixture({syntheticOwner=false,redeemed=999,hiddenCommitmentSha256='a'.repeat(64),cluster='devnet'}={}){
+  const network=networkProfile(cluster);
   const owner=key('owner'),policy={...policySource,owner:syntheticOwner?owner.publicKey.toBase58():policySource.owner};
   const storageOptions={storageMode:'hidden-settings',hiddenCommitmentSha256};
   const roles={machine:key('machine').publicKey.toBase58(),collection:key('collection').publicKey.toBase58()};
@@ -23,7 +25,7 @@ export function hiddenBuyerGatewayFixture({syntheticOwner=false,redeemed=999,hid
   const block={blockhash:key('hash').publicKey.toBase58(),lastValidBlockHeight:2000};
   let mode='normal',initialRedeemed=redeemed,simulated=false;const observations=new Map();
   function withPolicy(fn){const before=policySource.owner;policySource.owner=policy.owner;try{return fn();}finally{policySource.owner=before;}}
-  function order(id='hidden-gateway',quantity=1){return model.createOrder({id,cluster:'devnet',buyer:policy.owner,...roles,quantity,available:9999,
+  function order(id='hidden-gateway',quantity=1){return model.createOrder({id,cluster,buyer:policy.owner,...roles,quantity,available:9999,
     assets:Array.from({length:quantity},(_,i)=>key('asset-'+id+'-'+i).publicKey.toBase58())});}
   function input(id='hidden-gateway',quantity=1){return withPolicy(()=>{
     const fresh=order(id,quantity),template=planner.buildOrderTransactions(fresh,block).templates[0];
@@ -59,12 +61,12 @@ export function hiddenBuyerGatewayFixture({syntheticOwner=false,redeemed=999,hid
     return fixtureRpcAccount(data,MPL_CORE_PROGRAM_ID,rent(data.length)+Number(CORE_CREATE_LAMPORTS));
   }
   async function upstream(request,ResponseType=Response){
-    const url=new URL(request.url);if(url.origin!=='https://devnet.helius-rpc.com'||url.searchParams.get('api-key')!=='fixture-secret-42')throw Error('UNEXPECTED_SYNTHETIC_RPC');
+    const url=new URL(request.url);if(url.origin!==new URL(network.rpcUpstream).origin||url.searchParams.get('api-key')!=='fixture-secret-42')throw Error('UNEXPECTED_SYNTHETIC_RPC');
     const call=await request.json();calls.push(call);
     if(call.method==='sendTransaction')throw Error('NO_NETWORK_DISPATCH_IN_HIDDEN_FIXTURE');
     const current=initialRedeemed+(mode==='stale-index'&&simulated?1:0),next=initialRedeemed+1,slot=initialRedeemed===redeemed?600:1000;
     let result;
-    if(call.method==='getGenesisHash')result=mode==='wrong-genesis'?GENESIS_HASHES['mainnet-beta']:GENESIS_HASHES.devnet;
+    if(call.method==='getGenesisHash')result=mode==='wrong-genesis'?GENESIS_HASHES[cluster==='devnet'?'mainnet-beta':'devnet']:network.genesisHash;
     else if(call.method==='getLatestBlockhash')result={context:{slot},value:block};
     else if(call.method==='getBlockHeight')result=1800;
     else if(call.method==='isBlockhashValid')result={context:{slot},value:mode!=='expired'};
@@ -101,5 +103,6 @@ export function hiddenBuyerGatewayFixture({syntheticOwner=false,redeemed=999,hid
   }
   return{policy,owner,storageOptions,roles,accounts,model,planner,block,calls,preparations,key,order,input,signedInput,withPolicy,upstream,observeResponse,observations,
     setMode:value=>{mode=value;simulated=false;},setRedeemed:value=>{initialRedeemed=value;simulated=false;},
-    config:origin=>({version:2,cluster:'devnet',origin,...roles,...storageOptions})};
+    config:origin=>({version:2,cluster,origin,...roles,...storageOptions,
+      ...(cluster==='mainnet-beta'?{genesisHash:network.genesisHash}:{})})};
 }

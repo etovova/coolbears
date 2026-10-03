@@ -14,7 +14,7 @@ function source(input,allowPaused){
   need(isPrewalletExpiryReplacementInput(input));
   const {order,claim,request}=input;model.validateOrder(order);validateAssetClaim(order,claim);
   const first=order.items[claim.itemIndex].attempts[0];
-  need((allowPaused||!order.paused)&&order.cluster==='devnet'&&claim.attempt===1
+  need((allowPaused||!order.paused)&&claim.attempt===1
     &&order.items[claim.itemIndex].attempts.length===1
     &&first.state==='expired'&&first.signature===null&&first.proof?.signature===null);
   if(request!==null)validateAssetRequest(order,claim,request);

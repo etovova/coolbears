@@ -11,6 +11,7 @@ import { prepareDeploymentSigning } from '../handoff.mjs';
 import { readPassphrase } from '../passphrase.mjs';
 import { createGatewayFetch } from '../gateway/client.mjs';
 import { startSigningConsole } from './server.mjs';
+import { networkProfile } from '../network.mjs';
 async function responseFile(filename) {
   let file;
   try {
@@ -28,45 +29,54 @@ async function responseFile(filename) {
 export async function runOwnerConsole(args, { input = process.stdin, output = process.stdout, errorOutput = process.stderr, env = process.env } = {}) {
   let passphrase;
   try {
-    const [command, directory, suppliedStep, ...extra] = args;
+    const [command, directory, ...trailing] = args;
     const needsStep = ['prepare', 'prepare-retry', 'prepare-group', 'import-response'].includes(command);
+    const suppliedStep = needsStep ? trailing.shift() : undefined;
     if (!['status', 'prepare-next', 'prepare-group', 'prepare', 'prepare-retry', 'serve', 'import-response'].includes(command)
-      || !directory || extra.length || (needsStep ? !suppliedStep : suppliedStep !== undefined)) throw Error();
+      || !directory || (needsStep && (!suppliedStep || suppliedStep.startsWith('--')))
+      || trailing.length > 1 || (trailing.length && trailing[0] !== '--mainnet-sign')
+      || (command === 'status' && trailing.length)) throw Error();
     if (command === 'status') {
       output.write(JSON.stringify(await readDeploymentQueue(directory), null, 2) + '\n'); return 0;
     }
+    const bundle = await readDeploymentBundle(directory);
+    const profile = networkProfile(bundle.snapshot.manifest.cluster), authorizeMainnetSigning = trailing.length === 1;
+    if (authorizeMainnetSigning !== (profile.cluster === 'mainnet-beta')) throw Error();
     if (command === 'import-response') {
       const response = await responseFile(suppliedStep);
-      const session = await createSigningSession({ directory });
+      if (response.cluster === undefined ? profile.cluster !== 'devnet' : response.cluster !== profile.cluster) throw Error();
+      const session = await createSigningSession({ directory, authorizeMainnetSigning });
       const result = await session.accept(response.requestId, response.groupId ? response.transactionBase64s : response.transactionBase64);
       output.write(JSON.stringify(result) + '\n'); return 0;
     }
     const endpoint = env.COOLBEARS_RPC_URL;
+    const trustedHiddenCommitmentSha256 = env.COOLBEARS_HIDDEN_COMMITMENT_SHA256;
     const fetchImpl = env.COOLBEARS_OPERATOR_RPC_TOKEN === undefined ? undefined : createGatewayFetch({ endpoint, token: env.COOLBEARS_OPERATOR_RPC_TOKEN });
     if (command === 'prepare-group') {
       if (!/^[2-4]$/.test(suppliedStep)) throw Error();
-      const result = await prepareDeploymentGroup({ directory, count: Number(suppliedStep), endpoint, fetchImpl });
-      output.write(JSON.stringify(result) + '\n'); return 0;
+      const result = await prepareDeploymentGroup({ directory, count: Number(suppliedStep), endpoint, fetchImpl,
+        authorizeMainnet: authorizeMainnetSigning, expectedBinding: queueBinding(bundle.snapshot) });
+      output.write(JSON.stringify({ ...result, cluster: profile.cluster }) + '\n'); return 0;
     }
     if (['prepare', 'prepare-retry', 'prepare-next'].includes(command)) {
       // A pending request is resumed, never silently replaced or re-signed.
-      const bundle = await readDeploymentBundle(directory), action = nextDeploymentAction(bundle.snapshot);
+      const action = nextDeploymentAction(bundle.snapshot);
       const stepId = command === 'prepare-next' ? action.stepId : suppliedStep;
       const retry = command === 'prepare-retry';
-      if (bundle.snapshot.manifest.cluster !== 'devnet'
-        || action.type !== (retry ? 'retry-review' : 'prepare') || action.stepId !== stepId) {
+      if (action.type !== (retry ? 'retry-review' : 'prepare') || action.stepId !== stepId) {
         errorOutput.write('This step cannot be prepared. Resume the existing request or reconcile its outcome.\n'); return 1;
       }
       const expectedBinding = queueBinding(bundle.snapshot);
       passphrase = await readPassphrase({ input, output: errorOutput });
-      const result = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl, retry, expectedBinding });
-      output.write(JSON.stringify({ status: 'request-saved', stepId, ...result.binding, ownerSignatureCreated: false, transactionsSent: 0 }) + '\n');
+      const result = await prepareDeploymentSigning({ directory, stepId, passphrase, endpoint, fetchImpl, retry, expectedBinding,
+        authorizeMainnet: authorizeMainnetSigning, trustedHiddenCommitmentSha256 });
+      output.write(JSON.stringify({ status: 'request-saved', cluster: profile.cluster, stepId, ...result.binding, ownerSignatureCreated: false, transactionsSent: 0 }) + '\n');
       return 0;
     }
     // The URL is a local secret capability. Print only to the owner's local TTY.
     if (output.isTTY !== true) throw Error();
-    const console = await startSigningConsole({ directory, endpoint, fetchImpl });
-    output.write(`Open locally; keep this link private:\n${console.url}\n`);
+    const console = await startSigningConsole({ directory, endpoint, fetchImpl, authorizeMainnetSigning, trustedHiddenCommitmentSha256 });
+    output.write(`Open locally (${profile.cluster}); keep this link private:\n${console.url}\n`);
     const stop = () => { void console.close(); };
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     return 0;

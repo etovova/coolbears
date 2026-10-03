@@ -19,13 +19,15 @@ import {baseAssetBytes} from '../../orders/mint-cost.mjs';
 import {preparationFor} from '../../orders/preparation.mjs';
 import {anchorKey} from '../../orders/blockhash-anchor.mjs';
 import { GENESIS_HASHES } from '../../deployment/rpc.mjs';
+import {networkProfile} from '../../deployment/network.mjs';
 const key=label=>Keypair.fromSeed(createHash('sha256').update('buyer-gateway:'+label).digest());
-export async function buyerGatewayFixture({syntheticOwner=false}={}){
+export async function buyerGatewayFixture({syntheticOwner=false,cluster='devnet'}={}){
+  const network=networkProfile(cluster);
   const owner=key('owner'),policy={...approved,owner:syntheticOwner?owner.publicKey.toBase58():approved.owner};
   const previous=[approved.owner,nodePolicy.owner];let plan,full;
   try{
     approved.owner=nodePolicy.owner=policy.owner;
-    plan=await buildDeploymentPlan({cluster:'devnet',collection:key('collection').publicKey.toBase58(),reservedAsset:key('other').publicKey.toBase58(),
+    plan=await buildDeploymentPlan({cluster,collection:key('collection').publicKey.toBase58(),reservedAsset:key('other').publicKey.toBase58(),
       machine:key('machine').publicKey.toBase58(),blockhash:key('hash').publicKey.toBase58(),lastValidBlockHeight:2000,machineRentLamports:'5000000000'});
     full=insertionAccounts({steps:plan.steps},9999);
   }finally{[approved.owner,nodePolicy.owner]=previous;}
@@ -38,7 +40,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
   }
   function input(id='gateway-fixture',quantity=1,buyer=policy.owner){
     const assets=Array.from({length:quantity},(_,n)=>key('asset-'+id+'-'+n));
-    const order=model.createOrder({id,cluster:'devnet',buyer,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard,
+    const order=model.createOrder({id,cluster,buyer,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard,
       quantity,available:9999,assets:assets.map(k=>k.publicKey.toBase58())});
     const block={blockhash:key('hash').publicKey.toBase58(),lastValidBlockHeight:2000};
     const unsigned=planner.buildOrderTransactions(order,block).templates[0].unsignedBytes;
@@ -74,7 +76,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
     }finally{approved.owner=old;}
   }
   async function upstream(request,ResponseType=Response){
-    const url=new URL(request.url);if(url.origin!=='https://devnet.helius-rpc.com'||url.searchParams.get('api-key')!=='fixture-secret-42')throw Error('unexpected upstream');
+    const url=new URL(request.url);if(url.origin!==new URL(network.rpcUpstream).origin||url.searchParams.get('api-key')!=='fixture-secret-42')throw Error('unexpected upstream');
     if(request.headers.has('cookie')||request.headers.has('authorization')||request.headers.has('origin'))throw Error('forwarded browser header');
     const call=await request.json();calls.push(call);entered?.();
     if(mode==='hold')await new Promise(resolve=>{wait=resolve;});
@@ -91,7 +93,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       const anchorSlot=generation===1?600:1200,horizon=generation===1?900:1600,height=generation===1?2100:2700;
       const row=(slot)=>({slot,signature:base58.deserialize(createHash('sha512').update('expiry-row:'+slot).digest())[0],err:null,confirmationStatus:'finalized'});
       const assetFound=call.method==='getMultipleAccounts'&&[...submitted.values()].some(v=>v.asset===call.params[0][0]&&!v.executionFailed);
-      const results={getGenesisHash:GENESIS_HASHES.devnet,
+      const results={getGenesisHash:network.genesisHash,
         getBlock:call.params[0]===anchorSlot?{blockhash:key(generation===1?'hash':'replacement-hash').publicKey.toBase58(),blockHeight:generation===1?1800:2300,parentSlot:anchorSlot-1}:
           {blockhash:key('expiry-horizon').publicKey.toBase58(),blockHeight:height,parentSlot:horizon-1},
         isBlockhashValid:{context:{slot:horizon},value:mode==='expiry-live'},getFirstAvailableBlock:mode==='expiry-pruned'?anchorSlot+1:1,
@@ -146,7 +148,7 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
       if(mode==='cost-missing')simulatedAccounts=null;
       if(mode==='cost-wrong')simulatedAccounts[0].lamports++;
     }
-    const results={getLatestBlockhash:{context:{slot},value:{blockhash:key(generation===2?'replacement-hash':'hash').publicKey.toBase58(),lastValidBlockHeight:generation===2?2600:2000}},getGenesisHash:mode==='genesis'?GENESIS_HASHES['mainnet-beta']:GENESIS_HASHES.devnet,
+    const results={getLatestBlockhash:{context:{slot},value:{blockhash:key(generation===2?'replacement-hash':'hash').publicKey.toBase58(),lastValidBlockHeight:generation===2?2600:2000}},getGenesisHash:mode==='genesis'?GENESIS_HASHES[cluster==='devnet'?'mainnet-beta':'devnet']:network.genesisHash,
       getMultipleAccounts:{context:{slot},value:[...full.slice(0,3),full[5],full[6],full[3],...Array(quantity).fill(null)]},
       getBalance:{context:{slot},value:20000000000},getFeeForMessage:{context:{slot},value:mode==='fee-rise'?20000:10000},getMinimumBalanceForRentExemption:1999999,
       simulateTransaction:{context:{slot},value:{err:mode==='simulation'?{Custom:1}:null,unitsConsumed:99999,accounts:simulatedAccounts}},
@@ -157,5 +159,6 @@ export async function buyerGatewayFixture({syntheticOwner=false}={}){
   return{policy,owner,plan,full,model,planner,key,input,preparations,costApproval,costQuotes,signedInput,calls,upstream,receipt,submitted,setMode:value=>{mode=value;},
     setGeneration:value=>{if(![1,2].includes(value))throw Error('fixture generation');generation=value;},
     onRequest:callback=>{entered=callback;},release:()=>wait?.(),
-    config:origin=>({version:1,cluster:'devnet',origin,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard})};
+    config:origin=>({version:1,cluster,origin,machine:plan.roles.machine,collection:plan.roles.collection,guard:plan.roles.guard,
+      ...(cluster==='mainnet-beta'?{genesisHash:network.genesisHash}:{})})};
 }

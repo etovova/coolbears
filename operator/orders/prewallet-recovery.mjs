@@ -1,4 +1,5 @@
 // Positive terminal evidence for an existing native claim, without inventing a wallet claim.
+import {networkProfile} from '../deployment/network.mjs';
 import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {VersionedTransaction} from '@solana/web3.js';
@@ -7,6 +8,7 @@ import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyer
 import {validateHistoricalFailure} from './failure-record.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
+const networkIdentity=order=>order.cluster==='mainnet-beta'?{genesisHash:networkProfile(order.cluster).genesisHash}:{};
 const model=createProtocolOrderModel(policy),need=(v,code='PREWALLET_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const shape=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
@@ -39,7 +41,8 @@ export function prewalletSubmission(input,response){
 }
 export function validatePrewalletRecovery(report,input){
   const binding=prewalletBinding(input);
-  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster==='devnet'
+  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster===input.order.cluster
+    &&(input.order.cluster!=='mainnet-beta'||report.genesisHash===networkProfile(input.order.cluster).genesisHash)
     &&report.transactionsSent===0&&report.retryAuthorized===false&&report.readyToSubmit===false&&report.salesOpen===false
     &&typeof report.restored==='boolean'&&Number.isSafeInteger(report.networkRequests)&&report.networkRequests>=0);
   if(report.status==='prewallet-recovered'){
@@ -50,7 +53,7 @@ export function validatePrewalletRecovery(report,input){
   return report;
 }
 export function prewalletRecoveryReport(input,{response,result,networkRequests=0,restored=false,code}={}){
-  return validatePrewalletRecovery({...prewalletBinding(input),cluster:'devnet',status:response?'prewallet-recovered':'unknown',
+  return validatePrewalletRecovery({...prewalletBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:response?'prewallet-recovered':'unknown',
     transactionsSent:0,retryAuthorized:false,readyToSubmit:false,salesOpen:false,networkRequests,restored,
     ...(response?{response:structuredClone(response),result:structuredClone(result)}:{code:code??'PREWALLET_NOT_FOUND'})},input);
 }
@@ -62,7 +65,7 @@ export function prewalletRecoveryRecord(input,report){
 export function restorePrewalletSubmission(input,record){
   need(record?.version===1&&shape(record,record.proof?.kind==='failed'?'version claimSha256 response proof evidence':'version claimSha256 response proof')
     &&record.claimSha256===signedBytesId(JSON.stringify(input.claim))&&same(record.response,input.response));
-  return validateBuyerResult({...submissionBinding(input),cluster:'devnet',status:record.proof.kind,chainVerified:true,
+  return validateBuyerResult({...submissionBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:record.proof.kind,chainVerified:true,
     transactionsSent:0,networkRequests:0,retryAuthorized:false,restored:true,readyToSubmit:false,salesOpen:false,
     proof:structuredClone(record.proof),...(record.evidence?{evidence:structuredClone(record.evidence)}:{})},input,{recovery:true});
 }

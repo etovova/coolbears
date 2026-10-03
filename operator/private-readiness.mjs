@@ -11,17 +11,34 @@ import { compileDeploymentRpcPolicy } from './deployment/compile-rpc-policy.mjs'
 import { createRequestValidator } from './deployment/request-policy.mjs';
 import { sha256Json } from './deployment/journal.mjs';
 import { validateBuyerGatewayConfig } from './orders/gateway/worker.mjs';
+import { networkProfile } from './deployment/network.mjs';
+import { HIDDEN_SETTINGS, validateHiddenCommitmentSha256 } from './storage-mode.mjs';
 
 const LIMITS = Object.freeze({manifest:16*1024*1024, policy:2*1024*1024, small:16384,
   event:65536, events:20000, total:64*1024*1024});
 const paths = ['bundleDirectory','ownerGatewayDirectory','buyerGatewayDirectory'];
+const argumentFields = [...paths,'trustedHiddenCommitmentSha256'];
 const ownerEntry = submission => `import policy from './policy.json' with { type: 'json' };
 import { makeGateway } from '../worker.mjs';
 const { worker, DeploymentGate } = makeGateway(policy, { allowSubmission: ${submission} });
 export { DeploymentGate };
 export default worker;
 `;
+const ownerNetworkEntry = (submission,mainnet,mainnetSubmission,trustedHiddenCommitmentSha256) => `import policy from './policy.json' with { type: 'json' };
+import { makeGateway } from '../worker.mjs';
+const { worker, DeploymentGate } = makeGateway(policy, { allowSubmission: ${submission}, allowMainnet: ${mainnet}, allowMainnetSubmission: ${mainnetSubmission}${trustedHiddenCommitmentSha256===undefined?'':', trustedHiddenCommitmentSha256: '+JSON.stringify(trustedHiddenCommitmentSha256)} });
+export { DeploymentGate };
+export default worker;
+`;
 const buyerEntry = "import config from './config.json' with {type:'json'};\nimport {makeBuyerGateway} from '../worker.mjs';\nconst {worker,BuyerCheckGate}=makeBuyerGateway(config);\nexport {BuyerCheckGate};\nexport default worker;\n";
+const buyerMainnetEntry = trustedHiddenCommitmentSha256 => "import config from './config.json' with {type:'json'};\nimport {makeBuyerGateway} from '../worker.mjs';\nconst {worker,BuyerCheckGate}=makeBuyerGateway(config,{allowMainnet:true"+
+  (trustedHiddenCommitmentSha256===undefined?'':',trustedHiddenCommitmentSha256:'+JSON.stringify(trustedHiddenCommitmentSha256))+"});\nexport {BuyerCheckGate};\nexport default worker;\n";
+function ownerEntryReadOnly(source,policy,trustedHiddenCommitmentSha256){
+  const cluster=policy.cluster,expectedHash=cluster==='mainnet-beta'&&policy.storageMode===HIDDEN_SETTINGS?trustedHiddenCommitmentSha256:undefined;
+  need(source!==ownerEntry(true)&&![undefined,expectedHash].some(hash=>[false,true].some(mainnet=>[false,true].some(submission=>[false,true].some(mainnetSubmission=>
+    (submission||mainnetSubmission)&&source===ownerNetworkEntry(submission,mainnet,mainnetSubmission,hash))))),'SUBMISSION_ENABLED');
+  need(source===ownerNetworkEntry(false,cluster==='mainnet-beta',false,expectedHash)||(cluster==='devnet'&&source===ownerEntry(false)));
+}
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const need = (value, code='INVALID') => { if(!value)throw Object.assign(Error('Private readiness input is unavailable.'),{code}); };
 const check = (status, code=null) => ({status,code});
@@ -94,35 +111,45 @@ async function gatewayFiles(directory,owner){
   return {root,configuration,entry,value:json(configuration)};
 }
 function inputCode(prefix,error){
-  return prefix+({ENOENT:'_MISSING',LIMIT:'_LIMIT',INCOMPLETE:'_BUSY_OR_INCOMPLETE',CHANGED:'_CHANGED'}[error?.code]??'_INVALID');
+  return prefix+({ENOENT:'_MISSING',LIMIT:'_LIMIT',INCOMPLETE:'_BUSY_OR_INCOMPLETE',CHANGED:'_CHANGED',
+    TRUSTED_HIDDEN_COMMITMENT_REQUIRED:'_TRUSTED_HIDDEN_COMMITMENT_REQUIRED'}[error?.code]??'_INVALID');
 }
 function sameHead(a,b){return a.manifestSha256===b.manifestSha256&&a.headHash===b.headHash&&a.revision===b.revision;}
 
 export async function inspectPrivateReadiness(input={}){
   const result=report();let options;
   try{
-    need(input&&Object.getPrototypeOf(input)===Object.prototype&&Reflect.ownKeys(input).every(key=>paths.includes(key)));
+    need(input&&Object.getPrototypeOf(input)===Object.prototype&&Reflect.ownKeys(input).every(key=>argumentFields.includes(key)));
     options=Object.fromEntries(paths.map(key=>{
       const descriptor=Object.getOwnPropertyDescriptor(input,key);need(!descriptor||Object.hasOwn(descriptor,'value'));
       const value=descriptor?.value;need(value===undefined||(typeof value==='string'&&value.length>0&&value.length<=4096&&!value.includes('\0')));
       return [key,value];
     }));
+    const trusted=Object.getOwnPropertyDescriptor(input,'trustedHiddenCommitmentSha256');
+    need(!trusted||Object.hasOwn(trusted,'value'));
+    options.trustedHiddenCommitmentSha256=trusted?.value;
+    if(options.trustedHiddenCommitmentSha256!==undefined)validateHiddenCommitmentSha256(options.trustedHiddenCommitmentSha256);
   }catch{result.code='ARGUMENTS_INVALID';return result;}
-  let bundle,owner,buyer;
+  let bundle,owner,buyer,profile;
   if(!options.bundleDirectory)result.checks.bundle=check('blocked','BUNDLE_PATH_REQUIRED');
   else try{
     const root=await bundleBudget(options.bundleDirectory);bundle=await readDeploymentBundle(root);
-    need(bundle.snapshot.manifest.cluster==='devnet');result.checks.bundle=check('verified');
-  }catch(error){result.checks.bundle=check('blocked',inputCode('BUNDLE',error));}
+    profile=networkProfile(bundle.snapshot.manifest.cluster);
+    const machine=bundle.snapshot.manifest.steps[2]?.expected;
+    if(profile.cluster==='mainnet-beta'&&machine?.storageMode===HIDDEN_SETTINGS)
+      need(options.trustedHiddenCommitmentSha256!==undefined&&options.trustedHiddenCommitmentSha256===machine.hiddenSettings?.hash,
+        'TRUSTED_HIDDEN_COMMITMENT_REQUIRED');
+    result.checks.bundle=check('verified');
+  }catch(error){bundle=undefined;profile=undefined;result.checks.bundle=check('blocked',inputCode('BUNDLE',error));}
   if(!options.ownerGatewayDirectory)result.checks.ownerGateway=check('blocked','OWNER_GATEWAY_PATH_REQUIRED');
   else try{
     owner=await gatewayFiles(options.ownerGatewayDirectory,true);createRequestValidator(owner.value);
-    need(owner.entry.toString()!==ownerEntry(true),'SUBMISSION_ENABLED');
-    need(owner.entry.toString()===ownerEntry(false));
+    ownerEntryReadOnly(owner.entry.toString(),owner.value,options.trustedHiddenCommitmentSha256);
     if(!bundle)result.checks.ownerGateway=check('blocked','BUNDLE_BINDING_REQUIRED');
     else{
       const recoverySignatures=bundle.snapshot.steps.flatMap(step=>step.attempts).filter(attempt=>attempt.signed).map(attempt=>attempt.signed.signature);
-      const expected=await compileDeploymentRpcPolicy(bundle.snapshot.manifest,{allowSimulation:owner.value.allowSimulation,recoverySignatures});
+      const expected=await compileDeploymentRpcPolicy(bundle.snapshot.manifest,{allowSimulation:owner.value.allowSimulation,recoverySignatures,
+        authorizeMainnet:profile.cluster==='mainnet-beta',trustedHiddenCommitmentSha256:options.trustedHiddenCommitmentSha256});
       need(isDeepStrictEqual(owner.value,expected),'BINDING');result.checks.ownerGateway=check('verified');
     }
   }catch(error){result.checks.ownerGateway=check('blocked',error.code==='BINDING'?'OWNER_POLICY_STALE_OR_MISMATCHED'
@@ -130,10 +157,13 @@ export async function inspectPrivateReadiness(input={}){
   if(!options.buyerGatewayDirectory)result.checks.buyerGateway=check('blocked','BUYER_GATEWAY_PATH_REQUIRED');
   else try{
     buyer=await gatewayFiles(options.buyerGatewayDirectory,false);buyer.value=validateBuyerGatewayConfig(buyer.value);
-    need(buyer.entry.toString()===buyerEntry);
+    need(buyer.entry.toString()===(buyer.value.cluster==='mainnet-beta'
+      ?buyerMainnetEntry(buyer.value.version===2?options.trustedHiddenCommitmentSha256:undefined):buyerEntry));
     if(!bundle)result.checks.buyerGateway=check('blocked','BUNDLE_BINDING_REQUIRED');
     else{
       const expected=bundle.snapshot.manifest.steps[2].expected;
+      need(buyer.value.cluster===profile.cluster&&networkProfile(buyer.value.cluster).genesisHash===profile.genesisHash
+        &&(profile.cluster!=='mainnet-beta'||buyer.value.genesisHash===profile.genesisHash),'NETWORK_BINDING');
       need(['machine','collection','guard'].every(field=>buyer.value[field]===expected[field]),'BINDING');
       need(expected.storageMode==='hidden-settings'
         ?buyer.value.version===2&&buyer.value.storageMode===expected.storageMode&&buyer.value.hiddenCommitmentSha256===expected.hiddenSettings.hash
@@ -141,6 +171,7 @@ export async function inspectPrivateReadiness(input={}){
       result.checks.buyerGateway=check('verified');
     }
   }catch(error){result.checks.buyerGateway=check('blocked',error.code==='BINDING'?'BUYER_SCOPE_MISMATCH'
+    :error.code==='NETWORK_BINDING'?'BUYER_NETWORK_SCOPE_MISMATCH'
     :error.code==='STORAGE_PROFILE_BINDING'?'BUYER_STORAGE_PROFILE_MISMATCH':inputCode('BUYER_GATEWAY',error));}
   if(['bundle','ownerGateway','buyerGateway'].some(key=>result.checks[key].status!=='verified'))return result;
   try{
@@ -155,7 +186,8 @@ export async function inspectPrivateReadiness(input={}){
     }
     const snapshot=bundle.snapshot;
     const machine=snapshot.manifest.steps[2].expected;
-    const binding={cluster:'devnet',manifestSha256:snapshot.manifestSha256,journalRevision:snapshot.revision,journalHead:snapshot.headHash,
+    const binding={cluster:profile.cluster,...(profile.cluster==='mainnet-beta'?{genesisHash:profile.genesisHash}:{}),
+      manifestSha256:snapshot.manifestSha256,journalRevision:snapshot.revision,journalHead:snapshot.headHash,
       ...(machine.storageMode==='hidden-settings'?{storageMode:machine.storageMode,hiddenCommitmentSha256:machine.hiddenSettings.hash,privateMappingVerified:false}:{}),
       ownerPolicySha256:digest(owner.configuration),ownerEntrySha256:digest(owner.entry),
       buyerConfigSha256:digest(buyer.configuration),buyerEntrySha256:digest(buyer.entry)};
@@ -165,11 +197,12 @@ export async function inspectPrivateReadiness(input={}){
   return result;
 }
 
-export async function runPrivateReadiness(args,{output=process.stdout}={}){
+export async function runPrivateReadiness(args,{output=process.stdout,env=process.env}={}){
   let result;
   if(!Array.isArray(args)||args.length!==4||args[0]!=='inspect'||!args.every(value=>typeof value==='string'&&!value.startsWith('-'))){
     result=report();result.code='ARGUMENTS_INVALID';
-  }else result=await inspectPrivateReadiness(Object.fromEntries(paths.map((key,index)=>[key,args[index+1]])));
+  }else result=await inspectPrivateReadiness({...Object.fromEntries(paths.map((key,index)=>[key,args[index+1]])),
+    trustedHiddenCommitmentSha256:env.COOLBEARS_HIDDEN_COMMITMENT_SHA256});
   try{output.write(JSON.stringify(result)+'\n');}catch{return 1;}
   return result.status==='offline-bindings-verified'?0:1;
 }

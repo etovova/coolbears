@@ -8,6 +8,7 @@ import { createProtocolOrderModel } from './journal-model.mjs';
 import { createOrderPlanner } from './transaction-model.mjs';
 import { createSigningRequest, verifySigningResponse } from '../deployment/signing.mjs';
 import {validateSequentialOrder,currentItemIndex,assertCurrentItem} from './sequential.mjs';
+import { networkProfile } from '../deployment/network.mjs';
 const model = createProtocolOrderModel(policy), planner = createOrderPlanner(model);
 const need = (ok, code) => { if (!ok) throw Error(code); };
 const same = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
@@ -43,7 +44,7 @@ function identity(order) {
 }
 function context(order) {
   validateSequentialOrder(order);
-  need(order.cluster === 'devnet', 'DEVNET_ONLY');
+  networkProfile(order.cluster);
   need(ordinaryKey(order.buyer) && order.items.every(item => ordinaryKey(item.asset)), 'UNSIGNABLE_ADDRESS');
 }
 function internalRequest(record) {

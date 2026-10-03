@@ -1,8 +1,10 @@
 // Portable validation of trusted expiry evidence. This is not a retry grant.
+import {networkProfile} from '../deployment/network.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createProtocolOrderModel} from './journal-model.mjs';
 import {submissionBinding,validateBuyerSubmission} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
+const networkIdentity=order=>order.cluster==='mainnet-beta'?{genesisHash:networkProfile(order.cluster).genesisHash}:{};
 const model=createProtocolOrderModel(policy),need=(v)=>{if(!v)throw Error('EXPIRY_RESPONSE');};
 const uint=n=>Number.isSafeInteger(n)&&n>=0;
 const exact=(v,fields)=>v&&Object.keys(v).sort().join(' ')===fields.split(' ').sort().join(' ');
@@ -13,7 +15,8 @@ const identity=input=>{
 };
 export function validateBuyerExpiryResult(report,input){
   const binding=submissionBinding(input);
-  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster==='devnet'
+  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster===input.order.cluster
+    &&(input.order.cluster!=='mainnet-beta'||report.genesisHash===networkProfile(input.order.cluster).genesisHash)
     &&report.readyToSubmit===false&&report.salesOpen===false&&report.retryAuthorized===false);
   need(['expired','unknown'].includes(report.status));
   if(report.status==='unknown'){need(report.chainVerified===false&&!report.proof&&!report.evidence);return report;}
@@ -36,7 +39,7 @@ export function restoreExpiryReport(input,record){
   validateBuyerSubmission(input);
   need(exact(record,'version identity evidence proof')&&record.version===1
     &&JSON.stringify(record.identity)===JSON.stringify(identity(input)));
-  return validateBuyerExpiryResult({...submissionBinding(input),cluster:'devnet',status:'expired',chainVerified:true,
+  return validateBuyerExpiryResult({...submissionBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:'expired',chainVerified:true,
     retryAuthorized:false,readyToSubmit:false,salesOpen:false,transactionsSent:0,networkRequests:0,restored:true,
     evidence:structuredClone(record.evidence),proof:structuredClone(record.proof)},input);
 }

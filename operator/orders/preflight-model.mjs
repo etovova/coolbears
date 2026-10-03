@@ -1,4 +1,4 @@
-// Read-only current-item preflight for a sequential order in the closed Devnet profile.
+// Read-only current-item preflight for a sequential order in a closed network profile.
 // No signer custody, wallet invocation, journal mutation or submission grant.
 import { createHash } from 'node:crypto';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
@@ -15,6 +15,7 @@ import { validateBlockhashAnchor } from './blockhash-anchor.mjs';
 import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deployment/rpc.mjs';
 import { resolveStorageProfile } from '../storage-mode.mjs';
+import { networkProfile } from '../deployment/network.mjs';
 
 export function createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts }, storageOptions = {}) {
 storageOptions = validateOrderStorageOptions(storageOptions);
@@ -98,10 +99,10 @@ function checkSequentialReadiness({rpc, order, itemIndex = currentItemIndex(orde
 }
 
 function preflightOrder(options) { return checkOrder(options); }
-// Internal trusted adapter for a sign-only closed Devnet session, not a purchase grant.
+// Internal trusted adapter for a sign-only closed session, not a purchase grant.
 function checkPreparedOrder(options) { return checkOrder(options, true); }
 function checkSignedOrder(options) { return checkOrder(options, true, true); }
-async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request, response, blockhashAnchor } = {}, prepared = false, signedMode = false) {
+async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, request, response, blockhashAnchor, authorizeMainnet = false } = {}, prepared = false, signedMode = false) {
   let rpc, phase = 'order';
   const started = performance.now();
   try {
@@ -111,7 +112,10 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     const itemIndex = prepared ? claim?.itemIndex : currentItemIndex(order);
     assertCurrentItem(order, itemIndex);
     const item = order.items[itemIndex], receipts = new Map();
-    need(order.cluster === 'devnet', 'DEVNET_ONLY');
+    const network = networkProfile(order.cluster);
+    need(typeof authorizeMainnet === 'boolean', 'MAINNET_AUTHORIZATION');
+    need(network.cluster !== 'mainnet-beta' || authorizeMainnet, 'MAINNET_OPT_IN_REQUIRED');
+    need(network.cluster === 'mainnet-beta' || !authorizeMainnet, 'MAINNET_SCOPE_REQUIRED');
     if (prepared) {
       claim = structuredClone(claim); request = structuredClone(request);
       validateAssetRequest(order, claim, request);
@@ -124,8 +128,9 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
       } else need(order.revision === claim.orderRevision && item.attempts.at(-1).state === 'wallet-pending', 'PREPARED_ORDER_REQUIRED');
     } else need(!order.paused && item.attempts.length === 0 && (itemIndex > 0 || order.revision === 0), 'FRESH_ORDER_REQUIRED');
     need([order.buyer, ...order.items.map(item => item.asset)].every(address => PublicKey.isOnCurve(new PublicKey(address).toBytes())), 'UNSIGNABLE_ADDRESS');
-    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true });
-    phase = 'network'; await assertCluster(rpc, 'devnet');
+    rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true,
+      cluster: network.cluster, authorizeMainnet });
+    phase = 'network'; await assertCluster(rpc, network.cluster);
     phase = 'accounts'; const initial = await readState(rpc, order, itemIndex, 0, receipts);
     phase = 'balance';
     const balance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: initial.slot }]);
@@ -190,11 +195,12 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     need(performance.now() - started <= 30000, 'PREFLIGHT_TOO_OLD');
     const checkedAt = Date.now();
     return { status: signedMode ? 'submission-check-passed' : prepared ? 'wallet-check-passed' : 'preflight-passed',
-      mode: signedMode ? 'closed-devnet-send-check' : prepared ? 'closed-devnet-sign-only-check' : 'closed-devnet-order-preview',
+      mode: `closed-${network.cluster}-${signedMode ? 'send-check' : prepared ? 'sign-only-check' : 'order-preview'}`,
       ...(prepared ? { requestId: buyerRequestId(request), checkedAt, expiresAt: checkedAt + 20000 } : {}), orderId: order.id,
       orderRevision: order.revision, orderSha256, itemIndex, quantity: order.quantity,
       itemsRemaining: final.itemsRemaining, checkedSlot: slot, accountSlot: final.slot,
-      cluster: 'devnet', networkVerified: true, guardPriceVerified: true, blockhashVerified: true, blockhashProvenanceVerified: true,
+      cluster: network.cluster, networkVerified: true, guardPriceVerified: true, blockhashVerified: true, blockhashProvenanceVerified: true,
+      ...(network.cluster==='mainnet-beta'?{genesisHash:network.genesisHash}:{}),
       simulationVerified: true, simulationMode: signedMode ? 'signed' : 'unsigned', remainingBlocks: template.lastValidBlockHeight - height,
       candidate: { asset: template.asset, transactionBase64: encoded, messageSha256: template.messageSha256,
         blockhash: template.blockhash, lastValidBlockHeight: template.lastValidBlockHeight },

@@ -98,13 +98,13 @@ export { context as rpcContext, amount as rpcAmount, binding as snapshotBinding,
   unchanged as assertJournalUnchanged, checkState as checkDeploymentState,
   requireThat as requireDeploymentCheck, blocked as blockedDeploymentReport };
 
-export async function preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
+export async function preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256, authorizeMainnet = false } = {}) {
   let rpc, phase = 'journal';
   try {
     const { snapshot, plan, index, step, attempt, action } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(action.type !== 'reconcile' || ['wallet-pending', 'signed'].includes(attempt?.state), 'RECONCILIATION_REQUIRED');
     phase = 'network';
-    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, trustedHiddenCommitmentSha256 });
+    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, trustedHiddenCommitmentSha256, authorizeMainnet });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'accounts';
@@ -164,14 +164,14 @@ export async function preflightDeploymentStep({ directory, stepId, endpoint, fet
   } catch (error) { return blocked(error, phase, rpc, 'blocked'); }
 }
 
-export async function reconcileDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
+export async function reconcileDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256, authorizeMainnet = false } = {}) {
   let rpc, phase = 'journal';
   try {
     const { snapshot, plan, index, step, attempt } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
+      totalTimeoutMs: 30000, authorizeMainnet, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'receipt';
@@ -194,14 +194,14 @@ export async function reconcileDeploymentStep({ directory, stepId, endpoint, fet
 
 // A finalized execution failure proves atomic rollback of the instructions,
 // not a refund of fees. Also require the exact predecessor account state.
-export async function reconcileFailedDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
+export async function reconcileFailedDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256, authorizeMainnet = false } = {}) {
   let rpc, phase = 'journal';
   try {
     const { snapshot, plan, index, step, attempt } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
+      totalTimeoutMs: 30000, authorizeMainnet, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'receipt';
@@ -223,7 +223,7 @@ export async function reconcileFailedDeploymentStep({ directory, stepId, endpoin
 
 // The trusted gateway has independently checked bounded payer history and the
 // saved hash anchor. Recheck expiry, absence and predecessor effects locally.
-export async function reconcileExpiredDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, evidence, trustedHiddenCommitmentSha256 } = {}) {
+export async function reconcileExpiredDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, evidence, trustedHiddenCommitmentSha256, authorizeMainnet = false } = {}) {
   let rpc, phase = 'journal';
   try {
     const { snapshot, plan, index, step, attempt } = await target(directory, stepId, trustedHiddenCommitmentSha256);
@@ -232,7 +232,7 @@ export async function reconcileExpiredDeploymentStep({ directory, stepId, endpoi
       && evidence.lastValidBlockHeight === attempt.request.lastValidBlockHeight, 'EXPIRY_EVIDENCE_MISMATCH');
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
+      totalTimeoutMs: 30000, authorizeMainnet, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'expiry';

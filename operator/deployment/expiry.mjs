@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { inspectSignedDeploymentTransaction } from './signing.mjs';
-import { GENESIS_HASHES } from './rpc.mjs';
+import { networkProfile } from './network.mjs';
 import { validRecoverySignature } from './request-policy.mjs';
 export class DeploymentExpiryError extends Error {
   constructor(code) { super('Deployment expiry could not be verified.'); this.code = code; }
@@ -35,7 +35,11 @@ function blockHeader(value, slot) {
     && address(value.blockhash), 'EXPIRY_BLOCK_UNAVAILABLE');
   return value;
 }
-export async function verifyExpiredTransaction({ transactionBase64, anchor: inputAnchor, minContextSlot = 0, call }) {
+export async function verifyExpiredTransaction({ transactionBase64, anchor: inputAnchor, minContextSlot = 0, call,
+  cluster = 'devnet', authorizeMainnet = false }) {
+  let profile;
+  try { profile = networkProfile(cluster); } catch { throw new DeploymentExpiryError('EXPIRY_WRONG_CLUSTER'); }
+  need(typeof authorizeMainnet === 'boolean' && authorizeMainnet === (profile.cluster === 'mainnet-beta'), 'EXPIRY_NETWORK_AUTHORIZATION');
   const signed = inspectSignedDeploymentTransaction(transactionBase64);
   const tx = VersionedTransaction.deserialize(Buffer.from(signed.transactionBase64, 'base64'));
   const anchor = structuredClone(validateHashAnchor(inputAnchor));
@@ -46,7 +50,7 @@ export async function verifyExpiredTransaction({ transactionBase64, anchor: inpu
     requests++; const result = await call(method, params);
     need(performance.now() - started < 25000, 'EXPIRY_REVIEW_LIMIT'); return result;
   };
-  need(await rpc('getGenesisHash') === GENESIS_HASHES.devnet, 'EXPIRY_WRONG_CLUSTER');
+  need(await rpc('getGenesisHash') === profile.genesisHash, 'EXPIRY_WRONG_CLUSTER');
   const first = blockHeader(await rpc('getBlock', [anchor.slot, blockOptions]), anchor.slot);
   need(first.blockhash === anchor.blockhash && first.blockHeight <= anchor.lastValidBlockHeight, 'EXPIRY_ANCHOR_MISMATCH');
   const valid = await rpc('isBlockhashValid', [anchor.blockhash, { commitment: 'finalized', minContextSlot: Math.max(minContextSlot, anchor.slot) }]);

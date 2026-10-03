@@ -1,6 +1,6 @@
 # Private buyer candidate
 
-This is a private, closed Devnet review interface over the existing Core/Core
+This is a private, closed network-scoped review interface over the existing Core/Core
 Candy Machine buyer adapters. It is not part of the public website. The
 production factory always disables sending; neither configuration nor URL/UI
 options can enable it. Sales remain closed at 0.2 SOL per item.
@@ -25,8 +25,22 @@ The private JSON must contain exactly these fields, populated from an already
 reviewed deployment: `version: 1`, `cluster: "devnet"`, HTTPS `origin`, and
 canonical Solana public addresses `machine`, `collection`, `guard`. Do not put
 RPC URLs, API keys, wallet secrets, inventory files, final metadata, or a send
-switch in this file. The builder rejects extra fields and other clusters. No
+switch in this file. The builder rejects extra fields and unknown clusters. No
 real configuration or deployment addresses are supplied by this change.
+
+A separately reviewed Mainnet candidate uses `cluster: "mainnet-beta"` and the
+mandatory exact `genesisHash` from the static [network profile](../../MAINNET.md).
+Hidden Settings uses version 2 with `storageMode: "hidden-settings"` and its
+reviewed public commitment hash. The gateway separately requires the externally
+supplied trusted storage commitment; this browser configuration cannot authorize
+a gateway or change its upstream. The builder accepts only these two exact
+network profiles, freezes the selected configuration and reports its cluster.
+Mainnet packaging additionally requires explicit `--mainnet`; the factory API
+requires `authorizeMainnet: true`. Missing or crossed grants fail before output
+creation, storage access or wallet calls. The builder embeds this trusted literal
+separately from the configuration; configuration alone cannot activate Mainnet.
+There is no URL, UI, local-storage or environment network selector. No Mainnet
+configuration is activated by these source changes.
 
 For a separately authorized private setup, serve these static files at that
 exact HTTPS origin behind the existing buyer gateway routes. Preserve the
@@ -40,7 +54,8 @@ disabled as well.
 ## Explicit flow
 
 1. Review the browser profile/storage limitation and explicitly request
-   persistent storage. Connect one Wallet Standard wallet supporting Devnet
+   persistent storage. Connect one Wallet Standard wallet supporting the selected
+   profile (`solana:devnet` or `solana:mainnet`) and
    `solana:signTransaction` and choose its exact account. Send-only wallets are
    excluded, regardless of the public site's compatibility filter.
 2. Create 1–50 items or open saved progress. The local scope index retains only

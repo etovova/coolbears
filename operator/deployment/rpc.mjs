@@ -1,14 +1,12 @@
 // Read-only by default. Submission needs an exact signed-byte grant, a checked
-// Devnet genesis and one local use. No signing, retry or endpoint fallback.
+// selected genesis and one local use. No signing, retry or endpoint fallback.
 import { PublicKey } from '@solana/web3.js';
 import { inspectSignedDeploymentTransaction } from './signing.mjs';
+import { networkProfile, GENESIS_HASHES } from './network.mjs';
+export { GENESIS_HASHES } from './network.mjs';
 // Simulation requires an explicit opt-in and never replaces a blockhash.
 // Full genesis hashes: official Solana ClusterType::get_genesis_hash source:
 // https://github.com/solana-labs/solana/blob/master/sdk/src/genesis_config.rs
-export const GENESIS_HASHES = Object.freeze({
-  devnet: 'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG',
-  'mainnet-beta': '5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2N9d',
-});
 
 const METHODS = new Set([
   'getGenesisHash', 'getMultipleAccounts', 'getBalance', 'getLatestBlockhash',
@@ -83,7 +81,12 @@ async function readBody(response, signal, limit, expiresAt) {
   }
 }
 
-export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission, failedRetry, expiredRetry, allowExpiryReads = false } = {}) {
+export function createDeploymentRpc({ endpoint, cluster = 'devnet', authorizeMainnet = false, authorizeMainnetSend = false, fetchImpl = (...args) => globalThis.fetch(...args), timeoutMs = 15000, totalTimeoutMs, maxResponseBytes = 4 * 1024 * 1024, allowSimulation = false, submission, failedRetry, expiredRetry, allowExpiryReads = false } = {}) {
+  let profile;
+  try { profile = networkProfile(cluster); } catch { throw fail('CLUSTER'); }
+  if (typeof authorizeMainnet !== 'boolean' || typeof authorizeMainnetSend !== 'boolean'
+    || (cluster === 'devnet' && (authorizeMainnet || authorizeMainnetSend))
+    || (cluster === 'mainnet-beta' && (!authorizeMainnet || (submission !== undefined && !authorizeMainnetSend)))) throw fail('CONFIGURATION');
   const url = endpointUrl(endpoint);
   if (typeof allowSimulation !== 'boolean' || typeof allowExpiryReads !== 'boolean' || typeof fetchImpl !== 'function' || !Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 60000
     || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes < 1 || maxResponseBytes > 16 * 1024 * 1024
@@ -112,7 +115,7 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
     } catch { throw fail('CONFIGURATION'); }
   }
   const startedAt = performance.now();
-  let devnetChecked = false, submitted = false;
+  let networkChecked = false, submitted = false;
   let requests = 0;
   return Object.freeze({
     get requests() { return requests; },
@@ -123,16 +126,16 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
         || (allowExpiryReads && ['getBlock', 'getFirstAvailableBlock', 'getSignaturesForAddress'].includes(method)))) throw fail('METHOD');
       if (!Array.isArray(params)) throw fail('PARAMS');
       if (method === 'coolbears_authorizeExpiredRetry') {
-        if (expiryReviewed || !devnetChecked) throw fail('METHOD');
+        if (expiryReviewed || !networkChecked) throw fail('METHOD');
         if (params.length !== 1 || params[0] !== expiryGrant.transactionBase64) throw fail('PARAMS');
       }
       if (method === 'coolbears_authorizeFailedRetry') {
-        if (retryReviewed || !devnetChecked) throw fail('METHOD');
+        if (retryReviewed || !networkChecked) throw fail('METHOD');
         if (params.length !== 1 || params[0] !== retryGrant.transactionBase64) throw fail('PARAMS');
       }
       if (method === 'sendTransaction') {
         const [bytes, config] = params;
-        if (submitted || !devnetChecked) throw fail('METHOD');
+        if (submitted || !networkChecked) throw fail('METHOD');
         if (params.length !== 2 || bytes !== grant.transactionBase64 || !object(config)
           || Object.keys(config).sort().join(',') !== 'encoding,maxRetries,minContextSlot,preflightCommitment,skipPreflight'
           || config.encoding !== 'base64' || config.maxRetries !== 0 || config.skipPreflight !== false
@@ -170,7 +173,7 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
       if (method === 'sendTransaction') submitted = true; // Consume before I/O, including ambiguous failures.
       if (method === 'coolbears_authorizeFailedRetry') retryReviewed = true;
       if (method === 'coolbears_authorizeExpiredRetry') expiryReviewed = true;
-      if (method === 'getGenesisHash') devnetChecked = false;
+      if (method === 'getGenesisHash') networkChecked = false;
       const controller = new AbortController();
       const expiresAt = performance.now() + callTimeoutMs;
       let timer;
@@ -198,7 +201,7 @@ export function createDeploymentRpc({ endpoint, fetchImpl = (...args) => globalT
           if (!object(data.error) || !Number.isSafeInteger(data.error.code) || typeof data.error.message !== 'string') throw fail('RESPONSE');
           throw fail('RPC');
         }
-        if (method === 'getGenesisHash') devnetChecked = data.result === GENESIS_HASHES.devnet;
+        if (method === 'getGenesisHash') networkChecked = data.result === profile.genesisHash;
         if (method === 'sendTransaction' && data.result !== grant.signature) throw fail('RESPONSE');
         return data.result; // null is a legitimate read RPC result.
       });

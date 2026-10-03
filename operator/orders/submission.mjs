@@ -6,11 +6,12 @@ import {bytesToHex} from '@noble/hashes/utils';
 import {createProtocolOrderModel} from './journal-model.mjs';
 import {verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
 import {lamports} from './cost-approval.mjs';
+import {networkProfile} from '../deployment/network.mjs';
 const model=createProtocolOrderModel(policy),need=(v,code)=>{if(!v)throw Error(code);};
 export const signedBytesId=bytes=>bytesToHex(sha256(new TextEncoder().encode(bytes)));
 export function validateBuyerSubmission({order,claim,request,response}){
-  model.validateOrder(order);assertCurrentItem(order,claim.itemIndex);
-  need(order.cluster==='devnet'&&order.revision>=claim.orderRevision+2&&order.items[claim.itemIndex].attempts.length===claim.attempt
+  model.validateOrder(order);networkProfile(order.cluster);assertCurrentItem(order,claim.itemIndex);
+  need(order.revision>=claim.orderRevision+2&&order.items[claim.itemIndex].attempts.length===claim.attempt
     &&order.items[claim.itemIndex].attempts.at(-1).state==='unknown','SIGNED_ORDER_REQUIRED');
   const signed=verifyBuyerSigningResponse(order,claim,request,response);
   need(order.items[claim.itemIndex].attempts.at(-1).signature===signed.signature,'SAVED_RESPONSE_REQUIRED');
@@ -29,8 +30,10 @@ export function validateFailureEvidence(e,p){
 }
 export function validateBuyerResult(report,input,{recovery=false}={}){
   const binding=submissionBinding(input);
+  const network=networkProfile(input.order.cluster);
   need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)
-    &&report.cluster==='devnet'&&report.readyToSubmit===false&&report.salesOpen===false,'SUBMISSION_RESPONSE');
+    &&report.cluster===network.cluster&&(network.cluster!=='mainnet-beta'||report.genesisHash===network.genesisHash)
+    &&report.readyToSubmit===false&&report.salesOpen===false,'SUBMISSION_RESPONSE');
   if(recovery){
     need(['verified','failed','unknown'].includes(report.status),'SUBMISSION_RESPONSE');
     if(['verified','failed'].includes(report.status)){

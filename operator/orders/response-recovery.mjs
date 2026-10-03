@@ -1,4 +1,5 @@
 // Portable evidence binding. A discovered response is only usable with its terminal proof.
+import {networkProfile} from '../deployment/network.mjs';
 import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createProtocolOrderModel} from './journal-model.mjs';
@@ -6,6 +7,7 @@ import {validateAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from './
 import {validateCostApproval} from './cost-approval.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
+const networkIdentity=order=>order.cluster==='mainnet-beta'?{genesisHash:networkProfile(order.cluster).genesisHash}:{};
 const model=createProtocolOrderModel(policy),need=(v,code='RESPONSE_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const shape=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
@@ -13,7 +15,7 @@ export const responseRecoveryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,
 export function validateMissingBuyerResponse(input){
   need(shape(input,'order claim request walletClaim'),'MISSING_RESPONSE_FIELDS');
   const {order,claim,request,walletClaim:w}=input;model.validateOrder(order);validateAssetRequest(order,claim,request);
-  need(order.cluster==='devnet'&&order.items[claim.itemIndex].attempts.length===claim.attempt&&order.items[claim.itemIndex].attempts.at(-1).state==='unknown'
+  need(order.items[claim.itemIndex].attempts.length===claim.attempt&&order.items[claim.itemIndex].attempts.at(-1).state==='unknown'
     &&order.items[claim.itemIndex].attempts.at(-1).signature===null,'MISSING_RESPONSE_STATE');
   need(w&&((w.version===1&&shape(w,'version claimId requestId orderRevision'))
     ||(w.version===2&&shape(w,'version claimId requestId orderRevision costApproval')))
@@ -37,7 +39,8 @@ export function recoveredSubmission(input,response){
 }
 export function validateResponseRecovery(report,input){
   const binding=responseRecoveryBinding(input);
-  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster==='devnet'
+  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster===input.order.cluster
+    &&(input.order.cluster!=='mainnet-beta'||report.genesisHash===networkProfile(input.order.cluster).genesisHash)
     &&report.transactionsSent===0&&report.retryAuthorized===false&&report.readyToSubmit===false&&report.salesOpen===false
     &&typeof report.restored==='boolean'&&Number.isSafeInteger(report.networkRequests)&&report.networkRequests>=0);
   if(report.status==='response-recovered'){
@@ -48,7 +51,7 @@ export function validateResponseRecovery(report,input){
   return report;
 }
 export function responseRecoveryReport(input,{response,result,networkRequests=0,restored=false,code}={}){
-  return validateResponseRecovery({...responseRecoveryBinding(input),cluster:'devnet',status:response?'response-recovered':'unknown',
+  return validateResponseRecovery({...responseRecoveryBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:response?'response-recovered':'unknown',
     transactionsSent:0,retryAuthorized:false,readyToSubmit:false,salesOpen:false,restored,networkRequests,
     ...(response?{response:structuredClone(response),result:structuredClone(result)}:{code:code??'RESPONSE_NOT_FOUND'})},input);
 }
@@ -63,7 +66,7 @@ export function restoreDiscoveredSubmission(input,record){
     &&shape(record.identity,'orderIdentitySha256 requestId partialSha256 walletClaimSha256')
     &&typeof record.identity.walletClaimSha256==='string'&&/^[a-f0-9]{64}$/.test(record.identity.walletClaimSha256)
     &&Object.entries(identity(input)).every(([k,v])=>record.identity[k]===v)&&same(input.response,record.response));
-  return validateBuyerResult({...submissionBinding(input),cluster:'devnet',status:record.proof.kind,chainVerified:true,
+  return validateBuyerResult({...submissionBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:record.proof.kind,chainVerified:true,
     transactionsSent:0,networkRequests:0,retryAuthorized:false,restored:true,readyToSubmit:false,salesOpen:false,
     proof:structuredClone(record.proof),...(record.evidence?{evidence:structuredClone(record.evidence)}:{})},input,{recovery:true});
 }

@@ -1,4 +1,5 @@
 // Retirement of an invoked wallet attempt with a genuinely missing response.
+import {networkProfile} from '../deployment/network.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createProtocolOrderModel} from './journal-model.mjs';
 import {responseRecoveryBinding,validateMissingBuyerResponse} from './response-recovery.mjs';
@@ -6,6 +7,7 @@ import {buyerRequestId} from './signing.mjs';
 import {signedBytesId,submissionBinding,validateBuyerSubmission} from './submission.mjs';
 import {validateBuyerExpiryResult} from './expiry-review.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
+const networkIdentity=order=>order.cluster==='mainnet-beta'?{genesisHash:networkProfile(order.cluster).genesisHash}:{};
 const model=createProtocolOrderModel(policy),need=v=>{if(!v)throw Error('RESPONSE_EXPIRY_BINDING');};
 const exact=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 const positive=n=>Number.isSafeInteger(n)&&n>0,hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
@@ -22,7 +24,8 @@ function evidenceFor(input,p,e){
 }
 export function validateResponseExpiry(report,input){
   const binding=responseRecoveryBinding(input);
-  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster==='devnet'
+  need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster===input.order.cluster
+    &&(input.order.cluster!=='mainnet-beta'||report.genesisHash===networkProfile(input.order.cluster).genesisHash)
     &&report.transactionsSent===0&&report.retryAuthorized===false&&report.readyToSubmit===false&&report.salesOpen===false
     &&typeof report.restored==='boolean'&&Number.isSafeInteger(report.networkRequests)&&report.networkRequests>=0
     &&report.response===undefined&&report.result===undefined);
@@ -32,7 +35,7 @@ export function validateResponseExpiry(report,input){
   return report;
 }
 export function responseExpiryReport(input,{proof,evidence,networkRequests=0,restored=false,code}={}){
-  return validateResponseExpiry({...responseRecoveryBinding(input),cluster:'devnet',status:proof?'response-expired':'unknown',
+  return validateResponseExpiry({...responseRecoveryBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:proof?'response-expired':'unknown',
     chainVerified:!!proof,transactionsSent:0,retryAuthorized:false,readyToSubmit:false,salesOpen:false,networkRequests,restored,
     ...(proof?{proof:structuredClone(proof),evidence:structuredClone(evidence)}:{code:code??'RESPONSE_EXPIRY_NOT_VERIFIED'})},input);
 }
@@ -61,7 +64,7 @@ export function restoreResponseExpiry(input,record){
 export function restoreResponseExpirySubmission(input,record){
   const signed=validateBuyerSubmission(input);validateRecord(input,record);
   const {historyTransactions,...evidence}=structuredClone(record.evidence);
-  return validateBuyerExpiryResult({...submissionBinding(input),cluster:'devnet',status:'expired',chainVerified:true,
+  return validateBuyerExpiryResult({...submissionBinding(input),cluster:input.order.cluster,...networkIdentity(input.order),status:'expired',chainVerified:true,
     transactionsSent:0,networkRequests:0,restored:true,retryAuthorized:false,readyToSubmit:false,salesOpen:false,
     proof:{...structuredClone(record.proof),signature:signed.signature},evidence},input);
 }
