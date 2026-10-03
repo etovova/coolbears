@@ -40,13 +40,17 @@ async function publicOptions(filename) {
     }
     if (used > 4096) throw failure('OPTIONS');
     const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes.subarray(0, used)));
-    const names = ['id', 'cluster', 'blockhash', 'lastValidBlockHeight', 'machineRentLamports'];
+    const hidden = value?.storageMode === 'hidden-settings';
+    const names = ['id', 'cluster', 'blockhash', 'lastValidBlockHeight', 'machineRentLamports',
+      ...(hidden ? ['storageMode', 'hiddenCommitmentSha256'] : [])];
     if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== names.length
       || !names.every(key => Object.hasOwn(value, key)) || typeof value.id !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/.test(value.id)
       || !['devnet', 'mainnet-beta'].includes(value.cluster) || !address(value.blockhash)
       || !Number.isSafeInteger(value.lastValidBlockHeight) || value.lastValidBlockHeight < 1
       || typeof value.machineRentLamports !== 'string' || !/^[1-9]\d{0,19}$/.test(value.machineRentLamports)
-      || BigInt(value.machineRentLamports) > (1n << 64n) - 1n) throw failure('OPTIONS');
+      || BigInt(value.machineRentLamports) > (1n << 64n) - 1n
+      || (hidden && (typeof value.hiddenCommitmentSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(value.hiddenCommitmentSha256)
+        || value.hiddenCommitmentSha256 === '0'.repeat(64)))) throw failure('OPTIONS');
     return value;
   } catch { throw failure('OPTIONS'); }
   finally { bytes.fill(0); await handle?.close(); }
@@ -64,6 +68,9 @@ function publicReport(command, snapshot) {
   return {
     ok: true, command, mode: 'offline-custody', id: manifest.id, cluster: manifest.cluster, owner: manifest.owner, roles,
     manifestSha256: snapshot.manifestSha256, journalRevision: snapshot.revision, journalHead: snapshot.headHash,
+    ...(machine.storageMode === 'hidden-settings' ? { storageMode: 'hidden-settings',
+      hiddenCommitmentSha256: machine.hiddenSettings.hash, plannedMessages: manifest.steps.length,
+      privateMappingVerified: false } : {}),
     action: nextDeploymentAction(snapshot), ...(command === 'verify' ? { localKeysVerified: true } : {}),
     readyToSubmit: false, salesOpen: false, networkRequests: 0, signaturesCreated: 0, transactionsSent: 0,
   };

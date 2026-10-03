@@ -1,7 +1,7 @@
 // Executor policy for a contiguous order. Structural checks are not chain proof.
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
-const model=createOrderModel(policy);
+import {createProtocolOrderModel} from './journal-model.mjs';
+const model=createProtocolOrderModel(policy);
 const need=(ok,code='ORDER_SEQUENCE')=>{if(!ok)throw Error(code);};
 export function validateSequentialOrder(order){
   model.validateOrder(order);

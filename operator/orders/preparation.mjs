@@ -1,11 +1,11 @@
 // Unsigned current-item preparation. No custody, signing or execution grant.
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {createOrderPlanner} from './transaction-model.mjs';
 import {prepareAssetClaim} from './signing.mjs';
 import {validateBlockhashAnchor} from './blockhash-anchor.mjs';
 import {currentItemIndex} from './sequential.mjs';
-const model=createOrderModel(policy),planner=createOrderPlanner(model);
+const model=createProtocolOrderModel(policy),planner=createOrderPlanner(model);
 export function preparationFor(order,block,sourceSlot){
   const itemIndex=currentItemIndex(order);
   if(itemIndex===null)throw Error('ORDER_COMPLETE');

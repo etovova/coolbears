@@ -2,12 +2,12 @@
 import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {VersionedTransaction} from '@solana/web3.js';
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
 import {validateHistoricalFailure} from './failure-record.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
-const model=createOrderModel(policy),need=(v,code='PREWALLET_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
+const model=createProtocolOrderModel(policy),need=(v,code='PREWALLET_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const shape=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 export const prewalletRecoveryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-prewallet-recovery:v1:');

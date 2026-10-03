@@ -27,7 +27,8 @@ function publicPlaceholder(label, nonce) {
   throw Error('PREVIEW_PUBLIC_ADDRESS_UNAVAILABLE');
 }
 
-export async function previewDevnetDeployment({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), onProgress = () => {} } = {}) {
+export async function previewDevnetDeployment({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), onProgress = () => {},
+  storageMode = 'config-lines', hiddenCommitmentSha256 } = {}) {
   const report = { version: 1, kind: 'devnet-deployment-planning-preview', status: 'blocked',
     cluster: 'devnet', startedAt: new Date().toISOString(), addressesArePlaceholders: true,
     productionBundleCreated: false, keysCreated: 0, signaturesCreated: 0, transactionsSent: 0,
@@ -38,6 +39,8 @@ export async function previewDevnetDeployment({ endpoint, fetchImpl = (...args) 
   const started = performance.now();
   try {
     need(typeof fetchImpl === 'function' && typeof onProgress === 'function', 'INVALID_PREVIEW_OPTIONS');
+    const config = makePreparation({ storageMode, hiddenCommitmentSha256 }).cmConfig.config;
+    const machineSpace = getCandyMachineSize(config.itemsAvailable, config.configLineSettings);
     const pacedFetch = async (url, options) => {
       need(performance.now() - started < 18 * 60 * 1000, 'PREVIEW_DEADLINE_EXCEEDED');
       // Public RPC documents 40 requests/method/10 seconds. One request at a
@@ -50,8 +53,6 @@ export async function previewDevnetDeployment({ endpoint, fetchImpl = (...args) 
     rpc = createDeploymentRpc({ endpoint, fetchImpl: pacedFetch });
     phase = 'network';
     report.genesisHash = await assertCluster(rpc, 'devnet');
-    const config = makePreparation().cmConfig.config;
-    const machineSpace = getCandyMachineSize(config.itemsAvailable, config.configLineSettings);
     phase = 'rent';
     const rent = rpcAmount(await rpc.call('getMinimumBalanceForRentExemption', [machineSpace, { commitment: 'finalized' }]));
     need(rent > 0n, 'INVALID_MACHINE_RENT');
@@ -62,10 +63,14 @@ export async function previewDevnetDeployment({ endpoint, fetchImpl = (...args) 
     const plan = await buildDeploymentPlan({ cluster: 'devnet',
       collection: publicPlaceholder('collection', nonce), reservedAsset: publicPlaceholder('reserve', nonce),
       machine: publicPlaceholder('machine', nonce), blockhash: block.value?.blockhash,
-      lastValidBlockHeight: block.value?.lastValidBlockHeight, machineRentLamports: rent.toString() });
+      lastValidBlockHeight: block.value?.lastValidBlockHeight, machineRentLamports: rent.toString(), storageMode, hiddenCommitmentSha256 });
     const manifest = deploymentManifestFromPlan('devnet-preview-' + nonce, plan);
     const { model } = await buildDeploymentCostModel(manifest);
     report.model = model;
+    if (storageMode === 'hidden-settings') {
+      report.storageMode = storageMode; report.hiddenCommitmentSha256 = hiddenCommitmentSha256;
+      report.privateMappingVerified = false;
+    }
     report.placeholderAddresses = { collection: plan.roles.collection, reservedAsset: plan.roles.reservedAsset,
       machine: plan.roles.machine, guard: plan.roles.guard };
     report.mintPriceLamports = String(policy.priceSol * 1e9);

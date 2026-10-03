@@ -4,11 +4,11 @@ import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
 import { ed25519 } from '@noble/curves/ed25519';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
-import { createOrderModel } from './journal-model.mjs';
+import { createProtocolOrderModel } from './journal-model.mjs';
 import { createOrderPlanner } from './transaction-model.mjs';
 import { createSigningRequest, verifySigningResponse } from '../deployment/signing.mjs';
 import {validateSequentialOrder,currentItemIndex,assertCurrentItem} from './sequential.mjs';
-const model = createOrderModel(policy), planner = createOrderPlanner(model);
+const model = createProtocolOrderModel(policy), planner = createOrderPlanner(model);
 const need = (ok, code) => { if (!ok) throw Error(code); };
 const same = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
 const digest = value => bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(value))));
@@ -37,7 +37,7 @@ function ordinaryKey(address) {
 }
 function identity(order) {
   // Immutable scope and all assets; history is separately bound to the attempt.
-  const fields = ['version','kind','id','cluster','buyer','machine','collection','guard','quantity','availableAtPlanning','unitPriceLamports','totalPriceLamports','treasury'];
+  const fields = ['version','kind','id','cluster','buyer','machine','collection','guard','quantity','availableAtPlanning','unitPriceLamports','totalPriceLamports','treasury',...(order.version===2?['storageMode','hiddenCommitmentSha256']:[])];
   return digest({ ...Object.fromEntries(fields.map(field => [field, order[field]])),
     items: order.items.map(({index,asset}) => ({index,asset})) });
 }

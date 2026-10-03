@@ -109,3 +109,20 @@ test('missing/null cost options fail with the correct state before any check or 
   await assert.rejects(client.signOnly(null),/COST_APPROVAL_REQUIRED/);await assert.rejects(client.signOnly(),/COST_APPROVAL_REQUIRED/);
   saved={status:'wallet-response-unknown'};await client.load();await assert.rejects(client.signOnly(null),/NOT_READY/);assert.equal(calls,0);
 });
+
+test('an actual wallet client may connect before loading; unloaded or recreated clients cannot quote or request a signature',async()=>{
+  const input=f.input('connect-before-load');let reads=0,checks=0,signatures=0;
+  const account={address:f.policy.owner,publicKey:f.owner.publicKey.toBytes(),chains:['solana:devnet'],features:['solana:signTransaction']};
+  const wallet={chains:['solana:devnet'],accounts:[account],features:{'standard:connect':{connect:async()=>({accounts:[account]})},
+    'standard:events':{on:()=>()=>{}},'solana:signTransaction':{supportedTransactionVersions:[0],signTransaction:()=>{signatures++;throw Error('forbidden');}}}};
+  const storage={read:async()=>{reads++;return input.order;},readAssetSigning:async()=>({status:'asset-partial-saved',claim:input.claim,request:input.request}),readBuyerResponse:async()=>null};
+  const make=()=>createBuyerWalletClient({storage,scope:input.order,checkPrepared:async()=>{checks++;throw Error('forbidden');},storageManager:{persisted:async()=>true}});
+  const first=make();assert.equal(first.state().canRequestSignature,false);
+  assert.equal((await first.connect(wallet)).connected,true);assert.equal(first.state().canRequestSignature,false);assert.equal(reads,0);
+  await assert.rejects(first.quoteCost(),/NOT_READY/);await assert.rejects(first.signOnly({authorizeCost:true}),/NOT_READY/);
+  await first.load();assert.equal(first.state().canRequestSignature,true);first.dispose();assert.equal(first.state().canRequestSignature,false);
+  const second=make();await second.connect(wallet);assert.equal(second.state().canRequestSignature,false);assert.equal(reads,1);
+  await assert.rejects(second.quoteCost(),/NOT_READY/);await assert.rejects(second.signOnly({authorizeCost:true}),/NOT_READY/);
+  await second.load();assert.equal(second.state().canRequestSignature,true);assert.equal(reads,2);
+  assert.equal(checks,0);assert.equal(signatures,0);
+});

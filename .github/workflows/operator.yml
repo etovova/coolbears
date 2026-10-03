@@ -141,6 +141,10 @@ jobs:
       - run: node operator/tests/order-sequential-replacement.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
+      - name: Hidden Settings owner gateway with persistent SQLite
+        env:
+          COOLBEARS_TEST_STORAGE_MODE: hidden-settings
+        run: node operator/tests/deployment-gateway.runtime.mjs
 
   owner-console-browser:
     name: Owner and buyer signing in Chromium / ${{ matrix.group }}
@@ -183,6 +187,9 @@ jobs:
       - name: Configured private buyer interface through IndexedDB and HTTPS gateway
         if: matrix.group == 'console'
         run: node operator/tests/order-buyer-console-integration.browser.mjs
+      - name: Hidden Settings buyer interface with isolated legacy custody
+        if: matrix.group == 'console'
+        run: node operator/tests/hidden-buyer-console-integration.browser.mjs
       - name: Buyer expiry review after a lost wallet response
         if: matrix.group == 'expiry'
         run: node operator/tests/order-response-expiry.browser.mjs
@@ -240,6 +247,7 @@ jobs:
           path: |
             operator/build/owner-console-chromium/
             operator/build/buyer-storage-chromium/
+            operator/build/hidden-buyer-console-integration-chromium/
             operator/build/buyer-signing-chromium/
             operator/build/buyer-native-recovery-chromium/
             operator/build/buyer-wallet-chromium/

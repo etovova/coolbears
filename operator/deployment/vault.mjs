@@ -140,7 +140,10 @@ export function validateDeploymentVaultEnvelope(vault, manifest) {
 export async function createDeploymentSignerVault(input) {
   let passphrase, seeds, key;
   try {
-    const args = exact(input, CREATE_FIELDS);
+    const hidden = record(input) && Object.getOwnPropertyDescriptor(input, 'storageMode')?.value === 'hidden-settings';
+    const args = exact(input, [...CREATE_FIELDS, ...(hidden ? ['storageMode', 'hiddenCommitmentSha256'] : [])]);
+    if (hidden) check(typeof args.hiddenCommitmentSha256 === 'string' && /^[0-9a-f]{64}$/.test(args.hiddenCommitmentSha256)
+      && args.hiddenCommitmentSha256 !== '0'.repeat(64));
     passphrase = phraseBytes(args.passphrase);
     check(validId(args.id) && ['devnet', 'mainnet-beta'].includes(args.cluster));
     address(args.blockhash);
@@ -150,7 +153,8 @@ export async function createDeploymentSignerVault(input) {
     const roles = roleAddresses(seeds);
     check(new Set([policy.owner, ...Object.values(roles)]).size === 4);
     const plan = await buildDeploymentPlan({ cluster: args.cluster, ...roles, blockhash: args.blockhash,
-      lastValidBlockHeight: args.lastValidBlockHeight, machineRentLamports: args.machineRentLamports });
+      lastValidBlockHeight: args.lastValidBlockHeight, machineRentLamports: args.machineRentLamports,
+      ...(hidden ? { storageMode: args.storageMode, hiddenCommitmentSha256: args.hiddenCommitmentSha256 } : {}) });
     const manifest = deploymentManifestFromPlan(args.id, plan);
     checkRoles(roles, manifest, plan);
     const salt = randomBytes(32), iv = randomBytes(12);

@@ -2,11 +2,11 @@
 // Retains its native partial, wallet invocation and optional original cost consent.
 import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {restoreResponseExpiry} from './response-expiry.mjs';
 import {validateMissingBuyerResponse} from './response-recovery.mjs';
 import {signedBytesId} from './submission.mjs';
-const model=createOrderModel(policy),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const model=createProtocolOrderModel(policy),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const need=v=>{if(!v)throw Error('RESPONSE_EXPIRY_REPLACEMENT_BINDING');};
 const exact=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 export const isResponseExpiryReplacementInput=input=>exact(input,'order claim request walletClaim');

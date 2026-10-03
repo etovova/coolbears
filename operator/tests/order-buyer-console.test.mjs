@@ -5,6 +5,7 @@ import {createPrivateBuyerController} from '../orders/buyer-console/controller.m
 import {createPrivateBuyerConsole} from '../orders/buyer-console/factory.mjs';
 import {createScopeIndex,validateConsoleConfig} from '../orders/buyer-console/config.mjs';
 import {lamportsFromSol,solFromLamports} from '../orders/buyer-console/view.mjs';
+import {createBuyerWalletClient} from '../orders/wallet-client.mjs';
 const prepare=c=>c.prepare({authorizePreparation:true});
 const sign=(c,q)=>c.sign({authorizeCost:true,quoteId:q.quoteId,maxTotalLamports:q.budget.totalLamports});
 test('no creation, persistence, preparation, signing, sends or replacement effects without separate consent',async()=>{
@@ -112,4 +113,19 @@ test('retained wallet bytes can be saved explicitly without another wallet call 
   await assert.rejects(c.recoverWalletResponse(),/EXPLICIT_RESPONSE_RECOVERY/);assert.equal(saves,0);
   await c.recoverWalletResponse({authorizeResponseRecovery:true});assert.equal(saves,1);assert.equal(f.calls.wallet,1);assert.equal(f.calls.recover,0);assert.equal(f.calls.send,0);
   assert.equal(c.state().canRecoverWalletResponse,false);
+});
+
+for(const hidden of [false,true])test(`resuming ${hidden?'v2 hidden':'v1'} progress and reconnecting uses the actual unloaded wallet client without a stuck busy state`,async()=>{
+  const f=buyerConsoleFixture();await f.ready(1);const id=f.saved[0].id,before=JSON.stringify(f.snapshot),states=[];let checks=0;
+  const storage={...f.storage,read:async()=>structuredClone(f.snapshot.order),readAssetSigning:async()=>null,readBuyerResponse:async()=>null};
+  const controller=createPrivateBuyerController({...f.options,storage,
+    config:hidden?{...f.options.config,version:2,storageMode:'hidden-settings',hiddenCommitmentSha256:'a'.repeat(64)}:f.options.config,
+    onChange:state=>states.push(state.busy),makePorts:scope=>({wallet:createBuyerWalletClient({storage,scope,
+      checkPrepared:async()=>{checks++;throw Error('forbidden');},storageManager:{persisted:async()=>true}})})});
+  await controller.load(id);assert.equal(controller.state().busy,false);
+  await controller.connectWallet(f.wallet);assert.equal(controller.state().busy,false);await controller.selectAccount(f.account.address);
+  assert.equal(controller.state().selectedAccount,f.account.address);assert.equal(controller.state().busy,false);assert.equal(controller.state().canQuote,false);
+  controller.disconnectWallet();await controller.connectWallet(f.wallet);await controller.selectAccount(f.account.address);
+  assert.equal(controller.state().busy,false);assert.equal(controller.state().selectedAccount,f.account.address);assert.equal(controller.state().error,null);
+  assert.equal(states.at(-1),false);assert.equal(JSON.stringify(f.snapshot),before);assert.equal(checks,0);assert.equal(f.calls.wallet,0);assert.equal(f.calls.send,0);
 });

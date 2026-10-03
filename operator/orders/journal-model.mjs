@@ -3,7 +3,25 @@
 // module does not authenticate it or prove anything on chain by itself.
 import { publicKey } from '@metaplex-foundation/umi';
 import { base58 } from '@metaplex-foundation/umi/serializers';
-export function createOrderModel(policy) {
+import { validateHiddenCommitmentSha256, resolveHiddenIndexedMetadata } from '../storage-mode.mjs';
+export function validateOrderStorageOptions(value={}) {
+  if (!value || typeof value!=='object' || Array.isArray(value)) throw Error('ORDER_STORAGE_PROFILE');
+  const names=Object.keys(value).sort().join(' ');
+  if (names==='') return Object.freeze({});
+  if (names==='storageMode' && value.storageMode==='config-lines') return Object.freeze({storageMode:'config-lines'});
+  if (names!=='hiddenCommitmentSha256 storageMode' || value.storageMode!=='hidden-settings') throw Error('ORDER_STORAGE_PROFILE');
+  validateHiddenCommitmentSha256(value.hiddenCommitmentSha256);
+  return Object.freeze({storageMode:'hidden-settings',hiddenCommitmentSha256:value.hiddenCommitmentSha256});
+}
+// The caller must supply an independently trusted deployment profile. A record
+// cannot opt itself into a different machine policy at a network entry point.
+export function createOrderModel(policy, storageOptions = {}) {
+
+storageOptions=validateOrderStorageOptions(storageOptions);
+
+const hidden = storageOptions.storageMode === 'hidden-settings';
+const storageFields = hidden ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: storageOptions.hiddenCommitmentSha256 } : {};
+const version = hidden ? 2 : 1;
 
 const PRICE = String(policy.priceSol * 1e9);
 const CORE = 'CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d';
@@ -52,10 +70,10 @@ function validateProof(order, item, attempt, proof) {
   if (proof.kind === 'verified') {
     keys(proof.account, 'program owner collection name uri');
     requireThat(proof.account.program === CORE && proof.account.owner === order.buyer && proof.account.collection === order.collection, 'WRONG_ASSET');
-    const match = /\/metadata\/hidden\/(\d{4})\.json$/.exec(proof.account.uri);
+    const match = (hidden ? /\/metadata\/hidden-indexed\/([1-9]\d{0,3})\.json$/ : /\/metadata\/hidden\/(\d{4})\.json$/).exec(proof.account.uri);
     const index = match ? Number(match[1]) : 0;
-    requireThat(index >= 1 && index < policy.supply && proof.account.uri === `${policy.website}/metadata/hidden/${match[1]}.json`, 'WRONG_METADATA');
-    requireThat(proof.account.name === policy.hiddenName.replace('{index:04d}', match[1]), 'WRONG_METADATA');
+    requireThat(index >= 1 && index < policy.supply && proof.account.uri === `${policy.website}/metadata/${hidden ? 'hidden-indexed' : 'hidden'}/${match[1]}.json`, 'WRONG_METADATA');
+    requireThat(proof.account.name === (hidden ? resolveHiddenIndexedMetadata(policy,index).name : policy.hiddenName.replace('{index:04d}', match[1])), 'WRONG_METADATA');
   } else if (proof.kind === 'failed') {
     requireThat(proof.executionFailed === true && proof.accountAbsent === true, 'FAILURE_NOT_PROVEN');
   } else {
@@ -65,8 +83,9 @@ function validateProof(order, item, attempt, proof) {
 }
 
 function validateOrder(order) {
-  keys(order, 'version kind id revision cluster buyer machine collection guard quantity availableAtPlanning unitPriceLamports totalPriceLamports treasury paused items');
-  requireThat(order.version === 1 && order.kind === 'coolbears-offline-order' && idValid(order.id) && integer(order.revision), 'INVALID_ORDER');
+  keys(order, 'version kind id revision cluster buyer machine collection guard quantity availableAtPlanning unitPriceLamports totalPriceLamports treasury paused items'+(hidden ? ' storageMode hiddenCommitmentSha256' : ''));
+  requireThat(order.version === version && order.kind === 'coolbears-offline-order' && idValid(order.id) && integer(order.revision), 'INVALID_ORDER');
+  if (hidden) requireThat(order.storageMode === storageFields.storageMode && order.hiddenCommitmentSha256 === storageFields.hiddenCommitmentSha256, 'ORDER_STORAGE_PROFILE_MISMATCH');
   requireThat(['devnet', 'mainnet-beta'].includes(order.cluster), 'INVALID_CLUSTER');
   for (const field of ['buyer', 'machine', 'collection', 'guard', 'treasury']) address(order[field]);
   requireThat(new Set([order.machine, order.collection, order.guard]).size === 3, 'DUPLICATE_ACCOUNTS');
@@ -104,11 +123,15 @@ function validateOrder(order) {
   return order;
 }
 
-function createOrder({ id, cluster, buyer, machine, collection, guard, quantity, available, assets }) {
+function createOrder(input) {
+  const { id, cluster, buyer, machine, collection, guard, quantity, available, assets } = input;
+  if (Object.hasOwn(input,'storageMode') || Object.hasOwn(input,'hiddenCommitmentSha256')) {
+    requireThat(hidden && input.storageMode === storageFields.storageMode && input.hiddenCommitmentSha256 === storageFields.hiddenCommitmentSha256, 'ORDER_STORAGE_PROFILE_MISMATCH');
+  }
   requireThat(Array.isArray(assets), 'INVALID_ASSETS');
   requireThat(integer(quantity, 1), 'INVALID_QUANTITY');
   return validateOrder({
-    version: 1, kind: 'coolbears-offline-order', id, revision: 0,
+    version, kind: 'coolbears-offline-order', id, revision: 0, ...storageFields,
     cluster, buyer, machine, collection, guard, quantity, availableAtPlanning: available,
     unitPriceLamports: PRICE, totalPriceLamports: String(BigInt(PRICE) * BigInt(quantity)),
     treasury: policy.owner, paused: false,
@@ -213,7 +236,8 @@ function transitionOrder(order, event) {
   return validateOrder(next);
 }
 
-const storageKey = id => { requireThat(idValid(id), 'INVALID_ORDER_ID'); return `coolbears:offline-order:v1:${id}`; };
+// A hidden journal never overwrites or accidentally resumes a v1 journal.
+const storageKey = id => { requireThat(idValid(id), 'INVALID_ORDER_ID'); return hidden ? `coolbears:offline-order:v2:hidden-settings:${storageFields.hiddenCommitmentSha256}:${id}` : `coolbears:offline-order:v1:${id}`; };
 function readOrder(storage, id) {
   const raw = storage.getItem(storageKey(id));
   if (raw === null) return null;
@@ -234,7 +258,7 @@ function saveOrder(storage, order, expectedRevision = null) {
     requireThat(!order.paused && order.items.every(item => item.attempts.length === 0), 'INITIAL_ORDER_NOT_EMPTY');
   } else {
     requireThat(current.revision === expectedRevision && order.revision === expectedRevision + 1, 'STALE_REVISION');
-    for (const field of ['version', 'kind', 'id', 'cluster', 'buyer', 'machine', 'collection', 'guard', 'quantity', 'availableAtPlanning', 'unitPriceLamports', 'totalPriceLamports', 'treasury']) {
+    for (const field of ['version', 'kind', 'id', 'cluster', 'buyer', 'machine', 'collection', 'guard', 'quantity', 'availableAtPlanning', 'unitPriceLamports', 'totalPriceLamports', 'treasury', ...Object.keys(storageFields)]) {
       requireThat(current[field] === order[field], 'ORDER_SCOPE_CHANGED');
     }
     let changedItems = 0;
@@ -269,4 +293,16 @@ function saveOrder(storage, order, expectedRevision = null) {
 }
 
 return { validateOrder, createOrder, summarizeOrder, nextAction, itemsToPlan, transitionOrder, readOrder, saveOrder };
+}
+
+// Strict byte/evidence validation for portable protocol helpers. This dispatcher
+// grants no network admission: browser custody and gateways use the pinned
+// createOrderModel factory above and reject a different deployment profile.
+export function createProtocolOrderModel(policy) {
+  const legacy = createOrderModel(policy);
+  const forOrder = order => order?.version === 2
+    ? createOrderModel(policy, { storageMode: order.storageMode, hiddenCommitmentSha256: order.hiddenCommitmentSha256 })
+    : legacy;
+  return Object.freeze(Object.fromEntries(['validateOrder', 'summarizeOrder', 'nextAction', 'itemsToPlan', 'transitionOrder']
+    .map(name => [name, (order, ...args) => forOrder(order)[name](order, ...args)])));
 }

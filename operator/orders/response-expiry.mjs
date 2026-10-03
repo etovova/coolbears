@@ -1,12 +1,12 @@
 // Retirement of an invoked wallet attempt with a genuinely missing response.
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {responseRecoveryBinding,validateMissingBuyerResponse} from './response-recovery.mjs';
 import {buyerRequestId} from './signing.mjs';
 import {signedBytesId,submissionBinding,validateBuyerSubmission} from './submission.mjs';
 import {validateBuyerExpiryResult} from './expiry-review.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
-const model=createOrderModel(policy),need=v=>{if(!v)throw Error('RESPONSE_EXPIRY_BINDING');};
+const model=createProtocolOrderModel(policy),need=v=>{if(!v)throw Error('RESPONSE_EXPIRY_BINDING');};
 const exact=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 const positive=n=>Number.isSafeInteger(n)&&n>0,hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
 export const responseExpiryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-response-expiry:v1:');

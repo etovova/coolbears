@@ -20,10 +20,10 @@ export const COST_SOURCE_COMMITS = Object.freeze({
   candyMachine: 'ea3620b7436004f62e1e7bc3d69147f4feef2ae0',
 });
 
-export async function buildDeploymentCostModel(manifest) {
+export async function buildDeploymentCostModel(manifest, { trustedHiddenCommitmentSha256 } = {}) {
   assert.equal(corePackage.version, '1.10.0', 'COST_MODEL_SDK_VERSION_CHANGED');
   assert.equal(machinePackage.version, '0.3.0', 'COST_MODEL_SDK_VERSION_CHANGED');
-  const plan = await validateCanonicalDeploymentManifest(manifest);
+  const plan = await validateCanonicalDeploymentManifest(manifest, { trustedHiddenCommitmentSha256 });
   const [collection, reserve, machine] = plan.steps.map(step => step.expected);
   const base = getCollectionV1AccountDataSerializer().serialize({ key: Key.CollectionV1,
     updateAuthority: plan.roles.owner, name: collection.name, uri: collection.uri, numMinted: 0, currentSize: 0 });
@@ -60,7 +60,10 @@ export async function buildDeploymentCostModel(manifest) {
     { id: 'guard-rent', stepId: 'machine-create', bytes: sizes.guard },
     { id: 'collection-delegate-growth', stepId: 'machine-create', bytes: sizes.collectionWithDelegate, subtractBytes: sizes.collection },
   ];
+  const hidden = plan.steps[2].expected.storageMode === 'hidden-settings';
   return { plan, model: { revision: COST_MODEL_REVISION, sourceCommits: COST_SOURCE_COMMITS,
+    ...(hidden ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: plan.steps[2].expected.hiddenSettings.hash,
+      privateMappingVerified: false } : {}),
     scope: 'new-deployment-only', sizes, rentItems,
     protocolItems: [{ id: 'reserve-core-create-fee', stepId: 'reserve-create', lamports: CORE_CREATE_FEE_LAMPORTS }],
     steps: plan.steps.map(step => ({ id: step.id, signatures: step.requiredSigners.length })),

@@ -1,12 +1,12 @@
 // Portable evidence binding. A discovered response is only usable with its terminal proof.
 import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {validateAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
 import {validateCostApproval} from './cost-approval.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
-const model=createOrderModel(policy),need=(v,code='RESPONSE_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
+const model=createProtocolOrderModel(policy),need=(v,code='RESPONSE_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const shape=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 export const responseRecoveryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-response-recovery:v1:');

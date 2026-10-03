@@ -3,13 +3,15 @@ import { VersionedTransaction } from '@solana/web3.js';
 import { buildDeploymentCostModel } from './cost-model.mjs';
 import { DeploymentRpcError } from './rpc.mjs';
 import { PROGRAMS, messageIdentity, validRecoverySignature, createRequestValidator } from './request-policy.mjs';
-export async function compileDeploymentRpcPolicy(manifest, { allowSimulation = false, recoverySignatures = [] } = {}) {
+export async function compileDeploymentRpcPolicy(manifest, { allowSimulation = false, recoverySignatures = [], trustedHiddenCommitmentSha256 } = {}) {
   if (typeof allowSimulation !== 'boolean' || !Array.isArray(recoverySignatures) || recoverySignatures.length > 20000
     || !recoverySignatures.every(validRecoverySignature)) throw new DeploymentRpcError('CONFIGURATION');
   const recovery = [...recoverySignatures];
-  const { plan, model } = await buildDeploymentCostModel(manifest);
+  const { plan, model } = await buildDeploymentCostModel(manifest, { trustedHiddenCommitmentSha256 });
   if (plan.cluster !== 'devnet') throw new DeploymentRpcError('CLUSTER');
-  const policy = { version: 1, cluster: 'devnet', owner: plan.roles.owner,
+  const hidden = plan.steps[2].expected.storageMode === 'hidden-settings';
+  const policy = { version: hidden ? 2 : 1, cluster: 'devnet', owner: plan.roles.owner,
+    ...(hidden ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: plan.steps[2].expected.hiddenSettings.hash } : {}),
     accounts: [...PROGRAMS, plan.roles.collection, plan.roles.reservedAsset, plan.roles.machine, plan.roles.guard],
     sizes: [...new Set(Object.values(model.sizes))],
     messageIdentities: plan.steps.map(step => messageIdentity(Buffer.from(

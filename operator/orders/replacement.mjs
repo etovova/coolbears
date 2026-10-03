@@ -1,7 +1,7 @@
 // Portable structural binding. Only retained terminal evidence authorizes preparation.
 import {assertCurrentItem,currentItemIndex} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {prepareAssetClaim,validateAssetClaim,validateAssetRequest,verifyBuyerEvidence,buyerRequestId} from './signing.mjs';
 import {preparationFor} from './preparation.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
@@ -13,7 +13,7 @@ import {isPrewalletExpiryReplacementInput,validatePrewalletExpiryReplacementSour
 import {isResponseExpiryReplacementInput,validateResponseExpiryReplacementSource,validateResponseExpiryReplacementPrior,
   responseExpiryReplacementBinding} from './response-expiry-replacement.mjs';
 import {signedBytesId} from './submission.mjs';
-const model=createOrderModel(policy),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const model=createProtocolOrderModel(policy),same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const need=v=>{if(!v)throw Error('REPLACEMENT_BINDING');};
 const exact=(v,names)=>v&&Object.keys(v).sort().join(' ')===names.split(' ').sort().join(' ');
 export const replacementKey=(order,itemIndex=0)=>anchorKey(order,1,itemIndex).replace('buyer-blockhash:v1:','buyer-replacement:v1:');

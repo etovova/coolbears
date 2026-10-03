@@ -7,8 +7,8 @@ import {createSigningRequest,verifySigningResponse} from '../deployment/signing.
 import {verifyFinalizedReceipt,verifyFinalizedFailedTransaction} from '../deployment/receipt.mjs';
 import {createDeploymentRpc,assertCluster,DeploymentRpcError} from '../deployment/rpc.mjs';
 import {validateBuyerSubmission,submissionBinding,validateBuyerResult} from './submission.mjs';
-import {createOrderModel} from './journal-model.mjs';
-const model=createOrderModel(policy),need=(v,code)=>{if(!v)throw Object.assign(Error(code),{checkCode:code});};
+import {createProtocolOrderModel} from './journal-model.mjs';
+const model=createProtocolOrderModel(policy),need=(v,code)=>{if(!v)throw Object.assign(Error(code),{checkCode:code});};
 export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=12000}){
   const frozen=structuredClone(input),signed=validateBuyerSubmission(frozen),binding=submissionBinding(frozen);
   const fixed={...binding,cluster:'devnet',transactionsSent:0,readyToSubmit:false,salesOpen:false};let rpc;

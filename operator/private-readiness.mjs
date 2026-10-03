@@ -135,9 +135,13 @@ export async function inspectPrivateReadiness(input={}){
     else{
       const expected=bundle.snapshot.manifest.steps[2].expected;
       need(['machine','collection','guard'].every(field=>buyer.value[field]===expected[field]),'BINDING');
+      need(expected.storageMode==='hidden-settings'
+        ?buyer.value.version===2&&buyer.value.storageMode===expected.storageMode&&buyer.value.hiddenCommitmentSha256===expected.hiddenSettings.hash
+        :buyer.value.version===1&&!Object.hasOwn(buyer.value,'storageMode')&&!Object.hasOwn(buyer.value,'hiddenCommitmentSha256'),'STORAGE_PROFILE_BINDING');
       result.checks.buyerGateway=check('verified');
     }
-  }catch(error){result.checks.buyerGateway=check('blocked',error.code==='BINDING'?'BUYER_SCOPE_MISMATCH':inputCode('BUYER_GATEWAY',error));}
+  }catch(error){result.checks.buyerGateway=check('blocked',error.code==='BINDING'?'BUYER_SCOPE_MISMATCH'
+    :error.code==='STORAGE_PROFILE_BINDING'?'BUYER_STORAGE_PROFILE_MISMATCH':inputCode('BUYER_GATEWAY',error));}
   if(['bundle','ownerGateway','buyerGateway'].some(key=>result.checks[key].status!=='verified'))return result;
   try{
     // The original head is an observation of this run, not an invented record
@@ -150,7 +154,9 @@ export async function inspectPrivateReadiness(input={}){
       need(saved.configuration.equals(current.configuration)&&saved.entry.equals(current.entry));
     }
     const snapshot=bundle.snapshot;
+    const machine=snapshot.manifest.steps[2].expected;
     const binding={cluster:'devnet',manifestSha256:snapshot.manifestSha256,journalRevision:snapshot.revision,journalHead:snapshot.headHash,
+      ...(machine.storageMode==='hidden-settings'?{storageMode:machine.storageMode,hiddenCommitmentSha256:machine.hiddenSettings.hash,privateMappingVerified:false}:{}),
       ownerPolicySha256:digest(owner.configuration),ownerEntrySha256:digest(owner.entry),
       buyerConfigSha256:digest(buyer.configuration),buyerEntrySha256:digest(buyer.entry)};
     result.binding={...binding,inspectionSha256:sha256Json(binding)};

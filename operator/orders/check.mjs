@@ -2,7 +2,8 @@ import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { preflightOrder } from './preflight.mjs';
+import { createOrderPreflight } from './preflight.mjs';
+import {validateOrderStorageOptions} from './journal-model.mjs';
 
 export async function readOrderFile(filename) {
   const file = await open(filename, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
@@ -15,9 +16,15 @@ export async function readOrderFile(filename) {
   } finally { await file.close(); }
 }
 export async function runOrderCheck(args, { env = process.env, output = process.stdout, fetchImpl } = {}) {
+  let storageOptions={};
+  if(args[0]==='preflight'&&args[1]==='--storage-profile'&&args.length===4){
+    try{storageOptions=validateOrderStorageOptions(await readOrderFile(args[2]));args=['preflight',args[3]];}
+    catch{output.write(JSON.stringify({status:'blocked',code:'ORDER_STORAGE_PROFILE',transactionsSent:0})+'\n');return 1;}
+  }
   if (args.length !== 2 || args[0] !== 'preflight') {
     output.write(JSON.stringify({ status: 'blocked', code: 'USAGE', transactionsSent: 0 }) + '\n'); return 1;
   }
+  const {preflightOrder}=createOrderPreflight(storageOptions);
   const report = await preflightOrder({ readOrder: () => readOrderFile(args[1]),
     endpoint: env.COOLBEARS_BUYER_RPC_URL, fetchImpl });
   // CLI is a diagnostic, not a handoff file. Do not print executable bytes,
