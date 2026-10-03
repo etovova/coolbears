@@ -1,8 +1,0 @@
-/* Show the supplied square PNG in a wide viewport without changing its bytes. */
-.brand{display:inline-flex;align-items:center;line-height:1;text-decoration:none}
-.brand-logo{display:block;position:relative;overflow:hidden;width:180px;max-width:100%;aspect-ratio:1550/500;mix-blend-mode:lighten}
-.brand-logo>img{display:block;position:absolute;width:129.032258%;max-width:none;height:auto;left:-14.516129%;top:-145%}
-.nav .brand-logo{width:clamp(138px,16vw,194px)}
-.footer-mark .brand-logo{width:min(300px,100%);margin-inline:auto}
-.brand:focus-visible{outline:2px solid #ffd51f;outline-offset:5px}
-@media(max-width:850px){.nav .brand-logo{width:140px}}
