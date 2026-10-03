@@ -1,4 +1,5 @@
 // Portable binding and validation. No network calls or permission to broadcast.
+import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {sha256} from '@noble/hashes/sha256';
 import {bytesToHex} from '@noble/hashes/utils';
@@ -8,11 +9,11 @@ import {lamports} from './cost-approval.mjs';
 const model=createOrderModel(policy),need=(v,code)=>{if(!v)throw Error(code);};
 export const signedBytesId=bytes=>bytesToHex(sha256(new TextEncoder().encode(bytes)));
 export function validateBuyerSubmission({order,claim,request,response}){
-  model.validateOrder(order);
-  need(order.cluster==='devnet'&&order.revision>=claim.orderRevision+2&&order.items[0].attempts.length===claim.attempt
-    &&order.items[0].attempts.at(-1).state==='unknown'&&order.items.slice(1).every(i=>!i.attempts.length),'SIGNED_ORDER_REQUIRED');
+  model.validateOrder(order);assertCurrentItem(order,claim.itemIndex);
+  need(order.cluster==='devnet'&&order.revision>=claim.orderRevision+2&&order.items[claim.itemIndex].attempts.length===claim.attempt
+    &&order.items[claim.itemIndex].attempts.at(-1).state==='unknown','SIGNED_ORDER_REQUIRED');
   const signed=verifyBuyerSigningResponse(order,claim,request,response);
-  need(order.items[0].attempts.at(-1).signature===signed.signature,'SAVED_RESPONSE_REQUIRED');
+  need(order.items[claim.itemIndex].attempts.at(-1).signature===signed.signature,'SAVED_RESPONSE_REQUIRED');
   return signed;
 }
 export function submissionBinding(input){const signed=validateBuyerSubmission(input);return{
@@ -34,7 +35,7 @@ export function validateBuyerResult(report,input,{recovery=false}={}){
     need(['verified','failed','unknown'].includes(report.status),'SUBMISSION_RESPONSE');
     if(['verified','failed'].includes(report.status)){
       need(report.proof?.kind===report.status&&report.chainVerified===true,'SUBMISSION_RESPONSE');
-      model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:report.proof});
+      model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt,proof:report.proof});
       if(report.status==='failed'){
         need(report.retryAuthorized===false&&report.transactionsSent===0&&typeof report.restored==='boolean','FAILURE_EVIDENCE');
         validateFailureEvidence(report.evidence,report.proof);

@@ -36,7 +36,7 @@ export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=1200
         payerDebitLamports:String(meta.fee),payerPreBalanceLamports:String(meta.preBalances[0]),payerPostBalanceLamports:String(meta.postBalances[0])};
       return validateBuyerResult({...fixed,status:'failed',chainVerified:true,proof,evidence,retryAuthorized:false,restored:false,networkRequests:rpc.requests},frozen,{recovery:true});
     }
-    const request=createSigningRequest({deploymentId:frozen.order.id,stepId:'item-0',attempt:frozen.claim.attempt,cluster:'devnet',owner:frozen.order.buyer,
+    const request=createSigningRequest({deploymentId:frozen.order.id,stepId:`item-${frozen.claim.itemIndex}`,attempt:frozen.claim.attempt,cluster:'devnet',owner:frozen.order.buyer,
       transactionBase64:frozen.request.transactionBase64,lastValidBlockHeight:frozen.request.lastValidBlockHeight});
     const receipt=verifyFinalizedReceipt({request,signed:verifySigningResponse(request,{transactionBase64:signed.transactionBase64}),statusResult,transactionResult});
     const state=await rpc.call('getMultipleAccounts',[[frozen.claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:receipt.slot}]);
@@ -50,7 +50,7 @@ export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=1200
     const proof={kind:'verified',cluster:'devnet',machine:frozen.order.machine,collection:frozen.order.collection,buyer:frozen.order.buyer,
       asset:frozen.claim.asset,blockhash:frozen.claim.blockhash,messageSha256:signed.messageSha256,commitment:'finalized',slot:receipt.slot,
       signature:signed.signature,accountSlot:state.context.slot,account:{program:raw.owner,owner:asset.owner,collection:asset.updateAuthority.address,name:asset.name,uri:asset.uri}};
-    model.transitionOrder(frozen.order,{type:'reconcile',revision:frozen.order.revision,index:0,attempt:frozen.claim.attempt,proof});
+    model.transitionOrder(frozen.order,{type:'reconcile',revision:frozen.order.revision,index:frozen.claim.itemIndex,attempt:frozen.claim.attempt,proof});
     return{...fixed,status:'verified',chainVerified:true,proof,networkRequests:rpc.requests};
   }catch(error){return{...fixed,status:'unknown',chainVerified:false,networkRequests:rpc?.requests??0,
     code:error instanceof DeploymentRpcError?'RPC_'+error.code:error?.checkCode??'RECOVERY_NOT_VERIFIED'};}

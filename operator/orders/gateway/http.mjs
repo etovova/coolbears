@@ -5,7 +5,8 @@ export class BuyerCheckError extends Error {
 export const need = (ok, code, status = 400, retryAfter) => { if (!ok) throw new BuyerCheckError(code,status,retryAfter); };
 export const exact = (value, fields) => value && typeof value==='object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',')===fields.split(' ').sort().join(',');
-export async function readJson(message, {limit=65536,timeoutMs=4000,signal,canonical=true}={}) {
+export const BUYER_BODY_LIMIT=262144;
+export async function readJson(message, {limit=BUYER_BODY_LIMIT,timeoutMs=4000,signal,canonical=true}={}) {
   need(/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(message.headers.get('content-type')??'')
     && !message.headers.has('content-encoding'),'CONTENT_TYPE',415);
   const length=message.headers.get('content-length');

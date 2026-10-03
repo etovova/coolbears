@@ -1,5 +1,5 @@
 // Fixed HTTPS transport for explicit send and read-only recovery. No retries.
-import {BuyerCheckError,need,exact,readJson} from './http.mjs';
+import {BuyerCheckError,need,exact,readJson,BUYER_BODY_LIMIT} from './http.mjs';
 import {validateCostApproval,lamports} from '../cost-approval.mjs';
 import {validateBuyerSubmission,validateBuyerResult} from '../submission.mjs';
 import {validateBuyerExpiryResult} from '../expiry-review.mjs';
@@ -20,7 +20,7 @@ export function createBuyerSubmissionTransport({origin=globalThis.location?.orig
     const approval=route==='send'?structuredClone(costApproval):undefined;
     if(route==='send')validateCostApproval(approval,value,{now:Date.now()});
     const nonce=[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
-    const body=JSON.stringify({version:1,nonce,...value,...(route==='send'?{costApproval:approval}:['review-expiry','review-prewallet-expiry','review-response-expiry'].includes(route)?{authorizeExpiryReview:true}:replacing?{authorizeReplacement:true,...(acknowledgedFeeLamports!==undefined?{acknowledgedFeeLamports}:{})}:{})});need(new TextEncoder().encode(body).length<=65536,'BODY_SIZE');
+    const body=JSON.stringify({version:1,nonce,...value,...(route==='send'?{costApproval:approval}:['review-expiry','review-prewallet-expiry','review-response-expiry'].includes(route)?{authorizeExpiryReview:true}:replacing?{authorizeReplacement:true,...(acknowledgedFeeLamports!==undefined?{acknowledgedFeeLamports}:{})}:{})});need(new TextEncoder().encode(body).length<=BUYER_BODY_LIMIT,'BODY_SIZE');
     const endpoint=origin+'/api/buyer/'+route,controller=new AbortController();let timer,response;
     try{
       response=await Promise.race([fetchImpl(endpoint,{method:'POST',headers:{'content-type':'application/json'},body,signal:controller.signal,

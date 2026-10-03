@@ -5,6 +5,7 @@ import { createOrderModel } from '../journal-model.mjs';
 import { createOrderPlanner } from '../transaction-model.mjs';
 import { createAccountVerifier } from '../../deployment/accounts-model.mjs';
 import { createOrderChecker } from '../preflight-model.mjs';
+import {currentItemIndex,assertCurrentItem,validateSequentialOrder} from '../sequential.mjs';
 import {createCostQuote,costQuoteKey,validateCostApproval,enforceCostCeiling} from '../cost-approval.mjs';
 import { anchorKey, attemptKey, validateBlockhashAnchor } from '../blockhash-anchor.mjs';
 import { preparationFor, validatePreparation } from '../preparation.mjs';
@@ -93,39 +94,41 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       });
     }
     async validateResponseExpiryRetention(order,prior,request,walletClaim,sendBase,storage=this.storage){
-      need(JSON.stringify(prior)===JSON.stringify(await storage.get(responseExpiryKey(order)))
-        &&await storage.get(prewalletExpiryKey(order))===undefined&&await storage.get(prewalletRecoveryKey(order))===undefined
-        &&await storage.get(expiryKey(order))===undefined&&await storage.get(failureKey(order))===undefined
-        &&await storage.get(responseRecoveryKey(order))===undefined&&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
-      const preparation=await storage.get(anchorKey(order));
+      const itemIndex=request.itemIndex;
+      need(JSON.stringify(prior)===JSON.stringify(await storage.get(responseExpiryKey(order,1,itemIndex)))
+        &&await storage.get(prewalletExpiryKey(order,1,itemIndex))===undefined&&await storage.get(prewalletRecoveryKey(order,1,itemIndex))===undefined
+        &&await storage.get(expiryKey(order,1,itemIndex))===undefined&&await storage.get(failureKey(order,1,itemIndex))===undefined
+        &&await storage.get(responseRecoveryKey(order,1,itemIndex))===undefined&&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
+      const preparation=await storage.get(anchorKey(order,1,itemIndex));
       validateBlockhashAnchor(preparation?.anchor,request);
       need(preparation.anchor.sourceSlot===prior.evidence.anchorSlot,'REPLACEMENT_REQUIRED',409);
       if(walletClaim.version===2)need(JSON.stringify(await storage.get(costQuoteKey(walletClaim.costApproval.quote.quoteId)))
         ===JSON.stringify(walletClaim.costApproval.quote),'COST_QUOTE_NOT_SAVED',409);
     }
     async validateReplacementProvenance(order,claim,sendBase,storage=this.storage){
-      const replacement=await storage.get(replacementKey(order));
+      const itemIndex=claim.itemIndex;
+      const replacement=await storage.get(replacementKey(order,itemIndex));
       try{validateReplacementClaim(order,claim,replacement);
-        const firstFailed=order.items[0].attempts[0].state==='failed';
-        if(replacement.version!==5)need(await storage.get(responseExpiryKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
+        const firstFailed=order.items[itemIndex].attempts[0].state==='failed';
+        if(replacement.version!==5)need(await storage.get(responseExpiryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
         if(replacement.version===5){
           need(!firstFailed,'REPLACEMENT_REQUIRED',409);
           await this.validateResponseExpiryRetention(order,replacement.prior,replacement.responseExpiry.request,replacement.responseExpiry.walletClaim,sendBase,storage);
         }else if(replacement.version===4){
-          need(!firstFailed&&JSON.stringify(replacement.prior)===JSON.stringify(await storage.get(prewalletExpiryKey(order)))
-            &&await storage.get(prewalletRecoveryKey(order))===undefined&&await storage.get(expiryKey(order))===undefined
-            &&await storage.get(failureKey(order))===undefined&&await storage.get(responseRecoveryKey(order))===undefined
+          need(!firstFailed&&JSON.stringify(replacement.prior)===JSON.stringify(await storage.get(prewalletExpiryKey(order,1,itemIndex)))
+            &&await storage.get(prewalletRecoveryKey(order,1,itemIndex))===undefined&&await storage.get(expiryKey(order,1,itemIndex))===undefined
+            &&await storage.get(failureKey(order,1,itemIndex))===undefined&&await storage.get(responseRecoveryKey(order,1,itemIndex))===undefined
             &&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
         }else if(replacement.version===3){
-          need(await storage.get(prewalletExpiryKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
-          need(firstFailed&&JSON.stringify(replacement.prewallet)===JSON.stringify(await storage.get(prewalletRecoveryKey(order)))
-            &&await storage.get(expiryKey(order))===undefined&&await storage.get(failureKey(order))===undefined
-            &&await storage.get(responseRecoveryKey(order))===undefined&&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
+          need(await storage.get(prewalletExpiryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(firstFailed&&JSON.stringify(replacement.prewallet)===JSON.stringify(await storage.get(prewalletRecoveryKey(order,1,itemIndex)))
+            &&await storage.get(expiryKey(order,1,itemIndex))===undefined&&await storage.get(failureKey(order,1,itemIndex))===undefined
+            &&await storage.get(responseRecoveryKey(order,1,itemIndex))===undefined&&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
         }else{
-          need(await storage.get(prewalletExpiryKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
-          need(await storage.get(prewalletRecoveryKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
-          need(await storage.get(firstFailed?expiryKey(order):failureKey(order))===undefined,'REPLACEMENT_REQUIRED',409);
-          need(JSON.stringify(replacement.prior)===JSON.stringify(await storage.get(firstFailed?failureKey(order):expiryKey(order))),'REPLACEMENT_REQUIRED',409);
+          need(await storage.get(prewalletExpiryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(await storage.get(prewalletRecoveryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(await storage.get(firstFailed?expiryKey(order,1,itemIndex):failureKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(JSON.stringify(replacement.prior)===JSON.stringify(await storage.get(firstFailed?failureKey(order,1,itemIndex):expiryKey(order,1,itemIndex))),'REPLACEMENT_REQUIRED',409);
         }}
       catch{throw new BuyerCheckError('REPLACEMENT_REQUIRED',409);}
     }
@@ -136,7 +139,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
       try{
         authorize(request,config,this.env);need(route!=='send'||allowSubmission,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
         const body=await readJson(request,{signal:request.signal});
-        need(exact(body,responseReplace?'version nonce order claim request walletClaim authorizeReplacement':unsignedReplace?'version nonce order claim request authorizeReplacement':route==='prepare'?'version nonce order':route==='review-response-expiry'?'version nonce order claim request walletClaim authorizeExpiryReview':route==='recover-response'?'version nonce order claim request walletClaim':['check','recover-prewallet'].includes(route)?'version nonce order claim request':route==='review-prewallet-expiry'?'version nonce order claim request authorizeExpiryReview':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[0]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        need(exact(body,responseReplace?'version nonce order claim request walletClaim authorizeReplacement':unsignedReplace?'version nonce order claim request authorizeReplacement':route==='prepare'?'version nonce order':route==='review-response-expiry'?'version nonce order claim request walletClaim authorizeExpiryReview':route==='recover-response'?'version nonce order claim request walletClaim':['check','recover-prewallet'].includes(route)?'version nonce order claim request':route==='review-prewallet-expiry'?'version nonce order claim request authorizeExpiryReview':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[body.claim?.itemIndex]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
         if(['review-expiry','review-prewallet-expiry','review-response-expiry'].includes(route))need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
         if(replacing)need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
         const {order,claim,request:partial}=body;
@@ -146,9 +149,12 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const missing={order,claim,request:partial,walletClaim:body.walletClaim};
         const prewallet={order,claim,request:partial};
         const replacementInput=responseReplace?missing:unsignedReplace?prewallet:submission;
-        let signed;
+        let signed,itemIndex;
         try{
-          if(route==='prepare'){model.validateOrder(order);need(order.revision===0&&!order.paused&&order.items.every(i=>i.attempts.length===0),'REQUEST',400);}
+          validateSequentialOrder(order);
+          itemIndex=route==='prepare'?currentItemIndex(order):claim?.itemIndex;
+          need(Number.isSafeInteger(itemIndex)&&itemIndex>=0&&itemIndex<order.quantity,'REQUEST',400);
+          if(route==='prepare'){assertCurrentItem(order,itemIndex);need(!order.paused&&order.items[itemIndex].attempts.length===0&&(itemIndex>0||order.revision===0),'REQUEST',400);}
           else if(['recover-response','review-response-expiry'].includes(route))validateMissingBuyerResponse(missing);
           else if(['recover-prewallet','review-prewallet-expiry'].includes(route))validatePrewalletInput(prewallet);
           else if(responseReplace)validateResponseExpiryReplacementSource(missing);
@@ -156,25 +162,26 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           else if(route==='replace')signed=validateReplacementSource(submission);
           else if(route!=='check')signed=validateBuyerSubmission(submission);
           else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
-          need(order.revision===claim.orderRevision&&!order.paused&&order.items[0].attempts.length===claim.attempt&&order.items[0].attempts.at(-1).state==='wallet-pending'
-            &&order.items.slice(1).every(item=>!item.attempts.length),'REQUEST',400);}
+          assertCurrentItem(order,itemIndex);
+          need(order.revision===claim.orderRevision&&!order.paused&&order.items[itemIndex].attempts.length===claim.attempt&&order.items[itemIndex].attempts.at(-1).state==='wallet-pending'
+            &&order.items.slice(itemIndex+1).every(item=>!item.attempts.length),'REQUEST',400);}
         }catch{throw new BuyerCheckError('REQUEST',400);}
         // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
         const number=claim?.attempt??1;
-        const sendBase='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[0].asset]));
+        const sendBase='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[itemIndex].asset]));
         const sendKey=attemptKey(sendBase,number);
-        const retiredKey=expiryKey(order,number),retired=await this.storage.get(retiredKey);
-        const failedKey=failureKey(order,number),failed=await this.storage.get(failedKey);
+        const retiredKey=expiryKey(order,number,itemIndex),retired=await this.storage.get(retiredKey);
+        const failedKey=failureKey(order,number,itemIndex),failed=await this.storage.get(failedKey);
         need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
-        const discoveredKey=responseRecoveryKey(order,number),discovered=await this.storage.get(discoveredKey);
-        const prewalletKey=prewalletRecoveryKey(order,number),prewalletRecord=await this.storage.get(prewalletKey);
-        const prewalletRetiredKey=prewalletExpiryKey(order,number),prewalletRetired=await this.storage.get(prewalletRetiredKey);
-        const responseRetiredKey=responseExpiryKey(order,number),responseRetired=await this.storage.get(responseRetiredKey);
+        const discoveredKey=responseRecoveryKey(order,number,itemIndex),discovered=await this.storage.get(discoveredKey);
+        const prewalletKey=prewalletRecoveryKey(order,number,itemIndex),prewalletRecord=await this.storage.get(prewalletKey);
+        const prewalletRetiredKey=prewalletExpiryKey(order,number,itemIndex),prewalletRetired=await this.storage.get(prewalletRetiredKey);
+        const responseRetiredKey=responseExpiryKey(order,number,itemIndex),responseRetired=await this.storage.get(responseRetiredKey);
         if(number===2)await this.validateReplacementProvenance(order,claim,sendBase);
         if(responseRetired!==undefined){
           need(retired===undefined&&failed===undefined&&discovered===undefined&&prewalletRecord===undefined&&prewalletRetired===undefined
             &&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
-          if(number===1&&!responseReplace)need(await this.storage.get(replacementKey(order))===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          if(number===1&&!responseReplace)need(await this.storage.get(replacementKey(order,itemIndex))===undefined,'TERMINAL_RECORD_CONFLICT',409);
           need(responseReplace||['review-response-expiry','review-expiry'].includes(route),'ATTEMPT_EXPIRED',409);
           if(!responseReplace){
             let report;try{report=route==='review-expiry'?restoreResponseExpirySubmission(submission,responseRetired):restoreResponseExpiry(missing,responseRetired);}
@@ -195,7 +202,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(unsignedReplace)need(prewalletRetired!==undefined,'EXPIRY_RECORD_REQUIRED',409);
         if(route==='review-response-expiry')need(retired===undefined&&failed===undefined&&discovered===undefined&&prewalletRecord===undefined
           &&prewalletRetired===undefined&&await this.storage.get(sendKey)===undefined
-          &&(number===2||await this.storage.get(replacementKey(order))===undefined),'RESPONSE_EXPIRY_CONFLICT',409);
+          &&(number===2||await this.storage.get(replacementKey(order,itemIndex))===undefined),'RESPONSE_EXPIRY_CONFLICT',409);
         let prewalletPrior;
         if(prewalletRecord!==undefined){
           need(retired===undefined&&failed===undefined&&discovered===undefined&&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
@@ -221,7 +228,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
             else if(route==='recover'){restored=restoreDiscoveredSubmission(submission,discovered);full=submission;}
             else if(route==='replace'){
               need(discovered.proof.kind==='failed'&&failed!==undefined,'ATTEMPT_RECOVERED',409);
-              const active=structuredClone(submission);active.order.items[0].attempts[0].state='unknown';active.order.items[0].attempts[0].proof=null;
+              const active=structuredClone(submission);active.order.items[itemIndex].attempts[0].state='unknown';active.order.items[itemIndex].attempts[0].proof=null;
               const result=restoreDiscoveredSubmission(active,discovered);
               need(JSON.stringify(failureRecord(active,result))===JSON.stringify(failed),'TERMINAL_RECORD_CONFLICT',409);
             }else throw new BuyerCheckError('ATTEMPT_RECOVERED',409);
@@ -244,11 +251,11 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           }
           need(route==='recover','ATTEMPT_EXPIRED',409);
         }
-        const replaceKey=replacementKey(order),replacement=(number===2||replacing)?await this.storage.get(replaceKey):undefined;
-        const prior=responseReplace?responseRetired:unsignedReplace?prewalletRetired:prewalletPrior??(order.items[0].attempts[0]?.state==='failed'?failed:retired);
+        const replaceKey=replacementKey(order,itemIndex),replacement=(number===2||replacing)?await this.storage.get(replaceKey):undefined;
+        const prior=responseReplace?responseRetired:unsignedReplace?prewalletRetired:prewalletPrior??(order.items[itemIndex].attempts[0]?.state==='failed'?failed:retired);
         if(replacing){
           try{validateReplacementPrior(replacementInput,prior);
-            if(responseReplace)await this.validateResponseExpiryRetention(order,prior,partial,body.walletClaim,sendBase);}catch{throw new BuyerCheckError(prior?.proof?.kind==='failed'||order.items[0].attempts[0].state==='failed'?'FAILURE_RECORD_REQUIRED':'EXPIRY_RECORD_REQUIRED',409);}
+            if(responseReplace)await this.validateResponseExpiryRetention(order,prior,partial,body.walletClaim,sendBase);}catch{throw new BuyerCheckError(prior?.proof?.kind==='failed'||order.items[itemIndex].attempts[0].state==='failed'?'FAILURE_RECORD_REQUIRED':'EXPIRY_RECORD_REQUIRED',409);}
           try{validateReplacementAcknowledgment(replacementInput,prior,body.acknowledgedFeeLamports);}catch{throw new BuyerCheckError('PAID_FEE_ACKNOWLEDGMENT_REQUIRED',409);}
           if(replacement!==undefined){
             let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(prior)
@@ -261,7 +268,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
           need(!order.paused,'ORDER_PAUSED',409);
           need(await this.storage.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
         }
-        const blockKey=anchorKey(order,number),savedPreparation=route==='recover'?undefined:number===2?{anchor:replacement.anchor}:await this.storage.get(blockKey);
+        const blockKey=anchorKey(order,number,itemIndex),savedPreparation=route==='recover'?undefined:number===2?{anchor:replacement.anchor}:await this.storage.get(blockKey);
         if(route==='prepare'&&savedPreparation!==undefined){
           try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
           return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
@@ -303,8 +310,11 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(route==='prepare'){
           const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000});
           await assertCluster(rpc,'devnet');
-          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed'}]);
-          need(integer(latest?.context?.slot),'RPC_CONTEXT',503);
+          let sourceFloor=0;
+          if(itemIndex>0){try{sourceFloor=(await checker.checkSequentialReadiness({rpc,order,itemIndex})).slot;}
+            catch(error){if(error.checkCode)throw new BuyerCheckError(error.checkCode,409);throw error;}}
+          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',...(itemIndex>0?{minContextSlot:sourceFloor}:{})}]);
+          need(integer(latest?.context?.slot)&&latest.context.slot>=sourceFloor,'RPC_CONTEXT',503);
           const record=preparationFor(order,latest.value,latest.context.slot);
           const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
           need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
@@ -320,7 +330,9 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(replacing){
           const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000});
           await assertCluster(rpc,'devnet');
-          const floor=replacementAccountFloor(prior);
+          let floor=replacementAccountFloor(prior);
+          if(itemIndex>0){try{floor=(await checker.checkSequentialReadiness({rpc,order,itemIndex,minimum:floor})).slot;}
+            catch(error){if(error.checkCode)throw new BuyerCheckError(error.checkCode,409);throw error;}}
           const accounts=await rpc.call('getMultipleAccounts',[[claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:floor}]);
           need(integer(accounts?.context?.slot)&&accounts.context.slot>=floor&&Array.isArray(accounts.value)&&accounts.value.length===1&&accounts.value[0]===null,'REPLACEMENT_ASSET_OBSERVED',409);
           const sourceFloor=Math.max(replacementSourceFloor(prior),accounts.context.slot);

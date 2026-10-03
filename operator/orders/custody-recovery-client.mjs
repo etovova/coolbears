@@ -21,7 +21,8 @@ function sourceOf(value){
   else if(value.prewalletRecovery){source='prewallet';state=value.prewalletRecovery;validate=validatePrewalletInput;method='recoverPrewallet';}
   else return null;
   if(terminal(state.status)){
-    need(value.order?.items[0]?.attempts.at(-1)?.state===state.status,'RECOVERY_SNAPSHOT_INVALID');
+    const itemIndex=state.input?.claim?.itemIndex??value.assetSigning?.claim?.itemIndex;
+    need(Number.isSafeInteger(itemIndex)&&itemIndex>=0&&value.order?.items[itemIndex]?.attempts.at(-1)?.state===state.status,'RECOVERY_SNAPSHOT_INVALID');
   }else{
     need(({submission:['ready','send-claimed'],response:['wallet-response-unknown'],prewallet:['prewallet-unknown']})[source].includes(state.status)
       &&same(state.input?.order,value.order),'RECOVERY_SNAPSHOT_INVALID');

@@ -1,4 +1,4 @@
-// Explicit first-item closed Devnet send; local claim before HTTP, never automatic retry.
+// Explicit current-item closed Devnet send; local claim before HTTP, never automatic retry.
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
 import {validateCostApproval} from './cost-approval.mjs';
 import {validateBuyerExpiryResult} from './expiry-review.mjs';
@@ -26,7 +26,7 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
       need(!busy,'BUSY');busy=true;
       try{
         const state=await storage.readBuyerSubmission(frozenScope);need(state,'SAVED_RESPONSE_REQUIRED');
-        if(['verified','expired','failed'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[0].attempts.at(-1).signature,
+        if(['verified','expired','failed'].includes(state.status))return{status:'already-recorded',outcome:state.status,signature:state.input.order.items[state.input.claim.itemIndex].attempts.at(-1).signature,
           ...(state.status==='failed'?{retryAuthorized:false,feeLamports:state.failureRecord.evidence.feeLamports}:{}),readyToSubmit:false,salesOpen:false};
         const report=validateBuyerResult(await transport.recover(state.input),state.input,{recovery:true});
         if(report.status==='failed'){

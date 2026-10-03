@@ -7,6 +7,7 @@ import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { createOrderModel } from './journal-model.mjs';
 import { createOrderPlanner } from './transaction-model.mjs';
 import { createSigningRequest, verifySigningResponse } from '../deployment/signing.mjs';
+import {validateSequentialOrder,currentItemIndex,assertCurrentItem} from './sequential.mjs';
 const model = createOrderModel(policy), planner = createOrderPlanner(model);
 const need = (ok, code) => { if (!ok) throw Error(code); };
 const same = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
@@ -24,8 +25,14 @@ function bytes(value) {
   need(decoded.length <= 1232 && Buffer.from(decoded).toString('base64') === value, 'TRANSACTION_ENCODING');
   return decoded;
 }
+// Public address mathematics is immutable. Bound memoization avoids repeating
+// the subgroup check for all50 unchanged assets on every historical claim.
+const ordinaryKeys=new Set();
 function ordinaryKey(address) {
-  try { const p = ed25519.Point.fromBytes(new PublicKey(address).toBytes(), false); return !p.isSmallOrder() && p.isTorsionFree(); }
+  if(ordinaryKeys.has(address))return true;
+  try { const p = ed25519.Point.fromBytes(new PublicKey(address).toBytes(), false);
+    const valid=!p.isSmallOrder()&&p.isTorsionFree();
+    if(valid){if(ordinaryKeys.size>=512)ordinaryKeys.clear();ordinaryKeys.add(address);}return valid; }
   catch { return false; }
 }
 function identity(order) {
@@ -35,7 +42,7 @@ function identity(order) {
     items: order.items.map(({index,asset}) => ({index,asset})) });
 }
 function context(order) {
-  model.validateOrder(order);
+  validateSequentialOrder(order);
   need(order.cluster === 'devnet', 'DEVNET_ONLY');
   need(ordinaryKey(order.buyer) && order.items.every(item => ordinaryKey(item.asset)), 'UNSIGNABLE_ADDRESS');
 }
@@ -50,38 +57,41 @@ export function prepareAssetClaim(order, input) {
   context(order);
   exact(input, ['orderRevision','itemIndex','blockhash','lastValidBlockHeight','transactionBase64']);
   need(input.orderRevision === order.revision, 'STALE_REVISION');
-  const prior=order.items[0].attempts,number=prior.length+1;
-  need(!order.paused&&order.items.slice(1).every(item=>!item.attempts.length)
-    &&((number===1&&order.revision===0)||(number===2&&['expired','failed'].includes(prior[0].state))), 'FRESH_ORDER_REQUIRED');
+  const index=currentItemIndex(order);
+  need(index!==null&&input.itemIndex===index, 'FIRST_ITEM_REQUIRED');
+  const prior=order.items[index].attempts,number=prior.length+1;
+  need(!order.paused&&((number===1&&(index>0||order.revision===0))
+    ||(number===2&&['expired','failed'].includes(prior[0].state))), 'FRESH_ORDER_REQUIRED');
   if(number===2)need(input.blockhash!==prior[0].blockhash,'REPLACEMENT_HASH_REQUIRED');
-  need(input.itemIndex === 0, 'FIRST_ITEM_REQUIRED');
-  const template = planner.buildOrderItemTemplate(order, 0, input);
+  const template = planner.buildOrderItemTemplate(order, index, input);
   need(same(bytes(input.transactionBase64), template.unsignedBytes), 'ORDER_MESSAGE_MISMATCH');
-  const event = { type:'prepare', revision:order.revision, index:0, blockhash:input.blockhash,
+  const event = { type:'prepare', revision:order.revision, index, blockhash:input.blockhash,
     lastValidBlockHeight:input.lastValidBlockHeight, messageSha256:template.messageSha256,...(number===2?{retry:true}:{}) };
   const preparedOrder = model.transitionOrder(order, event);
   const claim = { version:1, kind:CLAIM, orderId:order.id, orderRevision:preparedOrder.revision,
     orderIdentitySha256:identity(order), cluster:order.cluster, buyer:order.buyer,
     machine:order.machine, collection:order.collection, guard:order.guard,
-    itemIndex:0, asset:order.items[0].asset, attempt:number, blockhash:input.blockhash,
+    itemIndex:index, asset:order.items[index].asset, attempt:number, blockhash:input.blockhash,
     lastValidBlockHeight:input.lastValidBlockHeight, messageSha256:template.messageSha256,
     transactionBase64:input.transactionBase64 };
   return { order:preparedOrder, event, claim };
 }
 export function validateAssetClaim(order, claim) {
   context(order); exact(claim, BINDING);
-  need(claim.version === 1 && claim.kind === CLAIM && claim.itemIndex === 0 && [1,2].includes(claim.attempt)
+  need(claim.version === 1 && claim.kind === CLAIM && Number.isSafeInteger(claim.itemIndex)
+    && claim.itemIndex>=0 && claim.itemIndex<order.quantity && [1,2].includes(claim.attempt)
     && Number.isSafeInteger(claim.orderRevision)&&order.revision>=claim.orderRevision
-    &&(claim.attempt===1?claim.orderRevision===1:claim.orderRevision>=3), 'ASSET_CLAIM_BINDING');
-  if(claim.attempt===2)need(['expired','failed'].includes(order.items[0].attempts[0].state)
-    &&order.items[0].attempts[0].blockhash!==claim.blockhash,'REPLACEMENT_HASH_REQUIRED');
-  need(order.items[0].attempts.length<=2&&order.items.slice(1).every(item=>!item.attempts.length),'ASSET_CLAIM_BINDING');
+    && (claim.itemIndex===0&&claim.attempt===1?claim.orderRevision===1:claim.orderRevision>=2*claim.itemIndex+claim.attempt*2-1), 'ASSET_CLAIM_BINDING');
+  const item=order.items[claim.itemIndex];
+  need(order.items.slice(0,claim.itemIndex).every(item=>item.attempts.at(-1)?.state==='verified'),'ASSET_CLAIM_BINDING');
+  if(claim.attempt===2)need(['expired','failed'].includes(item.attempts[0].state)
+    &&item.attempts[0].blockhash!==claim.blockhash,'REPLACEMENT_HASH_REQUIRED');
   need(claim.orderId === order.id && claim.orderIdentitySha256 === identity(order)
     && ['cluster','buyer','machine','collection','guard'].every(key => claim[key] === order[key])
-    && claim.asset === order.items[0].asset, 'ASSET_CLAIM_BINDING');
-  const attempt = order.items[0].attempts[claim.attempt-1];
+    && claim.asset === item.asset, 'ASSET_CLAIM_BINDING');
+  const attempt = item.attempts[claim.attempt-1];
   need(attempt && attempt.number === claim.attempt && ['blockhash','lastValidBlockHeight','messageSha256'].every(key => attempt[key] === claim[key]), 'ASSET_CLAIM_BINDING');
-  const template = planner.buildOrderItemTemplate(order, 0, claim);
+  const template = planner.buildOrderItemTemplate(order, claim.itemIndex, claim);
   need(template.messageSha256 === claim.messageSha256 && same(bytes(claim.transactionBase64), template.unsignedBytes), 'ORDER_MESSAGE_MISMATCH');
   return VersionedTransaction.deserialize(template.unsignedBytes).message.serialize();
 }
@@ -105,17 +115,17 @@ export function validateAssetRequest(order, claim, request) {
   return request;
 }
 export function verifyBuyerSigningResponse(order, claim, request, response) {
-  const attempt = order.items[0].attempts.at(-1);
+  const item=assertCurrentItem(order,claim.itemIndex),attempt=item.attempts.at(-1);
   need(attempt?.number === claim.attempt && ['wallet-pending','unknown'].includes(attempt.state), 'BUYER_RESPONSE_NOT_EXPECTED');
   return verifyBuyerEvidence(order,claim,request,response);
 }
 // Historical verification supplies evidence only; it never authorizes a wallet or send.
 export function verifyBuyerEvidence(order,claim,request,response){
   validateAssetRequest(order, claim, request);
-  const attempt=order.items[0].attempts[claim.attempt-1];
+  const attempt=order.items[claim.itemIndex].attempts[claim.attempt-1];
   const verified = verifySigningResponse(internalRequest(request), response);
   need(attempt.signature === null || attempt.signature === verified.signature, 'BUYER_SIGNATURE_CONFLICT');
-  return { ...verified, orderId:order.id, orderRevision:order.revision, itemIndex:0, attempt:claim.attempt,
+  return { ...verified, orderId:order.id, orderRevision:order.revision, itemIndex:claim.itemIndex, attempt:claim.attempt,
     // A valid signature is neither a fresh preflight nor an execution proof.
     mode:'offline-buyer-response-check', networkVerified:false, blockhashVerified:false, guardPriceVerified:false,
     readyToSubmit:false, salesOpen:false };

@@ -1,7 +1,10 @@
 // Browser custody, asset signing and durable buyer response evidence. No wallet calls, RPC or dispatch.
 import policy from '../../metadata/policy.json' with { type: 'json' };
 import { base58 } from '@metaplex-foundation/umi/serializers';
+import {sha256} from '@noble/hashes/sha256';
+import {bytesToHex} from '@noble/hashes/utils';
 import { createOrderModel } from './journal-model.mjs';
+import {validateSequentialOrder,currentItemIndex} from './sequential.mjs';
 import { prepareAssetClaim, validateAssetClaim, finalizeAssetRequest, validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from './submission.mjs';
 import {validateCostApproval} from './cost-approval.mjs';
@@ -32,7 +35,7 @@ function checkedScope(input) {
   return scope;
 }
 function bounded(order) {
-  model.validateOrder(order);
+  validateSequentialOrder(order);
   requireThat(order.revision <= MAX_REVISION && new TextEncoder().encode(JSON.stringify(order)).length <= MAX_BYTES, 'ORDER_STORAGE_LIMIT');
   return order;
 }
@@ -44,6 +47,21 @@ function keyShape(record, scopeKey, item) {
 }
 export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks } = {}) {
   let opening, connection, closed = false;
+  // One bounded, successful canonical snapshot only. Custody is never cached.
+  // A typed fingerprint distinguishes missing/undefined properties and array
+  // holes; every changed byte in retained evidence invalidates its validation.
+  let evidenceCache=null;
+  const replaySnapshots=new WeakMap();
+  function token(value){
+    if(value===null)return 'null';
+    const type=typeof value;
+    if(type!=='object')return type+':'+(type==='number'&&Object.is(value,-0)?'-0':JSON.stringify(value));
+    const prototype=Object.getPrototypeOf(value);
+    requireThat(Array.isArray(value)?prototype===Array.prototype:[Object.prototype,null].includes(prototype),'CORRUPT_ORDER_HISTORY');
+    const names=Reflect.ownKeys(value);requireThat(names.every(name=>typeof name==='string'),'CORRUPT_ORDER_HISTORY');
+    return (Array.isArray(value)?'array':prototype===null?'null-object':'object')+'{'+names.map(name=>JSON.stringify(name)+':'+token(value[name])).join(',')+'}';
+  }
+  const prefixHash=(previous,event)=>bytesToHex(sha256(new TextEncoder().encode(previous+'\n'+event)));
   // Only results actually returned by this instance's original native sign call.
   // No caller-supplied bytes, keys, re-signing or eviction of unresolved results.
   // This is volatile recovery, not persistence or device-loss recovery.
@@ -97,33 +115,58 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       try { callback(queries.map(request => request.result)); } catch (error) { abort(error); }
     }; });
   }
-  // Canonical evidence does not depend on possession of the original keys.
-  // A separate recovery-only reader can inspect it after custody is lost.
+  // Canonical evidence remains readable after custody loss.
   function validateEvidence([order, keys, events, signing], scope) {
     if (order === undefined) { requireThat(keys.length === 0 && events.length === 0 && signing.length === 0, 'ORPHANED_ORDER_DATA'); return null; }
+    const identity=token([scope,order,events,signing]);
+    if(evidenceCache?.identity===identity){replaySnapshots.set(events,evidenceCache.orders);return order;}
     bounded(order);
     requireThat(fields.every(field => order[field] === scope[field]), 'ORDER_SCOPE_MISMATCH');
     requireThat(events.length === order.revision + 1 && events[0]?.type === 'create', 'CORRUPT_ORDER_HISTORY');
-    let replay = bounded(events[0].order);
-    requireThat(replay.revision === 0 && !replay.paused && replay.items.every(item => !item.attempts.length), 'CORRUPT_ORDER_HISTORY');
-    for (let i = 1; i < events.length; i++) replay = model.transitionOrder(replay, events[i]);
-    requireThat(equal(replay, order), 'CORRUPT_ORDER_HISTORY');
+    const scopeToken=token(scope),eventTokens=events.map(token),cached=evidenceCache?.scopeToken===scopeToken?evidenceCache:null;
+    let matched=0;while(matched<eventTokens.length&&cached?.eventTokens[matched]===eventTokens[matched])matched++;
+    while(matched>0&&!cached.orders[matched-1])matched--;
+    const orders=matched?cached.orders.slice(0,matched):[],prefixes=matched?cached.prefixes.slice(0,matched):[];
+    if(!matched){const initial=bounded(structuredClone(events[0].order));
+      requireThat(initial.revision===0&&!initial.paused&&initial.items.every(item=>!item.attempts.length),'CORRUPT_ORDER_HISTORY');
+      orders.push(initial);prefixes.push(prefixHash('',eventTokens[0]));}
+    for(let i=orders.length;i<events.length;i++){
+      orders.push(model.transitionOrder(orders[i-1],events[i]));prefixes.push(prefixHash(prefixes[i-1],eventTokens[i]));
+    }
+    requireThat(equal(orders.at(-1),order),'CORRUPT_ORDER_HISTORY');
+    replaySnapshots.set(events,orders);
+    const validatedBatches=new Set();
     const batches=groups(signing);
-    if(signing.length)requireThat(batches.length===order.items[0].attempts.length,'ASSET_CLAIM_HISTORY');
+    if(signing.length)requireThat(batches.length===order.items.reduce((n,item)=>n+item.attempts.length,0),'ASSET_CLAIM_HISTORY');
     for(const [i,records]of batches.entries()){
-      const claim=records[0]?.record;
-      requireThat(claim.attempt===i+1&&equal(Object.keys(records[0]).sort(),(i===0?['phase','record']:['phase','record','replacement']).sort()),'ASSET_CLAIM_HISTORY');
-      requireThat(equal(events[claim.orderRevision],{type:'prepare',revision:claim.orderRevision-1,index:0,blockhash:claim.blockhash,
-        lastValidBlockHeight:claim.lastValidBlockHeight,messageSha256:claim.messageSha256,...(i===1?{retry:true}:{})}),'ASSET_CLAIM_HISTORY');
-      prewalletState(order,records,events);signingState(order,records);walletState(order,records,events);submissionState(order,records,events);
-      if(i===1){
-        validateReplacementClaim(order,claim,records[0].replacement);
-        const source=replacementState(order,batches[0],events);
+      const claim=records[0]?.record,previous=batches[i-1]?.[0]?.record;
+      requireThat((i===0?claim.itemIndex===0&&claim.attempt===1:
+        claim.itemIndex===previous.itemIndex?claim.attempt===previous.attempt+1:claim.itemIndex===previous.itemIndex+1&&claim.attempt===1)
+        &&equal(Object.keys(records[0]).sort(),(claim.attempt===1?['phase','record']:['phase','record','replacement']).sort()),'ASSET_CLAIM_HISTORY');
+      requireThat(equal(events[claim.orderRevision],{type:'prepare',revision:claim.orderRevision-1,index:claim.itemIndex,blockhash:claim.blockhash,
+        lastValidBlockHeight:claim.lastValidBlockHeight,messageSha256:claim.messageSha256,...(claim.attempt===2?{retry:true}:{})}),'ASSET_CLAIM_HISTORY');
+      const historical=atRevision(events,batches[i+1]?.[0]?.record.orderRevision-1,order);
+      const batchToken=prefixes[historical.revision]+'|'+token([historical,records,...(claim.attempt===2?[batches[i-1]]:[])]);
+      validatedBatches.add(batchToken);
+      if(cached?.validatedBatches.has(batchToken))continue;
+      prewalletState(historical,records,events);signingState(historical,records);walletState(historical,records,events);submissionState(historical,records,events);
+      if(claim.attempt===2){
+        validateReplacementClaim(historical,claim,records[0].replacement);
+        const prior=atRevision(events,claim.orderRevision-1,order);
+        const source=replacementState(prior,batches[i-1],events);
         requireThat(source&&['expired','failed'].includes(source.status)&&equal(records[0].replacement.prior,source.status==='failed'?source.failureRecord:source.expiryRecord)
           &&equal(records[0].replacement.prewallet,source.prewalletRecord)
           &&equal(records[0].replacement.responseExpiry,responseExpiryProvenance(source)),'REPLACEMENT_HISTORY');
       }
     }
+    // Failed replay/signature validation never replaces the last valid cache.
+    // Repeated pause/resume events do not retain a full order clone each. Keep
+    // only revisions referenced by canonical signing records and the latest.
+    const retained=new Set([0,order.revision]);
+    for(const row of signing){const revision=row.record?.orderRevision;
+      if(Number.isSafeInteger(revision)){retained.add(revision);retained.add(revision-1);}}
+    const kept=orders.map((value,index)=>retained.has(index)?value:undefined);
+    evidenceCache={identity,scopeToken,eventTokens,orders:kept,prefixes,validatedBatches};
     return order;
   }
   function validateKeys(order, records, scopeKey) {
@@ -170,10 +213,18 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     return { status:code ? 'unavailable' : 'available', code, items };
   }
   function groups(records){
-    requireThat(records.length<=12,'CORRUPT_ASSET_SIGNING');const batches=[];
+    requireThat(records.length<=600,'CORRUPT_ASSET_SIGNING');const batches=[];
     for(const record of records){if(record?.phase==='claimed')batches.push([]);
-      requireThat(batches.length>0&&batches.length<=2,'CORRUPT_ASSET_SIGNING');batches.at(-1).push(record);}
+      requireThat(batches.length>0&&batches.length<=100,'CORRUPT_ASSET_SIGNING');batches.at(-1).push(record);}
     return batches;
+  }
+  function atRevision(events,revision,fallback){
+    if(!Number.isSafeInteger(revision))return fallback;
+    requireThat(revision>=0&&revision<events.length,'CORRUPT_ORDER_HISTORY');
+    const cached=replaySnapshots.get(events);if(cached?.[revision])return cached[revision];
+    let start=revision;while(start>0&&!cached?.[start])start--;
+    let order=cached?.[start]??events[0].order;
+    for(let n=start+1;n<=revision;n++)order=model.transitionOrder(order,events[n]);return order;
   }
   const current=records=>groups(records).at(-1)??[];
   const hasPrewallet=records=>['prewallet-recovered','prewallet-expired'].includes(records.at(-1)?.phase);
@@ -186,11 +237,11 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       &&equal(Object.keys(r).sort(),['orderRevision','report','version'])
       &&Number.isSafeInteger(r.orderRevision)&&r.orderRevision>records[2].record.orderRevision
       &&r.orderRevision<=order.revision,'CORRUPT_RESPONSE_EXPIRY');
-    let prior=events[0].order;for(let n=1;n<r.orderRevision;n++)prior=model.transitionOrder(prior,events[n]);
+    const prior=atRevision(events,r.orderRevision-1,order);
     validateResponseExpiry(r.report,{order:prior,claim,request:records[1].record,walletClaim:records[2].record});
-    const attempt=order.items[0].attempts[claim.attempt-1];
+    const attempt=order.items[claim.itemIndex].attempts[claim.attempt-1];
     requireThat(r.report.status==='response-expired'&&attempt.state==='expired'&&attempt.signature===null
-      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:0,attempt:claim.attempt,proof:r.report.proof}),
+      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:claim.itemIndex,attempt:claim.attempt,proof:r.report.proof}),
       'RESPONSE_EXPIRY_HISTORY');
     return{status:'expired',report:structuredClone(r.report),signature:null,orderRevision:r.orderRevision,
       retryAuthorized:false,readyToSubmit:false,salesOpen:false};
@@ -201,12 +252,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     requireThat(records.length===(ready?3:2)&&equal(Object.keys(saved).sort(),['phase','record'])
       &&r?.version===1&&equal(Object.keys(r).sort(),['orderRevision','report','version'])
       &&Number.isSafeInteger(r.orderRevision)&&r.orderRevision>claim.orderRevision&&r.orderRevision<=order.revision,'CORRUPT_PREWALLET_RECOVERY');
-    let prior=events[0].order;for(let n=1;n<r.orderRevision;n++)prior=model.transitionOrder(prior,events[n]);
+    const prior=atRevision(events,r.orderRevision-1,order);
     const expired=saved.phase==='prewallet-expired';
     (expired?validatePrewalletExpiry:validatePrewalletRecovery)(r.report,{order:prior,claim,request:ready?.record??null});
     const result=expired?{status:'expired',proof:r.report.proof}:r.report.result;
-    requireThat(r.report.status===saved.phase&&order.items[0].attempts[claim.attempt-1].state===result.status
-      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:0,attempt:claim.attempt,proof:result.proof}),'PREWALLET_HISTORY');
+    requireThat(r.report.status===saved.phase&&order.items[claim.itemIndex].attempts[claim.attempt-1].state===result.status
+      &&equal(events[r.orderRevision],{type:'reconcile',revision:prior.revision,index:claim.itemIndex,attempt:claim.attempt,proof:result.proof}),'PREWALLET_HISTORY');
     return{status:result.status,report:structuredClone(r.report),
       ...(result.status==='failed'?{feeLamports:r.report.result.evidence.feeLamports}:{}),
       retryAuthorized:false,readyToSubmit:false,salesOpen:false};
@@ -237,24 +288,23 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       && /^[a-f0-9]{64}$/.test(claim.claimId) && claim.requestId === buyerRequestId(records[1].record)
       && claim.orderRevision === assetClaim.orderRevision+1 && order.revision >= claim.orderRevision, 'CORRUPT_WALLET_CLAIM');
     if(claim.version===2)validateCostApproval(claim.costApproval,{order,claim:records[0].record,request:records[1].record});
-    requireThat(equal(events[claim.orderRevision], {type:'unknown',revision:assetClaim.orderRevision,index:0,attempt:number}), 'WALLET_CLAIM_HISTORY');
+    requireThat(equal(events[claim.orderRevision], {type:'unknown',revision:assetClaim.orderRevision,index:assetClaim.itemIndex,attempt:number}), 'WALLET_CLAIM_HISTORY');
     if (response) {
       requireThat(records[3].phase === 'buyer-response'
         && shape(response, 'version claimId orderRevision transactionBase64 signature messageSha256')
         && response.version === 1 && response.claimId === claim.claimId
         && Number.isSafeInteger(response.orderRevision) && response.orderRevision > claim.orderRevision
         && response.orderRevision <= order.revision, 'CORRUPT_BUYER_RESPONSE');
-      let before = events[0].order;
-      for (let n = 1; n < response.orderRevision; n++) before = model.transitionOrder(before, events[n]);
+      const before=atRevision(events,response.orderRevision-1,order);
       const verified = verifyBuyerSigningResponse(before, records[0].record, records[1].record,
         {transactionBase64:response.transactionBase64});
       requireThat(verified.signature === response.signature && verified.messageSha256 === response.messageSha256
-        && equal(events[response.orderRevision], {type:'signature',revision:before.revision,index:0,attempt:number,
+        && equal(events[response.orderRevision], {type:'signature',revision:before.revision,index:assetClaim.itemIndex,attempt:number,
           signature:response.signature,messageSha256:response.messageSha256}), 'BUYER_RESPONSE_HISTORY');
     }
     if(expired)responseExpiryState(order,records,events);
-    else if(!response)requireThat(records.length===3&&order.items[0].attempts[number-1].state==='unknown'
-      &&order.items[0].attempts[number-1].signature===null,'MISSING_RESPONSE_HISTORY');
+    else if(!response)requireThat(records.length===3&&order.items[assetClaim.itemIndex].attempts[number-1].state==='unknown'
+      &&order.items[assetClaim.itemIndex].attempts[number-1].signature===null,'MISSING_RESPONSE_HISTORY');
     return {status:expired?'response-expired':response ? 'buyer-response-saved' : 'wallet-response-unknown',
       claim:structuredClone(claim), response:response ? structuredClone(response) : null,
       readyToSign:false, readyToSubmit:false, salesOpen:false};
@@ -276,29 +326,49 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         &&sendClaim.transactionSha256===signedBytesId(wallet.response.transactionBase64)
         &&Number.isSafeInteger(sendClaim.orderRevision)&&sendClaim.orderRevision>wallet.response.orderRevision
         &&sendClaim.orderRevision<=order.revision,'CORRUPT_SEND_CLAIM');
-      requireThat(equal(events[sendClaim.orderRevision],{type:'unknown',revision:sendClaim.orderRevision-1,index:0,attempt:number}),'SEND_CLAIM_HISTORY');
-      let prior=events[0].order;
-      for(let i=1;i<sendClaim.orderRevision;i++)prior=model.transitionOrder(prior,events[i]);
+      requireThat(equal(events[sendClaim.orderRevision],{type:'unknown',revision:sendClaim.orderRevision-1,index:input.claim.itemIndex,attempt:number}),'SEND_CLAIM_HISTORY');
+      const prior=atRevision(events,sendClaim.orderRevision-1,order);
       requireThat(!prior.paused,'SEND_CLAIM_HISTORY');validateBuyerSubmission({...input,order:prior});
     }
-    const outcome=order.items[0].attempts[number-1].state;
+    const outcome=order.items[input.claim.itemIndex].attempts[number-1].state;
     requireThat(records.length===(sendClaim?5:4)+(reviewed?1:0),'CORRUPT_EXPIRY_REVIEW');
     if(reviewed){
       const expected=reviewType==='expiry-reviewed'?'expired':'failed';
       requireThat(records.length===(sendClaim?6:5)&&equal(Object.keys(reviewed).sort(),['version','orderRevision','report'].sort())
         &&reviewed.version===1&&Number.isSafeInteger(reviewed.orderRevision)&&reviewed.orderRevision>wallet.response.orderRevision
         &&reviewed.orderRevision<=order.revision&&outcome===expected,'CORRUPT_EXPIRY_REVIEW');
-      let prior=events[0].order;
-      for(let i=1;i<reviewed.orderRevision;i++)prior=model.transitionOrder(prior,events[i]);
+      const prior=atRevision(events,reviewed.orderRevision-1,order);
       if(expected==='expired'){
         validateBuyerExpiryResult(reviewed.report,{...input,order:prior});expiryEvidence=expiryRecord({...input,order:prior},reviewed.report);
       }else failureEvidence=failureRecord({...input,order:prior},reviewed.report);
       requireThat(reviewed.report.status===expected&&equal(events[reviewed.orderRevision],
-        {type:'reconcile',revision:prior.revision,index:0,attempt:number,proof:reviewed.report.proof}),'EXPIRY_REVIEW_HISTORY');
+        {type:'reconcile',revision:prior.revision,index:input.claim.itemIndex,attempt:number,proof:reviewed.report.proof}),'EXPIRY_REVIEW_HISTORY');
     }
     requireThat(!['expired','failed'].includes(outcome)||reviewed,'TERMINAL_REVIEW_REQUIRED');
     return {status:['verified','expired','failed'].includes(outcome)?outcome:sendClaim?'send-claimed':'ready',
       input,expiryRecord:expiryEvidence,failureRecord:failureEvidence,costApproval:wallet.claim.costApproval?structuredClone(wallet.claim.costApproval):null,sendClaim:sendClaim?structuredClone(sendClaim):null,readyToSubmit:false,salesOpen:false};
+  }
+  function costSummary(saved){
+    const {order,signing}=saved;if(!order)return null;
+    requireThat(!order.items.some(item=>item.attempts.length)||signing.length>0,'ASSET_CLAIM_HISTORY');
+    const failures=[];
+    for(const records of groups(signing)){
+      const claim=records[0].record,last=records.at(-1);
+      const report=last.phase==='failure-reviewed'?last.record.report:
+        last.phase==='prewallet-recovered'&&last.record.report.result.status==='failed'?last.record.report.result:null;
+      if(report)failures.push({itemIndex:claim.itemIndex,attempt:claim.attempt,feeLamports:report.evidence.feeLamports});
+    }
+    const index=currentItemIndex(order),verified=index??order.quantity;
+    const records=current(signing),claim=records[0]?.record;
+    const quote=claim?.itemIndex===index?records.find(record=>record.phase==='wallet-claimed')?.record.costApproval?.quote:null;
+    return {quantity:order.quantity,verified,remaining:order.quantity-verified,currentItemIndex:index,
+      verifiedItemPriceLamports:(BigInt(order.unitPriceLamports)*BigInt(verified)).toString(),
+      knownFailedFeesLamports:failures.reduce((sum,row)=>sum+BigInt(row.feeLamports),0n).toString(),failedAttempts:failures,
+      approvedCurrentTemplate:quote?{quoteId:quote.quoteId,issuedAt:quote.issuedAt,expiresAt:quote.expiresAt,
+        totalLamports:quote.budget.totalLamports,projectedRemainingTotalLamports:
+          (BigInt(quote.budget.totalLamports)*BigInt(order.quantity-verified)).toString(),projectionOnly:true}:null,
+      successfulTransactionFeesLamports:null,actualOrderTotalLamports:null,
+      nextItemRequiresFreshQuote:index!==null,readyToSubmit:false,salesOpen:false};
   }
   async function snapshotData(scope, scopeKey) {
     const data = await transaction('readonly', (tx, resolve, abort) => load(tx, scopeKey, resolve, abort));
@@ -335,8 +405,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     if(!hasPrewallet(records)&&!responseExpired)return submissionState(order,records,events);
     const terminal=responseExpired?responseExpiryState(order,records,events):prewalletState(order,records,events);
     if(!['expired','failed'].includes(terminal.status)||records[0].record.attempt!==1)return null;
-    const prior=structuredClone(order);prior.items[0].attempts=prior.items[0].attempts.slice(0,1);
-    if(order.items[0].attempts.length>1)prior.revision=records.at(-1).record.orderRevision;
+    const prior=structuredClone(order);prior.items[records[0].record.itemIndex].attempts=prior.items[records[0].record.itemIndex].attempts.slice(0,1);
+    if(order.items[records[0].record.itemIndex].attempts.length>1)prior.revision=records.at(-1).record.orderRevision;
     if(responseExpired)return responseExpiryReplacementSource(prior,records[0].record,terminal.report,records[1].record,records[2].record);
     return terminal.status==='expired'
       ?prewalletExpiryReplacementSource(prior,records[0].record,terminal.report,records[1]?.phase==='ready'?records[1].record:null)
@@ -359,13 +429,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       requireThat(frozen.status===(expired?'prewallet-expired':'prewallet-recovered'),'PREWALLET_NOT_VERIFIED');
       const retained=nativeResults.get(scopeKey);
       if(retained&&!expired)requireThat(equal(retained.request,prewalletSubmission(state.input,frozen.response).request),'ASSET_REQUEST_CONFLICT');
-      const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:expired?frozen.proof:frozen.result.proof};
+      const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:state.input.claim.itemIndex,attempt:number,proof:expired?frozen.proof:frozen.result.proof};
       const order=bounded(model.transitionOrder(before.order,event));
       const record={phase:expired?'prewallet-expired':'prewallet-recovered',record:{version:1,orderRevision:order.revision,report:frozen}};
       await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
         requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
         tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-        tx.objectStore('signing').add(record,[scopeKey,0,number,6]);resolve(true);
+        tx.objectStore('signing').add(record,[scopeKey,state.input.claim.itemIndex,number,6]);resolve(true);
       },abort));
       const after=await snapshotData(scope,scopeKey);
       requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'PREWALLET_NOT_SAVED');
@@ -382,17 +452,17 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       if(expiry)validateBuyerExpiryResult(frozen,state.input);else validateBuyerResult(frozen,state.input,{recovery:true});
       requireThat(frozen.status===outcome,'RECOVERY_NOT_VERIFIED');
       const number=state.input.claim.attempt;
-      const event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:frozen.proof};
+      const event={type:'reconcile',revision:before.order.revision,index:state.input.claim.itemIndex,attempt:number,proof:frozen.proof};
       const order=bounded(model.transitionOrder(before.order,event));
       const record=expiry||failed?{phase:expiry?'expiry-reviewed':'failure-reviewed',record:{version:1,orderRevision:order.revision,report:frozen}}:null;
       await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
         requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
         tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-        if(record)tx.objectStore('signing').add(record,[scopeKey,0,number,5]);resolve(true);
+        if(record)tx.objectStore('signing').add(record,[scopeKey,state.input.claim.itemIndex,number,5]);resolve(true);
       },abort));
       const after=await snapshotData(scope,scopeKey);
       requireThat(equal(after.order,order)&&equal(after.signing,record?[...before.signing,record]:before.signing),'PROOF_NOT_SAVED');
-      return {status:outcome,signature:order.items[0].attempts[number-1].signature,orderRevision:order.revision,
+      return {status:outcome,signature:order.items[state.input.claim.itemIndex].attempts[number-1].signature,orderRevision:order.revision,
         ...(expiry||failed?{retryAuthorized:false}:{}),...(failed?{feeLamports:frozen.evidence.feeLamports}:{}),readyToSubmit:false,salesOpen:false};
     });
   }
@@ -404,10 +474,10 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       // A lost commit acknowledgment, or a later wallet step, is read-only.
       requireThat(equal(records[1],{phase:'ready',record:retained.request}),'ASSET_REQUEST_CONFLICT');
     }else{
-      requireThat(records.length===1&&saved.order.items[0].attempts.at(-1)?.state==='wallet-pending','ASSET_CLAIM_CHANGED');
+      requireThat(records.length===1&&saved.order.items[claim.itemIndex].attempts.at(-1)?.state==='wallet-pending','ASSET_CLAIM_CHANGED');
       await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
         requireThat(equal(validate(data,scope,scopeKey),saved.order)&&equal(data[3],saved.signing),'ASSET_CLAIM_CHANGED');
-        tx.objectStore('signing').add({phase:'ready',record:retained.request},[scopeKey,0,claim.attempt,1]);resolve(true);
+        tx.objectStore('signing').add({phase:'ready',record:retained.request},[scopeKey,claim.itemIndex,claim.attempt,1]);resolve(true);
       },abort));
       const after=await snapshotData(scope,scopeKey);
       requireThat(equal(after.order,saved.order)&&equal(after.signing,[...saved.signing,{phase:'ready',record:retained.request}]),'ASSET_REQUEST_NOT_SAVED');
@@ -423,6 +493,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       return locked(input, async (scope, scopeKey) => {
         const before = await snapshotData(scope, scopeKey);
         requireThat(before.order, 'MISSING_ORDER');
+        requireThat(!before.order.items.some(item=>item.attempts.length)||before.signing.length>0,'ASSET_CLAIM_HISTORY');
         requireThat(frozen?.orderRevision===before.order.revision,'STALE_REVISION');
         if(report){
           const source=replacementState(before.order,before.signing,before.events);
@@ -432,7 +503,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
             &&equal(report.record.prewallet,source.prewalletRecord)
             &&equal(report.record.responseExpiry,responseExpiryProvenance(source)),'REPLACEMENT_HISTORY');
           validateReplacementAcknowledgment(source.input,prior,acknowledgedFeeLamports);
-        }else requireThat(before.signing.length===0,'ASSET_SIGNING_EXISTS');
+        }else requireThat(currentItemIndex(before.order)===frozen.itemIndex
+          &&!groups(before.signing).some(records=>records[0].record.itemIndex===frozen.itemIndex),'ASSET_SIGNING_EXISTS');
         requireThat(!nativeSlots.has(scopeKey)&&nativeSlots.size<MAX_NATIVE_RESULTS,'NATIVE_RESULTS_PENDING');
         const prepared = prepareAssetClaim(before.order, frozen),number=prepared.claim.attempt;
         requireThat(number===(report?2:1),'REPLACEMENT_NOT_READY');
@@ -444,7 +516,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
             requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3],before.signing), 'STALE_REVISION');
             tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
             tx.objectStore('orders').put(prepared.order, scopeKey);
-            tx.objectStore('signing').add(claimed, [scopeKey, 0, number, 0]);
+            tx.objectStore('signing').add(claimed, [scopeKey, prepared.claim.itemIndex, number, 0]);
             resolve(true);
           }, abort));
           // Native signing starts only after the intent has committed and been read back.
@@ -452,7 +524,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [...before.signing,claimed]), 'ASSET_CLAIM_CHANGED');
           const message = validateAssetClaim(saved.order, prepared.claim);
           let signature;
-          try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[0].privateKey, message)); }
+          try { signature = new Uint8Array(await crypto.subtle.sign('Ed25519', saved.keys[prepared.claim.itemIndex].privateKey, message)); }
           catch { throw Error('ASSET_SIGNING_FAILED'); }
           const request = finalizeAssetRequest(saved.order, prepared.claim, signature);
           const retained=structuredClone({claimed,request});nativeResults.set(scopeKey,retained);
@@ -491,6 +563,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       });
     },
     read(input) { return locked(input, snapshot); },
+    readCostSummary(input) { return locked(input,async(scope,scopeKey)=>costSummary(await snapshotData(scope,scopeKey))); },
     // Evidence-only inspection. Never repairs keys, persists recovered data,
     // invokes a transaction signer or grants permission to continue purchasing.
     readRecoverySnapshot(input) {
@@ -566,10 +639,10 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const records=current(before.signing),assetClaim=records[0]?.record,number=assetClaim?.attempt;
         requireThat(before.order?.revision===orderRevision&&orderRevision===assetClaim?.orderRevision,'STALE_REVISION');
         requireThat(!before.order.paused && records.length === 2
-          && before.order.items[0].attempts[number-1].state === 'wallet-pending'
+          && before.order.items[assetClaim.itemIndex].attempts[number-1].state === 'wallet-pending'
           && requestId === buyerRequestId(records[1].record), 'WALLET_NOT_READY');
         validateCostApproval(approval,{order:before.order,claim:records[0].record,request:records[1].record},{now:Date.now()});
-        const event = {type:'unknown',revision:orderRevision,index:0,attempt:number};
+        const event = {type:'unknown',revision:orderRevision,index:assetClaim.itemIndex,attempt:number};
         const order = bounded(model.transitionOrder(before.order, event));
         const claimId = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2,'0')).join('');
         const claimed = {phase:'wallet-claimed',record:{version:2,claimId,requestId,orderRevision:order.revision,costApproval:approval}};
@@ -577,7 +650,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3], before.signing), 'STALE_REVISION');
           tx.objectStore('events').add(event, [scopeKey, order.revision]);
           tx.objectStore('orders').put(order, scopeKey);
-          tx.objectStore('signing').add(claimed, [scopeKey,0,number,2]); resolve(true);
+          tx.objectStore('signing').add(claimed, [scopeKey,assetClaim.itemIndex,number,2]); resolve(true);
         }, abort));
         const after = await snapshotData(scope, scopeKey);
         requireThat(equal(after.order, order) && equal(after.signing, [...before.signing,claimed]), 'WALLET_CLAIM_NOT_SAVED');
@@ -602,7 +675,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         }
         const verified = verifyBuyerSigningResponse(before.order, records[0].record, records[1].record,
           {transactionBase64:frozen.transactionBase64});
-        const event = {type:'signature',revision:before.order.revision,index:0,attempt:number,
+        const event = {type:'signature',revision:before.order.revision,index:records[0].record.itemIndex,attempt:number,
           signature:verified.signature,messageSha256:verified.messageSha256};
         const order = bounded(model.transitionOrder(before.order, event));
         const saved = {phase:'buyer-response',record:{version:1,claimId:frozen.claimId,orderRevision:order.revision,
@@ -611,7 +684,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(equal(validate(data, scope, scopeKey), before.order) && equal(data[3], before.signing), 'STALE_REVISION');
           tx.objectStore('events').add(event, [scopeKey, order.revision]);
           tx.objectStore('orders').put(order, scopeKey);
-          tx.objectStore('signing').add(saved, [scopeKey,0,number,3]); resolve(true);
+          tx.objectStore('signing').add(saved, [scopeKey,records[0].record.itemIndex,number,3]); resolve(true);
         }, abort));
         const after = await snapshotData(scope, scopeKey);
         requireThat(equal(after.order, order) && equal(after.signing, [...before.signing,saved]), 'BUYER_RESPONSE_NOT_SAVED');
@@ -624,7 +697,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     readBuyerResponseReplacement(input){
       return locked(input,async(scope,scopeKey)=>{
         const saved=await snapshotData(scope,scopeKey);
-        if(!saved.order||saved.order.items[0].attempts.length!==1||!hasResponseExpiry(current(saved.signing)))return null;
+        if(!saved.order||saved.order.items[current(saved.signing)[0]?.record.itemIndex]?.attempts.length!==1||!hasResponseExpiry(current(saved.signing)))return null;
         return replacementState(saved.order,saved.signing,saved.events);
       });
     },
@@ -635,13 +708,13 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const before=await snapshotData(scope,scopeKey),state=responseRecoveryState(before);
         requireThat(state?.status==='wallet-response-unknown','MISSING_RESPONSE_REQUIRED');
         validateResponseExpiry(frozen,state.input);requireThat(frozen.status==='response-expired','RESPONSE_EXPIRY_NOT_VERIFIED');
-        const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:0,attempt:number,proof:frozen.proof};
+        const number=state.input.claim.attempt,event={type:'reconcile',revision:before.order.revision,index:state.input.claim.itemIndex,attempt:number,proof:frozen.proof};
         const order=bounded(model.transitionOrder(before.order,event));
         const record={phase:'response-expired',record:{version:1,orderRevision:order.revision,report:frozen}};
         await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
           requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
           tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-          tx.objectStore('signing').add(record,[scopeKey,0,number,6]);resolve(true);
+          tx.objectStore('signing').add(record,[scopeKey,state.input.claim.itemIndex,number,6]);resolve(true);
         },abort));
         const after=await snapshotData(scope,scopeKey);
         requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'RESPONSE_EXPIRY_NOT_SAVED');
@@ -665,7 +738,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     readPrewalletReplacement(input){
       return locked(input,async(scope,scopeKey)=>{
         const saved=await snapshotData(scope,scopeKey);
-        if(!saved.order||saved.order.items[0].attempts.length!==1||!hasPrewallet(current(saved.signing)))return null;
+        if(!saved.order||saved.order.items[current(saved.signing)[0]?.record.itemIndex]?.attempts.length!==1||!hasPrewallet(current(saved.signing)))return null;
         return replacementState(saved.order,saved.signing,saved.events);
       });
     },
@@ -677,7 +750,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         requireThat(state?.status==='wallet-response-unknown','MISSING_RESPONSE_REQUIRED');
         validateResponseRecovery(frozen,state.input);requireThat(frozen.status==='response-recovered','RESPONSE_NOT_VERIFIED');
         const recovered=recoveredSubmission(state.input,frozen.response),number=state.input.claim.attempt;
-        const event={type:'reconcile',revision:recovered.input.order.revision,index:0,attempt:number,proof:frozen.result.proof};
+        const event={type:'reconcile',revision:recovered.input.order.revision,index:state.input.claim.itemIndex,attempt:number,proof:frozen.result.proof};
         const order=bounded(model.transitionOrder(recovered.input.order,event));
         const response={phase:'buyer-response',record:{version:1,claimId:state.input.walletClaim.claimId,
           orderRevision:recovered.input.order.revision,transactionBase64:frozen.response.transactionBase64,
@@ -687,8 +760,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
           requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
           tx.objectStore('events').add(recovered.event,[scopeKey,recovered.input.order.revision]);
           tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-          tx.objectStore('signing').add(response,[scopeKey,0,number,3]);
-          if(failure)tx.objectStore('signing').add(failure,[scopeKey,0,number,5]);resolve(true);
+          tx.objectStore('signing').add(response,[scopeKey,state.input.claim.itemIndex,number,3]);
+          if(failure)tx.objectStore('signing').add(failure,[scopeKey,state.input.claim.itemIndex,number,5]);resolve(true);
         },abort));
         const after=await snapshotData(scope,scopeKey);
         requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,response,...(failure?[failure]:[])]),'RESPONSE_RECOVERY_NOT_SAVED');
@@ -704,14 +777,14 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         validateCostApproval(state.costApproval,state.input,{now:Date.now()});
         requireThat(transactionSha256===signedBytesId(state.input.response.transactionBase64),'SEND_BYTES');
         const number=state.input.claim.attempt;
-        const event={type:'unknown',revision:before.order.revision,index:0,attempt:number};
+        const event={type:'unknown',revision:before.order.revision,index:state.input.claim.itemIndex,attempt:number};
         const order=bounded(model.transitionOrder(before.order,event));
         const record={phase:'send-claimed',record:{version:1,claimId:[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join(''),
-          orderRevision:order.revision,transactionSha256,signature:order.items[0].attempts[number-1].signature}};
+          orderRevision:order.revision,transactionSha256,signature:order.items[state.input.claim.itemIndex].attempts[number-1].signature}};
         await transaction('readwrite',(tx,resolve,abort)=>load(tx,scopeKey,data=>{
           requireThat(equal(validate(data,scope,scopeKey),before.order)&&equal(data[3],before.signing),'STALE_REVISION');
           tx.objectStore('events').add(event,[scopeKey,order.revision]);tx.objectStore('orders').put(order,scopeKey);
-          tx.objectStore('signing').add(record,[scopeKey,0,number,4]);resolve(true);
+          tx.objectStore('signing').add(record,[scopeKey,state.input.claim.itemIndex,number,4]);resolve(true);
         },abort));
         const after=await snapshotData(scope,scopeKey);
         requireThat(equal(after.order,order)&&equal(after.signing,[...before.signing,record]),'SEND_CLAIM_NOT_SAVED');
@@ -723,14 +796,15 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         return current.order?submissionState(current.order,current.signing,current.events):null;});
     },
     // Read-only historical evidence, reconstructed before the next attempt.
-    readBuyerAttempt(input,number) {
+    readBuyerAttempt(input,number,itemIndex=0) {
       requireThat([1,2].includes(number),'ATTEMPT_NUMBER');
+      requireThat(Number.isSafeInteger(itemIndex)&&itemIndex>=0&&itemIndex<50,'INVALID_ITEM_INDEX');
       return locked(input,async(scope,scopeKey)=>{
-        const saved=await snapshotData(scope,scopeKey),batches=groups(saved.signing),records=batches[number-1];
+        const saved=await snapshotData(scope,scopeKey),batches=groups(saved.signing),position=batches.findIndex(records=>records[0].record.itemIndex===itemIndex&&records[0].record.attempt===number),records=batches[position];
         if(!records)return null;
-        const revision=batches[number]?.[0]?.record.orderRevision-1;
+        const revision=batches[position+1]?.[0]?.record.orderRevision-1;
         let order=saved.order;
-        if(Number.isSafeInteger(revision)){order=saved.events[0].order;for(let n=1;n<=revision;n++)order=model.transitionOrder(order,saved.events[n]);}
+        if(Number.isSafeInteger(revision))order=atRevision(saved.events,revision,order);
         return{order:structuredClone(order),signing:signingState(order,records),wallet:walletState(order,records,saved.events),
           submission:submissionState(order,records,saved.events),...(hasPrewallet(records)?{prewallet:prewalletState(order,records,saved.events)}:{}),
           ...(hasResponseExpiry(records)?{responseExpiry:responseExpiryState(order,records,saved.events)}:{})};

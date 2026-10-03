@@ -1,4 +1,5 @@
 // Portable evidence binding. A discovered response is only usable with its terminal proof.
+import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createOrderModel} from './journal-model.mjs';
 import {validateAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
@@ -8,18 +9,18 @@ import {anchorKey} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),need=(v,code='RESPONSE_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const shape=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
-export const responseRecoveryKey=(order,attempt=1)=>anchorKey(order,attempt).replace('buyer-blockhash:v1:','buyer-response-recovery:v1:');
+export const responseRecoveryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-response-recovery:v1:');
 export function validateMissingBuyerResponse(input){
   need(shape(input,'order claim request walletClaim'),'MISSING_RESPONSE_FIELDS');
   const {order,claim,request,walletClaim:w}=input;model.validateOrder(order);validateAssetRequest(order,claim,request);
-  need(order.cluster==='devnet'&&order.items[0].attempts.length===claim.attempt&&order.items[0].attempts.at(-1).state==='unknown'
-    &&order.items[0].attempts.at(-1).signature===null&&order.items.slice(1).every(i=>!i.attempts.length),'MISSING_RESPONSE_STATE');
+  need(order.cluster==='devnet'&&order.items[claim.itemIndex].attempts.length===claim.attempt&&order.items[claim.itemIndex].attempts.at(-1).state==='unknown'
+    &&order.items[claim.itemIndex].attempts.at(-1).signature===null,'MISSING_RESPONSE_STATE');
   need(w&&((w.version===1&&shape(w,'version claimId requestId orderRevision'))
     ||(w.version===2&&shape(w,'version claimId requestId orderRevision costApproval')))
     &&typeof w.claimId==='string'&&/^[a-f0-9]{64}$/.test(w.claimId)&&w.requestId===buyerRequestId(request)
     &&w.orderRevision===claim.orderRevision+1&&order.revision>=w.orderRevision,'WALLET_CLAIM_REQUIRED');
   if(w.version===2)validateCostApproval(w.costApproval,{order,claim,request});
-  return input;
+  assertCurrentItem(order,claim.itemIndex);return input;
 }
 function identity(input){return{orderIdentitySha256:input.claim.orderIdentitySha256,requestId:buyerRequestId(input.request),
   partialSha256:signedBytesId(input.request.transactionBase64)};}
@@ -29,7 +30,7 @@ export function responseRecoveryBinding(input){validateMissingBuyerResponse(inpu
 export function recoveredSubmission(input,response){
   validateMissingBuyerResponse(input);need(shape(response,'transactionBase64'));
   const signed=verifyBuyerSigningResponse(input.order,input.claim,input.request,response);
-  const event={type:'signature',revision:input.order.revision,index:0,attempt:input.claim.attempt,
+  const event={type:'signature',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt,
     signature:signed.signature,messageSha256:signed.messageSha256};
   return{event,input:{order:model.transitionOrder(input.order,event),claim:input.claim,request:input.request,
     response:{transactionBase64:signed.transactionBase64}}};

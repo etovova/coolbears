@@ -32,7 +32,7 @@ export function validateWalletCheck(report, order, request, now = Date.now()) {
     && report.candidate?.transactionBase64 === request.transactionBase64
     && report.candidate.messageSha256 === request.messageSha256
     && report.candidate.blockhash === request.blockhash && report.candidate.lastValidBlockHeight === request.lastValidBlockHeight
-    && report.candidate.asset === request.asset && report.itemIndex === 0 && report.quantity === order.quantity
+    && report.candidate.asset === request.asset && report.itemIndex === request.itemIndex && report.quantity === order.quantity
     && report.networkVerified === true && report.guardPriceVerified === true && report.blockhashVerified === true && report.blockhashProvenanceVerified === true
     && report.budget?.complete === true && report.budget.scope === 'next-item-current-template'
     && report.simulationVerified === true && report.simulationMode === 'unsigned'

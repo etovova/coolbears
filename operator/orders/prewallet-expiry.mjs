@@ -7,7 +7,7 @@ import {anchorKey} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),need=v=>{if(!v)throw Error('PREWALLET_EXPIRY_BINDING');};
 const exact=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 const positive=n=>Number.isSafeInteger(n)&&n>0;
-export const prewalletExpiryKey=(order,attempt=1)=>anchorKey(order,attempt).replace('buyer-blockhash:v1:','buyer-prewallet-expiry:v1:');
+export const prewalletExpiryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-prewallet-expiry:v1:');
 export function validatePrewalletExpiry(report,input){
   const binding=prewalletBinding(input);
   need(report&&Object.entries(binding).every(([k,v])=>report[k]===v)&&report.cluster==='devnet'
@@ -25,7 +25,7 @@ export function validatePrewalletExpiry(report,input){
     &&e.historyTransactions>(e.historyPages-1)*10&&e.historyTransactions<=e.historyPages*10
     &&typeof e.historySha256==='string'&&/^[a-f0-9]{64}$/.test(e.historySha256)
     &&p.slot===e.slot&&p.blockHeight===e.blockHeight&&p.statusSlot===p.accountSlot);
-  model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:p});
+  model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt,proof:p});
   return report;
 }
 export function prewalletExpiryReport(input,{proof,evidence,networkRequests=0,restored=false,code}={}){

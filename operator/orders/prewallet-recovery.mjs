@@ -1,4 +1,5 @@
 // Positive terminal evidence for an existing native claim, without inventing a wallet claim.
+import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {VersionedTransaction} from '@solana/web3.js';
 import {createOrderModel} from './journal-model.mjs';
@@ -9,14 +10,14 @@ import {anchorKey} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),need=(v,code='PREWALLET_RECOVERY_BINDING')=>{if(!v)throw Error(code);};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const shape=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
-export const prewalletRecoveryKey=(order,attempt=1)=>anchorKey(order,attempt).replace('buyer-blockhash:v1:','buyer-prewallet-recovery:v1:');
+export const prewalletRecoveryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-prewallet-recovery:v1:');
 export function validatePrewalletInput(input){
   need(shape(input,'order claim request'),'PREWALLET_FIELDS');
   const {order,claim,request}=input;model.validateOrder(order);validateAssetClaim(order,claim);
-  need(order.items[0].attempts.length===claim.attempt&&order.items[0].attempts.at(-1).state==='wallet-pending'
-    &&order.items[0].attempts.at(-1).signature===null,'PREWALLET_STATE');
+  need(order.items[claim.itemIndex].attempts.length===claim.attempt&&order.items[claim.itemIndex].attempts.at(-1).state==='wallet-pending'
+    &&order.items[claim.itemIndex].attempts.at(-1).signature===null,'PREWALLET_STATE');
   if(request!==null)validateAssetRequest(order,claim,request);
-  return input;
+  assertCurrentItem(order,claim.itemIndex);return input;
 }
 export function prewalletBinding(input){validatePrewalletInput(input);return{
   orderId:input.order.id,orderRevision:input.order.revision,orderSha256:signedBytesId(JSON.stringify(input.order)),
@@ -31,8 +32,8 @@ export function prewalletSubmission(input,response){
   need(input.request===null||same(input.request,request),'PREWALLET_NATIVE_CONFLICT');
   const signed=verifyBuyerSigningResponse(input.order,input.claim,request,response);
   // Internal receipt-verifier projection only; these are not wallet claims/events.
-  let order=model.transitionOrder(input.order,{type:'unknown',revision:input.order.revision,index:0,attempt:input.claim.attempt});
-  order=model.transitionOrder(order,{type:'signature',revision:order.revision,index:0,attempt:input.claim.attempt,
+  let order=model.transitionOrder(input.order,{type:'unknown',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt});
+  order=model.transitionOrder(order,{type:'signature',revision:order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt,
     signature:signed.signature,messageSha256:signed.messageSha256});
   return{order,claim:input.claim,request,response:{transactionBase64:signed.transactionBase64}};
 }
@@ -44,7 +45,7 @@ export function validatePrewalletRecovery(report,input){
   if(report.status==='prewallet-recovered'){
     validateBuyerResult(report.result,prewalletSubmission(input,report.response),{recovery:true});
     need(['verified','failed'].includes(report.result.status)&&report.result.transactionsSent===0);
-    model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:report.result.proof});
+    model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt,proof:report.result.proof});
   }else need(report.status==='unknown'&&report.response===undefined&&report.result===undefined);
   return report;
 }
@@ -72,9 +73,9 @@ export function restorePrewalletRecovery(input,record){
 export function prewalletFailurePrior(input,record){
   need(record?.version===1&&shape(record,'version claimSha256 response proof evidence')
     &&record.claimSha256===signedBytesId(JSON.stringify(input.claim))&&same(record.response,input.response)
-    &&input.claim.attempt===1&&input.order.items[0].attempts.length===1,'PREWALLET_FAILURE_REQUIRED');
+    &&input.claim.attempt===1&&input.order.items[input.claim.itemIndex].attempts.length===1,'PREWALLET_FAILURE_REQUIRED');
   return validateHistoricalFailure(input,{version:1,identity:{orderIdentitySha256:input.claim.orderIdentitySha256,
-    requestId:buyerRequestId(input.request),transactionSha256:signedBytesId(input.response.transactionBase64),signature:input.order.items[0].attempts[0].signature},
+    requestId:buyerRequestId(input.request),transactionSha256:signedBytesId(input.response.transactionBase64),signature:input.order.items[input.claim.itemIndex].attempts[0].signature},
     proof:structuredClone(record.proof),evidence:structuredClone(record.evidence)});
 }
 export function prewalletReplacementSource(order,claim,report){
