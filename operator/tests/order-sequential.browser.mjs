@@ -94,13 +94,15 @@ try{
   assert.deepEqual(retained.groups,Array.from({length:50},(_,i)=>[i,1]));assert.equal(retained.keys.length,50);assert.ok(retained.keys.every(k=>k.extractable===false));
   assert.deepEqual(retained.first,firstHistory);assert.equal(retained.last.submission.status,'verified');assert.equal(retained.last.signing.claim.itemIndex,49);
   assert.equal(retained.cost.verified,50);assert.equal(retained.cost.remaining,0);assert.equal(retained.cost.actualOrderTotalLamports,null);
+  // The latest approval is a test input; a fresh browser context has no volatile globals.
+  const completedConsent=await page.evaluate(()=>structuredClone(sequenceConsent));
   await context.close();context=null;await launch();
   const restartReadStarted=Date.now();assert.deepEqual(await page.evaluate(s=>store.read(s),scope),order);
   report.completedOrderRestartReadMs=Date.now()-restartReadStarted;
   assert.deepEqual(await page.evaluate(s=>store.readCostSummary(s),scope),retained.cost);
   assert.deepEqual(await page.evaluate(s=>store.readBuyerAttempt(s,1,49),scope),retained.last);
   await open(scope);const completeAudit=await audit();assert.equal((await page.evaluate(()=>client.state())).canRequestSignature,false);
-  assert.equal(await page.evaluate(()=>code(client.signOnly(sequenceConsent))),'NOT_READY');
+  assert.equal(await page.evaluate(consent=>code(client.signOnly(consent)),completedConsent),'NOT_READY');
   await assert.rejects(prepare(scope,49));assert.deepEqual(await audit(),completeAudit);
   report.sequence={quantity:50,nativeSignatures:50,walletInvocations:50,fixtureSendInvocations:50,uniqueCostApprovals:50,verified:50};
   report.cases.push('all 50 complete with 50 distinct persisted nonextractable asset keys, 50 native signatures, 50 fresh wallet/cost approvals and 50 fixture send claims; a second full browser restart retains the complete order, full history and unknown actual-total accounting, completion cannot sign again');
