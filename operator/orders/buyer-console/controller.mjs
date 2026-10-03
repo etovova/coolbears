@@ -1,7 +1,7 @@
 // Private UI coordinator. Injected ports are trusted application dependencies, never UI input.
 import {PublicKey} from '@solana/web3.js';
 import {compatibleBuyerWallet} from '../wallet-client.mjs';
-import {validateConsoleConfig} from './config.mjs';
+import {validateConsoleConfig,consoleStorageOptions} from './config.mjs';
 const need=(v,c)=>{if(!v)throw Error(c);},copy=v=>structuredClone(v);
 const terminal=s=>['verified','failed','expired'].includes(s);
 const lamports=v=>{need(typeof v==='string'&&/^(0|[1-9][0-9]{0,19})$/.test(v),'INVALID_COST_LIMIT');return BigInt(v);};
@@ -84,7 +84,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
     readOnly:value?.readOnly===true,feeLamports:value?.feeLamports??value?.evidence?.feeLamports??value?.report?.evidence?.feeLamports});
   return Object.freeze({state,
     async load(id){return run(async()=>{noPendingMemory();const row=index.list().find(v=>v.id===id);need(row,'ORDER_NOT_FOUND');
-      scope={id:row.id,buyer:row.buyer,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard};account=null;bind();clearQuote();reviewedReplacement=null;loaded=false;result=null;await refresh();return stateUnlocked();});},
+      scope={id:row.id,buyer:row.buyer,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};account=null;bind();clearQuote();reviewedReplacement=null;loaded=false;result=null;await refresh();return stateUnlocked();});},
     async startNew({authorizeNewOrder=false}={}){return run(async()=>{consent(authorizeNewOrder,'NEW_ORDER');await refresh();enabled('canStartNew');
       ports?.wallet.dispose?.();scope=null;ports=null;evidence=null;summary=null;loaded=false;clearQuote();reviewedReplacement=null;result=null;return stateUnlocked();});},
     async refresh(){return run(async()=>{await refresh();return stateUnlocked();});},
@@ -101,7 +101,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
     async create({quantity,authorizeCreate=false}={}){return run(async()=>{consent(authorizeCreate,'CREATE');need(!scope&&account,'ACCOUNT_REQUIRED');
       need(Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=50,'INVALID_QUANTITY');need(await storageManager?.persisted?.()===true,'PERSISTENT_STORAGE_REQUIRED');
       const generation=epoch,id='buyer-'+[...crypto.getRandomValues(new Uint8Array(16))].map(v=>v.toString(16).padStart(2,'0')).join('');
-      scope={id,buyer:account.address,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard};
+      scope={id,buyer:account.address,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};
       // Save the scope before creation so a lost commit reply is resumable. Never erase an uncertain pointer.
       await index.save(scope);need(epoch===generation&&account?.address===scope.buyer,'WALLET_CHANGED');bind();await updateAfter(()=>storage.create({...scope,quantity,available:quantity}));
       await connectPortWallet();await refresh();return stateUnlocked();});},

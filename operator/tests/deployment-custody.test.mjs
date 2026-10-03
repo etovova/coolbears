@@ -175,3 +175,42 @@ test('non-TTY init and missing bundle inspect fail closed without a secret promp
   errorReport(inspect, 'INSPECT'); assert.equal(inspect.prompts, 0);
   assert.deepEqual(await readdir(root), ['public.json']);
 });
+
+test('hidden custody options create a separate three-step bundle and remain pinned across inspect/verify', async t => {
+  const root = await temporary(t), directory = path.join(root, 'hidden-bundle'), optionsFile = path.join(root, 'hidden-public.json');
+  const hidden = { ...OPTIONS, id: 'hidden-custody-TEST', storageMode: 'hidden-settings',
+    hiddenCommitmentSha256: '1'.repeat(64), machineRentLamports: '3962400' };
+  await writeFile(optionsFile, JSON.stringify(hidden));
+  const init = terminal([TEST_PHRASE, TEST_PHRASE]);
+  assert.equal(await runCustody(['init', directory, optionsFile], init), 0); restored(init, 2);
+  const report = JSON.parse(init.output.text);
+  assert.equal(report.storageMode, 'hidden-settings'); assert.equal(report.plannedMessages, 3);
+  assert.equal(report.hiddenCommitmentSha256, hidden.hiddenCommitmentSha256); assert.equal(report.privateMappingVerified, false);
+  assert.equal(report.salesOpen, false); assert.equal(report.transactionsSent, 0);
+  const saved = await readFile(path.join(directory, 'journal/manifest.json'));
+  const manifest = JSON.parse(saved); assert.equal(manifest.version, 1); assert.equal(manifest.steps.length, 3);
+  assert.equal(manifest.steps[2].expected.machineSpace, 652);
+  const inspect = terminal();
+  assert.equal(await runCustody(['inspect', directory], inspect), 0);
+  assert.deepEqual(JSON.parse(inspect.output.text), { ...report, command: 'inspect' });
+  const verify = terminal([TEST_PHRASE]);
+  assert.equal(await runCustody(['verify', directory], verify), 0); restored(verify, 1);
+  assert.deepEqual(JSON.parse(verify.output.text), { ...report, command: 'verify', localKeysVerified: true });
+  assert.deepEqual(await readFile(path.join(directory, 'journal/manifest.json')), saved);
+});
+
+test('missing, malformed, zero and unapproved hidden option fields fail before a secret prompt', async t => {
+  const root = await temporary(t), optionsFile = path.join(root, 'public.json');
+  for (const value of [{ ...OPTIONS, storageMode: 'hidden-settings' },
+    { ...OPTIONS, hiddenCommitmentSha256: '1'.repeat(64) },
+    { ...OPTIONS, storageMode: 'config-lines', hiddenCommitmentSha256: '1'.repeat(64) },
+    { ...OPTIONS, storageMode: 'hidden-settings', hiddenCommitmentSha256: '0'.repeat(64) },
+    { ...OPTIONS, storageMode: 'hidden-settings', hiddenCommitmentSha256: 'A'.repeat(64) },
+    { ...OPTIONS, storageMode: 'hidden-settings', hiddenCommitmentSha256: 1 },
+    { ...OPTIONS, storageMode: 'hidden-settings', hiddenCommitmentSha256: '1'.repeat(64), privateMappingVerified: true }]) {
+    await writeFile(optionsFile, JSON.stringify(value)); const io = terminal();
+    assert.equal(await runCustody(['init', path.join(root, 'never-created'), optionsFile], io), 1);
+    errorReport(io, 'OPTIONS'); assert.equal(io.prompts, 0);
+  }
+  assert.deepEqual(await readdir(root), ['public.json']);
+});

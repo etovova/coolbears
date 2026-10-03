@@ -1,9 +1,9 @@
 // Portable validation of trusted expiry evidence. This is not a retry grant.
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {submissionBinding,validateBuyerSubmission} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
-const model=createOrderModel(policy),need=(v)=>{if(!v)throw Error('EXPIRY_RESPONSE');};
+const model=createProtocolOrderModel(policy),need=(v)=>{if(!v)throw Error('EXPIRY_RESPONSE');};
 const uint=n=>Number.isSafeInteger(n)&&n>=0;
 const exact=(v,fields)=>v&&Object.keys(v).sort().join(' ')===fields.split(' ').sort().join(' ');
 export const expiryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-expiry:v1:');

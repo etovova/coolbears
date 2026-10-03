@@ -14,11 +14,19 @@ import { GENESIS_HASHES } from '../deployment/rpc.mjs';
 import { inspectSignedDeploymentTransaction } from '../deployment/signing.mjs';
 const key = n => Keypair.fromSeed(createHash('sha256').update(`gateway-runtime-${n}`).digest());
 const owner = key('owner'), collection = key('collection');
+const storageMode = process.env.COOLBEARS_TEST_STORAGE_MODE ?? 'config-lines';
+assert.ok(['config-lines', 'hidden-settings'].includes(storageMode), 'INVALID_TEST_STORAGE_MODE');
+const hidden = storageMode === 'hidden-settings';
+const hiddenCommitmentSha256 = createHash('sha256').update('gateway-runtime TEST commitment, not production').digest('hex');
 const savedOwner = approved.owner; approved.owner = owner.publicKey.toBase58();
 const plan = await buildDeploymentPlan({ cluster: 'devnet', collection: collection.publicKey.toBase58(),
   reservedAsset: key('asset').publicKey.toBase58(), machine: key('machine').publicKey.toBase58(),
-  blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000' });
+  blockhash: key('hash').publicKey.toBase58(), lastValidBlockHeight: 1000, machineRentLamports: '5000000000',
+  ...(hidden ? { storageMode, hiddenCommitmentSha256 } : {}) });
 const policy = await compileDeploymentRpcPolicy(deploymentManifestFromPlan('runtime-gateway-fixture', plan), { allowSimulation: true });
+assert.equal(policy.version, hidden ? 2 : 1);
+assert.equal(policy.messageIdentities.length, hidden ? 3 : 1431);
+assert.equal(plan.machineSpace, hidden ? 652 : 871827);
 approved.owner = savedOwner;
 const root = path.resolve(new URL('../..', import.meta.url).pathname);
 const bundled = await build({ stdin: { contents: `import { makeGateway } from './operator/deployment/gateway/worker.mjs';
@@ -88,7 +96,7 @@ try {
   assert.equal((await dispatch('sendTransaction', [])).status, 400); assert.equal(calls.length, 0); cases++;
   const accounts = await dispatch('getMultipleAccounts', [policy.accounts, { encoding: 'base64', commitment: 'finalized' }]);
   assert.equal(accounts.status, 200, JSON.stringify({ body: accounts.status === 200 ? null : await accounts.clone().text(), calls, errors }));
-  assert.equal(Buffer.from((await accounts.json()).result.value[5].data[0], 'base64').length, 871827);
+  assert.equal(Buffer.from((await accounts.json()).result.value[5].data[0], 'base64').length, plan.machineSpace);
   assert.deepEqual(calls.map(call => call.method), ['getGenesisHash', 'getMultipleAccounts']); cases++;
   const tx = VersionedTransaction.deserialize(Buffer.from(plan.steps[0].transactionBase64, 'base64')); tx.sign([owner, collection]);
   assert.equal((await dispatch('simulateTransaction', [Buffer.from(tx.serialize()).toString('base64'), {
@@ -172,6 +180,8 @@ try {
   assert.deepEqual(errors, []);
   const version = JSON.parse(await readFile(path.join(root, 'node_modules/miniflare/package.json'), 'utf8')).version;
   console.log(JSON.stringify({ passed: true, engine: 'workerd', miniflare: version, storage: 'SQLite', cases,
+    ...(hidden ? { storageMode, policyVersion: 2, canonicalMessages: plan.steps.length, machineBytes: plan.machineSpace,
+      privateMappingVerified: false } : {}),
     upstreamRequests: calls.length, bundleBytes: Buffer.byteLength(contents), bundleSha256: createHash('sha256').update(contents).digest('hex'),
     fixtureSubmissions: 5, outboundNetwork: 'intercepted fixtures only', cloudflareDeployed: false, liveDevnet: false, transactionsSent: 0 }));
 } finally { if (mf) await mf.dispose(); await rm(persist, { recursive: true, force: true }); }

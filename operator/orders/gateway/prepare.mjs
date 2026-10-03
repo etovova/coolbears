@@ -3,11 +3,14 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {readOrderFile} from '../check.mjs';
-import {validateOrder} from '../journal.mjs';
+import {policy} from '../../prepare.mjs';
+import {createOrderModel,validateOrderStorageOptions} from '../journal-model.mjs';
 import {validateBuyerGatewayConfig} from './worker.mjs';
-export async function prepareBuyerGateway(orderFile,origin,{directory=fileURLToPath(new URL('./private',import.meta.url))}={}){
-  const order=validateOrder(await readOrderFile(orderFile));
-  const config=validateBuyerGatewayConfig({version:1,cluster:order.cluster,origin,machine:order.machine,collection:order.collection,guard:order.guard});
+export async function prepareBuyerGateway(orderFile,origin,{directory=fileURLToPath(new URL('./private',import.meta.url)),storageOptions={}}={}){
+  const model=createOrderModel(policy,storageOptions),order=model.validateOrder(await readOrderFile(orderFile));
+  const hidden=storageOptions.storageMode==='hidden-settings';
+  const config=validateBuyerGatewayConfig({version:hidden?2:1,cluster:order.cluster,origin,machine:order.machine,collection:order.collection,guard:order.guard,
+    ...(hidden?{storageMode:order.storageMode,hiddenCommitmentSha256:order.hiddenCommitmentSha256}:{})});
   // Existing directory (including a symlink) is a hard stop, never overwritten.
   await mkdir(directory,{mode:0o700});
   await writeFile(join(directory,'config.json'),JSON.stringify(config,null,2)+'\n',{flag:'wx',mode:0o600});
@@ -15,6 +18,8 @@ export async function prepareBuyerGateway(orderFile,origin,{directory=fileURLToP
   return{status:'prepared-offline',cluster:'devnet',salesOpen:false,deployed:false,transactionsSent:0};
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(resolve(process.argv[1])).href){
-  try{if(process.argv.length!==4)throw Error('USAGE');console.log(JSON.stringify(await prepareBuyerGateway(process.argv[2],process.argv[3])));}
+  try{let args=process.argv.slice(2),storageOptions={};
+    if(args[0]==='--storage-profile'&&args.length===4){storageOptions=validateOrderStorageOptions(await readOrderFile(args[1]));args=args.slice(2);}
+    if(args.length!==2)throw Error('USAGE');console.log(JSON.stringify(await prepareBuyerGateway(args[0],args[1],{storageOptions})));}
   catch{console.error(JSON.stringify({status:'blocked',code:'PREPARATION_FAILED',deployed:false,transactionsSent:0}));process.exitCode=1;}
 }

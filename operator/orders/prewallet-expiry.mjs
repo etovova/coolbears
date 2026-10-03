@@ -1,10 +1,10 @@
 // Trusted unsigned-attempt retirement. No fabricated signed bytes or retry grant.
 import policy from '../../metadata/policy.json' with {type:'json'};
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {prewalletBinding,validatePrewalletInput} from './prewallet-recovery.mjs';
 import {signedBytesId} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
-const model=createOrderModel(policy),need=v=>{if(!v)throw Error('PREWALLET_EXPIRY_BINDING');};
+const model=createProtocolOrderModel(policy),need=v=>{if(!v)throw Error('PREWALLET_EXPIRY_BINDING');};
 const exact=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 const positive=n=>Number.isSafeInteger(n)&&n>0;
 export const prewalletExpiryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-prewallet-expiry:v1:');

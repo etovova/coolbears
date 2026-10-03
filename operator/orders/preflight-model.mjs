@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
 import { MPL_CORE_PROGRAM_ID, deserializeAssetV1, Key } from '@metaplex-foundation/mpl-core';
 import { lamports } from '@metaplex-foundation/umi';
-import { createOrderModel } from './journal-model.mjs';
+import { createOrderModel, validateOrderStorageOptions } from './journal-model.mjs';
 import { createOrderPlanner } from './transaction-model.mjs';
 import { currentItemIndex, assertCurrentItem, validateSequentialOrder } from './sequential.mjs';
 import { createSigningRequest, verifySigningResponse } from '../deployment/signing.mjs';
@@ -14,9 +14,13 @@ import { baseAssetBytes, verifySimulatedMintCost, CORE_CREATE_LAMPORTS } from '.
 import { validateBlockhashAnchor } from './blockhash-anchor.mjs';
 import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deployment/rpc.mjs';
+import { resolveStorageProfile } from '../storage-mode.mjs';
 
-export function createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts }) {
-const prefixPlanner = createOrderPlanner(createOrderModel(policy));
+export function createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts }, storageOptions = {}) {
+storageOptions = validateOrderStorageOptions(storageOptions);
+const profile = resolveStorageProfile(policy, storageOptions);
+const hidden = profile.storageMode === 'hidden-settings';
+const prefixPlanner = createOrderPlanner(createOrderModel(policy, storageOptions));
 const PROGRAMS = [MPL_CORE_PROGRAM_ID, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID];
 const need = (ok, checkCode) => { if (!ok) throw Object.assign(Error(checkCode), { checkCode }); };
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -143,7 +147,12 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     const feeResult = await rpc.call('getFeeForMessage', [Buffer.from(tx.message.serialize()).toString('base64'),
       { commitment: 'confirmed', minContextSlot: slot }]);
     slot = context(feeResult, slot); const fee = amount(feeResult.value); need(fee > 0n, 'FEE_UNAVAILABLE');
-    const assetBytes = baseAssetBytes(policy, order).length;
+    const expectedMintIndex = hidden ? initial.nextMintIndex : undefined;
+    if (hidden) need(Number.isSafeInteger(expectedMintIndex) && expectedMintIndex >= 1
+      && expectedMintIndex < policy.supply, 'MINT_INDEX_UNVERIFIED');
+    // Hidden names and URIs expand the verified sequential index. Quote rent
+    // for that exact current asset, including decimal-width transitions.
+    const assetBytes = baseAssetBytes(policy, order, hidden ? expectedMintIndex : '0001', storageOptions).length;
     const rent = amount(await rpc.call('getMinimumBalanceForRentExemption', [assetBytes, { commitment: 'confirmed' }]));
     need(rent > 0n, 'RENT_UNAVAILABLE');
     const knownMinimum = BigInt(order.unitPriceLamports) + fee + rent + CORE_CREATE_LAMPORTS;
@@ -156,11 +165,13 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     need(simulation.value?.err === null && simulation.value.replacementBlockhash == null
       && Number.isSafeInteger(simulation.value.unitsConsumed) && simulation.value.unitsConsumed >= 0
       && simulation.value.unitsConsumed <= 300000, 'SIMULATION_FAILED');
-    verifySimulatedMintCost(policy, order, simulation.value.accounts, rent);
+    verifySimulatedMintCost(policy, order, simulation.value.accounts, rent,
+      { ...storageOptions, ...(hidden ? { expectedIndex: expectedMintIndex } : {}) });
     phase = 'freshness';
     // Finalized accounts need not overtake a confirmed simulation bank.
     const final = await readState(rpc, order, itemIndex, initial.slot, receipts);
     need(final.itemsRemaining <= initial.itemsRemaining, 'INVENTORY_ROLLBACK');
+    if (hidden) need(final.nextMintIndex === expectedMintIndex, 'MINT_INDEX_CHANGED');
     const latestBalance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: Math.max(slot, final.slot) }]);
     slot = context(latestBalance, Math.max(slot, final.slot));
     need(amount(latestBalance.value) >= knownMinimum, 'INSUFFICIENT_BALANCE');

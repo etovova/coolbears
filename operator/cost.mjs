@@ -6,13 +6,14 @@ import { getCandyMachineSize } from '@metaplex-foundation/mpl-core-candy-machine
 import { checkRpc, validateEndpoint } from './preflight.mjs';
 import { makePreparation } from './prepare.mjs';
 
-export async function quoteMachine(endpoint) {
+export async function quoteMachine(endpoint, { storageMode, hiddenCommitmentSha256, fetchImpl = (...args) => globalThis.fetch(...args) } = {}) {
   validateEndpoint(endpoint);
-  const preflight = await checkRpc({ endpoint });
-  assert.equal(preflight.status, 'read-path-passed', `RPC preflight blocked: ${preflight.code}`);
-  const { config } = makePreparation().cmConfig;
+  assert.equal(typeof fetchImpl, 'function', 'INVALID_QUOTE_FETCH');
+  const { config } = makePreparation({ storageMode, hiddenCommitmentSha256 }).cmConfig;
   const accountBytes = getCandyMachineSize(config.itemsAvailable, config.configLineSettings);
-  const response = await fetch(endpoint, {
+  const preflight = await checkRpc({ endpoint, fetchImpl });
+  assert.equal(preflight.status, 'read-path-passed', `RPC preflight blocked: ${preflight.code}`);
+  const response = await fetchImpl(endpoint, {
     method: 'POST', headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getMinimumBalanceForRentExemption', params: [accountBytes, { commitment: 'finalized' }] }),
     signal: AbortSignal.timeout(15000),
@@ -26,6 +27,8 @@ export async function quoteMachine(endpoint) {
   const result = {
     checkedAt: new Date().toISOString(), cluster: 'devnet', transactionsSent: 0,
     machineItems: config.itemsAvailable, configLineSettings: config.configLineSettings,
+    ...(config.hiddenSettings ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: config.hiddenSettings.hash,
+      privateMappingVerified: false } : {}),
     accountBytes, machineRentLamports: body.result, machineRentSol: body.result / 1e9,
     owner: preflight.owner, ownerBalanceLamports: preflight.balanceLamports,
     machineRentShortfallLamports: Math.max(0, body.result - preflight.balanceLamports),
@@ -37,7 +40,9 @@ export async function quoteMachine(endpoint) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { console.log(JSON.stringify(await quoteMachine(process.env.COOLBEARS_RPC_URL), null, 2)); }
+  try { console.log(JSON.stringify(await quoteMachine(process.env.COOLBEARS_RPC_URL, {
+    storageMode: process.env.COOLBEARS_STORAGE_MODE, hiddenCommitmentSha256: process.env.COOLBEARS_HIDDEN_COMMITMENT_SHA256,
+  }), null, 2)); }
   catch (error) {
     console.log(JSON.stringify({ checkedAt: new Date().toISOString(), status: 'blocked', transactionsSent: 0, message: String(error.message).replaceAll(process.env.COOLBEARS_RPC_URL || '[unset]', '[RPC]') }, null, 2));
     process.exitCode = 1;

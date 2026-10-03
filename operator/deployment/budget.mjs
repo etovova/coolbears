@@ -67,13 +67,13 @@ async function spentReceipt(rpc, attempt) {
 }
 
 export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, timeoutMs,
-  concurrency = 8, bufferBasisPoints = 1000, retryTransactions = 10 } = {}) {
+  concurrency = 8, bufferBasisPoints = 1000, retryTransactions = 10, trustedHiddenCommitmentSha256 } = {}) {
   let rpc, phase = 'journal';
   try {
     need(integer(concurrency, 16) && concurrency >= 1 && integer(bufferBasisPoints, 10000)
       && integer(retryTransactions, 10000), 'INVALID_BUDGET_OPTIONS');
     const baseline = await readDeploymentJournal(directory);
-    const { plan, model } = await buildDeploymentCostModel(baseline.manifest);
+    const { plan, model } = await buildDeploymentCostModel(baseline.manifest, { trustedHiddenCommitmentSha256 });
     const latest = baseline.steps.map(step => step.attempts.at(-1));
     need(!latest.some(attempt => ['send-claimed', 'accepted', 'unknown'].includes(attempt?.state)), 'RECONCILIATION_REQUIRED');
     let completedIndex = -1;
@@ -81,7 +81,7 @@ export async function quoteDeploymentBudget({ directory, endpoint, fetchImpl, ti
     const startedAt = performance.now();
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: baseline.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 600000, recoverySignatures: baseline.steps.flatMap(step => step.attempts)
+      totalTimeoutMs: 600000, trustedHiddenCommitmentSha256, recoverySignatures: baseline.steps.flatMap(step => step.attempts)
         .filter(attempt => attempt.signed && ['verified', 'failed'].includes(attempt.state))
         .map(attempt => attempt.signed.signature) });
     const genesisHash = await assertCluster(rpc, plan.cluster);

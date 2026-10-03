@@ -27,14 +27,21 @@ jobs:
       - run: npm run build:site
       - run: npm run verify
       - run: node --test hosting/audit.test.mjs
+      - run: node --test hosting/indexed-metadata.test.mjs
       - run: node hosting/prepare.mjs
       - run: node hosting/runtime.mjs
       - run: node hosting/www-redirect/runtime.mjs
+      - run: node hosting/prepare-indexed.mjs
+      - run: node hosting/indexed-metadata.runtime.mjs
+      - name: Hidden metadata Worker validation without upload
+        run: node node_modules/wrangler/bin/wrangler.js deploy --config build/hidden-hosting-candidate/wrangler.json --dry-run --outdir build/hidden-hosting-dry-run
       - name: Wrangler validation without upload
         run: node node_modules/wrangler/bin/wrangler.js deploy --config build/hosting-candidate/wrangler.json --dry-run --outdir build/hosting-dry-run
       - uses: actions/upload-artifact@v4
         if: success()
         with:
           name: closed-hosting-candidate
-          path: build/hosting-candidate/
+          path: |
+            build/hosting-candidate/
+            build/hidden-hosting-candidate/
           retention-days: 14

@@ -10,6 +10,7 @@ import { buildDeploymentCostModel } from './cost-model.mjs';
 import { checkDeploymentState, requireDeploymentCheck as need } from './read.mjs';
 import { bytesHash, decodeIsolatedSnapshot } from './isolated-snapshot.mjs';
 import { formatSol } from './budget.mjs';
+import { resolveStorageProfile } from '../storage-mode.mjs';
 import svmPackage from '../node_modules/litesvm/package.json' with { type: 'json' };
 
 const INITIAL_BALANCE = 20_000_000_000n; // Artificial test funds, never real SOL.
@@ -44,10 +45,12 @@ function localAccount(svm, address) {
     data: [Buffer.from(account.data).toString('base64'), 'base64'], space: account.data.length };
 }
 
-export async function runIsolatedDeployment({ snapshot, onProgress = () => {}, retainVm = false } = {}) {
+export async function runIsolatedDeployment({ snapshot, onProgress = () => {}, retainVm = false,
+  storageMode = 'config-lines', hiddenCommitmentSha256 } = {}) {
   need(svmPackage.version === '1.4.1', 'ISOLATED_RUNTIME_VERSION_CHANGED');
   need(typeof onProgress === 'function', 'INVALID_ISOLATED_OPTIONS');
   need(typeof retainVm === 'boolean', 'INVALID_ISOLATED_OPTIONS');
+  resolveStorageProfile(policy, { storageMode, hiddenCommitmentSha256 });
   const source = decodeIsolatedSnapshot(snapshot);
   const snapshotSha256 = bytesHash(Buffer.from(JSON.stringify(snapshot)));
   const report = { version: 1, kind: 'isolated-devnet-deployment', status: 'running',
@@ -72,14 +75,18 @@ export async function runIsolatedDeployment({ snapshot, onProgress = () => {}, r
   svm.setClock(new Clock(BigInt(c.slot), BigInt(c.epochStartTimestamp), BigInt(c.epoch),
     BigInt(c.leaderScheduleEpoch), BigInt(c.unixTimestamp)));
   for (const program of source.programs) svm.addProgram(program.address, program.elf);
-  const config = makePreparation().cmConfig.config;
+  const config = makePreparation({ storageMode, hiddenCommitmentSha256 }).cmConfig.config;
   const machineSize = getCandyMachineSize(config.itemsAvailable, config.configLineSettings);
   const plan = await buildDeploymentPlan({ cluster: 'devnet', collection: placeholder('collection', snapshotSha256),
     reservedAsset: placeholder('reserve', snapshotSha256), machine: placeholder('machine', snapshotSha256),
     blockhash: svm.latestBlockhash(), lastValidBlockHeight: 1,
-    machineRentLamports: svm.minimumBalanceForRentExemption(BigInt(machineSize)).toString() });
+    machineRentLamports: svm.minimumBalanceForRentExemption(BigInt(machineSize)).toString(), storageMode, hiddenCommitmentSha256 });
   const { model } = await buildDeploymentCostModel(deploymentManifestFromPlan('isolated-devnet', plan));
   report.model = model; report.placeholderAddresses = plan.roles; report.plannedMessages = plan.steps.length;
+  if (storageMode === 'hidden-settings') {
+    report.storageMode = storageMode; report.hiddenCommitmentSha256 = hiddenCommitmentSha256;
+    report.privateMappingVerified = false;
+  }
   report.initialArtificialBalanceLamports = INITIAL_BALANCE.toString();
   svm.setAccount({ address: policy.owner, lamports: INITIAL_BALANCE,
     data: new Uint8Array(), programAddress: SYSTEM, executable: false });
@@ -155,7 +162,8 @@ export async function runIsolatedDeployment({ snapshot, onProgress = () => {}, r
     && total === rent + protocol + fees, 'ISOLATED_BALANCE_MISMATCH');
   report.finalAccounts = final; report.actualSizes = actualSizes;
   report.finalStateVerified = true; report.wholeDeploymentSimulated = true;
-  report.configLinesVerified = plan.machineItems; report.itemsRedeemed = 0;
+  report.configLinesVerified = storageMode === 'hidden-settings' ? 0 : plan.machineItems; report.itemsRedeemed = 0;
+  if (storageMode === 'hidden-settings') report.hiddenSettingsVerified = true;
   report.localRentQuotes = [...rentBySize].map(([bytes, lamports]) => ({ bytes, lamports: lamports.toString() }));
   report.observed = { accountRentLamports: rent.toString(), protocolLamports: protocol.toString(),
     runtimeFeesLamports: fees.toString(), payerDebitLamports: total.toString(), payerDebitSol: formatSol(total),

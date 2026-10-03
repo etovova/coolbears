@@ -58,15 +58,24 @@ export function createRequestValidator(input, { allowSubmission = false } = {}) 
   need(typeof allowSubmission === 'boolean', 'CONFIGURATION');
   let policy;
   try { policy = JSON.parse(JSON.stringify(input)); } catch { throw new DeploymentRpcError('CONFIGURATION'); }
-  need(exact(policy, ['version', 'cluster', 'owner', 'accounts', 'sizes', 'messageIdentities', 'allowSimulation', 'recoverySignatures'])
-    && policy.version === 1 && policy.cluster === 'devnet' && address(policy.owner)
+  // A hidden policy is a separate, explicitly versioned profile. The compiler
+  // rebuilds the complete canonical SDK plan before producing either profile;
+  // this runtime never infers authorization from an arbitrary message count.
+  const hidden = policy?.version === 2 && policy.storageMode === 'hidden-settings';
+  const messageCount = hidden ? 3 : 1431;
+  need(exact(policy, ['version', 'cluster', 'owner', 'accounts', 'sizes', 'messageIdentities', 'allowSimulation', 'recoverySignatures',
+    ...(hidden ? ['storageMode', 'hiddenCommitmentSha256'] : [])])
+    && (hidden || policy.version === 1) && policy.cluster === 'devnet' && address(policy.owner)
+    && (!hidden || (typeof policy.hiddenCommitmentSha256 === 'string' && /^[0-9a-f]{64}$/.test(policy.hiddenCommitmentSha256)
+      && policy.hiddenCommitmentSha256 !== '0'.repeat(64)
+      && Array.isArray(policy.sizes) && policy.sizes.includes(652) && !policy.sizes.includes(871827)))
     && Array.isArray(policy.accounts) && policy.accounts.length === 7 && policy.accounts.every(address)
     && new Set(policy.accounts).size === 7 && PROGRAMS.every((value, index) => value === policy.accounts[index])
     && Array.isArray(policy.sizes) && policy.sizes.length > 0 && policy.sizes.length <= 10
     && policy.sizes.every(value => uint(value) && value > 0 && value <= 4 * 1024 * 1024)
-    && Array.isArray(policy.messageIdentities) && policy.messageIdentities.length === 1431
+    && Array.isArray(policy.messageIdentities) && policy.messageIdentities.length === messageCount
     && policy.messageIdentities.every(value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value))
-    && new Set(policy.messageIdentities).size === 1431 && typeof policy.allowSimulation === 'boolean'
+    && new Set(policy.messageIdentities).size === messageCount && typeof policy.allowSimulation === 'boolean'
     && Array.isArray(policy.recoverySignatures) && policy.recoverySignatures.length <= 20000
     && policy.recoverySignatures.every(validRecoverySignature), 'CONFIGURATION');
   const accounts = policy.accounts, sizes = new Set(policy.sizes), identities = new Set(policy.messageIdentities);

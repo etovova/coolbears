@@ -1,0 +1,1116 @@
+{
+  "version": 1,
+  "kind": "isolated-hidden-deployment-and-mint-costs",
+  "status": "isolated-hidden-costs-passed",
+  "startedAt": "2026-10-03T18:06:39.692Z",
+  "environment": "LiteSVM-in-memory",
+  "litesvmVersion": "1.4.1",
+  "sourceCluster": "devnet",
+  "sourceSlot": 502809184,
+  "snapshotSha256": "a67b326020e64f5544a805c4e7dea15ad145815e5df42a1812f3451232510d13",
+  "sourceCapturedAt": "2026-09-23T06:11:30.737Z",
+  "programs": [
+    {
+      "address": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+      "programDataAddress": "9ZC25KLUrfgSoFVgjE1rrydZBbZns58UXi8A8ZhTdGfr",
+      "deploymentSlot": "492585604",
+      "upgradeAuthority": "Fsxr5WVKZZoeb7xgwTWRHymSRVGY9vk7m5B5GPu1KU59",
+      "programDataSha256": "72726e4b8fc837e9ee05d8a942903c5f10890d33cb4480344844211b30b03dcb",
+      "elfSha256": "5680d2371204033f55cdcf0c08d393ed737d99cfe35d83f65befe80f7537484a",
+      "elfBytes": 855888
+    },
+    {
+      "address": "CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J",
+      "programDataAddress": "3w3omcedXpcSCMASSGLFrbeSR4Bv27EUUxWuE7JXV7WC",
+      "deploymentSlot": "465360225",
+      "upgradeAuthority": "CMADP5F3EPYDZC2KBBBC1GmGi1arFEyfozpA8B3rwLWW",
+      "programDataSha256": "62405e95ed9de208563efa7a5a2f7146b0cc49568e2c6581dafc0faee7d734ed",
+      "elfSha256": "744fd03055950cbc496e844260e537f0e1a06c758df2726403aee726f212182c",
+      "elfBytes": 943120
+    },
+    {
+      "address": "CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ",
+      "programDataAddress": "GADi4g14b9y6fcn6DWbZy7nd2DCToD7viEMu9UGEDXqB",
+      "deploymentSlot": "465360252",
+      "upgradeAuthority": "CMADP5F3EPYDZC2KBBBC1GmGi1arFEyfozpA8B3rwLWW",
+      "programDataSha256": "90b3f2575e9bb1a6c8a884e1aa8ae1a21fe77b11faa64faac9342863a17c99d8",
+      "elfSha256": "376d2a57c501560cf78d36dc81d60ee864f7e2007e7d4c9a3785356f5b5975ee",
+      "elfBytes": 1871248
+    }
+  ],
+  "rent": {
+    "lamportsPerByteYear": "5080",
+    "exemptionThreshold": 1,
+    "burnPercent": 50
+  },
+  "clock": {
+    "slot": "502809184",
+    "epochStartTimestamp": "1790078747",
+    "epoch": "1163",
+    "leaderScheduleEpoch": "1164",
+    "unixTimestamp": "1790143884"
+  },
+  "rentSha256": "e6833309a1b7d9ce57849bd64d1d5834144a14cbc659346a9fda424a3e7ae219",
+  "clockSha256": "7143c0bccf3a8fa4abd390bfd525e8836288bfc11f27899cf4cd0d49d589b445",
+  "signaturesVerified": false,
+  "blockhashChecked": true,
+  "blockhashScope": "local-VM-only",
+  "transactionHistoryCapacity": 0,
+  "featureSet": "LiteSVM-default-not-cluster-feature-parity",
+  "runtimeMatchesDevnetValidator": false,
+  "realTransactionsSent": 0,
+  "transactionsSent": 0,
+  "realLamportsSpent": "0",
+  "ownerWalletUsed": false,
+  "productionBundleCreated": false,
+  "keysCreated": 0,
+  "signaturesCreated": 0,
+  "journalWrites": 0,
+  "readyToSubmit": false,
+  "salesOpen": false,
+  "mintPriceLamports": "200000000",
+  "addressesArePlaceholders": true,
+  "budgetComplete": false,
+  "fundingRecommendationLamports": null,
+  "wholeDeploymentSimulated": true,
+  "wholeDeploymentSimulatedOnChain": false,
+  "finalStateVerified": true,
+  "completedMessages": 3,
+  "steps": [
+    {
+      "id": "collection-create",
+      "messageSha256": "3073f1395415580982b16a584baf20c719fff79482f4ad53c3fdcceb0b51b66c",
+      "requiredSignatures": 2,
+      "computeUnits": "13045",
+      "payerDebitLamports": "1564480",
+      "feeLamports": "10000",
+      "rentLamports": "1554480",
+      "protocolLamports": "0"
+    },
+    {
+      "id": "reserve-create",
+      "messageSha256": "09f788a4201f7114d040db67017b73daebd65ca46ddc0bcfe2b9ce598ca7dab8",
+      "requiredSignatures": 2,
+      "computeUnits": "13849",
+      "payerDebitLamports": "2962880",
+      "feeLamports": "10000",
+      "rentLamports": "1452880",
+      "protocolLamports": "1500000"
+    },
+    {
+      "id": "machine-create",
+      "messageSha256": "74d879080a8bd934419ece05bc1d3b5c0b74269058f119096c5e41c291290c71",
+      "requiredSignatures": 2,
+      "computeUnits": "75076",
+      "payerDebitLamports": "5658960",
+      "feeLamports": "10000",
+      "rentLamports": "5648960",
+      "protocolLamports": "0"
+    }
+  ],
+  "accountCheckpoints": [
+    {
+      "afterStep": "collection-create",
+      "accounts": [
+        {
+          "role": "collection",
+          "address": "8ZV6jd2NVD4cJdi9vSi84m8eWEy6gAppLT8cqEXAgQze",
+          "exists": true,
+          "bytes": 178,
+          "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+          "lamports": "1554480",
+          "rentLamports": "1554480",
+          "dataSha256": "88393f9bb59d18fe78b35ee60e15cc039e9e6bb785156f269325bc1fba47ddd9"
+        },
+        {
+          "role": "reservedAsset",
+          "address": "DpD862vjbB81ShbUyKSrtcJ1rvp1y5ZhG4UmhgDvfUny",
+          "exists": false
+        },
+        {
+          "role": "machine",
+          "address": "9XRehYbiAgzgMs9PavEpW6zLhLr4nEaenquFaY33Skd3",
+          "exists": false
+        },
+        {
+          "role": "guard",
+          "address": "9VeFqx7fA4G9nMLRF2woGZDZ3KQ1A3HQwLiuetnmcWhe",
+          "exists": false
+        }
+      ]
+    },
+    {
+      "afterStep": "reserve-create",
+      "accounts": [
+        {
+          "role": "collection",
+          "address": "8ZV6jd2NVD4cJdi9vSi84m8eWEy6gAppLT8cqEXAgQze",
+          "exists": true,
+          "bytes": 178,
+          "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+          "lamports": "1554480",
+          "rentLamports": "1554480",
+          "dataSha256": "44aacb3d5f80c02c8ed1e9c0313550340fddbdee2d2b28a7d53976edec018034"
+        },
+        {
+          "role": "reservedAsset",
+          "address": "DpD862vjbB81ShbUyKSrtcJ1rvp1y5ZhG4UmhgDvfUny",
+          "exists": true,
+          "bytes": 158,
+          "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+          "lamports": "2952880",
+          "rentLamports": "1452880",
+          "dataSha256": "96e13fddad61145367e13a39aba23bf958a4a24b9e6888161b904779c6ecd0fa"
+        },
+        {
+          "role": "machine",
+          "address": "9XRehYbiAgzgMs9PavEpW6zLhLr4nEaenquFaY33Skd3",
+          "exists": false
+        },
+        {
+          "role": "guard",
+          "address": "9VeFqx7fA4G9nMLRF2woGZDZ3KQ1A3HQwLiuetnmcWhe",
+          "exists": false
+        }
+      ]
+    },
+    {
+      "afterStep": "machine-create",
+      "accounts": [
+        {
+          "role": "collection",
+          "address": "8ZV6jd2NVD4cJdi9vSi84m8eWEy6gAppLT8cqEXAgQze",
+          "exists": true,
+          "bytes": 225,
+          "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+          "lamports": "1793240",
+          "rentLamports": "1793240",
+          "dataSha256": "4e384234409a8d49f87c8a6005c6e5211c7bba907302ce3b0ad81cd12b532c72"
+        },
+        {
+          "role": "reservedAsset",
+          "address": "DpD862vjbB81ShbUyKSrtcJ1rvp1y5ZhG4UmhgDvfUny",
+          "exists": true,
+          "bytes": 158,
+          "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+          "lamports": "2952880",
+          "rentLamports": "1452880",
+          "dataSha256": "96e13fddad61145367e13a39aba23bf958a4a24b9e6888161b904779c6ecd0fa"
+        },
+        {
+          "role": "machine",
+          "address": "9XRehYbiAgzgMs9PavEpW6zLhLr4nEaenquFaY33Skd3",
+          "exists": true,
+          "bytes": 652,
+          "owner": "CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J",
+          "lamports": "3962400",
+          "rentLamports": "3962400",
+          "dataSha256": "5eba73f09a018c41eb6261e6ad245faf4631538506a5f4f79292a9dd38e120ee"
+        },
+        {
+          "role": "guard",
+          "address": "9VeFqx7fA4G9nMLRF2woGZDZ3KQ1A3HQwLiuetnmcWhe",
+          "exists": true,
+          "bytes": 157,
+          "owner": "CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ",
+          "lamports": "1447800",
+          "rentLamports": "1447800",
+          "dataSha256": "0dc621f6cd6cc052d22228125ff58f882f04701e39886a9719ca965d1b24aa35"
+        }
+      ]
+    }
+  ],
+  "model": {
+    "revision": "core-1.10.0-cm-0.3.0-20260923",
+    "sourceCommits": {
+      "core": "e72d63e4118a0a95ac9b40221e81b19d49e1e102",
+      "candyMachine": "ea3620b7436004f62e1e7bc3d69147f4feef2ae0"
+    },
+    "storageMode": "hidden-settings",
+    "hiddenCommitmentSha256": "55389b79ad2af2c2224a7208a2677a8ab0705b2faa9d728e4f18f03c7b95a68f",
+    "privateMappingVerified": false,
+    "scope": "new-deployment-only",
+    "sizes": {
+      "collection": 178,
+      "reservedAsset": 158,
+      "machine": 652,
+      "guard": 157,
+      "collectionWithDelegate": 225
+    },
+    "rentItems": [
+      {
+        "id": "collection-rent",
+        "stepId": "collection-create",
+        "bytes": 178
+      },
+      {
+        "id": "reserve-rent",
+        "stepId": "reserve-create",
+        "bytes": 158
+      },
+      {
+        "id": "machine-rent",
+        "stepId": "machine-create",
+        "bytes": 652
+      },
+      {
+        "id": "guard-rent",
+        "stepId": "machine-create",
+        "bytes": 157
+      },
+      {
+        "id": "collection-delegate-growth",
+        "stepId": "machine-create",
+        "bytes": 225,
+        "subtractBytes": 178
+      }
+    ],
+    "protocolItems": [
+      {
+        "id": "reserve-core-create-fee",
+        "stepId": "reserve-create",
+        "lamports": "1500000"
+      }
+    ],
+    "steps": [
+      {
+        "id": "collection-create",
+        "signatures": 2
+      },
+      {
+        "id": "reserve-create",
+        "signatures": 2
+      },
+      {
+        "id": "machine-create",
+        "signatures": 2
+      }
+    ],
+    "requiredSignatures": 6,
+    "priorityFeeLamports": "0",
+    "buyerMintsIncluded": 0,
+    "salesOpen": false,
+    "assumptions": [
+      "deployed-programs-match-reviewed-layouts-and-fees"
+    ],
+    "excluded": [
+      "future-buyer-mints",
+      "reveal-transactions",
+      "hosting-storage-domain-and-RPC-subscriptions",
+      "SOL-exchange-rate"
+    ]
+  },
+  "placeholderAddresses": {
+    "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "payer": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "collection": "8ZV6jd2NVD4cJdi9vSi84m8eWEy6gAppLT8cqEXAgQze",
+    "reservedAsset": "DpD862vjbB81ShbUyKSrtcJ1rvp1y5ZhG4UmhgDvfUny",
+    "machine": "9XRehYbiAgzgMs9PavEpW6zLhLr4nEaenquFaY33Skd3",
+    "guard": "9VeFqx7fA4G9nMLRF2woGZDZ3KQ1A3HQwLiuetnmcWhe",
+    "collectionUpdateAuthority": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "candyMachineAuthority": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "candyGuardAuthority": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y"
+  },
+  "plannedMessages": 3,
+  "storageMode": "hidden-settings",
+  "hiddenCommitmentSha256": "55389b79ad2af2c2224a7208a2677a8ab0705b2faa9d728e4f18f03c7b95a68f",
+  "privateMappingVerified": false,
+  "initialArtificialBalanceLamports": "20000000000",
+  "finalAccounts": [
+    {
+      "role": "collection",
+      "address": "8ZV6jd2NVD4cJdi9vSi84m8eWEy6gAppLT8cqEXAgQze",
+      "exists": true,
+      "bytes": 225,
+      "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+      "lamports": "1793240",
+      "rentLamports": "1793240",
+      "dataSha256": "4e384234409a8d49f87c8a6005c6e5211c7bba907302ce3b0ad81cd12b532c72"
+    },
+    {
+      "role": "reservedAsset",
+      "address": "DpD862vjbB81ShbUyKSrtcJ1rvp1y5ZhG4UmhgDvfUny",
+      "exists": true,
+      "bytes": 158,
+      "owner": "CoREENxT6tW1HoK8ypY1SxRMZTcVPm7R94rH4PZNhX7d",
+      "lamports": "2952880",
+      "rentLamports": "1452880",
+      "dataSha256": "96e13fddad61145367e13a39aba23bf958a4a24b9e6888161b904779c6ecd0fa"
+    },
+    {
+      "role": "machine",
+      "address": "9XRehYbiAgzgMs9PavEpW6zLhLr4nEaenquFaY33Skd3",
+      "exists": true,
+      "bytes": 652,
+      "owner": "CMACYFENjoBMHzapRXyo1JZkVS6EtaDDzkjMrmQLvr4J",
+      "lamports": "3962400",
+      "rentLamports": "3962400",
+      "dataSha256": "5eba73f09a018c41eb6261e6ad245faf4631538506a5f4f79292a9dd38e120ee"
+    },
+    {
+      "role": "guard",
+      "address": "9VeFqx7fA4G9nMLRF2woGZDZ3KQ1A3HQwLiuetnmcWhe",
+      "exists": true,
+      "bytes": 157,
+      "owner": "CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ",
+      "lamports": "1447800",
+      "rentLamports": "1447800",
+      "dataSha256": "0dc621f6cd6cc052d22228125ff58f882f04701e39886a9719ca965d1b24aa35"
+    }
+  ],
+  "actualSizes": {
+    "collection": 225,
+    "reservedAsset": 158,
+    "machine": 652,
+    "guard": 157
+  },
+  "configLinesVerified": 0,
+  "itemsRedeemed": 0,
+  "hiddenSettingsVerified": true,
+  "localRentQuotes": [
+    {
+      "bytes": 178,
+      "lamports": "1554480"
+    },
+    {
+      "bytes": 158,
+      "lamports": "1452880"
+    },
+    {
+      "bytes": 652,
+      "lamports": "3962400"
+    },
+    {
+      "bytes": 157,
+      "lamports": "1447800"
+    },
+    {
+      "bytes": 225,
+      "lamports": "1793240"
+    }
+  ],
+  "observed": {
+    "accountRentLamports": "8656320",
+    "protocolLamports": "1500000",
+    "runtimeFeesLamports": "30000",
+    "payerDebitLamports": "10186320",
+    "payerDebitSol": "0.010186320",
+    "protocolFeeLocation": "reserved-asset-balance-above-rent",
+    "modelMatched": true
+  },
+  "completedAt": "2026-10-03T18:06:40.324Z",
+  "deploymentStatus": "isolated-passed",
+  "historicalProgramSnapshot": true,
+  "freshMainnetQuote": false,
+  "fixtureCommitmentOnly": true,
+  "priorityFeesIncluded": false,
+  "localSamples": [
+    {
+      "index": 1,
+      "messageSha256": "ad01c1fb2e78566e054a8067743405d5750c99db1a96051c3758e4cf48cb3798",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 2,
+      "messageSha256": "97e9022624ce272f7b05e6fd6dbcde3cd048c458b2ea2ba80b54d77bed7daa5d",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 3,
+      "messageSha256": "acc5c717868abe5fb4a52c15572b9c307fd472bae967f1fb09413e296a2f2e3c",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 4,
+      "messageSha256": "2d37eb75bcbc825d37eaa80047d1c998f4396f20df89df223273ac1097ef31e8",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 5,
+      "messageSha256": "445e5a67ebb5bf4a4509e7244db9c1f2724a6d7771b08edaaabd980ec53e7c4d",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 6,
+      "messageSha256": "6b0eaa3c9faa7b87a3f265159cc82392e0be14ea015e8fa850dc97df3fcd07d7",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 7,
+      "messageSha256": "62e5605ec0e9e7b0cfafa13b8473c4da77a872385fb5d879a21f07d13a1f82b6",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 8,
+      "messageSha256": "4520a767441034d1a1dc55cff61fe70e52b8e671e227fb537c04b0c56840c639",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 9,
+      "messageSha256": "4df4cff9627152345560cea899b681f0ecc215743aca9bc5da46dcc6c1d697fc",
+      "requiredSignatures": 2,
+      "computeUnits": "60064",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2891760",
+      "assetBytes": 144,
+      "rentLamports": "1381760",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 10,
+      "messageSha256": "101c43ae76d6f4b83c17ff6b9758da671b587b027f049719d27629fe7736755e",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 11,
+      "messageSha256": "b5b968660f2dcab3eeea9af907d123ab706c5e32ab28d1fa5419adb8e0f62716",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 12,
+      "messageSha256": "e24fe45f936113eae91e9a007f252d195d3a531c29017b0d76ae6036ccef7460",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 13,
+      "messageSha256": "d90a9eb6dec4ddd88a42d5d1c6706b670870042c427e013ed9dfb67e3a82b3f4",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 14,
+      "messageSha256": "26d4060f0a7af82a05a8bd688f121fecf92f1288891fa922ac06465a1f3b6040",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 15,
+      "messageSha256": "bdec53f963b8791dab5e8af2f9b07ceada8a5ea777350847609b09bc34dfed12",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 16,
+      "messageSha256": "5d0da39df2bbfc82703fdf10d42d5109cd7576b0d73696b9b8acbdb0b6fc9fcf",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 17,
+      "messageSha256": "f8e9b721121b13bc74e45e631c5347621c69996f1f10a0e4b729187e5ede50c1",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 18,
+      "messageSha256": "98662c1f3f478aa7e3fe5117b4c0ed7ca8846b265791b57806a56dfd42d6c42f",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 19,
+      "messageSha256": "bccceff59d1db1a73fbfe4d1d13bad22372f9a13c9e4db106561c1ee5feecc66",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 20,
+      "messageSha256": "85d69d6d36f7d3c8a7bdcb9939c689bb074208e6890188b4e34b1641cb5f0331",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 21,
+      "messageSha256": "e92d1b2c37a4cf2d52cd33093c4298322d2f55df37f8f8a699f8caaae6174442",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 22,
+      "messageSha256": "2cd9e50ecdf607a83593f94855e41598fb438974b70e9bdb644f7e58ee303416",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 23,
+      "messageSha256": "2f3ffab594d09a7435069c29de5e653576de3eb20324ddb041f8bc4d410c1f40",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 24,
+      "messageSha256": "5acd9454efdeea4fc2750e9579ec60ef1b48bbefc19f7bd9fca772bf0d3df6f0",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 25,
+      "messageSha256": "349a324af55a8fbb33a41f3c9c5334c5de4a3ed4ae87571eb8bf1d58976bebcf",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 26,
+      "messageSha256": "24426e9427c4a32b87ec7d9424a86ef294359496802ade42eea07d76a84cd482",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 27,
+      "messageSha256": "0e27073db8c07c6fbfc021b81d72e2dd7dc9e47b72dfefe63522a36918f7aa88",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 28,
+      "messageSha256": "c4ee0c500588c1a62d2dbe7d7f7b64087a93f6987e33861564ad6eb524bfa301",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 29,
+      "messageSha256": "a4d2c87672bef27147c0e332cf4017989bc094cbe956d6cd0a49a5ef00dba13a",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 30,
+      "messageSha256": "c3a69ed30202a7e944cb1a9b8411c0380cff0d1270b256c31654b9c3bd059230",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 31,
+      "messageSha256": "1bea5b3af3a580d6e49ddb602df61a999c4233e6040fe9913613fe1893aef058",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 32,
+      "messageSha256": "0ab6f2762fb99617256e89e80a252ec404b9be346cdf4a0932c6b61b36fa8c72",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 33,
+      "messageSha256": "526f9611f484b6cfa526c28f13f19b01d67219c2758fa9e7acb716c58b1ef2ff",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 34,
+      "messageSha256": "010ceae26a9a6263bbae6ab4618e3016a56188bdebbee47dcdf0af05f4812562",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 35,
+      "messageSha256": "ba6d16c5e4ba2179da16085c6cb922349d40fb9722c01e5e37b379ec2376933a",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 36,
+      "messageSha256": "7800e12abd4a044a6f5c3ed07ebe0cbf720f86fe2c0d82462e18ee8fc0cb11ac",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 37,
+      "messageSha256": "c6137b209a3041344d28267caf0bf0650078af09e13f1d195fa3389aaaa5faeb",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 38,
+      "messageSha256": "17441d867909611c2c35a0f8c7ba705bda07a6c0018bc10e4288314d22e743ae",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 39,
+      "messageSha256": "54178ec931a26be421ddf494c3f165f05f34e01b3bfb5526e0c22789f4be60c8",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 40,
+      "messageSha256": "5289077ac76f23e5708fd5c530503eee4871e7cde73bb9a23a385fa1624a2509",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 41,
+      "messageSha256": "30a0cca31bfd032764667e67c4d71d2689d217ec011c293246c495c99a00ffda",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 42,
+      "messageSha256": "509d217cdddac88b1d63d2fab1ec4faea4ba92599650d3aee3879f8ab077faaa",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 43,
+      "messageSha256": "d97f74888371dbe5e698d52bed4f2f438b8cf94d59dd828cb4ac6428217d1974",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 44,
+      "messageSha256": "ea5f35533480e19d52693ffa67b0d9795351e58d536299268cdfd8a03d76e8ae",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 45,
+      "messageSha256": "9e990f8ca5aa7ed5bc67ec19d2ee19c71b3d6bd5cf746518677c4d95493182d1",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 46,
+      "messageSha256": "6ecaf76eea9dbe588854e75326547851297805d297c6362199297a16267a85dd",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 47,
+      "messageSha256": "7b9a988ced4988acabf01f32aa99450c7bfb97d9fd975a6bc0ac05efe4653c8c",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 48,
+      "messageSha256": "33ad581f215ea2b3d8fcab7b29d9fbce09fcbad3a63a9f9776e795d8f737ba96",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 49,
+      "messageSha256": "b131a1b5a97272f8f9bbe58139a81972d7dff26cdc61568b062c2197beb19065",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    },
+    {
+      "index": 50,
+      "messageSha256": "ba2226a91c652f06124ead1d4de99c6a9686d9b3f0f6ee84106e300aebdd34d3",
+      "requiredSignatures": 2,
+      "computeUnits": "60035",
+      "feeLamports": "10000",
+      "payerDebitLamports": "2901920",
+      "assetBytes": 146,
+      "rentLamports": "1391920",
+      "protocolLamports": "1500000",
+      "payerEqualsTreasury": true,
+      "priceTransferNetLamports": "0"
+    }
+  ],
+  "sameUriReveal": {
+    "onchainUpdatesPrepared": 0,
+    "ownerOnchainRevealCostLamports": "0",
+    "httpRevealActuallyPerformed": false,
+    "remoteImagesVerified": false,
+    "marketplaceRefreshVerified": false,
+    "existingInternalAssetUpdateExcluded": true
+  },
+  "closedGate": {
+    "messageSha256": "14587fc718e08e2eb40114813cc76346f71d174e233e56b0c9da26422d6f546d",
+    "requiredSignatures": 2,
+    "computeUnits": "14771",
+    "feeLamports": "10000",
+    "payerDebitLamports": "10000",
+    "rejected": true,
+    "errorCode": 6033,
+    "assetCreated": false,
+    "priceTransferredLamports": "0",
+    "relevantAccountsUnchanged": true
+  },
+  "distinctBuyerFixture": {
+    "messageSha256": "f2c1b232b02cbd291049746cb0fb26950eaafd0d0413f018d10dec837c135f51",
+    "requiredSignatures": 3,
+    "computeUnits": "60208",
+    "feeLamports": "15000",
+    "payerDebitLamports": "202906920",
+    "priceTransferredLamports": "200000000",
+    "ownerBalanceIncreaseLamports": "200000000",
+    "assetOwnedByPayer": true,
+    "buyerPaysAllMintCosts": true,
+    "rentLamports": "1391920",
+    "protocolLamports": "1500000",
+    "assetBytes": 146,
+    "payerDifferentFromAuthorizedMinter": true,
+    "extraAuthorizedMinterSignature": true,
+    "representsStandardPublicBuyer": false,
+    "ownerPaidMintOverheadLamports": "0",
+    "guardChanged": false
+  },
+  "finalMintState": {
+    "mintCount": 51,
+    "machineItemsRedeemed": 51,
+    "hiddenMachineBytes": 652,
+    "guardUnchanged": true,
+    "collectionPolicyAndPluginsUnchanged": true,
+    "machineConfigurationUnchanged": true,
+    "sequentialIndexedMetadataVerified": true,
+    "entireSupplyMinted": false,
+    "verified": true
+  },
+  "sourceArtifact": {
+    "runId": 35825328777,
+    "artifactId": 10735101985,
+    "name": "isolated-devnet-deployment",
+    "zipBytes": 912553,
+    "zipSha256": "10ecb9897454e57892ea9c1f2ded2abe5486684d78b5919d90db096a03801c7f"
+  }
+}

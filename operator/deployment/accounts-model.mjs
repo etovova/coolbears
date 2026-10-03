@@ -13,9 +13,10 @@ import { getCandyMachineAccountDataSerializer as machineBaseSerializer } from '.
 import { getCandyGuardAccountDataSerializer as guardHeaderSerializer } from '../node_modules/@metaplex-foundation/mpl-core-candy-machine/dist/src/generated/accounts/candyGuard.js';
 import { mplCandyMachine, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID,
   CANDY_MACHINE_HIDDEN_SECTION, findCandyGuardPda, findCandyMachineAuthorityPda,
-  getCandyMachineSize, getCandyMachineAccountDataSerializer, getCandyGuardDataSerializer } from '@metaplex-foundation/mpl-core-candy-machine';
+  getCandyMachineAccountDataSerializer, getCandyGuardDataSerializer } from '@metaplex-foundation/mpl-core-candy-machine';
+import { resolveStorageProfile } from '../storage-mode.mjs';
 
-export function createAccountVerifier(policy) {
+export function createAccountVerifier(policy, storageOptions = {}) {
 const ERROR = 'EXPECTED_ACCOUNT_STATE_MISMATCH';
 const fail = () => { throw Object.assign(Error(ERROR), { code: ERROR }); };
 const requireThat = value => { if (!value) fail(); };
@@ -23,8 +24,10 @@ const equalBytes = (a, b) => Buffer.from(a).equals(Buffer.from(b));
 const N = policy.supply - 1;
 const name = index => policy.hiddenName.replace('{index:04d}', String(index).padStart(4, '0'));
 const uri = index => `${policy.website}/metadata/hidden/${String(index).padStart(4, '0')}.json`;
-const SETTINGS = { prefixName: '', nameLength: Buffer.byteLength(name(N)), prefixUri: '', uriLength: Buffer.byteLength(uri(N)), isSequential: false };
-const MACHINE_SIZE = getCandyMachineSize(N, SETTINGS);
+const profile = resolveStorageProfile(policy, storageOptions);
+const HIDDEN = profile.storageMode === 'hidden-settings';
+const SETTINGS = profile.configLineSettings;
+const MACHINE_SIZE = profile.machineSpace;
 const OWNER = policy.owner;
 const rpcDisabled = () => { throw Error('OFFLINE_ACCOUNT_VERIFIER'); };
 const umi = createUmi('http://127.0.0.1:1', { fetch: rpcDisabled }).use(mplCandyMachine());
@@ -65,16 +68,22 @@ function classify(expected) {
     return 'reserve';
   }
   if (Object.hasOwn(expected, 'guard')) {
-    exact(expected, 'machine guard collection authority guardAuthority mintAuthority itemsAvailable itemsLoaded machineSpace machineRentLamports configLineSettings addressGate payment salesOpen');
+    exact(expected, 'machine guard collection authority guardAuthority mintAuthority itemsAvailable itemsLoaded machineSpace machineRentLamports configLineSettings addressGate payment salesOpen'
+      + (HIDDEN ? ' storageMode hiddenSettings' : ''));
     address(expected.machine); address(expected.guard); address(expected.collection);
     requireThat(expected.authority === OWNER && expected.guardAuthority === OWNER && expected.addressGate === OWNER && expected.salesOpen === false);
     requireThat(expected.guard === findCandyGuardPda(umi, { base: expected.machine })[0] && expected.mintAuthority === expected.guard);
     requireThat(expected.itemsAvailable === N && Number.isSafeInteger(expected.itemsLoaded) && expected.itemsLoaded >= 0 && expected.itemsLoaded <= N && expected.machineSpace === MACHINE_SIZE);
     requireThat(typeof expected.machineRentLamports === 'string' && /^[1-9][0-9]*$/.test(expected.machineRentLamports) && BigInt(expected.machineRentLamports) <= (1n << 64n) - 1n);
     assert.deepEqual(expected.configLineSettings, SETTINGS);
+    if (HIDDEN) {
+      requireThat(expected.storageMode === profile.storageMode && expected.itemsLoaded === 0);
+      assert.deepEqual(expected.hiddenSettings, profile.hiddenSettings);
+    }
     assert.deepEqual(expected.payment, { lamports: String(policy.priceSol * 1e9), destination: OWNER });
     return 'machine';
   }
+  requireThat(!HIDDEN); // Hidden machines never have config-line insertion steps.
   exact(expected, 'machine authority startingIndex count configLines');
   address(expected.machine); requireThat(expected.authority === OWNER);
   requireThat(Number.isSafeInteger(expected.startingIndex) && expected.startingIndex >= 0 && Number.isSafeInteger(expected.count) && expected.count > 0 && expected.startingIndex + expected.count <= N);
@@ -171,9 +180,21 @@ function machineState(bytes, minting = false) {
   const [base, end] = canonicalPrefix(machineBaseSerializer(), bytes.subarray(0, CANDY_MACHINE_HIDDEN_SECTION));
   requireThat(base.authority === OWNER && (minting ? base.itemsRedeemed >= 0n && base.itemsRedeemed <= BigInt(N) : base.itemsRedeemed === 0n)
     && base.data.itemsAvailable === BigInt(N) && base.data.maxEditionSupply === 0n && base.data.isMutable === true);
-  assert.deepEqual(base.data.configLineSettings, some(SETTINGS));
-  assert.deepEqual(base.data.hiddenSettings, { __option: 'None' });
+  assert.deepEqual(base.data.configLineSettings, HIDDEN ? { __option: 'None' } : some(SETTINGS));
+  if (HIDDEN) {
+    requireThat(base.data.hiddenSettings?.__option === 'Some');
+    // SDK decoding preserves the caller's byte-array subtype. Compare the
+    // complete public settings with an exact canonical hexadecimal digest.
+    const value = base.data.hiddenSettings.value;
+    assert.deepEqual({ ...value, hash: Buffer.from(value.hash).toString('hex') }, profile.hiddenSettings);
+  } else assert.deepEqual(base.data.hiddenSettings, { __option: 'None' });
   requireThat(bytes.subarray(end, CANDY_MACHINE_HIDDEN_SECTION).every(byte => byte === 0));
+  if (HIDDEN) {
+    // The exact 652-byte account ends at the reserved base section. There is
+    // no loaded counter, bitmap, config-line buffer or mint-index inventory.
+    requireThat(MACHINE_SIZE === 652 && MACHINE_SIZE === CANDY_MACHINE_HIDDEN_SECTION);
+    return { ...base, itemsLoaded: 0, nextMintIndex: Number(base.itemsRedeemed) + 1 };
+  }
   const loaded = bytes.readUInt32LE(CANDY_MACHINE_HIDDEN_SECTION);
   requireThat(minting ? loaded === N : loaded <= N);
   const lineSize = SETTINGS.nameLength + SETTINGS.uriLength;
@@ -232,6 +253,9 @@ function verifyOrderAccounts(order, values) {
   try {
     const { machine, guard, collection, buyer } = order;
     [machine, guard, collection, buyer].forEach(address);
+    if (HIDDEN) requireThat(order.storageMode === profile.storageMode
+      && order.hiddenCommitmentSha256 === profile.hiddenSettings.hash);
+    else requireThat(!Object.hasOwn(order, 'storageMode') && !Object.hasOwn(order, 'hiddenCommitmentSha256'));
     requireThat(new Set([machine, guard, collection]).size === 3 && Array.isArray(values) && values.length === 3);
     const machineBytes = rawAccount(values[0], MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MACHINE_SIZE);
     const state = machineState(machineBytes, true);
@@ -242,7 +266,7 @@ function verifyOrderAccounts(order, values) {
     verifyCollection({ collection, machine, updateAuthority: OWNER, name: policy.collectionName,
       uri: `${policy.website}/metadata/collection.json`, royaltyBasisPoints: policy.royaltyPercent * 100,
       royaltyRecipient: OWNER }, rawAccount(values[2], MPL_CORE_PROGRAM_ID, 65536), Number(state.itemsRedeemed) + 1);
-    for (let index = 0; index < N; index++) {
+    for (let index = 0; !HIDDEN && index < N; index++) {
       const encoded = Buffer.alloc(state.lineSize);
       encoded.write(name(index + 1), 0, SETTINGS.nameLength, 'utf8');
       encoded.write(uri(index + 1), SETTINGS.nameLength, SETTINGS.uriLength, 'utf8');
@@ -250,7 +274,8 @@ function verifyOrderAccounts(order, values) {
       requireThat(equalBytes(encoded, machineBytes.subarray(at, at + state.lineSize)));
     }
     return { itemsRemaining: N - Number(state.itemsRedeemed), buyerAllowed: buyer === OWNER,
-      guardPriceVerified: true, unitPriceLamports: String(policy.priceSol * 1e9), salesOpen: false };
+      guardPriceVerified: true, unitPriceLamports: String(policy.priceSol * 1e9), salesOpen: false,
+      ...(HIDDEN ? { itemsRedeemed: Number(state.itemsRedeemed), nextMintIndex: state.nextMintIndex } : {}) };
   } catch { fail(); }
 }
 function verifyInsert(expected, bytes) {

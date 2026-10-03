@@ -9,6 +9,8 @@ import { validateCanonicalDeploymentManifest } from './intent.mjs';
 import { assertCluster, DeploymentRpcError } from './rpc.mjs';
 import { createScopedDeploymentRpc } from './scoped-rpc.mjs';
 import { expectedAccountAddresses, verifyExpectedAccounts } from './accounts.mjs';
+import { createAccountVerifier } from './accounts-model.mjs';
+import { policy } from '../prepare.mjs';
 import { verifyFinalizedReceipt, verifyFinalizedFailedTransaction } from './receipt.mjs';
 import { validExpiryEvidence } from './expiry.mjs';
 
@@ -33,9 +35,9 @@ async function unchanged(directory, baseline) {
   const fresh = await readDeploymentJournal(directory);
   requireThat(fresh.manifestSha256 === baseline.manifestSha256 && fresh.revision === baseline.revision && fresh.headHash === baseline.headHash, 'JOURNAL_CHANGED_DURING_READ');
 }
-async function target(directory, stepId) {
+async function target(directory, stepId, trustedHiddenCommitmentSha256) {
   const snapshot = await readDeploymentJournal(directory);
-  const plan = await validateCanonicalDeploymentManifest(snapshot.manifest);
+  const plan = await validateCanonicalDeploymentManifest(snapshot.manifest, { trustedHiddenCommitmentSha256 });
   const index = plan.steps.findIndex(step => step.id === stepId);
   requireThat(index >= 0, 'UNKNOWN_DEPLOYMENT_STEP');
   const action = nextDeploymentAction(snapshot);
@@ -47,6 +49,13 @@ async function target(directory, stepId) {
 // entire completed config-line prefix, rather than trusting cache.loaded or
 // the most recently inserted handful of lines.
 async function checkState(rpc, plan, completedIndex, minimum = 0) {
+  const machineExpected = plan.steps[2].expected;
+  // The plan is rebuilt from canonical intent upstream. Hidden layout is
+  // selected explicitly and pinned to that plan's declared commitment; a
+  // default legacy verifier must never accept a hidden account by inference.
+  const verifier = machineExpected.storageMode === 'hidden-settings'
+    ? createAccountVerifier(policy, { storageMode: 'hidden-settings', hiddenCommitmentSha256: machineExpected.hiddenSettings.hash })
+    : { expectedAccountAddresses, verifyExpectedAccounts };
   const { collection, reservedAsset, machine, guard } = plan.roles;
   const addresses = [...PROGRAMS, collection, reservedAsset, machine, guard];
   const result = await rpc.call('getMultipleAccounts', [addresses, { encoding: 'base64', commitment: 'finalized', minContextSlot: minimum }]);
@@ -55,8 +64,8 @@ async function checkState(rpc, plan, completedIndex, minimum = 0) {
   for (let i = 0; i < PROGRAMS.length; i++) requireThat(result.value[i]?.executable === true, 'PROGRAM_UNAVAILABLE');
   const accounts = new Map(addresses.map((address, i) => [address, result.value[i]]));
   const inspect = expected => {
-    const keys = expectedAccountAddresses(expected);
-    verifyExpectedAccounts(expected, keys, keys.map(key => accounts.get(key)));
+    const keys = verifier.expectedAccountAddresses(expected);
+    verifier.verifyExpectedAccounts(expected, keys, keys.map(key => accounts.get(key)));
   };
   for (const [i, keys] of [[0, [collection]], [1, [reservedAsset]], [2, [machine, guard]]]) {
     if (completedIndex < i) for (const key of keys) requireThat(accounts.get(key) === null, 'NEW_ACCOUNT_ALREADY_EXISTS');
@@ -89,13 +98,13 @@ export { context as rpcContext, amount as rpcAmount, binding as snapshotBinding,
   unchanged as assertJournalUnchanged, checkState as checkDeploymentState,
   requireThat as requireDeploymentCheck, blocked as blockedDeploymentReport };
 
-export async function preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs } = {}) {
+export async function preflightDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
   let rpc, phase = 'journal';
   try {
-    const { snapshot, plan, index, step, attempt, action } = await target(directory, stepId);
+    const { snapshot, plan, index, step, attempt, action } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(action.type !== 'reconcile' || ['wallet-pending', 'signed'].includes(attempt?.state), 'RECONCILIATION_REQUIRED');
     phase = 'network';
-    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000 });
+    rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'accounts';
@@ -155,14 +164,14 @@ export async function preflightDeploymentStep({ directory, stepId, endpoint, fet
   } catch (error) { return blocked(error, phase, rpc, 'blocked'); }
 }
 
-export async function reconcileDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs } = {}) {
+export async function reconcileDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
   let rpc, phase = 'journal';
   try {
-    const { snapshot, plan, index, step, attempt } = await target(directory, stepId);
+    const { snapshot, plan, index, step, attempt } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature] });
+      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'receipt';
@@ -185,14 +194,14 @@ export async function reconcileDeploymentStep({ directory, stepId, endpoint, fet
 
 // A finalized execution failure proves atomic rollback of the instructions,
 // not a refund of fees. Also require the exact predecessor account state.
-export async function reconcileFailedDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs } = {}) {
+export async function reconcileFailedDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, trustedHiddenCommitmentSha256 } = {}) {
   let rpc, phase = 'journal';
   try {
-    const { snapshot, plan, index, step, attempt } = await target(directory, stepId);
+    const { snapshot, plan, index, step, attempt } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature] });
+      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'receipt';
@@ -214,16 +223,16 @@ export async function reconcileFailedDeploymentStep({ directory, stepId, endpoin
 
 // The trusted gateway has independently checked bounded payer history and the
 // saved hash anchor. Recheck expiry, absence and predecessor effects locally.
-export async function reconcileExpiredDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, evidence } = {}) {
+export async function reconcileExpiredDeploymentStep({ directory, stepId, endpoint, fetchImpl, timeoutMs, evidence, trustedHiddenCommitmentSha256 } = {}) {
   let rpc, phase = 'journal';
   try {
-    const { snapshot, plan, index, step, attempt } = await target(directory, stepId);
+    const { snapshot, plan, index, step, attempt } = await target(directory, stepId, trustedHiddenCommitmentSha256);
     requireThat(ACTIVE.has(attempt?.state) && attempt?.signed, 'SIGNED_ATTEMPT_REQUIRED');
     requireThat(validExpiryEvidence(evidence) && evidence.blockhash === attempt.request.blockhash
       && evidence.lastValidBlockHeight === attempt.request.lastValidBlockHeight, 'EXPIRY_EVIDENCE_MISMATCH');
     phase = 'network';
     rpc = await createScopedDeploymentRpc({ manifest: snapshot.manifest, endpoint, fetchImpl, timeoutMs,
-      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature] });
+      totalTimeoutMs: 30000, recoverySignatures: [attempt.signed.signature], trustedHiddenCommitmentSha256 });
     const startedAt = performance.now();
     const genesisHash = await assertCluster(rpc, plan.cluster);
     phase = 'expiry';

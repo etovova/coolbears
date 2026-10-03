@@ -4,8 +4,8 @@ import { compileDeploymentRpcPolicy } from './compile-rpc-policy.mjs';
 import { createRequestValidator, jsonSnapshot } from './request-policy.mjs';
 const need = (value, code) => { if (!value) throw new DeploymentRpcError(code); };
 export async function createScopedDeploymentRpc({ manifest, endpoint, fetchImpl, timeoutMs,
-  totalTimeoutMs, allowSimulation = false, recoverySignatures = [] } = {}) {
-  const policy = await compileDeploymentRpcPolicy(manifest, { allowSimulation, recoverySignatures });
+  totalTimeoutMs, allowSimulation = false, recoverySignatures = [], trustedHiddenCommitmentSha256 } = {}) {
+  const policy = await compileDeploymentRpcPolicy(manifest, { allowSimulation, recoverySignatures, trustedHiddenCommitmentSha256 });
   const validate = createRequestValidator(policy);
   const rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs,
     allowSimulation, maxResponseBytes: 4 * 1024 * 1024 });

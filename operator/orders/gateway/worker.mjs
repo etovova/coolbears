@@ -28,8 +28,6 @@ import {failureKey,failureRecord,restoreFailureReport} from '../failure-record.m
 import {replacementKey,validateReplacementSource,validateReplacementPrior,validateReplacementAcknowledgment,replacementAccountFloor,replacementSourceFloor,replacementFor,replacementReport,validateReplacementClaim} from '../replacement.mjs';
 import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
 import { BuyerCheckError, need, exact, readJson } from './http.mjs';
-const model=createOrderModel(policy),planner=createOrderPlanner(model);
-const checker=createOrderChecker(policy,{...model,...planner,...createAccountVerifier(policy)});
 const KEY='buyer-check-budget:v1',GLOBAL='buyer-check-global-v1',HOLD=45000,INTERVAL=200;
 const METHODS=new Set(['getGenesisHash','getMultipleAccounts','getBalance','getFeeForMessage',
   'getMinimumBalanceForRentExemption','simulateTransaction','isBlockhashValid','getBlockHeight',
@@ -44,7 +42,9 @@ function failure(error){const known=error instanceof BuyerCheckError;
     known&&integer(error.retryAfter)?{'retry-after':String(error.retryAfter)}:{});}
 function cap(value,limit,fallback){if(value===undefined)return fallback;need(typeof value==='string'&&/^[1-9][0-9]*$/.test(value)&&+value<=limit,'CONFIGURATION',503);return +value;}
 export function validateBuyerGatewayConfig(input){
-  need(exact(input,'version cluster origin machine collection guard')&&input.version===1&&input.cluster==='devnet','CONFIGURATION',503);
+  const hidden=input?.version===2;
+  need(exact(input,'version cluster origin machine collection guard'+(hidden?' storageMode hiddenCommitmentSha256':''))&&input.version===(hidden?2:1)&&input.cluster==='devnet','CONFIGURATION',503);
+  if(hidden)need(input.storageMode==='hidden-settings'&&typeof input.hiddenCommitmentSha256==='string'&&/^[a-f0-9]{64}$/.test(input.hiddenCommitmentSha256)&&input.hiddenCommitmentSha256!=='0'.repeat(64),'CONFIGURATION',503);
   try{const u=new URL(input.origin);need(u.protocol==='https:'&&u.origin===input.origin&&!u.username&&!u.password,'CONFIGURATION',503);
     for(const field of ['machine','collection','guard'])need(new PublicKey(input[field]).toBase58()===input[field],'CONFIGURATION',503);
     need(new Set([input.machine,input.collection,input.guard]).size===3,'CONFIGURATION',503);
@@ -69,6 +69,9 @@ function retryAfter(value,now){const s=typeof value==='string'&&/^\d+$/.test(val
 export function makeBuyerGateway(input,{allowSubmission=false}={}){
   need(typeof allowSubmission==='boolean','CONFIGURATION',503);
   const config=validateBuyerGatewayConfig(input);
+  const storageOptions=config.version===2?{storageMode:config.storageMode,hiddenCommitmentSha256:config.hiddenCommitmentSha256}:{};
+  const model=createOrderModel(policy,storageOptions),planner=createOrderPlanner(model);
+  const checker=createOrderChecker(policy,{...model,...planner,...createAccountVerifier(policy,storageOptions)},storageOptions);
   class BuyerCheckGate{
     constructor(state,env,{fetchImpl=(...args)=>globalThis.fetch(...args),clock=Date.now,pause=ms=>new Promise(r=>setTimeout(r,ms))}={}){
       this.storage=state.storage;this.env=env;this.fetchImpl=fetchImpl;this.clock=clock;this.pause=pause;this.busy=false;
@@ -144,6 +147,9 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         if(replacing)need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
         const {order,claim,request:partial}=body;
         need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
+        need(config.version===2
+          ?order.storageMode===config.storageMode&&order.hiddenCommitmentSha256===config.hiddenCommitmentSha256
+          :!Object.hasOwn(order,'storageMode')&&!Object.hasOwn(order,'hiddenCommitmentSha256'),'DEPLOYMENT_STORAGE_PROFILE',400);
         need(order.buyer===policy.owner,'SALES_CLOSED',409);
         const submission={order,claim,request:partial,response:body.response};
         const missing={order,claim,request:partial,walletClaim:body.walletClaim};
@@ -151,6 +157,7 @@ export function makeBuyerGateway(input,{allowSubmission=false}={}){
         const replacementInput=responseReplace?missing:unsignedReplace?prewallet:submission;
         let signed,itemIndex;
         try{
+          model.validateOrder(order);
           validateSequentialOrder(order);
           itemIndex=route==='prepare'?currentItemIndex(order):claim?.itemIndex;
           need(Number.isSafeInteger(itemIndex)&&itemIndex>=0&&itemIndex<order.quantity,'REQUEST',400);

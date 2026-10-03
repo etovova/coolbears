@@ -5,11 +5,15 @@ import { createDeploymentRpc, assertCluster } from './rpc.mjs';
 import { rpcContext, rpcAmount, requireDeploymentCheck as need, blockedDeploymentReport } from './read.mjs';
 import { captureIsolatedSnapshot, bytesHash, RENT_SYSVAR } from './isolated-snapshot.mjs';
 import { runIsolatedDeployment } from './isolated.mjs';
+import { policy } from '../prepare.mjs';
+import { resolveStorageProfile } from '../storage-mode.mjs';
 
-export async function previewIsolatedDeployment({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), onProgress = () => {} } = {}) {
+export async function previewIsolatedDeployment({ endpoint, fetchImpl = (...args) => globalThis.fetch(...args), onProgress = () => {},
+  storageMode = 'config-lines', hiddenCommitmentSha256 } = {}) {
   let snapshot, report, rpc, phase = 'configuration', previousStart = -Infinity;
   try {
     need(typeof fetchImpl === 'function' && typeof onProgress === 'function', 'INVALID_ISOLATED_OPTIONS');
+    resolveStorageProfile(policy, { storageMode, hiddenCommitmentSha256 });
     rpc = createDeploymentRpc({ endpoint, maxResponseBytes: 16 * 1024 * 1024,
       timeoutMs: 30000, totalTimeoutMs: 120000,
       fetchImpl: async (url, options) => {
@@ -21,7 +25,7 @@ export async function previewIsolatedDeployment({ endpoint, fetchImpl = (...args
     phase = 'source-snapshot'; snapshot = await captureIsolatedSnapshot(rpc);
     onProgress({ phase, slot: snapshot.accounts.context.slot });
     phase = 'local-execution';
-    const result = await runIsolatedDeployment({ snapshot, onProgress });
+    const result = await runIsolatedDeployment({ snapshot, onProgress, storageMode, hiddenCommitmentSha256 });
     report = result.report;
     if (report.status !== 'isolated-passed') return { report, snapshot };
     phase = 'rent-calibration';
@@ -37,8 +41,8 @@ export async function previewIsolatedDeployment({ endpoint, fetchImpl = (...args
     need(typeof latest.value?.blockhash === 'string' && Number.isSafeInteger(latest.value.lastValidBlockHeight)
       && latest.value.lastValidBlockHeight > 0, 'INVALID_LATEST_BLOCKHASH');
     const feeQuotes = [];
-    // Four representative shapes only. PR25 separately quoted all 1431.
-    // Do not describe this calibration as a full fresh network budget.
+    // At most four representative shapes. Hidden mode contains three messages;
+    // this calibration still is not a complete production budget.
     for (const step of result.plan.steps.slice(0, 4)) {
       const tx = VersionedTransaction.deserialize(Buffer.from(step.transactionBase64, 'base64'));
       tx.message.recentBlockhash = latest.value.blockhash;
@@ -59,7 +63,7 @@ export async function previewIsolatedDeployment({ endpoint, fetchImpl = (...args
     // The sysvar supplying the local rent schedule must stay unchanged.
     need(JSON.stringify(rentEnd.value) === JSON.stringify([snapshot.accounts.value[6]]), 'RENT_CHANGED_DURING_ISOLATED_PREVIEW');
     report.calibration = { cluster: 'devnet', checkedAt: new Date().toISOString(), rentQuotes, feeQuotes,
-      representativeMessagesQuoted: feeQuotes.length, everyMessageQuoted: false,
+      representativeMessagesQuoted: feeQuotes.length, everyMessageQuoted: feeQuotes.length === result.plan.steps.length,
       rentMatched: true, representativeFeesMatched: true, programSnapshotRevalidatedAfterRun: false };
     report.status = 'isolated-passed-and-calibrated';
   } catch (error) {

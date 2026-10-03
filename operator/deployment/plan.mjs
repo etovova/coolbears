@@ -9,6 +9,7 @@ import { createCollection, create as createAsset, mplCore } from '@metaplex-foun
 import { create as createMachine, addConfigLines, findCandyGuardPda, getCandyMachineSize, mplCandyMachine } from '@metaplex-foundation/mpl-core-candy-machine';
 import jsonGuardParser from '../node_modules/@metaplex-foundation/cli/dist/lib/cm/jsonGuardParser.js';
 import { makePreparation, policy } from '../prepare.mjs';
+import { HIDDEN_SETTINGS, hiddenSettingsForSdk } from '../storage-mode.mjs';
 
 const MAX_BYTES = 1232;
 const U64_MAX = (1n << 64n) - 1n;
@@ -53,7 +54,7 @@ function offlineContext(owner, rent, expectedSpace) {
 }
 
 export async function buildDeploymentPlan({ cluster, collection, reservedAsset, machine,
-  blockhash, lastValidBlockHeight, machineRentLamports } = {}) {
+  blockhash, lastValidBlockHeight, machineRentLamports, storageMode, hiddenCommitmentSha256 } = {}) {
   assert.ok(['devnet', 'mainnet-beta'].includes(cluster), 'INVALID_CLUSTER');
   for (const value of [collection, reservedAsset, machine, blockhash]) checkedAddress(value);
   assert.equal(new Set([collection, reservedAsset, machine, policy.owner]).size, 4, 'DUPLICATE_DEPLOYMENT_ADDRESS');
@@ -61,8 +62,11 @@ export async function buildDeploymentPlan({ cluster, collection, reservedAsset, 
   assert.ok(typeof machineRentLamports === 'string' && /^[1-9][0-9]*$/.test(machineRentLamports), 'INVALID_MACHINE_RENT');
   const rent = BigInt(machineRentLamports);
   assert.ok(rent <= U64_MAX, 'INVALID_MACHINE_RENT');
-  const preparation = makePreparation({ collection });
+  const preparation = makePreparation({ collection, storageMode, hiddenCommitmentSha256 });
   const config = preparation.cmConfig.config;
+  const hidden = preparation.releasePlan.storageMode === HIDDEN_SETTINGS;
+  const hiddenSettings = hidden ? { ...config.hiddenSettings,
+    hash: preparation.releasePlan.hiddenCommitmentSha256 } : undefined;
   const machineSpace = getCandyMachineSize(config.itemsAvailable, config.configLineSettings);
   const owner = placeholder(policy.owner);
   const umi = offlineContext(owner, rent, machineSpace);
@@ -103,14 +107,16 @@ export async function buildDeploymentPlan({ cluster, collection, reservedAsset, 
 
   const parsed = jsonGuardParser(preparation.cmConfig);
   const machineBuilder = await createMachine(umi, {
-    ...config, candyMachine: machineSigner, collection: collectionSigner.publicKey,
+    ...config, ...(hidden ? { hiddenSettings: hiddenSettingsForSdk(hiddenSettings) } : {}),
+    candyMachine: machineSigner, collection: collectionSigner.publicKey,
     payer: owner, authority: owner.publicKey, collectionUpdateAuthority: owner,
     guards: parsed.guards, groups: parsed.groups,
   });
   const machineExpected = { machine, guard, collection, authority: policy.owner,
     guardAuthority: policy.owner, mintAuthority: guard, itemsAvailable: config.itemsAvailable,
     itemsLoaded: 0, machineSpace, machineRentLamports, configLineSettings: config.configLineSettings,
-    addressGate: policy.owner, payment: preparation.releasePlan.payment, salesOpen: false };
+    addressGate: policy.owner, payment: preparation.releasePlan.payment, salesOpen: false,
+    ...(hidden ? { storageMode: HIDDEN_SETTINGS, hiddenSettings } : {}) };
   // The complete fixed-policy bundle fits as one transaction. Do not invent
   // partially initialized deployment states if a future SDK/policy exceeds it.
   assert.equal(machineBuilder.items.length, 4, 'UNEXPECTED_MACHINE_INSTRUCTION_LAYOUT');
@@ -143,10 +149,11 @@ export async function buildDeploymentPlan({ cluster, collection, reservedAsset, 
   }
   flush();
   return { version: 1, mode: 'offline-unsigned-deployment', cluster, roles,
-    supply: policy.supply, machineItems: items.length, reservedItems: 1,
+    supply: policy.supply, machineItems: config.itemsAvailable, reservedItems: 1,
     readyToSubmit: false, networkVerified: false, blockhashVerified: false,
     rentVerified: false, feeQuote: null, machineRentLamports, machineSpace,
-    networkRequests: 0, signaturesCreated: 0, transactionsSent: 0, salesOpen: false, steps };
+    networkRequests: 0, signaturesCreated: 0, transactionsSent: 0, salesOpen: false, steps,
+    ...(hidden ? { storageMode: HIDDEN_SETTINGS, privateRevealMappingVerified: false } : {}) };
 }
 
 // This projection carries intent, not proof that addresses, rent or authorities

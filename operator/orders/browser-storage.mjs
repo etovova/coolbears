@@ -17,35 +17,42 @@ import {validateReplacementResult,validateReplacementClaim,validateReplacementAc
 import {validatePrewalletInput,validatePrewalletRecovery,prewalletSubmission,prewalletReplacementSource} from './prewallet-recovery.mjs';
 import {validatePrewalletExpiry} from './prewallet-expiry.mjs';
 import {prewalletExpiryReplacementSource} from './prewallet-expiry-replacement.mjs';
-const model = createOrderModel(policy);
 const DATABASE = 'coolbears-buyer-custody-v1';
 const STORES = ['orders', 'keys', 'events', 'signing'];
 const MAX_REVISION = 1024, MAX_BYTES = 262144;
 const requireThat = (ok, code) => { if (!ok) throw Error(code); };
-const fields = ['id', 'cluster', 'buyer', 'machine', 'collection', 'guard'];
+const BASE_FIELDS = ['id', 'cluster', 'buyer', 'machine', 'collection', 'guard'];
 const equal = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const responseExpiryProvenance=source=>source.input.walletClaim?{request:source.input.request,walletClaim:source.input.walletClaim}:undefined;
-function checkedScope(input) {
-  // The validation placeholder must be distinct even when buyer is the owner.
-  const scope = Object.fromEntries(fields.map(key => [key, input?.[key]]));
-  const candidates = Array.from({ length: 8 }, (_, index) => base58.deserialize(new Uint8Array(32).fill(index + 1))[0]);
-  const placeholder = candidates.find(value => ![...Object.values(scope), policy.owner].includes(value));
-  model.createOrder({ ...scope, quantity: 1, available: 1, assets: [placeholder] });
-  requireThat(scope.cluster === 'devnet', 'DEVNET_ONLY');
-  return scope;
-}
-function bounded(order) {
-  validateSequentialOrder(order);
-  requireThat(order.revision <= MAX_REVISION && new TextEncoder().encode(JSON.stringify(order)).length <= MAX_BYTES, 'ORDER_STORAGE_LIMIT');
-  return order;
-}
 function keyShape(record, scopeKey, item) {
   const key = record?.privateKey, pub = record?.publicKey;
   requireThat(record?.version === 1 && record.scopeKey === scopeKey && record.index === item.index && record.asset === item.asset, 'ASSET_KEY_MISSING');
   requireThat(key instanceof CryptoKey && key.type === 'private' && !key.extractable && key.algorithm.name === 'Ed25519' && equal([...key.usages], ['sign']), 'INVALID_ASSET_KEY');
   requireThat(pub instanceof CryptoKey && pub.type === 'public' && pub.algorithm.name === 'Ed25519' && equal([...pub.usages], ['verify']), 'INVALID_ASSET_KEY');
 }
-export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks } = {}) {
+export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks, storageOptions = {} } = {}) {
+  const model = createOrderModel(policy, storageOptions);
+  const hidden = storageOptions.storageMode === 'hidden-settings';
+  const profile = hidden ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: storageOptions.hiddenCommitmentSha256 } : {};
+  const fields = [...BASE_FIELDS, ...Object.keys(profile)];
+  function checkedScope(input) {
+    // The validation placeholder must be distinct even when buyer is the owner.
+    requireThat(hidden || (!Object.hasOwn(input ?? {}, 'storageMode') && !Object.hasOwn(input ?? {}, 'hiddenCommitmentSha256')), 'ORDER_STORAGE_PROFILE_MISMATCH');
+    const scope = Object.fromEntries(fields.map(key => [key, input?.[key]]));
+    if (hidden) requireThat(scope.storageMode === 'hidden-settings' && scope.hiddenCommitmentSha256 === profile.hiddenCommitmentSha256, 'ORDER_STORAGE_PROFILE_MISMATCH');
+    const candidates = Array.from({ length: 8 }, (_, index) => base58.deserialize(new Uint8Array(32).fill(index + 1))[0]);
+    const placeholder = candidates.find(value => ![...Object.values(scope), policy.owner].includes(value));
+    model.createOrder({ ...scope, quantity: 1, available: 1, assets: [placeholder] });
+    requireThat(scope.cluster === 'devnet', 'DEVNET_ONLY');
+    return scope;
+  }
+  function bounded(order) {
+    model.validateOrder(order);
+    validateSequentialOrder(order);
+    requireThat(order.revision <= MAX_REVISION && new TextEncoder().encode(JSON.stringify(order)).length <= MAX_BYTES, 'ORDER_STORAGE_LIMIT');
+    return order;
+  }
+
   let opening, connection, closed = false;
   // One bounded, successful canonical snapshot only. Custody is never cached.
   // A typed fingerprint distinguishes missing/undefined properties and array

@@ -3,10 +3,10 @@ import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {sha256} from '@noble/hashes/sha256';
 import {bytesToHex} from '@noble/hashes/utils';
-import {createOrderModel} from './journal-model.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
 import {verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
 import {lamports} from './cost-approval.mjs';
-const model=createOrderModel(policy),need=(v,code)=>{if(!v)throw Error(code);};
+const model=createProtocolOrderModel(policy),need=(v,code)=>{if(!v)throw Error(code);};
 export const signedBytesId=bytes=>bytesToHex(sha256(new TextEncoder().encode(bytes)));
 export function validateBuyerSubmission({order,claim,request,response}){
   model.validateOrder(order);assertCurrentItem(order,claim.itemIndex);
