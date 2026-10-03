@@ -70,8 +70,11 @@ jobs:
         with:
           node-version: '24.19.0'
           cache: npm
-          cache-dependency-path: operator/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            operator/package-lock.json
       - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
       - run: npm run --prefix operator setup
       - run: npm run --prefix operator verify
