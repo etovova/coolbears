@@ -1,4 +1,22 @@
-**Current addition:** [Reviewed replacement after a lost response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) prepares one second attempt from the retained response-expiry record and genuine wallet claim. Separate native signing and fresh cost approval remain required. Sales stay closed; missing custody, later items, purchase UI and real setup remain unfinished. The sections below retain earlier milestones.
+## Current development status — 2026-10-03
+
+Sales remain closed at 0.2 SOL. This is a Core / Core Candy Machine candidate;
+source and fixture verification do not authorize deployment or live purchases.
+
+| Area | Current scope |
+| --- | --- |
+| First item | Preparation, explicit cost consent, signing, single-use send, outcome/expiry recovery and one reviewed replacement are implemented. |
+| Lost browser custody | [Read-only outcome review](orders/CUSTODY_RECOVERY.md) validates retained canonical evidence independently of key possession. It cannot restore erased keys or authorize further purchases. |
+| Missing canonical history | Fails closed; no reconstructed wallet claims, replacement keys or automatic cleanup. |
+| Later items and total cost | Sequential execution and cumulative cost presentation remain the next development stage. |
+| Purchase interface | A reviewed private candidate UI remains to be integrated. |
+| Real setup and devices | Private configuration, gateway deployment, fresh live checks and new-flow wallet/phone trials remain unverified. |
+
+The cumulative sections below describe their original milestones and may list
+work completed by later entries. Current validation results belong to the PR
+and continuation checkpoint, not to a claim inferred from the presence of tests.
+
+**PR57:** [Reviewed replacement after a lost response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) prepares one second attempt from the retained response-expiry record and genuine wallet claim. Separate native signing and fresh cost approval remain required.
 
 **PR56:** [Expiry after a lost wallet response](orders/RESPONSE_EXPIRY.md) preserves the actual wallet claim and consent. Only a bounded finalized absence review can retire it; incomplete history stays unknown. The review itself authorizes no new signature, send or replacement.
 

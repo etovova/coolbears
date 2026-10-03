@@ -1,4 +1,6 @@
-**Current addition:** [Reviewed replacement after a lost wallet response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) retains the real wallet claim, consent and original null-signature expiry. A separate explicit preparation permits one second attempt; new signing requires fresh cost approval. Sales stay closed at 0.2 SOL. The sections below retain earlier milestones.
+**Current addition:** [Read-only recovery after custody loss](orders/CUSTODY_RECOVERY.md) can inspect retained canonical purchase evidence and check its outcome when browser keys are missing. It does not restore keys, write recovered evidence or authorize signing, sending or replacement. See the current [readiness table](PRODUCTION_READINESS.md) for remaining stages. Sales stay closed at 0.2 SOL. The sections below retain earlier milestones.
+
+**PR57:** [Reviewed replacement after a lost wallet response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) retains the real wallet claim, consent and original null-signature expiry. A separate explicit preparation permits one second attempt; new signing requires fresh cost approval.
 
 **PR49:** [новая попытка после подтверждённой ошибки](orders/FAILED_REPLACEMENT.md) требует явного
 подтверждения уплаченной комиссии и отдельного свежего согласия на расходы.
