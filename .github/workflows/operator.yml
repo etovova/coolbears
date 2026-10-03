@@ -149,7 +149,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [expiry, recovery, signing, sequential]
+        group: [expiry, recovery, signing, sequential, console]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -177,6 +177,12 @@ jobs:
       - name: Sequential buyer order across fifty retained assets
         if: matrix.group == 'sequential'
         run: node operator/tests/order-sequential.browser.mjs
+      - name: Private buyer review interface and blocked production bundle
+        if: matrix.group == 'console'
+        run: node operator/tests/order-buyer-console.browser.mjs
+      - name: Configured private buyer interface through IndexedDB and HTTPS gateway
+        if: matrix.group == 'console'
+        run: node operator/tests/order-buyer-console-integration.browser.mjs
       - name: Buyer expiry review after a lost wallet response
         if: matrix.group == 'expiry'
         run: node operator/tests/order-response-expiry.browser.mjs
@@ -241,6 +247,8 @@ jobs:
             operator/build/buyer-submission-chromium/
             operator/build/buyer-custody-recovery-chromium/
             operator/build/buyer-sequential-chromium/
+            operator/build/buyer-console-chromium/
+            operator/build/buyer-console-integration-chromium/
             operator/build/buyer-replacement-chromium/
             operator/build/buyer-failure-recovery-chromium/
             operator/build/buyer-failed-replacement-chromium/
