@@ -67,6 +67,10 @@ try{
   await page.reload();await ready();assert.deepEqual(await journal(),fresh);assert.equal((await counters()).native,0);
   await button('orders').selectOption(id);await click('resume-order');
   report.cases.push('version2 hidden scope, digest and native non-extractable custody survive page reload; loading performs no signing or RPC');
+  // Reload deliberately forgets the live wallet selection. Restore it only by
+  // explicit UI actions before asking the production controller for a quote.
+  await button('wallets').selectOption('0');await click('connect');
+  await button('accounts').selectOption(fixture.policy.owner);await click('choose-account');
 
   const coexist=await page.evaluate(async s=>{const old=integration.legacyScope(s),legacy=await integration.legacy.create({...old,quantity:1,available:9999});
     const current=await integration.storage.read(s);return{legacy,current,keys:await integration.rawKeys(),wrong:await integration.wrongProfile(s)};},hiddenScope);
@@ -96,7 +100,7 @@ try{
   assert.equal(await button('cost-cap').inputValue(),sol);assert.equal(await button('sign').isDisabled(),true);
   assert.match(await button('costs').textContent(),new RegExp(sol.replace('.','\\.')));
   await button('cost-consent').check();await click('sign',{network:true});
-  assert.deepEqual(await counters(),{native:1,wallet:1,send:0,connect:1,persist:1});
+  assert.deepEqual(await counters(),{native:1,wallet:1,send:0,connect:2,persist:1});
   const signed=await journal(),signedBytes=await page.evaluate(()=>integration.signedBytes),before=await counters();
   assert.deepEqual(signed.signing.map(row=>row.phase),['claimed','ready','wallet-claimed','buyer-response']);
   assert.equal(signed.signing[2].record.costApproval.maxTotalLamports,total.toString());

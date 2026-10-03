@@ -138,3 +138,50 @@ test('CLI reports only safe JSON and treats successful offline inspection as no 
   text='';assert.equal(await runPrivateReadiness(['inspect','secret-sentinel'],{output}),1);
   const blocked=JSON.parse(text);safe(blocked);assert.equal(blocked.code,'ARGUMENTS_INVALID');
 });
+
+test('hidden readiness binds both gateway storage profiles to the immutable bundle commitment',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'coolbears-hidden-readiness-TEST-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const hiddenOptions={bundleDirectory:join(root,'bundle'),ownerGatewayDirectory:join(root,'owner'),buyerGatewayDirectory:join(root,'buyer')};
+  const hiddenCommitmentSha256='1'.repeat(64);
+  const created=await createDeploymentSignerVault({id:'hidden-readiness-TEST',cluster:'devnet',
+    blockhash:new PublicKey(new Uint8Array(32).fill(17)).toBase58(),lastValidBlockHeight:2000,
+    machineRentLamports:'3962400',passphrase:phrase,storageMode:'hidden-settings',hiddenCommitmentSha256});
+  await createDeploymentBundle({directory:hiddenOptions.bundleDirectory,...created});
+  const machine=created.manifest.steps[2].expected;
+  const hiddenPolicy=await compileDeploymentRpcPolicy(created.manifest,{allowSimulation:true});
+  assert.equal(hiddenPolicy.version,2);assert.equal(hiddenPolicy.messageIdentities.length,3);
+  const hiddenConfig={version:2,cluster:'devnet',origin:'https://hidden-readiness.test',machine:machine.machine,
+    collection:machine.collection,guard:machine.guard,storageMode:'hidden-settings',hiddenCommitmentSha256};
+  for(const directory of [hiddenOptions.ownerGatewayDirectory,hiddenOptions.buyerGatewayDirectory])await mkdir(directory,{mode:0o700});
+  for(const [directory,file,value]of [[hiddenOptions.ownerGatewayDirectory,'policy.json',JSON.stringify(hiddenPolicy)],
+    [hiddenOptions.ownerGatewayDirectory,'entry.mjs',ownerEntry(false)],
+    [hiddenOptions.buyerGatewayDirectory,'config.json',JSON.stringify(hiddenConfig)],[hiddenOptions.buyerGatewayDirectory,'entry.mjs',buyerEntry]])
+    await writeFile(join(directory,file),value,{mode:0o600});
+  const before=await files(root),result=await inspectPrivateReadiness(hiddenOptions);safe(result);
+  assert.equal(result.status,'offline-bindings-verified');assert.ok(Object.values(result.checks).every(value=>value.status==='verified'));
+  assert.equal(result.binding.storageMode,'hidden-settings');assert.equal(result.binding.hiddenCommitmentSha256,hiddenCommitmentSha256);
+  assert.equal(result.binding.privateMappingVerified,false);assert.deepEqual(await files(root),before);
+  const legacy={...hiddenConfig,version:1};delete legacy.storageMode;delete legacy.hiddenCommitmentSha256;
+  for(const changed of [legacy,{...hiddenConfig,hiddenCommitmentSha256:'2'.repeat(64)}]){
+    await mutation(hiddenOptions.buyerGatewayDirectory,'config.json',()=>JSON.stringify(changed),async()=>{
+      const saved=await files(root),blocked=await inspectPrivateReadiness(hiddenOptions);safe(blocked);
+      assert.equal(blocked.status,'blocked');assert.equal(blocked.checks.buyerGateway.code,'BUYER_STORAGE_PROFILE_MISMATCH');
+      assert.equal(blocked.binding,null);assert.deepEqual(await files(root),saved);
+    });
+  }
+  await mutation(hiddenOptions.ownerGatewayDirectory,'policy.json',()=>JSON.stringify({...hiddenPolicy,hiddenCommitmentSha256:'2'.repeat(64)}),async()=>{
+    const blocked=await inspectPrivateReadiness(hiddenOptions);safe(blocked);
+    assert.equal(blocked.checks.ownerGateway.code,'OWNER_POLICY_STALE_OR_MISMATCHED');assert.equal(blocked.binding,null);
+  });
+  assert.deepEqual(await files(root),before);
+});
+
+test('legacy readiness rejects a crossed hidden buyer profile even when all account addresses match',async()=>{
+  await mutation(options.buyerGatewayDirectory,'config.json',bytes=>JSON.stringify({...JSON.parse(bytes),version:2,
+    storageMode:'hidden-settings',hiddenCommitmentSha256:'1'.repeat(64)}),async()=>{
+    const before=await files(),result=await inspectPrivateReadiness(options);safe(result);
+    assert.equal(result.status,'blocked');assert.equal(result.checks.buyerGateway.code,'BUYER_STORAGE_PROFILE_MISMATCH');
+    assert.equal(result.binding,null);assert.deepEqual(await files(),before);
+  });
+});

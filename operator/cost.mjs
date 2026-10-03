@@ -9,7 +9,8 @@ import { makePreparation } from './prepare.mjs';
 export async function quoteMachine(endpoint, { storageMode, hiddenCommitmentSha256, fetchImpl = (...args) => globalThis.fetch(...args) } = {}) {
   validateEndpoint(endpoint);
   assert.equal(typeof fetchImpl, 'function', 'INVALID_QUOTE_FETCH');
-  const { config } = makePreparation({ storageMode, hiddenCommitmentSha256 }).cmConfig;
+  const preparation = makePreparation({ storageMode, hiddenCommitmentSha256 });
+  const { config } = preparation.cmConfig;
   const accountBytes = getCandyMachineSize(config.itemsAvailable, config.configLineSettings);
   const preflight = await checkRpc({ endpoint, fetchImpl });
   assert.equal(preflight.status, 'read-path-passed', `RPC preflight blocked: ${preflight.code}`);
@@ -27,7 +28,7 @@ export async function quoteMachine(endpoint, { storageMode, hiddenCommitmentSha2
   const result = {
     checkedAt: new Date().toISOString(), cluster: 'devnet', transactionsSent: 0,
     machineItems: config.itemsAvailable, configLineSettings: config.configLineSettings,
-    ...(config.hiddenSettings ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: config.hiddenSettings.hash,
+    ...(config.hiddenSettings ? { storageMode: 'hidden-settings', hiddenCommitmentSha256: preparation.releasePlan.hiddenCommitmentSha256,
       privateMappingVerified: false } : {}),
     accountBytes, machineRentLamports: body.result, machineRentSol: body.result / 1e9,
     owner: preflight.owner, ownerBalanceLamports: preflight.balanceLamports,

@@ -108,6 +108,7 @@ test('standalone machine rent quote selects 652-byte hidden layout and rejects i
   const result = await quoteMachine(endpoint, { storageMode: input.storageMode, hiddenCommitmentSha256: commitment, fetchImpl });
   assert.equal(result.accountBytes, 652); assert.equal(result.machineRentLamports, rent(652));
   assert.equal(result.storageMode, 'hidden-settings'); assert.equal(result.privateMappingVerified, false);
+  assert.equal(result.hiddenCommitmentSha256, commitment); assert.match(result.hiddenCommitmentSha256, /^[0-9a-f]{64}$/);
   assert.equal(result.totalReleaseCostQuoted, false); assert.equal(result.transactionsSent, 0);
   assert.deepEqual(calls.at(-1).params, [652, { commitment: 'finalized' }]);
   calls.length = 0;
