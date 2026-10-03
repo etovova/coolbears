@@ -45,6 +45,7 @@ export function mountPrivateBuyerConsole({controller,registry,document=globalThi
     el('send-consent').disabled=!s.sendingEnabled||s.busy;
     enable('expiry',s.canReviewExpiry&&el('expiry-consent').checked);enable('replace',s.canReplace&&el('replacement-consent').checked&&(!s.failedFeeLamports||el('fee-consent').checked));
     enable('replacement-sign',s.canPrepareReplacement&&el('replacement-signing-consent').checked);
+    if(s.quantity!==null)el('quantity').value=String(s.quantity);
     el('quantity').disabled=!!s.scope||s.busy;el('cost-cap').disabled=!quote||s.busy;
   }
   function action(id,fn){el(id).addEventListener('click',async()=>{localError=null;try{const pending=fn();render();await pending;}catch(error){localError=explainConsoleError(error);}finally{render();}});}

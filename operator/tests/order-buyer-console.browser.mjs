@@ -59,6 +59,7 @@ try{
   await page.evaluate(()=>keepFixture());const before=await page.evaluate(()=>structuredClone(fixture.calls));await page.reload();await ready();
   assert.deepEqual(await page.evaluate(()=>fixture.calls),before);const id=await page.evaluate(()=>fixture.saved[0].id);
   await button('orders').selectOption(id);await button('resume-order').click();await ready();
+  assert.equal(await button('quantity').inputValue(),'2');assert.equal(await button('quantity').isDisabled(),true);
   assert.match(await button('items').textContent(),/Outcome unknown/);assert.equal(await button('sign').isDisabled(),true);
   await button('recover').click();await ready();assert.equal(await page.evaluate(()=>fixture.calls.recover),before.recover+1);
   report.cases.push('a reloaded scope resumes the retained unknown state without wallet approval or duplicate creation and checks outcome only on an explicit click');
