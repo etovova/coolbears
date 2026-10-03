@@ -8,6 +8,7 @@ import {makeBuyerGateway} from '../orders/gateway/worker.mjs';
 import {createBuyerCheckClient} from '../orders/gateway/client.mjs';
 import {validateWalletCheck} from '../orders/wallet-client.mjs';
 import {runOrderCheck} from '../orders/check.mjs';
+import {validateCostApproval,enforceCostCeiling} from '../orders/cost-approval.mjs';
 const origin='https://hidden-gateway.test',nonce='c'.repeat(64);
 function harness(f){
   let now=Date.now();const data=new Map(f.preparations);
@@ -59,4 +60,29 @@ test('explicit public storage-profile CLI performs complete hidden read-only pre
     assert.equal(hidden.report.status,'preflight-passed');assert.equal(hidden.report.budget.baseAssetBytes,146);assert.equal(hidden.report.signaturesCreated,0);assert.equal(hidden.report.transactionsSent,0);
     assert.ok(!JSON.stringify(hidden.report).includes('fixture-secret-42'));assert.ok(!Object.hasOwn(hidden.report,'candidate'));
   }finally{await rm(parent,{recursive:true,force:true});}
+});
+
+test('buyer approval reserves the largest hidden rent width so a fresh 9-to-10 quote stays within the explicit cap without a new charge',async()=>{
+  const f=hiddenBuyerGatewayFixture({redeemed:8}),input=f.input('width-reserve'),h=harness(f);
+  const response=await h.dispatch(input),first=await response.json();assert.equal(response.status,200,JSON.stringify(first));
+  const report=first.report,b=report.budget,quote=report.costQuote;
+  assert.equal(b.baseAssetBytes,144);assert.equal(b.rentBudgetAssetBytes,150);
+  assert.equal(b.observedBaseRentLamports,String((144+128)*5080));
+  assert.equal(b.nextItemBaseRentLamports,String((150+128)*5080));
+  assert.equal(quote.budget.assetRentLamports,b.nextItemBaseRentLamports);
+  assert.equal(quote.budget.protocolChargeLamports,'1500000');assert.equal(quote.budget.unitPriceLamports,'200000000');
+  const actualMinimum=200000000n+10000n+BigInt(b.observedBaseRentLamports)+1500000n;
+  const approval={version:1,quote,maxTotalLamports:quote.budget.totalLamports,approvedAt:Date.now()};
+  assert.throws(()=>validateCostApproval({...approval,maxTotalLamports:actualMinimum.toString()},input),/COST_LIMIT_TOO_LOW/);
+  validateCostApproval(approval,input);
+  h.advance();f.setRedeemed(9);const freshResponse=await h.dispatch(input),fresh=await freshResponse.json();
+  assert.equal(freshResponse.status,200,JSON.stringify(fresh));assert.equal(fresh.report.budget.baseAssetBytes,146);
+  assert.equal(fresh.report.budget.observedBaseRentLamports,String((146+128)*5080));
+  assert.equal(fresh.report.budget.nextItemKnownMinimumLamports,quote.budget.totalLamports);
+  assert.equal(enforceCostCeiling(approval,input,fresh.report).totalLamports,quote.budget.totalLamports);
+  const over=structuredClone(fresh.report);over.budget.nextItemBaseRentLamports=String(BigInt(over.budget.nextItemBaseRentLamports)+1n);
+  over.budget.nextItemKnownMinimumLamports=String(BigInt(over.budget.nextItemKnownMinimumLamports)+1n);
+  over.budget.projectedOrderTotalLamports=over.budget.nextItemKnownMinimumLamports;
+  assert.throws(()=>enforceCostCeiling(approval,input,over),/COST_LIMIT_EXCEEDED/);
+  assert.ok(f.calls.every(call=>call.method!=='sendTransaction'));
 });

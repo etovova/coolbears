@@ -45,10 +45,21 @@ transaction for this initial setup.
 
 ## Buyer payment
 
-The buyer is the transaction fee payer, minter and NFT owner. The exact quote
-includes 0.2 SOL to the approved destination, current message fee, exact NFT
-account rent and the Core creation charge. No owner-funded mint subsidy,
-additional purchase surcharge or platform tip is added.
+The buyer is the transaction fee payer, minter and NFT owner. The quote includes
+0.2 SOL to the approved destination, current message fee, a maximum-width NFT
+account rent reserve and the Core creation charge. Hidden indexes can acquire
+more decimal digits after a preflight check: the budget therefore uses the
+serialized size for the largest permitted index and a fresh RPC rent quote.
+Simulation still verifies the actual current index, exact account bytes and its
+actual rent separately. A changed index during the check still blocks progress.
+
+The reserve changes the balance/approval budget, not the transaction or amount
+collected. The mint program charges only the actual account rent; any unused
+reserve remains in the buyer wallet. No owner-funded mint subsidy, additional
+purchase surcharge or platform tip is added. The default v1 quote is unchanged.
+This remains an application estimate and approval ceiling, not an on-chain
+spending cap; the reserve covers index-width growth under the verified profile,
+and fresh selected-network program and fee checks are still required.
 
 Version 2 orders bind the chosen storage profile and commitment. Their durable
 storage namespaces are distinct from v1, so old records remain recoverable.

@@ -33,7 +33,10 @@ function harness({ redeemed = 0, finalRedeemed = redeemed, simulatedIndex = rede
     quantity: 1, available: 9999, assets: [address('asset')] });
   const assetSize = baseAssetBytes(policy, order, redeemed + 1, options).length;
   const rent = BigInt((assetSize + 128) * 5080);
-  const minimum = 200000000n + 10000n + rent + CORE_CREATE_LAMPORTS;
+  const budgetAssetSize = baseAssetBytes(policy, order, policy.supply - 1, options).length;
+  const budgetRent = BigInt((budgetAssetSize + 128) * 5080);
+  const actualMinimum = 200000000n + 10000n + rent + CORE_CREATE_LAMPORTS;
+  const minimum = 200000000n + 10000n + budgetRent + CORE_CREATE_LAMPORTS;
   let accountReads = 0; const calls = [];
   const fetchImpl = async (_url, init) => {
     const call = JSON.parse(init.body); calls.push(call);
@@ -49,7 +52,7 @@ function harness({ redeemed = 0, finalRedeemed = redeemed, simulatedIndex = rede
       getBalance: { context: { slot: 600 }, value: balance ?? Number(minimum) },
       getLatestBlockhash: { context: { slot: 600 }, value: { blockhash, lastValidBlockHeight: 2000 } },
       getFeeForMessage: { context: { slot: 600 }, value: 10000 },
-      getMinimumBalanceForRentExemption: Number(rent),
+      getMinimumBalanceForRentExemption: (call.params[0] + 128) * 5080,
       simulateTransaction: { context: { slot: 600 }, value: { err: null,
         unitsConsumed: 99999, accounts: [fixtureRpcAccount(assets, MPL_CORE_PROGRAM_ID,
           Number(rent + CORE_CREATE_LAMPORTS))] } },
@@ -59,18 +62,20 @@ function harness({ redeemed = 0, finalRedeemed = redeemed, simulatedIndex = rede
     if (mutate) result = mutate(call, result);
     return new Response(JSON.stringify({ jsonrpc: '2.0', id: call.id, result }));
   };
-  return { order, calls, assetSize, rent, minimum, run: () => checker.preflightOrder({
+  return { order, calls, assetSize, rent, budgetAssetSize, budgetRent, actualMinimum, minimum, run: () => checker.preflightOrder({
     readOrder: () => orderMutation ? orderMutation(structuredClone(order)) : structuredClone(order), endpoint, fetchImpl }) };
 }
 
-test('hidden rent quotes use the trusted mint index across every decimal width boundary', async () => {
+test('hidden simulations retain the trusted index while every decimal width receives the largest account rent budget', async () => {
   for (const redeemed of [0, 8, 9, 98, 99, 998, 999, 9998]) {
     const h = harness({ redeemed }), before = structuredClone(h.order), report = await h.run();
     assert.equal(report.status, 'preflight-passed', JSON.stringify(report));
-    const rentCall = h.calls.find(call => call.method === 'getMinimumBalanceForRentExemption');
-    assert.equal(rentCall.params[0], h.assetSize);
+    const rentCalls = h.calls.filter(call => call.method === 'getMinimumBalanceForRentExemption');
+    assert.deepEqual(rentCalls.map(call => call.params[0]), h.assetSize === h.budgetAssetSize ? [h.assetSize] : [h.assetSize, h.budgetAssetSize]);
     assert.equal(report.budget.baseAssetBytes, h.assetSize);
-    assert.equal(report.budget.nextItemBaseRentLamports, h.rent.toString());
+    assert.equal(report.budget.observedBaseRentLamports, h.rent.toString());
+    assert.equal(report.budget.rentBudgetAssetBytes, h.budgetAssetSize);
+    assert.equal(report.budget.nextItemBaseRentLamports, h.budgetRent.toString());
     assert.equal(report.budget.protocolChargesLamports, '1500000');
     assert.equal(report.budget.nextItemKnownMinimumLamports, h.minimum.toString());
     assert.equal(report.budget.unitPriceLamports, '200000000');
@@ -83,12 +88,46 @@ test('hidden rent quotes use the trusted mint index across every decimal width b
   }
 });
 
-test('hidden buyer balance must cover price, transaction fee, exact asset rent and Core charge', async () => {
+test('hidden buyer balance must cover price, transaction fee, largest-index rent funding and Core charge', async () => {
   const baseline = harness({ redeemed: 9 });
   const poor = harness({ redeemed: 9, balance: Number(baseline.minimum - 1n) });
   const report = await poor.run();
   assert.equal(report.code, 'INSUFFICIENT_BALANCE');
   assert.equal(poor.calls.some(call => call.method === 'simulateTransaction'), false);
+});
+
+test('a balance covering only the observed short index cannot approve the maximum rent funding reserve', async () => {
+  const baseline = harness({ redeemed: 8 });
+  assert.ok(baseline.actualMinimum < baseline.minimum);
+  const poor = harness({ redeemed: 8, balance: Number(baseline.actualMinimum) });
+  assert.equal((await poor.run()).code, 'INSUFFICIENT_BALANCE');
+  assert.equal(poor.calls.some(call => call.method === 'simulateTransaction'), false);
+  const exact = harness({ redeemed: 8, balance: Number(baseline.minimum) });
+  const report = await exact.run();
+  assert.equal(report.status, 'preflight-passed', JSON.stringify(report));
+  assert.equal(report.budget.observedBaseRentLamports, baseline.rent.toString());
+  assert.equal(report.budget.nextItemBaseRentLamports, baseline.budgetRent.toString());
+});
+
+test('the final buyer balance reread still needs the maximum rent reserve after successful actual-index simulation', async () => {
+  const baseline = harness({ redeemed: 8 });let balances = 0;
+  const h = harness({ redeemed: 8, mutate: (call, result) => {
+    if (call.method === 'getBalance' && ++balances === 2) result.value = Number(baseline.actualMinimum);
+    return result;
+  } });
+  const report = await h.run();assert.equal(report.code, 'INSUFFICIENT_BALANCE');
+  assert.equal(h.calls.filter(call => call.method === 'simulateTransaction').length, 1);
+  assert.equal(report.readyToSign, false);
+});
+
+test('unavailable or nonmonotonic largest-index rent quotes block before simulation without an arithmetic fallback', async () => {
+  const baseline = harness({ redeemed: 8 });
+  for (const value of [0, Number(baseline.rent - 1n), null]) {
+    const h = harness({ redeemed: 8, mutate: (call, result) =>
+      call.method === 'getMinimumBalanceForRentExemption' && call.params[0] === baseline.budgetAssetSize ? value : result });
+    assert.equal((await h.run()).status, 'blocked');
+    assert.equal(h.calls.some(call => call.method === 'simulateTransaction'), false);
+  }
 });
 
 test('hidden simulated metadata and final inventory must retain the exact quoted index', async () => {

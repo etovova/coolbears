@@ -150,12 +150,18 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     const expectedMintIndex = hidden ? initial.nextMintIndex : undefined;
     if (hidden) need(Number.isSafeInteger(expectedMintIndex) && expectedMintIndex >= 1
       && expectedMintIndex < policy.supply, 'MINT_INDEX_UNVERIFIED');
-    // Hidden names and URIs expand the verified sequential index. Quote rent
-    // for that exact current asset, including decimal-width transitions.
+    // Simulation still proves the exact current index and its account rent.
+    // Hidden metadata can grow if another mint advances the index after the
+    // final read. Reserve enough buyer funding for the largest permitted index.
     const assetBytes = baseAssetBytes(policy, order, hidden ? expectedMintIndex : '0001', storageOptions).length;
     const rent = amount(await rpc.call('getMinimumBalanceForRentExemption', [assetBytes, { commitment: 'confirmed' }]));
     need(rent > 0n, 'RENT_UNAVAILABLE');
-    const knownMinimum = BigInt(order.unitPriceLamports) + fee + rent + CORE_CREATE_LAMPORTS;
+    const rentBudgetAssetBytes = hidden ? baseAssetBytes(policy, order, policy.supply - 1, storageOptions).length : assetBytes;
+    need(rentBudgetAssetBytes >= assetBytes, 'RENT_BUDGET_UNVERIFIED');
+    const rentBudget = rentBudgetAssetBytes === assetBytes ? rent
+      : amount(await rpc.call('getMinimumBalanceForRentExemption', [rentBudgetAssetBytes, { commitment: 'confirmed' }]));
+    need(rentBudget >= rent, 'RENT_BUDGET_UNVERIFIED');
+    const knownMinimum = BigInt(order.unitPriceLamports) + fee + rentBudget + CORE_CREATE_LAMPORTS;
     need(funds >= knownMinimum, 'INSUFFICIENT_BALANCE');
     phase = 'simulation';
     const simulation = await rpc.call('simulateTransaction', [encoded, { encoding: 'base64', commitment: 'confirmed',
@@ -193,7 +199,8 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
       candidate: { asset: template.asset, transactionBase64: encoded, messageSha256: template.messageSha256,
         blockhash: template.blockhash, lastValidBlockHeight: template.lastValidBlockHeight },
       budget: { complete: true, scope: 'next-item-current-template', unitPriceLamports: order.unitPriceLamports, orderItemPriceLamports: order.totalPriceLamports,
-        nextItemFeeLamports: fee.toString(), nextItemBaseRentLamports: rent.toString(), baseAssetBytes: assetBytes,
+        nextItemFeeLamports: fee.toString(), nextItemBaseRentLamports: rentBudget.toString(), baseAssetBytes: assetBytes,
+        ...(hidden ? { observedBaseRentLamports: rent.toString(), rentBudgetAssetBytes } : {}),
         nextItemKnownMinimumLamports: knownMinimum.toString(), protocolChargesLamports: CORE_CREATE_LAMPORTS.toString(), priorityFeeLamports: '0',
         projectedOrderTotalLamports: (knownMinimum * BigInt(order.quantity)).toString(), projectionOnly: true,
         ...(itemIndex>0?{completedQuantity:itemIndex,remainingQuantity:order.quantity-itemIndex,
