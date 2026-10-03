@@ -2,6 +2,14 @@
 подписанные байты только вместе с окончательным результатом. Ответ и исход
 сохраняются атомарно; отсутствие истории не разрешает повтор. Ниже — история этапов.
 
+**Custody-loss recovery update:** `readRecoverySnapshot(scope)` now separates
+canonical purchase evidence from current key possession. A missing, unusable or
+mismatched CryptoKey can no longer hide the complete retained first-attempt
+evidence, including when only a later item's key was lost. This API is read-only;
+all existing storage, wallet, sender and replacement methods still require full
+custody. The [custody recovery controller](CUSTODY_RECOVERY.md) can use this
+snapshot for existing outcome checks without saving results or continuing a purchase.
+
 # Browser custody and order storage
 
 **PR41 update:** closed Devnet sign-only wallet handoff, prepared-request checks and atomic buyer-response evidence are implemented. See `WALLET.md`. The new internal prepared check can permit signing only; public purchase, sending and sales remain disabled. Earlier milestone notes below describe their original scope.
@@ -29,7 +37,7 @@ history and transition rules. The Node `journal.mjs` preserves its old exports
 and shared policy object. Browser code uses the approved JSON policy directly;
 it does not bundle Node file access or the operator preparation CLI.
 
-Every read validates the scope, order, complete replay of stored events, key
+Every normal read validates the scope, order, complete replay of stored events, key
 count and identities. It signs an internally generated, domain-separated random
 challenge and verifies it using each stored public key. No custody challenge or challenge signature
 is exposed. No API returns private keys or exports a signer. Asset partial signing accepts
@@ -45,8 +53,42 @@ const scope = { id, cluster: 'devnet', buyer, machine, collection, guard };
 const order = await storage.create({ ...scope, quantity: 2, available: 100 });
 const restored = await storage.read(scope); // null only if the whole scope is absent
 const paused = await storage.append(scope, { type: 'pause', revision: restored.revision });
+const evidence = await storage.readRecoverySnapshot(scope); // explicit read-only inspection
 storage.close(); // connection only, never data deletion
 ```
+
+`readRecoverySnapshot` holds the same exclusive, non-queued scope lock and loads
+the original order, events, signing rows and key records in one readonly IDB
+transaction. It first validates the exact scope, complete event replay, claims,
+SDK message reconstruction, signatures, wallet intent, replacement ancestry and
+any terminal evidence using the existing validators. It then reports custody
+separately for every item. `custody.status` is `available` only when all keys and
+the complete key record set pass validation. Unavailable custody reports one of
+`ASSET_KEY_MISSING`, `INVALID_ASSET_KEY` or `ASSET_KEY_MISMATCH`; it never creates
+a replacement key or changes a retained record. Surviving keys are located by
+their canonical item index, so a removed earlier key does not shift the reported
+identity of later keys. Available keys still prove possession with the existing
+internal random challenge; transaction bytes are never signed by this reader.
+
+The detached result has `mode: 'read-only-recovery'`, the canonical `order`,
+existing `assetSigning`, `buyerWallet`, `submission`, `responseRecovery` and
+`prewalletRecovery` states, and `custody: { status, code, items }`. Each custody
+item contains only `index`, `asset`, `status` and `code`. There are no CryptoKeys
+or challenge bytes in the result. `readOnly` is true, `readyToSign`,
+`readyToSubmit`, `retryAuthorized` and `salesOpen` are false, and
+`transactionsSent` is zero even when custody is available. Nested states retain
+their canonical evidence and their existing no-send flags; a retained `ready`
+submission label does not authorize dispatch through this API.
+
+Missing or corrupt canonical history remains an error, regardless of custody.
+An attempted order whose entire signing history is absent fails with
+`ASSET_CLAIM_HISTORY`; generic offline journal events cannot be promoted into
+recovery evidence. An untouched order has null evidence states. A missing order
+with surviving rows fails with `ORPHANED_ORDER_DATA`, while only a wholly absent
+scope returns null. This API never persists a newly observed outcome, releases a
+volatile native result, invokes a wallet, grants a retry or bypasses the full
+custody requirement on any normal method. It does not restore erased keys,
+implement backup/device migration or make a claim about permanent persistence.
 
 Each operation holds a Web Lock for its scope with `ifAvailable: true`:
 a competing tab receives `ORDER_BUSY` immediately. There is no forced lock
@@ -99,6 +141,14 @@ profile created by that test invocation. No real wallet, phone or RPC is tested.
 Local model/regression checks and CI results are recorded in the continuation
 checkpoint and PR. Adding the Chromium script to CI is not itself a passing
 browser result; use the completed report for the actual outcome.
+
+`order-custody-snapshot.test.mjs` uses a readonly IndexedDB protocol double with
+real native Ed25519 keys and SDK transaction bytes. It checks retained evidence
+with missing first/later keys, invalid/mismatched/unusable keys, strict rejection
+of corrupt order/event/signing history, normal-API custody gates and the absence
+of writes, new keys and transaction signing. The separate custody recovery
+Chromium suite covers actual IndexedDB and browser lifecycle behavior; neither
+suite establishes real-wallet, phone or live RPC coverage.
 
 Primary design references (checked 2026-09-23):
 - [W3C WebCrypto Level 2](https://www.w3.org/TR/webcrypto-2/): Ed25519 and CryptoKey serialization.

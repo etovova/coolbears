@@ -181,6 +181,9 @@ jobs:
       - name: Buyer single-use submission and finalized recovery
         if: matrix.group == 'recovery'
         run: node operator/tests/order-submission.browser.mjs
+      - name: Read-only buyer outcome review after custody loss
+        if: matrix.group == 'recovery'
+        run: node operator/tests/order-custody-recovery.browser.mjs
       - name: Buyer reviewed replacement across browser and gateway restarts
         if: matrix.group == 'recovery'
         run: node operator/tests/order-replacement.browser.mjs
@@ -231,6 +234,7 @@ jobs:
             operator/build/buyer-wallet-chromium/
             operator/build/buyer-gateway-chromium/
             operator/build/buyer-submission-chromium/
+            operator/build/buyer-custody-recovery-chromium/
             operator/build/buyer-replacement-chromium/
             operator/build/buyer-failure-recovery-chromium/
             operator/build/buyer-failed-replacement-chromium/

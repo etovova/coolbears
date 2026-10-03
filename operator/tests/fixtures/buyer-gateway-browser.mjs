@@ -75,3 +75,15 @@ window.observedPrewalletBytes=async(scope,secret)=>{
   tx.signatures[1]=new Uint8Array(window.lastNativeSignature);tx.sign([Keypair.fromSecretKey(new Uint8Array(secret))]);
   return Buffer.from(tx.serialize()).toString('base64');
 };
+
+import {createBuyerCustodyRecovery} from '../../orders/custody-recovery-client.mjs';
+window.openCustodyRecovery=scope=>{
+  window.custodyRecovery=createBuyerCustodyRecovery({scope,storage:store,transport:createBuyerSubmissionTransport()});
+};
+// Count write transactions only while an individual disposable recovery test
+// enables the audit. The application has no access to this test instrumentation.
+const originalTransaction=IDBDatabase.prototype.transaction;
+IDBDatabase.prototype.transaction=function(names,mode,...options){
+  if(mode==='readwrite'&&Array.isArray(window.recoveryWriteAudit))window.recoveryWriteAudit.push(Array.from(typeof names==='string'?[names]:names));
+  return originalTransaction.call(this,names,mode,...options);
+};

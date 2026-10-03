@@ -97,12 +97,12 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       try { callback(queries.map(request => request.result)); } catch (error) { abort(error); }
     }; });
   }
-  function validate([order, keys, events, signing], scope, scopeKey) {
+  // Canonical evidence does not depend on possession of the original keys.
+  // A separate recovery-only reader can inspect it after custody is lost.
+  function validateEvidence([order, keys, events, signing], scope) {
     if (order === undefined) { requireThat(keys.length === 0 && events.length === 0 && signing.length === 0, 'ORPHANED_ORDER_DATA'); return null; }
     bounded(order);
     requireThat(fields.every(field => order[field] === scope[field]), 'ORDER_SCOPE_MISMATCH');
-    requireThat(keys.length === order.quantity, 'ASSET_KEY_MISSING');
-    for (const item of order.items) keyShape(keys[item.index], scopeKey, item);
     requireThat(events.length === order.revision + 1 && events[0]?.type === 'create', 'CORRUPT_ORDER_HISTORY');
     let replay = bounded(events[0].order);
     requireThat(replay.revision === 0 && !replay.paused && replay.items.every(item => !item.attempts.length), 'CORRUPT_ORDER_HISTORY');
@@ -126,20 +126,48 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     }
     return order;
   }
+  function validateKeys(order, records, scopeKey) {
+    requireThat(records.length === order.quantity, 'ASSET_KEY_MISSING');
+    for (const item of order.items) keyShape(records[item.index], scopeKey, item);
+  }
+  function validate(data, scope, scopeKey) {
+    const order = validateEvidence(data, scope);
+    if (order) validateKeys(order, data[1], scopeKey);
+    return order;
+  }
+  async function proveKey(item, record, scopeKey) {
+    keyShape(record, scopeKey, item);
+    try {
+      const pub = new Uint8Array(await crypto.subtle.exportKey('raw', record.publicKey));
+      requireThat(pub.length === 32 && base58.deserialize(pub)[0] === item.asset, 'ASSET_KEY_MISMATCH');
+      // Internal domain-separated random challenge. Never a caller's transaction.
+      const nonce = crypto.getRandomValues(new Uint8Array(32));
+      const prefix = new TextEncoder().encode(`CoolBears custody proof v1\n${scopeKey}\n${item.index}\n`);
+      const challenge = new Uint8Array(prefix.length + nonce.length); challenge.set(prefix); challenge.set(nonce, prefix.length);
+      const signature = await crypto.subtle.sign('Ed25519', record.privateKey, challenge);
+      requireThat(await crypto.subtle.verify('Ed25519', record.publicKey, signature, challenge), 'ASSET_KEY_MISMATCH');
+    } catch { throw Error('ASSET_KEY_MISMATCH'); }
+  }
   async function proveKeys(order, records, scopeKey) {
+    for (const item of order.items) await proveKey(item, records[item.index], scopeKey);
+  }
+  async function custodyState(order, records, scopeKey) {
+    let code = null;
+    try { validateKeys(order, records, scopeKey); } catch (error) { code = error.message; }
+    const items = [];
     for (const item of order.items) {
-      const record = records[item.index]; keyShape(record, scopeKey, item);
+      let problem = null;
+      // IDB getAll compacts missing rows. Locate each retained key by its
+      // canonical index instead of treating later keys as the missing one.
+      const matches = records.filter(record => record?.index === item.index);
       try {
-        const pub = new Uint8Array(await crypto.subtle.exportKey('raw', record.publicKey));
-        requireThat(pub.length === 32 && base58.deserialize(pub)[0] === item.asset, 'ASSET_KEY_MISMATCH');
-        // Internal domain-separated random challenge. Never a caller's transaction.
-        const nonce = crypto.getRandomValues(new Uint8Array(32));
-        const prefix = new TextEncoder().encode(`CoolBears custody proof v1\n${scopeKey}\n${item.index}\n`);
-        const challenge = new Uint8Array(prefix.length + nonce.length); challenge.set(prefix); challenge.set(nonce, prefix.length);
-        const signature = await crypto.subtle.sign('Ed25519', record.privateKey, challenge);
-        requireThat(await crypto.subtle.verify('Ed25519', record.publicKey, signature, challenge), 'ASSET_KEY_MISMATCH');
-      } catch { throw Error('ASSET_KEY_MISMATCH'); }
+        requireThat(matches.length === 1, 'ASSET_KEY_MISSING');
+        await proveKey(item, matches[0], scopeKey);
+      } catch (error) { problem = error.message; }
+      items.push({ index:item.index, asset:item.asset, status:problem ? 'unavailable' : 'available', code:problem });
+      code ??= problem;
     }
+    return { status:code ? 'unavailable' : 'available', code, items };
   }
   function groups(records){
     requireThat(records.length<=12,'CORRUPT_ASSET_SIGNING');const batches=[];
@@ -463,6 +491,26 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       });
     },
     read(input) { return locked(input, snapshot); },
+    // Evidence-only inspection. Never repairs keys, persists recovered data,
+    // invokes a transaction signer or grants permission to continue purchasing.
+    readRecoverySnapshot(input) {
+      return locked(input, async (scope, scopeKey) => {
+        const data = await transaction('readonly', (tx, resolve, abort) => load(tx, scopeKey, resolve, abort));
+        const order = validateEvidence(data, scope);
+        if (!order) return null;
+        // Generic journal primitives can retain model events without native
+        // signing rows. Such an attempt is not complete recovery evidence.
+        requireThat(!order.items.some(item => item.attempts.length) || data[3].length > 0, 'ASSET_CLAIM_HISTORY');
+        const saved = { order, events:data[2], signing:data[3] };
+        const evidence = { assetSigning:signingState(order, saved.signing),
+          buyerWallet:walletState(order, saved.signing, saved.events),
+          submission:submissionState(order, saved.signing, saved.events),
+          responseRecovery:responseRecoveryState(saved), prewalletRecovery:prewalletRecoveryState(saved) };
+        return { mode:'read-only-recovery', order:structuredClone(order), ...evidence,
+          custody:await custodyState(order, data[1], scopeKey), readOnly:true,
+          readyToSign:false, readyToSubmit:false, retryAuthorized:false, salesOpen:false, transactionsSent:0 };
+      });
+    },
     async append(input, event) {
       const frozen = structuredClone(event);
       requireThat(new TextEncoder().encode(JSON.stringify(frozen)).length <= 16384, 'EVENT_STORAGE_LIMIT');
