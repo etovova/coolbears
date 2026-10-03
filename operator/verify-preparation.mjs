@@ -7,16 +7,22 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { makePreparation, policy } from './prepare.mjs';
+import { HIDDEN_SETTINGS, resolveStorageProfile } from './storage-mode.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 
-export async function verifyPreparation(directory) {
+export async function verifyPreparation(directory, { storageMode, hiddenCommitmentSha256 } = {}) {
   assert.ok(directory, 'Specify a preparation directory');
+  // The expected profile and digest come from the caller, never saved files.
+  // Validate them before reading a package so an absent digest cannot downgrade.
+  resolveStorageProfile(policy, { storageMode, hiddenCommitmentSha256 });
   const source = path.resolve(directory);
   const readJson = async file => JSON.parse(await readFile(path.join(source, file), 'utf8'));
   const config = await readJson('cm-config.json');
   // A supplied address is checked for syntax only; no existence/authority claim.
-  const expected = makePreparation({ collection: config?.config?.collection });
+  const expected = makePreparation({ collection: config?.config?.collection,
+    storageMode, hiddenCommitmentSha256 });
+  const hidden = expected.releasePlan.storageMode === HIDDEN_SETTINGS;
   const compare = (actual, approved, file) => {
     // Do not dump arbitrary input values (including accidentally pasted secrets).
     try { assert.deepEqual(actual, approved); }
@@ -32,6 +38,9 @@ export async function verifyPreparation(directory) {
     supply: policy.supply, machineItems: policy.supply - 1,
     metadataPublished: false, collectionCreated: false, machineCreated: false,
     salesOpen: false, earliestRevealDate: policy.earliestRevealDate,
+    ...(hidden ? { storageMode: HIDDEN_SETTINGS,
+      hiddenCommitmentSha256: expected.releasePlan.hiddenCommitmentSha256,
+      privateRevealMappingVerified: false, configLineInsertions: 0 } : {}),
   }, 'preparation.json');
   const filenames = expected.documents.map((_, index) => `${String(index).padStart(4, '0')}.json`);
   compare((await readdir(path.join(source, 'hidden'))).sort(), filenames, 'hidden filenames');
@@ -44,6 +53,14 @@ export async function verifyPreparation(directory) {
     compare(JSON.parse(await readFile(path.join(root, 'metadata', relative), 'utf8')), document, `repository metadata/${relative}`);
     digest.update(`${filename}\0${JSON.stringify(expected.documents[index])}\n`);
   }
+  if (hidden) {
+    const indexedFilenames = expected.documents.slice(1).map((_, index) => `${index + 1}.json`);
+    compare((await readdir(path.join(source, 'hidden-indexed'))).sort(), indexedFilenames.sort(), 'hidden-indexed filenames');
+    for (let index = 1; index < expected.documents.length; index++) {
+      const relative = `hidden-indexed/${index}.json`;
+      compare(await readJson(relative), expected.documents[index], relative);
+    }
+  }
   return {
     version: 1, status: 'offline-preparation-verified',
     metadataDocuments: filenames.length, machineItems: expected.cmConfig.config.itemsAvailable,
@@ -55,11 +72,19 @@ export async function verifyPreparation(directory) {
     networkRequests: 0, transactionsSent: 0, salesOpen: false, readyToDeploy: false,
     unverified: ['network and funding', 'collection existence and authorities', 'reserved asset creation',
       'machine creation and insertion', 'production RPC and order recovery', 'private reveal mapping'],
+    ...(hidden ? { storageMode: HIDDEN_SETTINGS,
+      hiddenCommitmentSha256: expected.releasePlan.hiddenCommitmentSha256,
+      indexedMetadataDocuments: expected.documents.length - 1,
+      privateRevealMappingVerified: false,
+      commitmentStatus: expected.releasePlan.commitmentStatus, configLineInsertions: 0 } : {}),
   };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { console.log(JSON.stringify(await verifyPreparation(process.argv[2]), null, 2)); }
+  try { console.log(JSON.stringify(await verifyPreparation(process.argv[2], {
+    storageMode: process.env.COOLBEARS_STORAGE_MODE,
+    hiddenCommitmentSha256: process.env.COOLBEARS_HIDDEN_COMMITMENT_SHA256,
+  }), null, 2)); }
   catch {
     // Malformed JSON/URLs can contain secrets: keep command output generic.
     console.error('Offline preparation check failed. Use a fresh prepared directory and review its files; do not reset an existing deployment.');
