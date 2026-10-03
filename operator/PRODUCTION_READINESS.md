@@ -9,8 +9,18 @@ source and fixture verification do not authorize deployment or live purchases.
 | Lost browser custody | [Read-only outcome review](orders/CUSTODY_RECOVERY.md) validates retained canonical evidence independently of key possession. It cannot restore erased keys or authorize further purchases. |
 | Missing canonical history | Fails closed; no reconstructed wallet claims, replacement keys or automatic cleanup. |
 | Later items and total cost | [Sequential execution](orders/SEQUENTIAL.md) uses a verified prefix, fresh consent per item and a nominal subtotal plus known failed fees. Actual whole-order debit remains unknown. |
-| Purchase interface | A reviewed private candidate UI remains to be integrated. |
+| Purchase interface | The [private candidate](orders/buyer-console/README.md) integrates explicit preparation, fresh cost approval, wallet signing, retained response recovery, expiry and separately reviewed replacement. Production sending is disabled; public site integration and real usage are unverified. |
+| Existing private configuration | The [offline inspector](PRIVATE_READINESS.md) checks supplied encrypted bundle, journal head, gateway scope and disabled-sender entries, then rechecks input stability. It neither unlocks keys nor creates/configures/deploys a gateway. Real input paths have not been supplied or inspected. |
 | Real setup and devices | Private configuration, gateway deployment, fresh live checks and new-flow wallet/phone trials remain unverified. |
+
+The interface has local controller/factory fixture checks; its Chromium suite uses
+simulated dependency ports and captures desktop and mobile-viewport screenshots.
+A separate configured production-factory smoke joins the actual UI, IndexedDB,
+HTTPS adapters and workerd/SQLite with disposable wallet and intercepted RPC fixtures.
+The inspector has disposable local bundle/configuration fixtures. These do not
+establish physical-phone behavior, real wallet approval, live RPC/simulation,
+private endpoint installation or readiness to publish. The new suites are wired
+into CI; a passing result must be read from the completed run and checkpoint.
 
 The cumulative sections below describe their original milestones and may list
 work completed by later entries. Current validation results belong to the PR
