@@ -32,7 +32,7 @@ export async function discoverPrewalletResult({input,blockhashAnchor,endpoint,fe
       need(Buffer.from(tx.serialize()).equals(bytes),'RESPONSE_TRANSACTION');
       if(!Buffer.from(tx.message.serialize()).equals(Buffer.from(partial.message.serialize())))continue;
       const full=prewalletSubmission(frozen,{transactionBase64:transaction.transaction[0]});
-      const signed={signature:full.order.items[0].attempts.at(-1).signature,transactionBase64:full.response.transactionBase64};
+      const signed={signature:full.order.items[full.claim.itemIndex].attempts.at(-1).signature,transactionBase64:full.response.transactionBase64};
       need(signed.signature===row.signature&&row.slot>=blockhashAnchor.sourceSlot&&!matched,'RESPONSE_AMBIGUOUS');
       matched={row,transaction,response:{transactionBase64:signed.transactionBase64}};
     }

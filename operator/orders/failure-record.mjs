@@ -4,7 +4,7 @@ import {submissionBinding,validateBuyerResult,validateFailureEvidence,signedByte
 import {verifyBuyerEvidence,buyerRequestId} from './signing.mjs';
 const need=v=>{if(!v)throw Error('FAILURE_RECORD');};
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
-export const failureKey=(order,attempt=1)=>anchorKey(order,attempt).replace('buyer-blockhash:v1:','buyer-failure:v1:');
+export const failureKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-failure:v1:');
 function identity(input){const b=submissionBinding(input);return{orderIdentitySha256:input.claim.orderIdentitySha256,
   requestId:b.requestId,transactionSha256:b.transactionSha256,signature:b.signature};}
 export function failureRecord(input,report){
@@ -19,7 +19,7 @@ export function restoreFailureReport(input,record){
 }
 // Historical terminal evidence only: no fabricated active revisions or wallet events.
 export function validateHistoricalFailure(input,record){
-  const signed=verifyBuyerEvidence(input.order,input.claim,input.request,input.response),attempt=input.order.items[0].attempts[input.claim.attempt-1];
+  const signed=verifyBuyerEvidence(input.order,input.claim,input.request,input.response),attempt=input.order.items[input.claim.itemIndex].attempts[input.claim.attempt-1];
   need(attempt.state==='failed'&&same(attempt.proof,record?.proof)
     &&record&&Object.keys(record).sort().join(' ')==='evidence identity proof version'&&record.version===1
     &&same(record.identity,{orderIdentitySha256:input.claim.orderIdentitySha256,requestId:buyerRequestId(input.request),

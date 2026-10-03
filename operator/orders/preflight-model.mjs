@@ -1,8 +1,14 @@
-// Read-only first-item preflight for a fresh order in the closed Devnet profile.
+// Read-only current-item preflight for a sequential order in the closed Devnet profile.
 // No signer custody, wallet invocation, journal mutation or submission grant.
 import { createHash } from 'node:crypto';
 import { PublicKey, VersionedTransaction } from '@solana/web3.js';
-import { MPL_CORE_PROGRAM_ID } from '@metaplex-foundation/mpl-core';
+import { MPL_CORE_PROGRAM_ID, deserializeAssetV1, Key } from '@metaplex-foundation/mpl-core';
+import { lamports } from '@metaplex-foundation/umi';
+import { createOrderModel } from './journal-model.mjs';
+import { createOrderPlanner } from './transaction-model.mjs';
+import { currentItemIndex, assertCurrentItem, validateSequentialOrder } from './sequential.mjs';
+import { createSigningRequest, verifySigningResponse } from '../deployment/signing.mjs';
+import { verifyFinalizedReceipt } from '../deployment/receipt.mjs';
 import { MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID } from '@metaplex-foundation/mpl-core-candy-machine';
 import { baseAssetBytes, verifySimulatedMintCost, CORE_CREATE_LAMPORTS } from './mint-cost.mjs';
 import { validateBlockhashAnchor } from './blockhash-anchor.mjs';
@@ -10,6 +16,7 @@ import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from
 import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deployment/rpc.mjs';
 
 export function createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts }) {
+const prefixPlanner = createOrderPlanner(createOrderModel(policy));
 const PROGRAMS = [MPL_CORE_PROGRAM_ID, MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID, MPL_CORE_CANDY_GUARD_PROGRAM_ID];
 const need = (ok, checkCode) => { if (!ok) throw Object.assign(Error(checkCode), { checkCode }); };
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -18,17 +25,72 @@ function context(value, minimum) {
   return value.context.slot;
 }
 function amount(value) { need(Number.isSafeInteger(value) && value >= 0, 'RPC_AMOUNT'); return BigInt(value); }
-async function readState(rpc, order, minimum = 0) {
+function prefixAccount(order, item, raw) {
+  const proof = item.attempts.at(-1).proof;
+  need(raw?.owner === MPL_CORE_PROGRAM_ID && raw.executable === false
+    && Number.isSafeInteger(raw.lamports) && raw.lamports > 0 && Array.isArray(raw.data)
+    && raw.data.length === 2 && raw.data[1] === 'base64' && typeof raw.data[0] === 'string'
+    && raw.data[0].length <= 65536, 'PRIOR_ASSET_CHANGED');
+  const data = Buffer.from(raw.data[0], 'base64');
+  need(data.toString('base64') === raw.data[0], 'PRIOR_ASSET_CHANGED');
+  let asset;
+  try { asset = deserializeAssetV1({publicKey:item.asset,owner:raw.owner,executable:false,lamports:lamports(raw.lamports),data}); }
+  catch { need(false, 'PRIOR_ASSET_CHANGED'); }
+  need(asset.key === Key.AssetV1 && asset.owner === order.buyer && asset.updateAuthority.type === 'Collection'
+    && asset.updateAuthority.address === order.collection && asset.name === proof.account.name
+    && asset.uri === proof.account.uri, 'PRIOR_ASSET_CHANGED');
+}
+async function verifyPrefixReceipts(rpc, order, itemIndex, minimum, receipts) {
+  if (itemIndex === 0) return;
+  const prefix = order.items.slice(0, itemIndex);
+  const statuses = await rpc.call('getSignatureStatuses', [prefix.map(item => item.attempts.at(-1).signature), {searchTransactionHistory:true}]);
+  context(statuses, minimum);
+  need(Array.isArray(statuses.value) && statuses.value.length === prefix.length, 'PRIOR_RECEIPT_UNVERIFIED');
+  for (const [index, item] of prefix.entries()) {
+    const attempt = item.attempts.at(-1), proof = attempt.proof;
+    // Full historical bytes are fetched from the trusted finalized RPC. Client
+    // journal flags or an unrelated successful signature cannot authorize item N.
+    let transactionResult = receipts.get(index);
+    if (!transactionResult) {
+      transactionResult = await rpc.call('getTransaction', [attempt.signature,
+        {commitment:'finalized',encoding:'base64',maxSupportedTransactionVersion:0}]);
+    }
+    try {
+      const encoded = transactionResult?.transaction?.[0];
+      need(typeof encoded === 'string' && encoded.length <= 1644, 'PRIOR_RECEIPT_UNVERIFIED');
+      const tx = VersionedTransaction.deserialize(Buffer.from(encoded, 'base64'));
+      const template = prefixPlanner.buildOrderItemTemplate(order, index, attempt);
+      need(Buffer.from(tx.message.serialize()).equals(Buffer.from(VersionedTransaction.deserialize(template.unsignedBytes).message.serialize())), 'PRIOR_RECEIPT_UNVERIFIED');
+      tx.signatures[0] = new Uint8Array(64);
+      const request = createSigningRequest({deploymentId:order.id,stepId:`item-${index}`,attempt:attempt.number,
+        cluster:order.cluster,owner:order.buyer,transactionBase64:Buffer.from(tx.serialize()).toString('base64'),lastValidBlockHeight:attempt.lastValidBlockHeight});
+      const signed = verifySigningResponse(request, {transactionBase64:encoded});
+      const receipt = verifyFinalizedReceipt({request,signed,statusResult:{context:statuses.context,value:[statuses.value[index]]},transactionResult});
+      need(receipt.signature === attempt.signature && receipt.messageSha256 === attempt.messageSha256
+        && receipt.slot === proof.slot, 'PRIOR_RECEIPT_UNVERIFIED');
+      receipts.set(index, transactionResult);
+    } catch { need(false, 'PRIOR_RECEIPT_UNVERIFIED'); }
+  }
+}
+async function readState(rpc, order, itemIndex, minimum = 0, receipts = new Map()) {
+  validateSequentialOrder(order); assertCurrentItem(order, itemIndex);
+  const prefix = order.items.slice(0, itemIndex);
+  minimum = Math.max(minimum, ...prefix.map(item => item.attempts.at(-1).proof.accountSlot));
   const addresses = [...PROGRAMS, order.machine, order.guard, order.collection, ...order.items.map(item => item.asset)];
   const result = await rpc.call('getMultipleAccounts', [addresses, { encoding: 'base64', commitment: 'finalized', minContextSlot: minimum }]);
   const slot = context(result, minimum);
   need(Array.isArray(result.value) && result.value.length === addresses.length, 'ACCOUNT_LIST');
   need(result.value.slice(0, 3).every(value => value?.executable === true), 'PROGRAM_UNAVAILABLE');
   const state = verifyOrderAccounts(order, result.value.slice(3, 6));
-  need(result.value.slice(6).every(value => value === null), 'ASSET_ALREADY_EXISTS');
-  need(state.itemsRemaining >= order.quantity, 'INSUFFICIENT_SUPPLY');
+  prefix.forEach((item, index) => prefixAccount(order, item, result.value[6 + index]));
+  need(result.value.slice(6 + itemIndex).every(value => value === null), 'ASSET_ALREADY_EXISTS');
+  need(state.itemsRemaining >= order.quantity - itemIndex, 'INSUFFICIENT_SUPPLY');
   need(state.buyerAllowed, 'SALES_CLOSED');
+  await verifyPrefixReceipts(rpc, order, itemIndex, slot, receipts);
   return { ...state, slot };
+}
+function checkSequentialReadiness({rpc, order, itemIndex = currentItemIndex(order), minimum = 0}) {
+  return readState(rpc, order, itemIndex, minimum);
 }
 
 function preflightOrder(options) { return checkOrder(options); }
@@ -41,22 +103,26 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
   try {
     need(typeof readOrder === 'function', 'ORDER_READER_REQUIRED');
     const order = structuredClone(validateOrder(await readOrder())), orderSha256 = hash(order);
+    validateSequentialOrder(order);
+    const itemIndex = prepared ? claim?.itemIndex : currentItemIndex(order);
+    assertCurrentItem(order, itemIndex);
+    const item = order.items[itemIndex], receipts = new Map();
     need(order.cluster === 'devnet', 'DEVNET_ONLY');
     if (prepared) {
       claim = structuredClone(claim); request = structuredClone(request);
       validateAssetRequest(order, claim, request);
       blockhashAnchor = validateBlockhashAnchor(structuredClone(blockhashAnchor), claim);
-      need(!order.paused && order.items[0].attempts.length === claim.attempt && order.items.slice(1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
+      need(!order.paused && item.attempts.length === claim.attempt && order.items.slice(itemIndex + 1).every(item => !item.attempts.length), 'PREPARED_ORDER_REQUIRED');
       if (signedMode) {
         response = verifyBuyerSigningResponse(order, claim, request, structuredClone(response));
-        need(order.revision >= claim.orderRevision+2 && order.items[0].attempts.at(-1).state === 'unknown'
-          && order.items[0].attempts.at(-1).signature === response.signature, 'SAVED_RESPONSE_REQUIRED');
-      } else need(order.revision === claim.orderRevision && order.items[0].attempts.at(-1).state === 'wallet-pending', 'PREPARED_ORDER_REQUIRED');
-    } else need(order.revision === 0 && !order.paused && order.items.every(item => item.attempts.length === 0), 'FRESH_ORDER_REQUIRED');
+        need(order.revision >= claim.orderRevision+2 && item.attempts.at(-1).state === 'unknown'
+          && item.attempts.at(-1).signature === response.signature, 'SAVED_RESPONSE_REQUIRED');
+      } else need(order.revision === claim.orderRevision && item.attempts.at(-1).state === 'wallet-pending', 'PREPARED_ORDER_REQUIRED');
+    } else need(!order.paused && item.attempts.length === 0 && (itemIndex > 0 || order.revision === 0), 'FRESH_ORDER_REQUIRED');
     need([order.buyer, ...order.items.map(item => item.asset)].every(address => PublicKey.isOnCurve(new PublicKey(address).toBytes())), 'UNSIGNABLE_ADDRESS');
     rpc = createDeploymentRpc({ endpoint, fetchImpl, timeoutMs, totalTimeoutMs: 30000, allowSimulation: true });
     phase = 'network'; await assertCluster(rpc, 'devnet');
-    phase = 'accounts'; const initial = await readState(rpc, order);
+    phase = 'accounts'; const initial = await readState(rpc, order, itemIndex, 0, receipts);
     phase = 'balance';
     const balance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: initial.slot }]);
     let slot = context(balance, initial.slot);
@@ -69,7 +135,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
       const latest = await rpc.call('getLatestBlockhash', [{ commitment: 'confirmed', minContextSlot: slot }]);
       slot = context(latest, slot);
       const planned = buildOrderTransactions(order, latest.value); template = planned.templates[0];
-      need(template?.itemIndex === 0 && planned.templates.length === order.quantity, 'ORDER_TEMPLATE');
+      need(template?.itemIndex === itemIndex && planned.templates.length === order.quantity - itemIndex, 'ORDER_TEMPLATE');
     }
     const encoded = signedMode ? response.transactionBase64 : prepared ? request.transactionBase64 : Buffer.from(template.unsignedBytes).toString('base64');
     const tx = VersionedTransaction.deserialize(Buffer.from(encoded, 'base64'));
@@ -93,7 +159,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     verifySimulatedMintCost(policy, order, simulation.value.accounts, rent);
     phase = 'freshness';
     // Finalized accounts need not overtake a confirmed simulation bank.
-    const final = await readState(rpc, order, initial.slot);
+    const final = await readState(rpc, order, itemIndex, initial.slot, receipts);
     need(final.itemsRemaining <= initial.itemsRemaining, 'INVENTORY_ROLLBACK');
     const latestBalance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: Math.max(slot, final.slot) }]);
     slot = context(latestBalance, Math.max(slot, final.slot));
@@ -109,7 +175,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     return { status: signedMode ? 'submission-check-passed' : prepared ? 'wallet-check-passed' : 'preflight-passed',
       mode: signedMode ? 'closed-devnet-send-check' : prepared ? 'closed-devnet-sign-only-check' : 'closed-devnet-order-preview',
       ...(prepared ? { requestId: buyerRequestId(request), checkedAt, expiresAt: checkedAt + 20000 } : {}), orderId: order.id,
-      orderRevision: order.revision, orderSha256, itemIndex: 0, quantity: order.quantity,
+      orderRevision: order.revision, orderSha256, itemIndex, quantity: order.quantity,
       itemsRemaining: final.itemsRemaining, checkedSlot: slot, accountSlot: final.slot,
       cluster: 'devnet', networkVerified: true, guardPriceVerified: true, blockhashVerified: true, blockhashProvenanceVerified: true,
       simulationVerified: true, simulationMode: signedMode ? 'signed' : 'unsigned', remainingBlocks: template.lastValidBlockHeight - height,
@@ -119,6 +185,8 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
         nextItemFeeLamports: fee.toString(), nextItemBaseRentLamports: rent.toString(), baseAssetBytes: assetBytes,
         nextItemKnownMinimumLamports: knownMinimum.toString(), protocolChargesLamports: CORE_CREATE_LAMPORTS.toString(), priorityFeeLamports: '0',
         projectedOrderTotalLamports: (knownMinimum * BigInt(order.quantity)).toString(), projectionOnly: true,
+        ...(itemIndex>0?{completedQuantity:itemIndex,remainingQuantity:order.quantity-itemIndex,
+          projectedRemainingTotalLamports:(knownMinimum*BigInt(order.quantity-itemIndex)).toString()}:{}),
         fullOrderTotalLamports: null, balanceLamports: String(latestBalance.value) },
       networkRequests: rpc.requests, signaturesCreated: 0, journalWrites: 0, transactionsSent: 0,
       readyToSign: prepared && !signedMode, readyToSubmit: false, salesOpen: false };
@@ -132,5 +200,5 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
   }
 }
 
-return { preflightOrder, checkPreparedOrder, checkSignedOrder };
+return { preflightOrder, checkPreparedOrder, checkSignedOrder, checkSequentialReadiness };
 }

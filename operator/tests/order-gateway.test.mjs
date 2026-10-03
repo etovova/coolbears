@@ -37,7 +37,7 @@ test('origin, scope, closed buyer and exact bounded protocol reject without upst
     [valid,{headers:{authorization:'Bearer pretend'}},403],[valid,{url:endpoint+'?rpc=x'},404],
     [[valid],{},400],[{...valid,endpoint:'https://other.test'}, {},400],
     [JSON.stringify(valid).replace('"version":1','"version":1,"version":1'),{},400],
-    [' '.repeat(65537),{},413],[{...valid,order:{...input.order,buyer:f.key('stranger').publicKey.toBase58()}},{},409],
+    [' '.repeat(262145),{},413],[{...valid,order:{...input.order,buyer:f.key('stranger').publicKey.toBase58()}},{},409],
     [{...valid,order:{...input.order,machine:f.key('stranger').publicKey.toBase58()}},{},400],
     [{...valid,request:{...input.request,transactionBase64:'AAAA'}},{},400] ];
   for(const [body,options,status]of cases)assert.equal((await h.dispatch(body,options)).status,status);

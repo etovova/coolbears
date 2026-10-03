@@ -1,7 +1,7 @@
 // Browser check transport: fixed same-origin path, no upstream URL or credential.
 import { validateAssetRequest } from '../signing.mjs';
 import { validateWalletCheck } from '../wallet-client.mjs';
-import { BuyerCheckError, need, exact, readJson } from './http.mjs';
+import { BuyerCheckError, need, exact, readJson, BUYER_BODY_LIMIT } from './http.mjs';
 export function createBuyerCheckClient({origin=globalThis.location?.origin,
   fetchImpl=(...args)=>globalThis.fetch(...args),crypto=globalThis.crypto,timeoutMs=35000}={}) {
   let endpoint;
@@ -12,7 +12,7 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
     need(exact(input,'order claim request'),'REQUEST');const value=structuredClone(input);
     validateAssetRequest(value.order,value.claim,value.request);
     const nonce=[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');
-    const body=JSON.stringify({version:1,nonce,...value});need(new TextEncoder().encode(body).length<=65536,'BODY_SIZE');
+    const body=JSON.stringify({version:1,nonce,...value});need(new TextEncoder().encode(body).length<=BUYER_BODY_LIMIT,'BODY_SIZE');
     const controller=new AbortController();let timer,response;
     try{
       response=await Promise.race([fetchImpl(endpoint,{method:'POST',headers:{'content-type':'application/json'},body,

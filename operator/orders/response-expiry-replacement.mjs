@@ -1,5 +1,6 @@
 // Replacement of an invoked wallet attempt whose genuine response stayed missing.
 // Retains its native partial, wallet invocation and optional original cost consent.
+import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createOrderModel} from './journal-model.mjs';
 import {restoreResponseExpiry} from './response-expiry.mjs';
@@ -12,22 +13,22 @@ export const isResponseExpiryReplacementInput=input=>exact(input,'order claim re
 function source(input,allowPaused){
   need(isResponseExpiryReplacementInput(input));
   const {order,claim}=input;model.validateOrder(order);
-  const first=order.items[0].attempts[0];
+  const first=order.items[claim.itemIndex].attempts[0];
   need((allowPaused||!order.paused)&&order.cluster==='devnet'&&claim.attempt===1
-    &&order.items[0].attempts.length===1&&order.items.slice(1).every(item=>!item.attempts.length)
+    &&order.items[claim.itemIndex].attempts.length===1
     &&first.state==='expired'&&first.signature===null&&first.proof?.signature===null);
-  return input;
+  assertCurrentItem(order,claim.itemIndex);return input;
 }
 export function validateResponseExpiryReplacementSource(input){
   source(input,false);
   // Full invocation validation is applied to the retained proof in priorFor.
-  const active=structuredClone(input);active.order.items[0].attempts[0].state='unknown';active.order.items[0].attempts[0].proof=null;
+  const active=structuredClone(input);active.order.items[active.claim.itemIndex].attempts[0].state='unknown';active.order.items[active.claim.itemIndex].attempts[0].proof=null;
   validateMissingBuyerResponse(active);return input;
 }
 function priorFor(input,prior,allowPaused){
-  source(input,allowPaused);need(same(input.order.items[0].attempts[0].proof,prior?.proof));
+  source(input,allowPaused);need(same(input.order.items[input.claim.itemIndex].attempts[0].proof,prior?.proof));
   // Verification projection only; never a persisted history rewrite.
-  const active=structuredClone(input);active.order.items[0].attempts[0].state='unknown';active.order.items[0].attempts[0].proof=null;
+  const active=structuredClone(input);active.order.items[active.claim.itemIndex].attempts[0].state='unknown';active.order.items[active.claim.itemIndex].attempts[0].proof=null;
   restoreResponseExpiry(active,prior);return prior;
 }
 export function validateResponseExpiryReplacementPrior(input,prior){return priorFor(input,prior,false);}

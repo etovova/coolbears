@@ -8,7 +8,7 @@ source and fixture verification do not authorize deployment or live purchases.
 | First item | Preparation, explicit cost consent, signing, single-use send, outcome/expiry recovery and one reviewed replacement are implemented. |
 | Lost browser custody | [Read-only outcome review](orders/CUSTODY_RECOVERY.md) validates retained canonical evidence independently of key possession. It cannot restore erased keys or authorize further purchases. |
 | Missing canonical history | Fails closed; no reconstructed wallet claims, replacement keys or automatic cleanup. |
-| Later items and total cost | Sequential execution and cumulative cost presentation remain the next development stage. |
+| Later items and total cost | [Sequential execution](orders/SEQUENTIAL.md) uses a verified prefix, fresh consent per item and a nominal subtotal plus known failed fees. Actual whole-order debit remains unknown. |
 | Purchase interface | A reviewed private candidate UI remains to be integrated. |
 | Real setup and devices | Private configuration, gateway deployment, fresh live checks and new-flow wallet/phone trials remain unverified. |
 

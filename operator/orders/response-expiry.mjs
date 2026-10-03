@@ -9,7 +9,7 @@ import {anchorKey} from './blockhash-anchor.mjs';
 const model=createOrderModel(policy),need=v=>{if(!v)throw Error('RESPONSE_EXPIRY_BINDING');};
 const exact=(v,keys)=>v&&Object.keys(v).sort().join(' ')===keys.split(' ').sort().join(' ');
 const positive=n=>Number.isSafeInteger(n)&&n>0,hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v);
-export const responseExpiryKey=(order,attempt=1)=>anchorKey(order,attempt).replace('buyer-blockhash:v1:','buyer-response-expiry:v1:');
+export const responseExpiryKey=(order,attempt=1,itemIndex=0)=>anchorKey(order,attempt,itemIndex).replace('buyer-blockhash:v1:','buyer-response-expiry:v1:');
 function evidenceFor(input,p,e){
   need(p?.kind==='expired'&&p.signature===null
     &&exact(e,'blockhash anchorSlot slot blockHeight lastValidBlockHeight historyPages historyTransactions historySha256')
@@ -28,7 +28,7 @@ export function validateResponseExpiry(report,input){
     &&report.response===undefined&&report.result===undefined);
   if(report.status==='unknown'){need(report.chainVerified===false&&report.proof===undefined&&report.evidence===undefined);return report;}
   need(report.status==='response-expired'&&report.chainVerified===true);evidenceFor(input,report.proof,report.evidence);
-  model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:0,attempt:input.claim.attempt,proof:report.proof});
+  model.transitionOrder(input.order,{type:'reconcile',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt,proof:report.proof});
   return report;
 }
 export function responseExpiryReport(input,{proof,evidence,networkRequests=0,restored=false,code}={}){

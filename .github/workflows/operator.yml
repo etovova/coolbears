@@ -137,6 +137,8 @@ jobs:
       - run: node operator/tests/order-prewallet-expiry-replacement.runtime.mjs
       - run: node operator/tests/order-response-expiry.runtime.mjs
       - run: node operator/tests/order-response-expiry-replacement.runtime.mjs
+      - run: node operator/tests/order-sequential-gateway.runtime.mjs
+      - run: node operator/tests/order-sequential-replacement.runtime.mjs
       - run: node operator/tests/order-gateway.runtime.mjs
       - run: node operator/tests/deployment-gateway.runtime.mjs
 
@@ -147,7 +149,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        group: [expiry, recovery, signing]
+        group: [expiry, recovery, signing, sequential]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -172,6 +174,9 @@ jobs:
       - name: Buyer reviewed replacement after a lost wallet response expired
         if: matrix.group == 'expiry'
         run: node operator/tests/order-response-expiry-replacement.browser.mjs
+      - name: Sequential buyer order across fifty retained assets
+        if: matrix.group == 'sequential'
+        run: node operator/tests/order-sequential.browser.mjs
       - name: Buyer expiry review after a lost wallet response
         if: matrix.group == 'expiry'
         run: node operator/tests/order-response-expiry.browser.mjs
@@ -235,6 +240,7 @@ jobs:
             operator/build/buyer-gateway-chromium/
             operator/build/buyer-submission-chromium/
             operator/build/buyer-custody-recovery-chromium/
+            operator/build/buyer-sequential-chromium/
             operator/build/buyer-replacement-chromium/
             operator/build/buyer-failure-recovery-chromium/
             operator/build/buyer-failed-replacement-chromium/

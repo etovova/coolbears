@@ -1,4 +1,6 @@
-**Current addition:** [Read-only recovery after custody loss](orders/CUSTODY_RECOVERY.md) can inspect retained canonical purchase evidence and check its outcome when browser keys are missing. It does not restore keys, write recovered evidence or authorize signing, sending or replacement. See the current [readiness table](PRODUCTION_READINESS.md) for remaining stages. Sales stay closed at 0.2 SOL. The sections below retain earlier milestones.
+**Current addition:** [Sequential buyer orders](orders/SEQUENTIAL.md) continue through 1–50 retained assets with a verified prefix, fresh per-item cost consent and at most one reviewed replacement per item. Unknown outcomes stop progression. The cost summary separates nominal prices, known failed fees and remaining projections. See the current [readiness table](PRODUCTION_READINESS.md). Sales stay closed at 0.2 SOL. The sections below retain earlier milestones.
+
+**PR58:** [Read-only recovery after custody loss](orders/CUSTODY_RECOVERY.md) can inspect retained canonical purchase evidence and check its outcome when browser keys are missing. It does not restore keys, write recovered evidence or authorize signing, sending or replacement.
 
 **PR57:** [Reviewed replacement after a lost wallet response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) retains the real wallet claim, consent and original null-signature expiry. A separate explicit preparation permits one second attempt; new signing requires fresh cost approval.
 

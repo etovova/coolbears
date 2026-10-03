@@ -1,5 +1,6 @@
 // Replacement provenance for an expired native claim with no buyer signature.
 // Structural validation only; the gateway must retain the exact expiry record.
+import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createOrderModel} from './journal-model.mjs';
 import {validateAssetClaim,validateAssetRequest} from './signing.mjs';
@@ -12,19 +13,19 @@ export const isPrewalletExpiryReplacementInput=input=>exact(input,'order claim r
 function source(input,allowPaused){
   need(isPrewalletExpiryReplacementInput(input));
   const {order,claim,request}=input;model.validateOrder(order);validateAssetClaim(order,claim);
-  const first=order.items[0].attempts[0];
+  const first=order.items[claim.itemIndex].attempts[0];
   need((allowPaused||!order.paused)&&order.cluster==='devnet'&&claim.attempt===1
-    &&order.items[0].attempts.length===1&&order.items.slice(1).every(item=>!item.attempts.length)
+    &&order.items[claim.itemIndex].attempts.length===1
     &&first.state==='expired'&&first.signature===null&&first.proof?.signature===null);
   if(request!==null)validateAssetRequest(order,claim,request);
-  return input;
+  assertCurrentItem(order,claim.itemIndex);return input;
 }
 export function validatePrewalletExpiryReplacementSource(input){return source(input,false);}
 function priorFor(input,prior,allowPaused){
-  source(input,allowPaused);need(same(input.order.items[0].attempts[0].proof,prior?.proof));
+  source(input,allowPaused);need(same(input.order.items[input.claim.itemIndex].attempts[0].proof,prior?.proof));
   // This verification projection is never recorded as a new event or revision.
-  const active=structuredClone(input);active.order.items[0].attempts[0].state='wallet-pending';
-  active.order.items[0].attempts[0].proof=null;
+  const active=structuredClone(input);active.order.items[active.claim.itemIndex].attempts[0].state='wallet-pending';
+  active.order.items[active.claim.itemIndex].attempts[0].proof=null;
   restorePrewalletExpiry(active,prior);return prior;
 }
 export function validatePrewalletExpiryReplacementPrior(input,prior){return priorFor(input,prior,false);}

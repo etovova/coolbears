@@ -1,13 +1,16 @@
-// Unsigned first-item preparation. No custody, signing or execution grant.
+// Unsigned current-item preparation. No custody, signing or execution grant.
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {createOrderModel} from './journal-model.mjs';
 import {createOrderPlanner} from './transaction-model.mjs';
 import {prepareAssetClaim} from './signing.mjs';
 import {validateBlockhashAnchor} from './blockhash-anchor.mjs';
+import {currentItemIndex} from './sequential.mjs';
 const model=createOrderModel(policy),planner=createOrderPlanner(model);
 export function preparationFor(order,block,sourceSlot){
-  const template=planner.buildOrderItemTemplate(order,0,block);
-  const candidate={orderRevision:order.revision,itemIndex:0,blockhash:template.blockhash,lastValidBlockHeight:template.lastValidBlockHeight,
+  const itemIndex=currentItemIndex(order);
+  if(itemIndex===null)throw Error('ORDER_COMPLETE');
+  const template=planner.buildOrderItemTemplate(order,itemIndex,block);
+  const candidate={orderRevision:order.revision,itemIndex,blockhash:template.blockhash,lastValidBlockHeight:template.lastValidBlockHeight,
     transactionBase64:Buffer.from(template.unsignedBytes).toString('base64')};
   const {claim}=prepareAssetClaim(order,candidate);
   const anchor={version:1,orderIdentitySha256:claim.orderIdentitySha256,messageSha256:claim.messageSha256,

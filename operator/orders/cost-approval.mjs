@@ -11,8 +11,9 @@ export function lamports(value){
   need(typeof value==='string'&&/^(0|[1-9][0-9]{0,15})$/.test(value),'COST_AMOUNT');
   const n=BigInt(value);need(n<=BigInt(Number.MAX_SAFE_INTEGER),'COST_AMOUNT');return n;
 }
-function quoteBudget(value,order){
-  need(exact(value,'unitPriceLamports networkFeeLamports assetRentLamports protocolChargeLamports priorityFeeLamports totalLamports projectedOrderTotalLamports quantity'),'COST_QUOTE_INVALID');
+function quoteBudget(value,order,itemIndex=0){
+  const sequential=itemIndex>0;
+  need(exact(value,'unitPriceLamports networkFeeLamports assetRentLamports protocolChargeLamports priorityFeeLamports totalLamports projectedOrderTotalLamports quantity'+(sequential?' completedQuantity remainingQuantity projectedRemainingTotalLamports':'')),'COST_QUOTE_INVALID');
   const names=['unitPriceLamports','networkFeeLamports','assetRentLamports','protocolChargeLamports','priorityFeeLamports','totalLamports','projectedOrderTotalLamports'];
   const amounts=Object.fromEntries(names.map(k=>[k,lamports(value[k])]));
   need(value.unitPriceLamports===order.unitPriceLamports&&value.quantity===order.quantity
@@ -20,34 +21,41 @@ function quoteBudget(value,order){
     &&amounts.priorityFeeLamports===0n
     &&amounts.totalLamports===amounts.unitPriceLamports+amounts.networkFeeLamports+amounts.assetRentLamports+amounts.protocolChargeLamports
     &&amounts.projectedOrderTotalLamports===amounts.totalLamports*BigInt(order.quantity),'COST_QUOTE_INVALID');
-  return {...Object.fromEntries(names.map(k=>[k,value[k]])),quantity:value.quantity};
+  if(sequential)need(value.completedQuantity===itemIndex&&value.remainingQuantity===order.quantity-itemIndex
+    &&lamports(value.projectedRemainingTotalLamports)===amounts.totalLamports*BigInt(value.remainingQuantity),'COST_QUOTE_INVALID');
+  return {...Object.fromEntries(names.map(k=>[k,value[k]])),quantity:value.quantity,
+    ...(sequential?{completedQuantity:itemIndex,remainingQuantity:value.remainingQuantity,projectedRemainingTotalLamports:value.projectedRemainingTotalLamports}:{})};
 }
 export function checkedBudget(report,order){
+  const itemIndex=report?.itemIndex??0;
+  need(Number.isSafeInteger(itemIndex)&&itemIndex>=0&&itemIndex<order.quantity,'COST_QUOTE_INVALID');
   const b=report?.budget;
   need(b?.complete===true&&b.scope==='next-item-current-template'&&b.projectionOnly===true
     &&b.fullOrderTotalLamports===null&&b.orderItemPriceLamports===order.totalPriceLamports,'COST_QUOTE_INVALID');
   const result=quoteBudget({unitPriceLamports:b.unitPriceLamports,networkFeeLamports:b.nextItemFeeLamports,
     assetRentLamports:b.nextItemBaseRentLamports,protocolChargeLamports:b.protocolChargesLamports,priorityFeeLamports:b.priorityFeeLamports,
-    totalLamports:b.nextItemKnownMinimumLamports,projectedOrderTotalLamports:b.projectedOrderTotalLamports,quantity:order.quantity},order);
+    totalLamports:b.nextItemKnownMinimumLamports,projectedOrderTotalLamports:b.projectedOrderTotalLamports,quantity:order.quantity,
+    ...(itemIndex>0?{completedQuantity:b.completedQuantity,remainingQuantity:b.remainingQuantity,projectedRemainingTotalLamports:b.projectedRemainingTotalLamports}:{})},order,itemIndex);
   need(lamports(b.balanceLamports)>=lamports(result.totalLamports),'COST_QUOTE_INVALID');return result;
 }
 const fields=['version','kind','requestId','orderIdentitySha256','checkedSlot','issuedAt','expiresAt','budget'];
-function quoteId(quote,order){return digest(Object.fromEntries(fields.map(k=>[k,k==='budget'?quoteBudget(quote.budget,order):quote[k]])));}
+function quoteId(quote,order,itemIndex=0){return digest(Object.fromEntries(fields.map(k=>[k,k==='budget'?quoteBudget(quote.budget,order,itemIndex):quote[k]])));}
 export const costQuoteKey=id=>'buyer-cost:v1:'+id;
 export function createCostQuote(input,report){
   const {order,claim,request}=input;validateAssetRequest(order,claim,request);
   need(report.status==='wallet-check-passed'&&report.requestId===buyerRequestId(request)
-    &&report.orderRevision===claim.orderRevision&&report.orderId===order.id&&report.readyToSign===true,'COST_QUOTE_INVALID');
-  const quote={version:1,kind:'coolbears-buyer-cost-quote',requestId:buyerRequestId(request),orderIdentitySha256:claim.orderIdentitySha256,
+    &&report.orderRevision===claim.orderRevision&&report.orderId===order.id&&report.readyToSign===true
+    &&(report.itemIndex??0)===claim.itemIndex,'COST_QUOTE_INVALID');
+  const quote={version:claim.itemIndex>0?2:1,kind:'coolbears-buyer-cost-quote',requestId:buyerRequestId(request),orderIdentitySha256:claim.orderIdentitySha256,
     checkedSlot:report.checkedSlot,issuedAt:report.checkedAt,expiresAt:report.checkedAt+300000,budget:checkedBudget(report,order)};
-  quote.quoteId=quoteId(quote,order);validateCostQuote(quote,input);return quote;
+  quote.quoteId=quoteId(quote,order,claim.itemIndex);validateCostQuote(quote,input);return quote;
 }
 export function validateCostQuote(quote,{order,claim,request}){
   validateAssetRequest(order,claim,request);
-  need(exact(quote,fields.join(' ')+' quoteId')&&quote.version===1&&quote.kind==='coolbears-buyer-cost-quote'
+  need(exact(quote,fields.join(' ')+' quoteId')&&quote.version===(claim.itemIndex>0?2:1)&&quote.kind==='coolbears-buyer-cost-quote'
     &&quote.requestId===buyerRequestId(request)&&quote.orderIdentitySha256===claim.orderIdentitySha256
     &&integer(quote.checkedSlot)&&integer(quote.issuedAt)&&integer(quote.expiresAt)
-    &&quote.expiresAt-quote.issuedAt===300000&&quote.quoteId===quoteId(quote,order),'COST_QUOTE_INVALID');
+    &&quote.expiresAt-quote.issuedAt===300000&&quote.quoteId===quoteId(quote,order,claim.itemIndex),'COST_QUOTE_INVALID');
   return quote;
 }
 export function validateCostApproval(approval,input,{now}={}){
