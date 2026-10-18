@@ -213,6 +213,10 @@ try {
     await modal(page);
     await page.locator('.public-mint-dialog button', { hasText: /^Phantom$/ }).click();
     await page.waitForFunction(() => typeof window.__testWallet.resolve === 'function');
+    // A native modal blocks physical clicks on the header. Dismiss it while
+    // the wallet response is pending, then exercise real duplicate clicks.
+    await page.locator('.public-mint-dialog [data-action="close"]').click();
+    await page.locator('.public-mint-dialog').waitFor({state:'hidden'});
     await page.locator('#walletBtn').dblclick();
     assert.equal(await page.evaluate(() => window.__testWallet.connects), 2, 'pending connection prevents duplicate wallet calls');
     assert.equal(await page.locator('.public-mint-dialog').count(), 1);
@@ -235,6 +239,8 @@ try {
     await page.evaluate(() => { window.__testWallet.resolve(); window.__testWallet.mode = 'ready'; });
     await page.evaluate(() => Promise.resolve());
     assert.equal(await page.locator('#walletBtn').getAttribute('title'), '', 'late reply after timeout cannot connect silently');
+    await page.locator('.public-mint-dialog [data-action="close"]').click();
+    await page.locator('.public-mint-dialog').waitFor({state:'hidden'});
     await modal(page);
     await page.locator('.public-mint-dialog button', { hasText: /^Phantom$/ }).click();
     await page.waitForFunction(address => document.querySelector('#walletBtn').title === address, owner);
