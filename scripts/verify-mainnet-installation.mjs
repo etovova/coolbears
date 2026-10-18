@@ -38,9 +38,24 @@ const targets=[...overlay,...original];
 let next=0;await Promise.all(Array.from({length:6},async()=>{while(next<targets.length){const item=targets[next++],expectedBytes=await readFile(item.file),observed=await get(item.path);assert.equal(observed.bytes.length,expectedBytes.length,item.path);assert.equal(sha(observed.bytes),sha(expectedBytes),item.path);checks.push({kind:'public-content',path:item.path,bytes:observed.bytes.length,sha256:sha(observed.bytes),verified:true});}}));
 assert.equal(overlay.length,217);assert.equal(original.length,6);
 // Existing Devnet laboratory gets a genesis read only; its records and supply are never changed.
-const legacy=await fetch('https://coolbears-devnet-rpc.yauheni84.workers.dev/rpc',{method:'POST',redirect:'manual',credentials:'omit',headers:{origin,'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getGenesisHash',params:[]}),signal:AbortSignal.timeout(20000)});
-assert.equal(legacy.status,200,'legacy Devnet genesis read');const legacyBody=await legacy.json();assert.equal(legacyBody.result,'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG');
-checks.push({kind:'preserved-legacy-devnet-genesis',verified:true,transactionsSent:0});
-const artifact={version:1,stage:'actual-closed-mainnet-site-operational-check',status:'passed',observedAt:new Date().toISOString(),origin,actualInstallationProof:actual,backendNetworkVerified:true,readinessStatus:state.status,salesOpen:false,overlayFilesVerified:overlay.length,originalMediaVerified:original.length,checks,financialTransactionsSent:0,walletInvocations:0,limitations:['Live site bytes and named Mainnet read path were checked; no owner wallet signature or buyer transaction was sent. Provider plan, billing capacity and production traffic availability are not established by these reads.']};
+async function readLegacyDevnetGenesis({fetchImpl=fetch,pause=ms=>new Promise(resolve=>setTimeout(resolve,ms))}={}){
+ for(let readAttempts=1;readAttempts<=3;readAttempts++){
+  const response=await fetchImpl('https://coolbears-devnet-rpc.yauheni84.workers.dev/rpc',{method:'POST',redirect:'manual',credentials:'omit',headers:{origin,'content-type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getGenesisHash',params:[]}),signal:AbortSignal.timeout(20000)});
+  const body=await response.json();
+  if(response.status===200){
+   assert.deepEqual(body,{jsonrpc:'2.0',id:1,result:'EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG'},'legacy Devnet genesis response');
+   return{readAttempts};
+  }
+  assert.equal(response.status,429,'legacy Devnet genesis read');
+  assert.deepEqual(body,{jsonrpc:'2.0',id:1,error:{code:-32098,message:'CoolBears Devnet RPC request unavailable.',data:{category:'RATE_LIMIT'}}},'legacy Devnet admission response');
+  const retryAfter=response.headers.get('retry-after');
+  assert.ok(typeof retryAfter==='string'&&/^[1-5]$/.test(retryAfter),'legacy Devnet bounded Retry-After');
+  assert.ok(readAttempts<3,'legacy Devnet genesis read limit');
+  await pause(Number(retryAfter)*1000);
+ }
+}
+const legacy=await readLegacyDevnetGenesis();
+checks.push({kind:'preserved-legacy-devnet-genesis',verified:true,readAttempts:legacy.readAttempts,transactionsSent:0});
+const artifact={version:1,stage:'actual-closed-mainnet-site-operational-check',status:'passed',observedAt:new Date().toISOString(),origin,actualInstallationProof:actual,backendNetworkVerified:true,readinessStatus:state.status,salesOpen:false,overlayFilesVerified:overlay.length,originalMediaVerified:original.length,legacyDevnetReadAttempts:legacy.readAttempts,checks,financialTransactionsSent:0,walletInvocations:0,limitations:['Live site bytes and named Mainnet read path were checked; no owner wallet signature or buyer transaction was sent. Provider plan, billing capacity and production traffic availability are not established by these reads.']};
 await mkdir('build',{recursive:true});await writeFile('build/mainnet-installation-observation.SAFE.json',JSON.stringify(artifact,null,2)+'\n');
 console.log(JSON.stringify({status:'passed',actualInstallationProof:actual,backendNetworkVerified:true,readinessStatus:state.status,salesOpen:false,overlayFilesVerified:overlay.length,originalMediaVerified:original.length,financialTransactionsSent:0}));
