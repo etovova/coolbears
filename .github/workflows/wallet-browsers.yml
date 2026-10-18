@@ -41,9 +41,10 @@ jobs:
           node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps "${{ matrix.engine }}"
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Main site and wallet picker
+        id: main
         run: node tests/main.browser.mjs
       - name: Devnet failures and recovery
-        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' && steps.main.outcome == 'success' }}
         run: node tests/devnet-matrix.browser.mjs
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}

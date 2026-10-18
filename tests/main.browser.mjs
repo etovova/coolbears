@@ -17,16 +17,20 @@ const report = { checkedAt: new Date().toISOString(), engine, physicalDevices: f
 const contents = new Map();
 let unexpectedWrites = 0;
 await mkdir(output, { recursive: true });
+const saveReport=()=>writeFile(path.join(output,'main-browser-report.json'),JSON.stringify(report,null,2)+'\n');
 const browser = await playwright[engine].launch({ executablePath: process.env.COOLBEARS_CHROMIUM || undefined, headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [] });
 
-async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null } = {}) {
+async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, clock = false } = {}) {
   const { defaultBrowserType: _engine, ...descriptor } = devices[device];
   if (engine === 'firefox') delete descriptor.isMobile;
   const context = await browser.newContext(descriptor);
   const page = await context.newPage();
+  // Readiness captures Date.now when mounted; install the test clock before
+  // navigation so all client clocks, UI timers and fixtures share it.
+  if(clock)await page.clock.install();
   const errors = [];
   let readinessCalls=0;
-  page.on('pageerror', error => errors.push(error.message));
+  page.on('pageerror', error => {errors.push(error.message);report.pageErrors.push({device,storage,message:error.message});});
   await context.route('**/*', async route => {
     const request = route.request();
     if (request.method() !== 'GET') { unexpectedWrites++; return route.abort(); }
@@ -37,7 +41,7 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
       // The synthetic HTTPS response uses the actual pinned public deployment;
       // no UI option, legacy wallet adapter or query string can enable minting.
       const checkedAt=await page.evaluate(()=>Date.now());
-      const response={version:1,status:readiness==='closed'?'closed':'open',cluster:publicDeployment.cluster,genesisHash:publicDeployment.genesisHash,machine:publicDeployment.machine,collection:publicDeployment.collection,guard:publicDeployment.guard,storageMode:publicDeployment.storageMode,hiddenCommitmentSha256:publicDeployment.hiddenCommitmentSha256,unitPriceLamports:'200000000',maximumPerOrder:50,profileSha256:readiness==='wrong-profile'?'0'.repeat(64):publicDeployment.profileSha256,checkedAt,expiresAt:checkedAt+10000,salesOpen:readiness!=='closed'};
+      const response={version:1,status:readiness==='closed'?'closed':'open',cluster:publicDeployment.cluster,genesisHash:publicDeployment.genesisHash,machine:publicDeployment.machine,collection:publicDeployment.collection,guard:publicDeployment.guard,storageMode:publicDeployment.storageMode,hiddenCommitmentSha256:publicDeployment.hiddenCommitmentSha256,unitPriceLamports:'200000000',maximumPerOrder:50,profileSha256:readiness==='wrong-profile'?'0'.repeat(64):publicDeployment.profileSha256,checkedAt,expiresAt:checkedAt+8000,salesOpen:readiness!=='closed'};
       return route.fulfill({contentType:'application/json',headers:{'cache-control':'no-store'},body:JSON.stringify(response)});
     }
     if (url.origin !== origin) return route.abort();
@@ -77,6 +81,7 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
   return { page, context, readinessCalls:()=>readinessCalls, async done(name, details = {}) {
     assert.deepEqual(errors, [], `${name}: uncaught browser errors`);
     report.cases.push({ name, device, storage, readinessCalls, ...details });
+    await saveReport();
     await context.close();
   } };
 }
@@ -226,9 +231,8 @@ try {
     await test.done('cancelled connection is retryable and repeated clicks cannot duplicate a pending connection');
   }
   {
-    const test = await open({ wallet: true });
+    const test = await open({ wallet: true, clock: true });
     const { page } = test;
-    await page.clock.install();
     await page.evaluate(() => { window.__testWallet.mode = 'delayed'; });
     await modal(page);
     await page.locator('.public-mint-dialog button', { hasText: /^Phantom$/ }).click();
@@ -248,8 +252,8 @@ try {
     await test.done('unresponsive wallet releases UI after deadline; late reply is ignored and reconnect works', { clockAdvanced: true });
   }
   {
-    const test = await open({stallPublicModule:true});
-    const {page}=test;await page.clock.install();
+    const test = await open({stallPublicModule:true,clock:true});
+    const {page}=test;
     await page.locator('#walletBtn').click();
     await page.waitForFunction(()=>document.querySelector('#walletBtn').hasAttribute('aria-busy'));
     await page.clock.fastForward(15001);
@@ -258,15 +262,16 @@ try {
     await test.done('stalled public-module download releases loading state',{clockAdvanced:true});
   }
   for(const readiness of ['open','closed','wrong-profile']){
-    const test=await open({readiness});const {page}=test;
-    await page.clock.install();assert.equal(test.readinessCalls(),0,'passive homepage makes no readiness RPC');
+    const test=await open({readiness,clock:true});const {page}=test;
+    assert.equal(test.readinessCalls(),0,'passive homepage makes no readiness RPC');
     await page.getByRole('button',{name:'Check mint availability',exact:true}).first().click();
     await page.waitForFunction(()=>!document.querySelector('.public-mint-dialog [data-view="message"]').textContent.includes('Waiting'));
     assert.equal(test.readinessCalls(),1);
     assert.equal(await page.locator('#mintBtn').isDisabled(),readiness!=='open');
     if(readiness==='open'){
       assert.equal(await page.locator('#minted').textContent(),'MINT IS OPEN');
-      await page.clock.fastForward(10001);
+      await page.clock.fastForward(8001);
+      await page.waitForFunction(()=>document.querySelector('#mintBtn').disabled===true);
       assert.equal(await page.locator('#mintBtn').isDisabled(),true,'expired proof closes mint without a timer fetch');
       assert.equal(test.readinessCalls(),1);
     }
@@ -274,6 +279,11 @@ try {
   }
   assert.equal(unexpectedWrites, 0);
   report.networkWrites = unexpectedWrites;
-  await writeFile(path.join(output, 'main-browser-report.json'), JSON.stringify(report, null, 2) + '\n');
+  report.status='passed';await saveReport();
   console.log(JSON.stringify(report));
+} catch(error){
+  report.status='failed';report.networkWrites=unexpectedWrites;
+  report.failure={name:error.name,message:error.message,stack:error.stack};await saveReport();
+  console.error(JSON.stringify({status:report.status,lastCompletedCase:report.cases.at(-1)?.name,failure:report.failure}));
+  throw error;
 } finally { await browser.close(); }
