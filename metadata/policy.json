@@ -12,11 +12,11 @@
   "owner": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
   "publicAssets": {
     "logo": {
-      "sha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7",
-      "bytes": 416229,
+      "sha256": "5a2336dd187df5875386d7b930426325247ae6d892efef9a6ae40ecbc769677c",
+      "bytes": 242625,
       "size": [
-        1000,
-        1000
+        2000,
+        2000
       ],
       "frames": 1
     },

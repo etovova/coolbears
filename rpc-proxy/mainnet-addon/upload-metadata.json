@@ -1,0 +1,28 @@
+{
+  "main_module": "main.mjs",
+  "compatibility_date": "2026-09-22",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "usage_model": "standard",
+  "logpush": false,
+  "tail_consumers": [],
+  "tags": [],
+  "bindings": [
+    {
+      "type": "inherit",
+      "name": "DAILY_CREDIT_CAP",
+      "version_id": "latest"
+    },
+    {
+      "type": "inherit",
+      "name": "HELIUS_API_KEY",
+      "version_id": "latest"
+    },
+    {
+      "type": "inherit",
+      "name": "RPC_GATE",
+      "version_id": "latest"
+    }
+  ]
+}

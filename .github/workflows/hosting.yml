@@ -1,7 +1,7 @@
 name: Verify hosting candidate without deployment
 on:
   pull_request:
-    paths: ['hosting/**', '.github/workflows/hosting.yml']
+    paths: ['hosting/**', 'public-mainnet/**', 'scripts/**', 'package.json', 'package-lock.json', 'operator/package-lock.json', '.github/workflows/hosting.yml']
 permissions:
   contents: read
 jobs:
@@ -22,9 +22,11 @@ jobs:
           cache: npm
       - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
       - run: npm run test:devnet
       - run: npm run build:wallet
       - run: npm run build:site
+      - run: npm run test:public-mainnet
       - run: npm run verify
       - run: node --test hosting/audit.test.mjs
       - run: node --test hosting/indexed-metadata.test.mjs
@@ -45,3 +47,4 @@ jobs:
             build/hosting-candidate/
             build/hidden-hosting-candidate/
           retention-days: 14
+

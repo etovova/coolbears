@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "kind": "coolbears-public-site-deployment",
+  "buildSha256": "ff7a8bb3b22a15e2dd2fa460f4621951d31c9c6c6da36e3531062e25747faedf",
+  "profileSha256": "4e3d6c7102460550e0eb2c4c354455111bf9624406de6c84b3b2165f6cd7e3f1",
+  "sourcePolicySha256": "da221551ba5567a163dcd1c923bed2643baeb0147ca77a076157718712602d57",
+  "preservedAssets": {
+    "/assets/collection/banner.png": {
+      "bytes": 685128,
+      "sha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95"
+    },
+    "/assets/collection/gif.gif": {
+      "bytes": 1319230,
+      "sha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312"
+    },
+    "/assets/collection/logo.png": {
+      "bytes": 242625,
+      "sha256": "5a2336dd187df5875386d7b930426325247ae6d892efef9a6ae40ecbc769677c"
+    }
+  },
+  "originalAssetsVerified": true
+}

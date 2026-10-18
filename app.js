@@ -78,6 +78,12 @@
   let connected = false;
   let wallet = null;
   let walletAddress = '';
+  let publicMint = null;
+  const publicMintReady = import('./public-mainnet/site-entry.mjs').then(({mount}) => {
+    publicMint = mount({language:()=>lang,onWalletChange:address=>{walletAddress=address||'';connected=!!walletAddress;}});
+    publicMint.render();return publicMint;
+  });
+  publicMintReady.catch(()=>{});
 
   const t = k => tr[lang][k] ?? tr.en[k] ?? k;
   const qty = $('#qty');
@@ -90,6 +96,7 @@
   const backTop = $('#backTop');
 
   function renderConnectionState() {
+    if (publicMint) { publicMint.render(); return; }
     if (walletBtn) { walletBtn.textContent = connected ? walletAddress.slice(0, 4) + '…' + walletAddress.slice(-4) + '\n' + t('disconnectWallet') : t('connectWallet'); walletBtn.title = walletAddress; }
     if (mintBtn) { mintBtn.textContent = t('prelaunchButton'); mintBtn.disabled = true; }
     if ($('#minted')) $('#minted').textContent = t('prelaunchStatus');
@@ -175,33 +182,11 @@
   }
   async function connect() {
     if (openingWallet) return;
-    openingWallet = true;
-    walletBtn?.setAttribute('aria-busy', 'true');
-    try {
-      if (!wallet) {
-        const { createWalletUI } = await loadWalletUI();
-        wallet = createWalletUI({
-          language: () => lang,
-          onChange: address => {
-            walletAddress = address || '';
-            connected = Boolean(walletAddress);
-            renderConnectionState();
-            walletMessage(null);
-          }
-        });
-      }
-      if (connected) {
-        await wallet.disconnect();
-        walletMessage('walletDisconnected');
-      } else {
-        await wallet.connect();
-      }
-    } catch (error) {
-      walletMessage(error?.code === 4001 || error?.name === 'AbortError' ? 'connectCancelled' : 'walletFailed');
-    } finally {
-      openingWallet = false;
-      walletBtn?.removeAttribute('aria-busy');
-    }
+    openingWallet = true;walletBtn?.setAttribute('aria-busy','true');
+    let importTimer;
+    try { const control=await Promise.race([publicMintReady,new Promise((_,reject)=>{importTimer=setTimeout(()=>reject(Error('PUBLIC_MODULE_TIMEOUT')),15000);})]);clearTimeout(importTimer);await control.connect(); }
+    catch { walletMessage('walletFailed'); }
+    finally { clearTimeout(importTimer);openingWallet=false;walletBtn?.removeAttribute('aria-busy'); }
   }
 
   walletBtn?.addEventListener('click', connect);
