@@ -18,6 +18,9 @@ async function get(path){
 }
 const deployment=await get('/api/buyer/deployment'),actual=JSON.parse(deployment.bytes.toString('utf8'));assert.deepEqual(actual,expected);
 checks.push({kind:'deployment',path:'/api/buyer/deployment',verified:true});
+// The deployment proof already performs two fresh reads through the shared
+// gateway. Respect its 200 ms admission interval before this separate check.
+await new Promise(resolve=>setTimeout(resolve,250));
 const readiness=await get('/api/buyer/readiness'),state=JSON.parse(readiness.bytes.toString('utf8'));
 assert.equal(readiness.response.headers.get('x-coolbears-network-verified'),'1');
 assert.equal(Object.keys(state).sort().join(' '),'checkedAt cluster collection expiresAt genesisHash guard hiddenCommitmentSha256 machine maximumPerOrder profileSha256 salesOpen status storageMode unitPriceLamports version');assert.equal(state.version,1);assert.equal(state.profileSha256,config.profileSha256);
