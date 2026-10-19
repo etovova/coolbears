@@ -14,6 +14,18 @@ import {createScopeIndex,consoleStorageOptions} from '/public-mainnet/modules/a6
 import {validateCostApproval} from '/public-mainnet/modules/496495ca692686787c96.mjs';
 import {validatePublicBuyerConfig,buyerScopeConfig} from '/public-mainnet/modules/9609056ec7e489d2b838.mjs';
 import {createPublicReadinessClient} from '/public-mainnet/modules/c0b4bcd4974224d3cb18.mjs';
+// Bound the port the native controller awaits, so its own busy guard is released
+// after an unanswered wallet prompt. A late response cannot resume that call.
+function boundedConnectWallet(wallet){
+  const feature=wallet?.features?.['standard:connect'];if(typeof feature?.connect!=='function')return wallet;
+  const features={...wallet.features,'standard:connect':{...feature,async connect(...args){
+    let timer;try{return await Promise.race([Promise.resolve().then(()=>feature.connect(...args)),new Promise((_,reject)=>{
+      timer=setTimeout(()=>reject(Error('WALLET_CONNECT_TIMEOUT')),15000);
+    })]);}finally{clearTimeout(timer);}
+  }}};
+  return Object.freeze({get name(){return wallet.name;},get version(){return wallet.version;},get icon(){return wallet.icon;},
+    get chains(){return wallet.chains;},get accounts(){return wallet.accounts;},features});
+}
 export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
   const deployment=validatePublicBuyerConfig(input),config=buyerScopeConfig(deployment);
   if(globalThis.location?.origin!==config.origin)throw Error('PUBLIC_ORIGIN');
@@ -43,7 +55,8 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
   const api={state,refreshReadiness:()=>{state();if(indexUnavailable)throw Error('STORAGE_UNAVAILABLE');return readiness.refresh();},dispose(){readiness.dispose();client.dispose();}};
   for(const name of Object.keys(client))if(!['state','dispose'].includes(name))api[name]=async(...args)=>{
     if(gateBusy)throw Error('BUSY');if(guarded.has(name)){gateBusy=true;emit();}
-    try{if(guarded.has(name)){state();if(indexUnavailable)throw Error('STORAGE_UNAVAILABLE');await readiness.requireOpen();}return await client[name](...args);}
+    try{if(guarded.has(name)){state();if(indexUnavailable)throw Error('STORAGE_UNAVAILABLE');await readiness.requireOpen();}
+      return await client[name](...(name==='connectWallet'?[boundedConnectWallet(args[0]),...args.slice(1)]:args));}
     finally{if(sync.has(name))try{await refreshApprovedQuote();}catch{approvedQuote=null;}gateBusy=false;emit();}
   };
   return Object.freeze(api);

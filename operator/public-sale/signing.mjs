@@ -11,7 +11,7 @@ const hash=v=>typeof v==='string'&&/^[a-f0-9]{64}$/.test(v)&&v!=='0'.repeat(64);
 function exact(value,keys){need(value&&[Object.prototype,null].includes(Object.getPrototypeOf(value))&&Reflect.ownKeys(value).length===keys.length);for(const k of keys){const d=Object.getOwnPropertyDescriptor(value,k);need(d&&Object.hasOwn(d,'value'));}}
 function deploymentBinding(value){
   exact(value,['deploymentId','manifestSha256','revision','headHash']);
-  need(typeof value.deploymentId==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(value.deploymentId)&&hash(value.manifestSha256)&&value.revision===38&&hash(value.headHash));
+  need(typeof value.deploymentId==='string'&&/^[A-Za-z0-9_-]{1,64}$/.test(value.deploymentId)&&hash(value.manifestSha256)&&[37,38].includes(value.revision)&&hash(value.headHash));
   return Object.freeze({deploymentId:value.deploymentId,manifestSha256:value.manifestSha256,revision:value.revision,headHash:value.headHash});
 }
 export function createGuardOpenSigningRequest({releaseId,profile,deployment,privateLaunchMappingProofSha256,blockhash,lastValidBlockHeight}={}){
