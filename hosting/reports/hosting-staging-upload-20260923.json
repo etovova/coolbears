@@ -1,0 +1,78 @@
+{
+  "kind": "cloudflare-static-assets-upload",
+  "startedAt": "2026-09-23T09:50:48Z",
+  "candidateManifestSha256": "fd73845f95c98d23066d49a6b3fc3bf73051356bba1788143f3f83a9771e17bc",
+  "buckets": [
+    {
+      "index": 0,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 1,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 2,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 3,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 4,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 5,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 6,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 7,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 8,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 9,
+      "files": 1000,
+      "httpStatus": 202,
+      "success": true
+    },
+    {
+      "index": 10,
+      "files": 31,
+      "httpStatus": 201,
+      "success": true
+    }
+  ],
+  "complete": true,
+  "workerPublished": false,
+  "dnsChanged": false,
+  "completedAt": "2026-09-23T09:53:06Z",
+  "uploadedFiles": 10031
+}

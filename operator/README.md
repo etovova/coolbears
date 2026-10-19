@@ -1,8 +1,75 @@
+**Current network support:** The [offline Mainnet candidate](MAINNET.md) adds explicit network, signing and sending permissions to the scoped journal and private adapters. It does not select or activate a real network. The earlier Devnet milestones below remain historical; sales stay closed at 0.2 SOL.
+
+**Current addition:** The [private buyer review interface](orders/buyer-console/README.md) connects the retained order adapters through explicit preparation, cost approval, wallet signing and outcome review. Its production factory keeps sending disabled; it is separate from the public site. The [offline private setup inspector](PRIVATE_READINESS.md) checks existing encrypted bundle and gateway bindings without unlocking keys, writing configuration or contacting a network. Local fixtures do not establish real setup or wallet readiness; see the [current status](PRODUCTION_READINESS.md). Sales remain closed at 0.2 SOL.
+
+**PR59:** [Sequential buyer orders](orders/SEQUENTIAL.md) continue through 1–50 retained assets with a verified prefix, fresh per-item cost consent and at most one reviewed replacement per item. Unknown outcomes stop progression. The cost summary separates nominal prices, known failed fees and remaining projections. See the current [readiness table](PRODUCTION_READINESS.md). Sales stay closed at 0.2 SOL. The sections below retain earlier milestones.
+
+**PR58:** [Read-only recovery after custody loss](orders/CUSTODY_RECOVERY.md) can inspect retained canonical purchase evidence and check its outcome when browser keys are missing. It does not restore keys, write recovered evidence or authorize signing, sending or replacement.
+
+**PR57:** [Reviewed replacement after a lost wallet response expired](orders/RESPONSE_EXPIRY_REPLACEMENT.md) retains the real wallet claim, consent and original null-signature expiry. A separate explicit preparation permits one second attempt; new signing requires fresh cost approval.
+
+**PR49:** [новая попытка после подтверждённой ошибки](orders/FAILED_REPLACEMENT.md) требует явного
+подтверждения уплаченной комиссии и отдельного свежего согласия на расходы.
+Первая подпись, комиссия и история сохраняются; третья попытка заблокирована.
+Продажи закрыты, цена 0,2 SOL. Ниже — история предыдущих этапов.
+
+**PR48:** [восстановление окончательной ошибки и списанной комиссии](orders/FAILURE_RECOVERY.md)
+сохраняет доказательство на сервере и в браузере. Старые подписи и claims
+сохраняются; повтор после ошибки требует отдельного этапа. Продажи закрыты,
+цена 0,2 SOL. Ниже — история предыдущих этапов.
+
+**PR47:** [одна новая попытка после сохранённого доказательства истечения](orders/REPLACEMENT.md)
+получает новый hash, отдельные записи и свежее согласие на расходы. Первая
+подпись, claims и история сохраняются; третья попытка не разрешена. Продажи
+закрыты, цена 0,2 SOL. Ниже — история предыдущих этапов.
+
+**PR46:** [явная проверка истечения попытки покупателя](orders/EXPIRY_REVIEW.md) сохраняет
+доказательство в SQLite и браузерном журнале. Старые claims не освобождаются;
+новая подпись и повторная отправка этим этапом не разрешаются. Ниже — история этапов.
+
+**PR45:** [согласие на расчёт и предел расходов](orders/COST_APPROVAL.md) сохраняется до вызова
+кошелька; свежие расходы проверяются перед подписью и отправкой. Это предел
+приложения по RPC/simulation, а не on-chain гарантия окончательного списания.
+Старые evidence остаются доступны для recovery. Ниже — история этапов.
+
+**PR44:** [подготовка с сохранённым исходным blockhash и полный бюджет первого NFT](orders/PREPARATION.md)
+теперь обязательны для buyer check/send. Бюджет всего заказа остаётся прогнозом;
+старые попытки без server anchor не получают разрешения на новую подпись/отправку.
+Продажи закрыты, цена 0,2 SOL, отправка по умолчанию выключена. Ниже — история этапов.
+
+**PR43:** добавлены [одноразовая отправка и finalized recovery](orders/SUBMISSION.md)
+первого подписанного Devnet-item. Browser/SQLite claims записываются до I/O;
+потеря ответа разрешает только проверку сети. Отправка по умолчанию выключена,
+endpoint не опубликован, полный бюджет и production UI ещё не готовы.
+Ниже сохранены описания прежних этапов.
+
+Добавлен [отдельный серверный маршрут проверки заказа](orders/gateway/README.md):
+фиксированный HTTPS transport, проверка точного asset partial, сохранение лимитов
+в SQLite и связанная проверка браузера. Это кандидат для закрытой Devnet,
+без публикации endpoint; продажи закрыты, цена 0,2 SOL.
+
+[Подпись кошелька и сохранение ответа](orders/WALLET.md) используют durable claim
+до вызова Wallet Standard. Проверенная подпись остаётся evidence в состоянии
+unknown; отправитель покупок и finalized recovery ещё не подключены.
+
+Для нового заказа подготовлено отдельное [браузерное хранилище](orders/STORAGE.md):
+IndexedDB, Web Locks, атомарная история и восстановление asset CryptoKey.
+Это ещё не исполнитель покупки; основной сайт и закрытые продажи не меняются.
+
 # Новый процесс выпуска CoolBears
+
+Продолжение подготовки полного выпуска: [ограниченная групповая подпись](deployment/GROUPS.md)
+для 2–4 insert-операций и [возобновляемая очередь](deployment/QUEUE.md).
+Это операторский Devnet-код с тестовыми проверками; реальная приватная
+настройка, свежий бюджет и процесс покупки ещё не завершены. Продажи закрыты.
+
+Для заказов 1–50 добавлена [проверка перед подписью](orders/PREFLIGHT.md):
+состояние полной машины, закрытый guard, остаток и unsigned simulation первого
+item нового Devnet-заказа. Это диагностический этап, без подписи или отправки.
 
 **Текущий результат:** лабораторная проверка машины на две позиции завершена. Владелец прислал отчёт v6 реального Phantom Android: `stage=verified`, NFT `8c2rbr5eG2v7FhEJ2PJ78UemoQRfbiwJ9jJoikiWiWER`, подпись `519EGskF9cwHQCtmFuMxXfPCnquxY83pU3ajUzhbXGUQoNTvhbQY85YwLg4KVS6487K4smor8KGKwPkexTQzGA7b`. Он также подтвердил медведя и анимацию. 22 сентября 2026 независимое чтение `inspectOperation` через Cloudflare RPC подтвердило `stage=verified`, finalized-транзакцию без ошибки, владельца, коллекцию, имя `CoolBears #0001 — Hidden Bear` и URI скрытых метаданных #0001; текущий тираж — 2/2. Повторный минт не требуется; [подробности и ограничения](../devnet/README.md). Физические Solflare/Backpack ещё не проверены.
 
-Путь Phantom `signTransaction` → собственный Helius RPC проверен в v6. 22 сентября 2026 [общий Devnet RPC](../rpc-proxy/README.md) развёрнут в Cloudflare и прошёл независимую проверку только чтением: CORS, Devnet genesis, аккаунты машины/guard/коллекции, тираж 2/2. Его публичный адрес без ключа настроен в `settings.siteRpc`, клиент v7 пересобран; состояние публикации этой сборки подтверждается workflow GitHub Pages, физического теста v7 нет. Процедура и ограничения: [SHARED_RPC.md](SHARED_RPC.md). Исторические отчёты ниже про один выпущенный NFT и addressGate на лабораторный Bjst описывают прежний этап, а не текущее состояние.
+Путь Phantom `signTransaction` → собственный Helius RPC проверен в v6. 22 сентября 2026 [общий Devnet RPC](../rpc-proxy/README.md) развёрнут в Cloudflare и прошёл независимую проверку только чтением: CORS, Devnet genesis, аккаунты машины/guard/коллекции, тираж 2/2. Его публичный адрес без ключа настроен в опубликованном клиенте v7. Физический отчёт владельца от `2026-09-22T19:31:37Z` подтверждает `rpc=site-devnet`, `configurationError=false` и сохранённую операцию `stage=verified`: это проверка существующего NFT через RPC сайта, без нового минта. Процедура и ограничения: [SHARED_RPC.md](SHARED_RPC.md). Исторические отчёты ниже про один выпущенный NFT и addressGate на лабораторный Bjst описывают прежний этап, а не текущее состояние.
 
 Используется Metaplex CLI 0.4.3, Node 24.19.0 и npm 11.9.0. Создание коллекции и машины выполняется отдельно от сайта. Сайт сохраняет оформление и закрытые продажи. Код прежней панели и тестовой страницы не используется.
 
@@ -26,10 +93,11 @@ npm ci --prefix operator --ignore-scripts --no-audit --no-fund
 npm run --prefix operator setup
 npm run --prefix operator verify
 mkdir -p private
-node operator/prepare.mjs private/new-cli-project
+node operator/prepare.mjs private/NEW
+node operator/verify-preparation.mjs private/NEW
 ```
 
-Выходная папка должна быть новой. Повторный запуск в ту же папку завершается до перезаписи. Адрес коллекции пока пуст: CLI откажется создавать машину до появления настоящей коллекции. Подготовленные файлы не считаются опубликованными или загруженными on-chain.
+`NEW` заменить именем новой папки. Повторный запуск подготовки в ту же папку завершается до перезаписи. Эти две команды работают офлайн: подготовка записывает пакет, проверка только читает его и сверяет с политикой. Аудит предназначен для свежего пакета, который ещё не отправлялся в сеть; это не проверка изменённого CLI cache после развёртывания. По умолчанию адрес коллекции пуст; необязательный `COOLBEARS_COLLECTION` задаёт публичный адрес, для которого офлайн проверяется только формат, не существование и не полномочия. Продажи закрыты, `readyToDeploy=false`. `release-plan.json` описывает план, а не подтверждает создание коллекции, резервного NFT или машины. Состав пакета и последующие этапы: [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md).
 
 RPC задаётся явно через `COOLBEARS_RPC_URL`. При отсутствии настройки автоматического переключения на публичный RPC нет. Для сервера за системным HTTPS proxy в Node 24 использовался `NODE_USE_ENV_PROXY=1`.
 
@@ -41,16 +109,11 @@ npm run --prefix operator mplx -- cm create --help
 
 Проверка RPC выполняет только четыре чтения. Симуляция отправляет `simulateTransaction` с отключённой проверкой отсутствующей подписи владельца, никогда `sendTransaction`; она не доказывает, что кошелёк подпишет транзакцию. Одно успешное чтение или симуляция публичного RPC не гарантирует стабильную работу на телефоне.
 
-## Следующий этап
+## Подготовка полного выпуска
 
-1. Выбрать и настроить личный Devnet RPC и кошелёк оператора. Ключи хранятся на доверенном компьютере; приватные ключи владельца не запрашивать в чате.
-2. Профинансировать полную машину только после выбора окончательной конфигурации. Для нынешних 9999 config lines SDK рассчитывает 871827 байт; реальный Devnet RPC 21 сентября вернул 4429531400 lamports (4.4295314 тестового SOL) только за аккаунт машины. Это не полный бюджет: collection, guard, asset и комиссии учитываются отдельно. На указанном кошельке владельца во время расчёта было 0.2956272 Devnet SOL.
-3. Проверить свежую конфигурацию и соответствие уже опубликованным скрытым метаданным перед записью config lines.
-4. Создать коллекцию официальной командой `mplx core collection create` с подготовленным `collection-plugins.json`. Идентичность подписанта и update authority должны быть проверены до отправки.
-5. Создать Core Candy Machine через `mplx cm create`, затем `mplx cm insert` и `mplx cm fetch`. После неопределённого результата команды не запускать создание заново: сначала восстановить адрес/подпись и проверить состояние.
-6. Перенести проверенный Devnet-процесс в будущий основной интерфейс при закрытых продажах; отдельно проверить физические Solflare/Backpack и другие устройства. Успешный Phantom Android уже описан выше. Не повторять завершённый лабораторный минт и не возвращать старую панель.
+Актуальная последовательность и границы готовности: [PRODUCTION_READINESS.md](PRODUCTION_READINESS.md). Текущий этап — проверяемый офлайн-пакет на 10 000 NFT: резерв #0000 и 9 999 записей машины. Затем нужен отдельный офлайн-планировщик заказов 1–50. Основной интерфейс продаж, production-аккаунты и раскрытие ещё не готовы; продажи остаются закрытыми. Завершённые лабораторный минт и проверку v7 не повторять для подготовки файлов.
 
-Полный выпуск коллекции, производственный интерфейс продаж, пакетные покупки и раскрытие ещё не завершены. Продажи не открывать автоматически. Прежние тесты и старые адреса не подтверждают новый процесс; новая отдельная Devnet-проверка описана ниже.
+Числа из [исторической оценки rent](reports/devnet-rent.json) от 21 сентября 2026 — 871 827 байт и 4.4295314 Devnet SOL за аккаунт машины — не являются текущим бюджетом, суммой для пополнения или оценкой Mainnet. Указанный там баланс также исторический. Перед финансированием потребуется свежая проверка только чтением через отдельный RPC для выбранной сети и конфигурации; остальные аккаунты и комиссии считаются отдельно.
 
 ## Совместимость CLI с сервером
 

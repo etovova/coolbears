@@ -1,0 +1,50 @@
+name: Verify hosting candidate without deployment
+on:
+  pull_request:
+    paths: ['hosting/**', 'public-mainnet/**', 'scripts/**', 'package.json', 'package-lock.json', 'operator/package-lock.json', '.github/workflows/hosting.yml']
+permissions:
+  contents: read
+jobs:
+  hosting:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      WRANGLER_SEND_METRICS: 'false'
+      CLOUDFLARE_SEND_METRICS: 'false'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run test:devnet
+      - run: npm run build:wallet
+      - run: npm run build:site
+      - run: npm run test:public-mainnet
+      - run: npm run verify
+      - run: node --test hosting/audit.test.mjs
+      - run: node --test hosting/indexed-metadata.test.mjs
+      - run: node hosting/prepare.mjs
+      - run: node hosting/runtime.mjs
+      - run: node hosting/www-redirect/runtime.mjs
+      - run: node hosting/prepare-indexed.mjs
+      - run: node hosting/indexed-metadata.runtime.mjs
+      - name: Hidden metadata Worker validation without upload
+        run: node node_modules/wrangler/bin/wrangler.js deploy --config build/hidden-hosting-candidate/wrangler.json --dry-run --outdir build/hidden-hosting-dry-run
+      - name: Wrangler validation without upload
+        run: node node_modules/wrangler/bin/wrangler.js deploy --config build/hosting-candidate/wrangler.json --dry-run --outdir build/hosting-dry-run
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: closed-hosting-candidate
+          path: |
+            build/hosting-candidate/
+            build/hidden-hosting-candidate/
+          retention-days: 14
+

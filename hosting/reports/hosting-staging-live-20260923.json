@@ -1,0 +1,345 @@
+{
+  "kind": "live-cloudflare-static-staging",
+  "startedAt": "2026-09-23T09:55:39.010Z",
+  "origin": "https://coolbears-site-candidate.yauheni84.workers.dev",
+  "sourceCommit": "5bce65e3735ac24f3a93a826d5143a96558049ff",
+  "candidateManifestSha256": "fd73845f95c98d23066d49a6b3fc3bf73051356bba1788143f3f83a9771e17bc",
+  "passed": true,
+  "checks": [
+    {
+      "name": "bytes assets/collection/banner.png",
+      "passed": true,
+      "path": "/assets/collection/banner.png",
+      "status": 200,
+      "bytes": 685128,
+      "sha256": "d3f82a120907b3ec5747628127580b9a1f80757676692361f43a533b5248bb95"
+    },
+    {
+      "name": "bytes CNAME",
+      "passed": true,
+      "path": "/CNAME",
+      "status": 200,
+      "bytes": 19,
+      "sha256": "cc0f81fe5c363a54c31c5ef8520301dde44311dd18699495f50feb462236361d"
+    },
+    {
+      "name": "bytes app.js",
+      "passed": true,
+      "path": "/app.js",
+      "status": 200,
+      "bytes": 20700,
+      "sha256": "39ed9c8b45cff9702666cde9b7e9041a03362e8172365e873143e267fe6e756f"
+    },
+    {
+      "name": "bytes assets/collection/gif.gif",
+      "passed": true,
+      "path": "/assets/collection/gif.gif",
+      "status": 200,
+      "bytes": 1319230,
+      "sha256": "b43ab0519db076709b7697dd3c767ab7177610fb163ec25b8c08a5146ba3d312"
+    },
+    {
+      "name": "bytes assets/collection/logo.png",
+      "passed": true,
+      "path": "/assets/collection/logo.png",
+      "status": 200,
+      "bytes": 416229,
+      "sha256": "5d8398d9497deab99a1c57d147df43047131fa9354097ea2879385f3bf6d71e7"
+    },
+    {
+      "name": "bytes assets/nft/promo-02.webp",
+      "passed": true,
+      "path": "/assets/nft/promo-02.webp",
+      "status": 200,
+      "bytes": 235690,
+      "sha256": "68cc4ef5b0c3541d0db651ab47e01a5f32d6f3f93f0b368870033bf7a40340b3"
+    },
+    {
+      "name": "bytes assets/nft/hero-main.webp",
+      "passed": true,
+      "path": "/assets/nft/hero-main.webp",
+      "status": 200,
+      "bytes": 278434,
+      "sha256": "23b860089a10f7f7b6ccb1542016d521fee91c37b85dff2011ed9e72e2a74c2f"
+    },
+    {
+      "name": "bytes assets/nft/promo-03.webp",
+      "passed": true,
+      "path": "/assets/nft/promo-03.webp",
+      "status": 200,
+      "bytes": 323680,
+      "sha256": "97357fa8e8d32a4b3d0bbfcc541f49d6ddbbca17be6a86f862c0a3475b5bccd3"
+    },
+    {
+      "name": "bytes assets/nft/promo-07.webp",
+      "passed": true,
+      "path": "/assets/nft/promo-07.webp",
+      "status": 200,
+      "bytes": 154532,
+      "sha256": "96a53c69d739668a8bb3dd466633758fbd9e2dd0908d9944a87ba1fc9c59ec38"
+    },
+    {
+      "name": "bytes assets/nft/promo-06.webp",
+      "passed": true,
+      "path": "/assets/nft/promo-06.webp",
+      "status": 200,
+      "bytes": 175330,
+      "sha256": "5dd72cc2c50c43e11810391978b6a90fd68b713262a9c0e79dfd9b92a2efa171"
+    },
+    {
+      "name": "bytes assets/nft/promo-04.webp",
+      "passed": true,
+      "path": "/assets/nft/promo-04.webp",
+      "status": 200,
+      "bytes": 176244,
+      "sha256": "f3eb0133006471a7c6fb856834b164b9eaf05ab46933e822c60457501d972e2d"
+    },
+    {
+      "name": "bytes assets/nft/promo-05.webp",
+      "passed": true,
+      "path": "/assets/nft/promo-05.webp",
+      "status": 200,
+      "bytes": 182260,
+      "sha256": "5c08f7f8764f63cf27e183502fdc758d4dc0f709c22df3769a7dd5cfa7410512"
+    },
+    {
+      "name": "bytes devnet/style.css",
+      "passed": true,
+      "path": "/devnet/style.css",
+      "status": 200,
+      "bytes": 3728,
+      "sha256": "54ac046a59bbda96c950dd03928bbecb638b392b9c6d7788924ecc5cb3223ee4"
+    },
+    {
+      "name": "bytes devnet/app.js",
+      "passed": true,
+      "path": "/devnet/app.js",
+      "status": 200,
+      "bytes": 1504057,
+      "sha256": "122bba1a7863df51bd8dbddba3f1db0a103d3b5fc94313240232c34ed65ca602"
+    },
+    {
+      "name": "bytes config.js",
+      "passed": true,
+      "path": "/config.js",
+      "status": 200,
+      "bytes": 1107,
+      "sha256": "ac33f0d09a3da909ea9a1a6cdd3ce8822cfb5ba4942ff29264e0404df6092840"
+    },
+    {
+      "name": "bytes devnet/index.html",
+      "passed": true,
+      "path": "/devnet/",
+      "status": 200,
+      "bytes": 5157,
+      "sha256": "14a275f82049ca86e1fdd37b9b890baccb507ea724867854003346cd92ab3d18"
+    },
+    {
+      "name": "bytes devnet/app.js.LEGAL.txt",
+      "passed": true,
+      "path": "/devnet/app.js.LEGAL.txt",
+      "status": 200,
+      "bytes": 7204,
+      "sha256": "2aba12c473dd3dcde21ea05cf36b3cd62a5111616d6a25b4533b551c736caae5"
+    },
+    {
+      "name": "bytes metadata/0000.json",
+      "passed": true,
+      "path": "/metadata/0000.json",
+      "status": 200,
+      "bytes": 611,
+      "sha256": "99cd0f02cd8a7948b0b78cd72b5ccbf4df2d70723897228a5817e3fbd0f64766"
+    },
+    {
+      "name": "bytes index.html",
+      "passed": true,
+      "path": "/",
+      "status": 200,
+      "bytes": 10685,
+      "sha256": "aa710ed784de074fe843beed45f1861af74f66cc0b5ffd67c25efa804718fbff"
+    },
+    {
+      "name": "bytes metadata/collection.json",
+      "passed": true,
+      "path": "/metadata/collection.json",
+      "status": 200,
+      "bytes": 777,
+      "sha256": "8985e05ca4fe716fc2ada13323c456587633f877751a6eb1580a27238d11ba93"
+    },
+    {
+      "name": "bytes mobile-fix.css",
+      "passed": true,
+      "path": "/mobile-fix.css",
+      "status": 200,
+      "bytes": 4472,
+      "sha256": "33fa7e7ec8741aacc1f7f5907a9e9cd1dd17917e54f40547d8b7f312cc99ee2c"
+    },
+    {
+      "name": "bytes robots.txt",
+      "passed": true,
+      "path": "/robots.txt",
+      "status": 200,
+      "bytes": 71,
+      "sha256": "9f665f8dce4f548a9847af43128c9acfc822bbafe53b46f087599ade6b9bc3fb"
+    },
+    {
+      "name": "bytes sitemap.xml",
+      "passed": true,
+      "path": "/sitemap.xml",
+      "status": 200,
+      "bytes": 235,
+      "sha256": "336991b801cf63d077e3bf835b56c7e0162c94a8cc8e52dd99a26de1c123cf0d"
+    },
+    {
+      "name": "bytes privacy.html",
+      "passed": true,
+      "path": "/privacy",
+      "status": 200,
+      "bytes": 1043,
+      "sha256": "139ec77e20c025e01e95e01924079d0aa0b26ef0deecc6175b8b543eb1fb5768"
+    },
+    {
+      "name": "bytes wallet-core.mjs",
+      "passed": true,
+      "path": "/wallet-core.mjs",
+      "status": 200,
+      "bytes": 4654,
+      "sha256": "942c9a108ae0d8824e969eef307a74409ae1ba9c47dd4aa46567cc88ca518647"
+    },
+    {
+      "name": "bytes wallet-ui.mjs",
+      "passed": true,
+      "path": "/wallet-ui.mjs",
+      "status": 200,
+      "bytes": 4579,
+      "sha256": "7ba665018029ea7fa2c73ce0a81276262aa1b679a938de8b213dc4b54b1f6e02"
+    },
+    {
+      "name": "bytes style.css",
+      "passed": true,
+      "path": "/style.css",
+      "status": 200,
+      "bytes": 8403,
+      "sha256": "a40d1852eac72c39e1a73cb2a7bac512388a6f0e7e8141f13869e56a28118a43"
+    },
+    {
+      "name": "bytes terms.html",
+      "passed": true,
+      "path": "/terms",
+      "status": 200,
+      "bytes": 996,
+      "sha256": "548a67c96f7661ee8cd1d4d514751fb81ebc8c7389b21d9610962da4b167f003"
+    },
+    {
+      "name": "bytes wallet-standard.js",
+      "passed": true,
+      "path": "/wallet-standard.js",
+      "status": 200,
+      "bytes": 294300,
+      "sha256": "9cf41c7e42536486150a2a04c4a2e1e2474f925294edb416e7c963c01b26a372"
+    },
+    {
+      "name": "bytes wallet.css",
+      "passed": true,
+      "path": "/wallet.css",
+      "status": 200,
+      "bytes": 742,
+      "sha256": "0f33b13e3486168e8faabdbb24704519d08965a3a4231214776c6556d9d1a81a"
+    },
+    {
+      "name": "bytes wallet-standard.js.LEGAL.txt",
+      "passed": true,
+      "path": "/wallet-standard.js.LEGAL.txt",
+      "status": 200,
+      "bytes": 5627,
+      "sha256": "8825a8cf9529485bafed8a87fdba68be4f848beed019f429dbdafe90f6b2f53b"
+    },
+    {
+      "name": "bytes metadata/hidden/0000.json",
+      "passed": true,
+      "path": "/metadata/hidden/0000.json",
+      "status": 200,
+      "bytes": 532,
+      "sha256": "da53813717120e485ad59f7994e373ef752381ae51f5635c8249305f303ab0ea"
+    },
+    {
+      "name": "bytes metadata/hidden/4999.json",
+      "passed": true,
+      "path": "/metadata/hidden/4999.json",
+      "status": 200,
+      "bytes": 532,
+      "sha256": "1b4b39640f569ad71b1e9161973cc3e165b49d35f808da53514e5acf4c01774c"
+    },
+    {
+      "name": "bytes metadata/hidden/9999.json",
+      "passed": true,
+      "path": "/metadata/hidden/9999.json",
+      "status": 200,
+      "bytes": 532,
+      "sha256": "42866d087df6cd02d495d6841225592f9970512757481f236fed06fc343547cb"
+    },
+    {
+      "name": "bytes metadata/hidden/0001.json",
+      "passed": true,
+      "path": "/metadata/hidden/0001.json",
+      "status": 200,
+      "bytes": 532,
+      "sha256": "120b69940040f32851c763cbe13b2c9d0533ede4f84d389833b4c18206ce84db"
+    },
+    {
+      "name": "directory redirect",
+      "passed": true
+    },
+    {
+      "name": "not served /missing.json",
+      "passed": true
+    },
+    {
+      "name": "not served /metadata/hidden/10000.json",
+      "passed": true
+    },
+    {
+      "name": "not served /operator/package.json",
+      "passed": true
+    },
+    {
+      "name": "not served /private/reveal.json",
+      "passed": true
+    },
+    {
+      "name": "not served /.git/config",
+      "passed": true
+    },
+    {
+      "name": "not served /_headers",
+      "passed": true
+    },
+    {
+      "name": "not served /wrangler.json",
+      "passed": true
+    },
+    {
+      "name": "not served /report.json",
+      "passed": true
+    },
+    {
+      "name": "no endpoint /rpc",
+      "passed": true
+    },
+    {
+      "name": "no endpoint /api/mint",
+      "passed": true
+    },
+    {
+      "name": "GIF HEAD and ETag",
+      "passed": true
+    }
+  ],
+  "salesOpen": false,
+  "priceSol": 0.2,
+  "realWalletTested": false,
+  "realRpcRequests": 0,
+  "realTransactionsSent": 0,
+  "mainDomainSwitched": false,
+  "completedAt": "2026-09-23T09:56:43.173Z"
+}

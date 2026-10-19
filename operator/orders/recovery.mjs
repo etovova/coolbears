@@ -1,0 +1,60 @@
+// Trusted read orchestrator. Never submits, refreshes a hash or authorizes retry.
+import {networkProfile} from '../deployment/network.mjs';
+import policy from '../../metadata/policy.json' with {type:'json'};
+import {lamports} from '@metaplex-foundation/umi';
+import {VersionedTransaction} from '@solana/web3.js';
+import {deserializeAssetV1,Key,MPL_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-core';
+import {createSigningRequest,verifySigningResponse} from '../deployment/signing.mjs';
+import {verifyFinalizedReceipt,verifyFinalizedFailedTransaction} from '../deployment/receipt.mjs';
+import {createDeploymentRpc,assertCluster,DeploymentRpcError} from '../deployment/rpc.mjs';
+import {validateBuyerSubmission,submissionBinding,validateBuyerResult} from './submission.mjs';
+import {createProtocolOrderModel} from './journal-model.mjs';
+const model=createProtocolOrderModel(policy),need=(v,code)=>{if(!v)throw Object.assign(Error(code),{checkCode:code});};
+export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=12000,authorizeMainnet=false}){
+  const frozen=structuredClone(input),signed=validateBuyerSubmission(frozen),binding=submissionBinding(frozen);
+  const profile=networkProfile(frozen.order.cluster);
+  // This label binds expected network identity; chainVerified separately reports the RPC evidence.
+  const fixed={...binding,cluster:frozen.order.cluster,...(profile.cluster==='mainnet-beta'?{genesisHash:profile.genesisHash}:{}),transactionsSent:0,readyToSubmit:false,salesOpen:false};let rpc;
+  try{
+    rpc=createDeploymentRpc({authorizeMainnet,cluster:frozen.order.cluster,endpoint,fetchImpl,timeoutMs,totalTimeoutMs:30000});await assertCluster(rpc,frozen.order.cluster);
+    const statusResult=await rpc.call('getSignatureStatuses',[[signed.signature],{searchTransactionHistory:true}]);
+    const transactionResult=await rpc.call('getTransaction',[signed.signature,{commitment:'finalized',encoding:'base64',maxSupportedTransactionVersion:0}]);
+    if(statusResult?.value?.[0]?.err!=null||transactionResult?.meta?.err!=null){
+      const receipt=verifyFinalizedFailedTransaction({transactionBase64:signed.transactionBase64,statusResult,transactionResult});
+      const tx=VersionedTransaction.deserialize(Buffer.from(signed.transactionBase64,'base64')),meta=transactionResult.meta;
+      const count=tx.message.staticAccountKeys.length,uint=v=>Number.isSafeInteger(v)&&v>=0;
+      need(tx.message.addressTableLookups.length===0&&tx.message.staticAccountKeys[0].toBase58()===frozen.order.buyer
+        &&uint(meta.fee)&&meta.fee>0&&[meta.preBalances,meta.postBalances].every(a=>Array.isArray(a)&&a.length===count&&a.every(uint)),'FAILURE_FEE_EVIDENCE');
+      need(meta.preBalances[1]===0&&meta.postBalances[1]===0&&BigInt(meta.preBalances[0])-BigInt(meta.postBalances[0])===BigInt(meta.fee)
+        &&meta.preBalances.slice(1).every((v,n)=>v===meta.postBalances[n+1]),'FAILURE_BALANCE_EVIDENCE');
+      const state=await rpc.call('getMultipleAccounts',[[frozen.claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:receipt.slot}]);
+      need(uint(state?.context?.slot)&&state.context.slot>=receipt.slot&&Array.isArray(state.value)&&state.value.length===1&&state.value[0]===null,'FAILURE_ASSET_OBSERVED');
+      const finalStatus=await rpc.call('getSignatureStatuses',[[signed.signature],{searchTransactionHistory:true}]);
+      const finalReceipt=verifyFinalizedFailedTransaction({transactionBase64:signed.transactionBase64,statusResult:finalStatus,transactionResult});
+      need(finalReceipt.contextSlot>=state.context.slot&&finalReceipt.errorSha256===receipt.errorSha256,'FAILURE_STATUS_CONTEXT');
+      const proof={kind:'failed',cluster:frozen.order.cluster,machine:frozen.order.machine,collection:frozen.order.collection,buyer:frozen.order.buyer,
+        asset:frozen.claim.asset,blockhash:frozen.claim.blockhash,messageSha256:signed.messageSha256,commitment:'finalized',slot:receipt.slot,
+        signature:signed.signature,executionFailed:true,accountAbsent:true,accountSlot:state.context.slot};
+      const evidence={slot:receipt.slot,statusSlot:finalReceipt.contextSlot,errorSha256:receipt.errorSha256,feeLamports:String(meta.fee),
+        payerDebitLamports:String(meta.fee),payerPreBalanceLamports:String(meta.preBalances[0]),payerPostBalanceLamports:String(meta.postBalances[0])};
+      return validateBuyerResult({...fixed,status:'failed',chainVerified:true,proof,evidence,retryAuthorized:false,restored:false,networkRequests:rpc.requests},frozen,{recovery:true});
+    }
+    const request=createSigningRequest({deploymentId:frozen.order.id,stepId:`item-${frozen.claim.itemIndex}`,attempt:frozen.claim.attempt,cluster:frozen.order.cluster,owner:frozen.order.buyer,
+      transactionBase64:frozen.request.transactionBase64,lastValidBlockHeight:frozen.request.lastValidBlockHeight});
+    const receipt=verifyFinalizedReceipt({request,signed:verifySigningResponse(request,{transactionBase64:signed.transactionBase64}),statusResult,transactionResult});
+    const state=await rpc.call('getMultipleAccounts',[[frozen.claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:receipt.slot}]);
+    need(Number.isSafeInteger(state?.context?.slot)&&state.context.slot>=receipt.slot&&Array.isArray(state.value)&&state.value.length===1,'ACCOUNT_CONTEXT');
+    const raw=state.value[0];need(raw?.owner===MPL_CORE_PROGRAM_ID&&raw.executable===false&&Number.isSafeInteger(raw.lamports)&&raw.lamports>0
+      &&Array.isArray(raw.data)&&raw.data.length===2&&raw.data[1]==='base64'&&typeof raw.data[0]==='string'&&raw.data[0].length<=65536,'ASSET_ACCOUNT');
+    const data=Buffer.from(raw.data[0],'base64');need(data.toString('base64')===raw.data[0],'ASSET_ACCOUNT');
+    const asset=deserializeAssetV1({publicKey:frozen.claim.asset,owner:raw.owner,executable:false,lamports:lamports(raw.lamports),data});
+    need(asset.key===Key.AssetV1&&asset.owner===frozen.order.buyer&&asset.updateAuthority.type==='Collection'
+      &&asset.updateAuthority.address===frozen.order.collection,'ASSET_ACCOUNT');
+    const proof={kind:'verified',cluster:frozen.order.cluster,machine:frozen.order.machine,collection:frozen.order.collection,buyer:frozen.order.buyer,
+      asset:frozen.claim.asset,blockhash:frozen.claim.blockhash,messageSha256:signed.messageSha256,commitment:'finalized',slot:receipt.slot,
+      signature:signed.signature,accountSlot:state.context.slot,account:{program:raw.owner,owner:asset.owner,collection:asset.updateAuthority.address,name:asset.name,uri:asset.uri}};
+    model.transitionOrder(frozen.order,{type:'reconcile',revision:frozen.order.revision,index:frozen.claim.itemIndex,attempt:frozen.claim.attempt,proof});
+    return{...fixed,status:'verified',chainVerified:true,proof,networkRequests:rpc.requests};
+  }catch(error){return{...fixed,status:'unknown',chainVerified:false,networkRequests:rpc?.requests??0,
+    code:error instanceof DeploymentRpcError?'RPC_'+error.code:error?.checkCode??'RECOVERY_NOT_VERIFIED'};}
+}

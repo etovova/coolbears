@@ -1,0 +1,38 @@
+{
+  "description": "CandyGuard emitted by captured Devnet program in LiteSVM; no on-chain transaction.",
+  "programElfSha256": "376d2a57c501560cf78d36dc81d60ee864f7e2007e7d4c9a3785356f5b5975ee",
+  "expected": {
+    "machine": "GtnYnx5cYDgSFHmWP7sVfxpiwniFTAXFb8nQyjJmokwH",
+    "guard": "9cvXF1yZhKj2qk3KKj7M2xv8MoyExfpz3QrSkkGaBCqd",
+    "collection": "4yMDWthw29SQrMVh9NN4Cyv9rPiwoHrLiUX6qhFS1DtA",
+    "authority": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "guardAuthority": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "mintAuthority": "9cvXF1yZhKj2qk3KKj7M2xv8MoyExfpz3QrSkkGaBCqd",
+    "itemsAvailable": 9999,
+    "itemsLoaded": 0,
+    "machineSpace": 871827,
+    "machineRentLamports": "4429531400",
+    "configLineSettings": {
+      "prefixName": "",
+      "nameLength": 31,
+      "prefixUri": "",
+      "uriLength": 52,
+      "isSequential": false
+    },
+    "addressGate": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y",
+    "payment": {
+      "lamports": "200000000",
+      "destination": "FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y"
+    },
+    "salesOpen": false
+  },
+  "account": {
+    "lamports": 1447800,
+    "owner": "CMAGAKJ67e9hRZgfC5SFTbZH8MgEmtqazKXjmkaJjWTJ",
+    "executable": false,
+    "data": [
+      "LM/HuHBnIrXsI202FIUFiEH5ao9elyX+hjDAFNpU/Txk+LvS8j6qaP/VpSJJHg+vFbIXfAsHy61RLSuJgtyn5Po8pKFzWFK4ZgIQAAAAAAAAAMLrCwAAAADVpSJJHg+vFbIXfAsHy61RLSuJgtyn5Po8pKFzWFK4ZtWlIkkeD68Vshd8CwfLrVEtK4mC3Kfk+jykoXNYUrhmAAAAAA==",
+      "base64"
+    ]
+  }
+}

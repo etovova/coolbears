@@ -1,0 +1,295 @@
+// Explicit disposable fixture paths only. No live keys, wallet, endpoint or RPC.
+import test,{before,after} from 'node:test';
+import assert from 'node:assert/strict';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { Keypair, PublicKey, VersionedTransaction } from '@solana/web3.js';
+import { policy } from '../prepare.mjs';
+import { createDeploymentSignerVault, openDeploymentSignerVault } from '../deployment/vault.mjs';
+import { createDeploymentBundle } from '../deployment/vault-store.mjs';
+import { compileDeploymentRpcPolicy } from '../deployment/compile-rpc-policy.mjs';
+import { appendDeploymentEvent } from '../deployment/journal.mjs';
+import { inspectPrivateReadiness, runPrivateReadiness } from '../private-readiness.mjs';
+import { networkProfile } from '../deployment/network.mjs';
+
+let temp,options,fixture,ownerPolicy,originalFetch,networkCalls=0,ownerBefore;
+const owner=Keypair.fromSeed(new Uint8Array(32).fill(201));
+const phrase=Buffer.from('disposable-private-readiness-TEST-only');
+const ownerEntry=submission=>`import policy from './policy.json' with { type: 'json' };
+import { makeGateway } from '../worker.mjs';
+const { worker, DeploymentGate } = makeGateway(policy, { allowSubmission: ${submission} });
+export { DeploymentGate };
+export default worker;
+`;
+const buyerEntry="import config from './config.json' with {type:'json'};\nimport {makeBuyerGateway} from '../worker.mjs';\nconst {worker,BuyerCheckGate}=makeBuyerGateway(config);\nexport {BuyerCheckGate};\nexport default worker;\n";
+const ownerNetworkEntry=(submission,mainnet,mainnetSubmission,commitment)=>`import policy from './policy.json' with { type: 'json' };
+import { makeGateway } from '../worker.mjs';
+const { worker, DeploymentGate } = makeGateway(policy, { allowSubmission: ${submission}, allowMainnet: ${mainnet}, allowMainnetSubmission: ${mainnetSubmission}${commitment===undefined?'':', trustedHiddenCommitmentSha256: '+JSON.stringify(commitment)} });
+export { DeploymentGate };
+export default worker;
+`;
+const buyerMainnetEntry=commitment=>"import config from './config.json' with {type:'json'};\nimport {makeBuyerGateway} from '../worker.mjs';\nconst {worker,BuyerCheckGate}=makeBuyerGateway(config,{allowMainnet:true"+
+  (commitment===undefined?'':',trustedHiddenCommitmentSha256:'+JSON.stringify(commitment))+"});\nexport {BuyerCheckGate};\nexport default worker;\n";
+before(async()=>{
+  originalFetch=globalThis.fetch;globalThis.fetch=()=>{networkCalls++;throw Error('network forbidden');};
+  ownerBefore=policy.owner;policy.owner=owner.publicKey.toBase58();
+  temp=await mkdtemp(join(tmpdir(),'coolbears-private-readiness-'));
+  options={bundleDirectory:join(temp,'bundle'),ownerGatewayDirectory:join(temp,'owner'),buyerGatewayDirectory:join(temp,'buyer')};
+  fixture=await createDeploymentSignerVault({id:'private-readiness-fixture',cluster:'devnet',
+    blockhash:new PublicKey(new Uint8Array(32).fill(17)).toBase58(),lastValidBlockHeight:2000,
+    machineRentLamports:'5000000000',passphrase:phrase});
+  await createDeploymentBundle({directory:options.bundleDirectory,...fixture});
+  ownerPolicy=await compileDeploymentRpcPolicy(fixture.manifest,{allowSimulation:true});
+  const machine=fixture.manifest.steps[2].expected;
+  const config={version:1,cluster:'devnet',origin:'https://private-readiness.test',machine:machine.machine,collection:machine.collection,guard:machine.guard};
+  for(const directory of [options.ownerGatewayDirectory,options.buyerGatewayDirectory])await mkdir(directory,{mode:0o700});
+  for(const [directory,file,value]of [[options.ownerGatewayDirectory,'policy.json',JSON.stringify(ownerPolicy)],
+    [options.ownerGatewayDirectory,'entry.mjs',ownerEntry(false)],
+    [options.buyerGatewayDirectory,'config.json',JSON.stringify(config)],[options.buyerGatewayDirectory,'entry.mjs',buyerEntry]])
+    await writeFile(join(directory,file),value,{mode:0o600});
+});
+after(async()=>{globalThis.fetch=originalFetch;policy.owner=ownerBefore;phrase.fill(0);if(temp)await rm(temp,{recursive:true,force:true});assert.equal(networkCalls,0);});
+async function files(directory= temp,prefix=''){
+  const saved={};
+  for(const entry of await readdir(directory,{withFileTypes:true})){
+    const name=prefix+entry.name;
+    if(entry.isSymbolicLink())saved[name]='retained-symlink';
+    else if(entry.isDirectory())Object.assign(saved,await files(join(directory,entry.name),name+'/'));
+    else saved[name]=(await readFile(join(directory,entry.name))).toString('base64');
+  }
+  return saved;
+}
+async function mutation(directory,file,transform,verify){
+  const filename=join(directory,file),before=await readFile(filename);
+  try{await writeFile(filename,transform(before));await verify();}finally{await writeFile(filename,before);}
+}
+const safe=report=>{
+  const output=JSON.stringify(report);
+  for(const text of [temp,phrase.toString(),'ciphertextBase64','saltBase64','ivBase64','tagBase64','secret-sentinel',
+    fixture.vault.ciphertextBase64,fixture.manifest.steps[1].expected.asset])assert.ok(!output.includes(text));
+  for(const key of ['readyToSign','readyToSubmit','salesOpen','deploymentPerformed'])assert.equal(report[key],false);
+  for(const key of ['networkRequests','signaturesCreated','transactionsSent'])assert.equal(report[key],0);
+  assert.ok(report.prerequisites.every(value=>value.status==='unverified'));
+};
+
+test('existing encrypted bundle and prepared configs bind offline without modifying any bytes',async()=>{
+  const before=await files(),result=await inspectPrivateReadiness(options);safe(result);
+  assert.equal(result.status,'offline-bindings-verified');assert.ok(Object.values(result.checks).every(value=>value.status==='verified'));
+  assert.equal(result.binding.cluster,'devnet');assert.equal(result.binding.journalRevision,0);
+  assert.equal(result.binding.journalHead,result.binding.manifestSha256);
+  for(const [key,value]of Object.entries(result.binding))if(key.endsWith('Sha256'))assert.match(value,/^[a-f0-9]{64}$/);
+  assert.deepEqual(await files(),before);
+});
+test('missing exact paths and missing files yield concrete blocked reports without discovery or repair',async()=>{
+  const missing=await inspectPrivateReadiness({});safe(missing);
+  assert.deepEqual(Object.values(missing.checks).slice(0,3).map(value=>value.code),
+    ['BUNDLE_PATH_REQUIRED','OWNER_GATEWAY_PATH_REQUIRED','BUYER_GATEWAY_PATH_REQUIRED']);
+  const before=await files(),result=await inspectPrivateReadiness({...options,bundleDirectory:join(temp,'absent-secret-sentinel')});safe(result);
+  assert.equal(result.checks.bundle.code,'BUNDLE_MISSING');assert.equal(result.binding,null);
+  assert.equal(result.checks.ownerGateway.code,'BUNDLE_BINDING_REQUIRED');assert.deepEqual(await files(),before);
+});
+test('caller booleans, secret fields, malformed JSON and noncanonical entries never become verification',async()=>{
+  const supplied=await inspectPrivateReadiness({...options,keysVerified:true,secret:'secret-sentinel'});safe(supplied);
+  assert.equal(supplied.code,'ARGUMENTS_INVALID');
+  for(const [directory,file,change,checkName]of [
+    [options.ownerGatewayDirectory,'policy.json',()=>'{secret-sentinel','ownerGateway'],
+    [options.ownerGatewayDirectory,'policy.json',bytes=>JSON.stringify({...JSON.parse(bytes),token:'secret-sentinel'}),'ownerGateway'],
+    [options.buyerGatewayDirectory,'config.json',bytes=>JSON.stringify({...JSON.parse(bytes),passed:true}),'buyerGateway'],
+    [options.buyerGatewayDirectory,'entry.mjs',()=>"throw Error('secret-sentinel');",'buyerGateway'],
+  ])await mutation(directory,file,change,async()=>{
+    const before=await files(),result=await inspectPrivateReadiness(options);safe(result);
+    assert.equal(result.checks[checkName].status,'blocked');assert.equal(result.binding,null);assert.deepEqual(await files(),before);
+  });
+});
+test('closed scope rejects owner submission and mismatched buyer account roles',async()=>{
+  await mutation(options.ownerGatewayDirectory,'entry.mjs',()=>ownerEntry(true),async()=>{
+    const result=await inspectPrivateReadiness(options);safe(result);assert.equal(result.checks.ownerGateway.code,'OWNER_SUBMISSION_ENABLED');
+  });
+  await mutation(options.buyerGatewayDirectory,'config.json',bytes=>{
+    const config=JSON.parse(bytes);config.machine=Keypair.fromSeed(new Uint8Array(32).fill(202)).publicKey.toBase58();return JSON.stringify(config);
+  },async()=>{
+    const result=await inspectPrivateReadiness(options);safe(result);assert.equal(result.checks.buyerGateway.code,'BUYER_SCOPE_MISMATCH');
+  });
+});
+test('unsafe modes, symlinks, oversized config and pending journal data are blocked and retained',async()=>{
+  const config=join(options.buyerGatewayDirectory,'config.json');await chmod(config,0o644);
+  try{assert.equal((await inspectPrivateReadiness(options)).checks.buyerGateway.code,'BUYER_GATEWAY_INVALID');}finally{await chmod(config,0o600);}
+  const link=join(temp,'buyer-link');await symlink(options.buyerGatewayDirectory,link);
+  assert.equal((await inspectPrivateReadiness({...options,buyerGatewayDirectory:link})).checks.buyerGateway.code,'BUYER_GATEWAY_INVALID');
+  await mutation(options.buyerGatewayDirectory,'config.json',()=>Buffer.alloc(16385,32),async()=>{
+    const result=await inspectPrivateReadiness(options);safe(result);assert.equal(result.checks.buyerGateway.code,'BUYER_GATEWAY_LIMIT');
+  });
+  const pending=join(options.bundleDirectory,'journal','.writer-lock');await mkdir(pending,{mode:0o700});
+  try{const result=await inspectPrivateReadiness(options);safe(result);assert.equal(result.checks.bundle.code,'BUNDLE_BUSY_OR_INCOMPLETE');
+    assert.deepEqual(await readdir(pending),[]);}finally{await rm(pending,{recursive:true});}
+});
+test('stale owner recovery policy is detected against newly retained signed journal evidence',async()=>{
+  const signer=await openDeploymentSignerVault({...fixture,passphrase:phrase}),step=fixture.manifest.steps[0];let request;
+  try{request=signer.partialSign({stepId:step.id,transactionBase64:step.transactionBase64,lastValidBlockHeight:step.lastValidBlockHeight,attempt:1});}
+  finally{signer.dispose();}
+  const journal=join(options.bundleDirectory,'journal');
+  await appendDeploymentEvent(journal,{type:'prepare',stepId:step.id,request,retry:false},{expectedRevision:0});
+  const tx=VersionedTransaction.deserialize(Buffer.from(request.transactionBase64,'base64'));tx.sign([owner]);
+  const snapshot=await appendDeploymentEvent(journal,{type:'signed',stepId:step.id,attempt:1,transactionBase64:Buffer.from(tx.serialize()).toString('base64')},{expectedRevision:1});
+  const before=await files(),stale=await inspectPrivateReadiness(options);safe(stale);
+  assert.equal(stale.checks.ownerGateway.code,'OWNER_POLICY_STALE_OR_MISMATCHED');assert.deepEqual(await files(),before);
+  const current=await compileDeploymentRpcPolicy(fixture.manifest,{allowSimulation:true,recoverySignatures:[snapshot.steps[0].attempts[0].signed.signature]});
+  await writeFile(join(options.ownerGatewayDirectory,'policy.json'),JSON.stringify(current));
+  const updatedBefore=await files(),updated=await inspectPrivateReadiness(options);safe(updated);
+  assert.equal(updated.status,'offline-bindings-verified');assert.equal(updated.binding.journalRevision,2);assert.equal(updated.binding.journalHead,snapshot.headHash);
+  assert.deepEqual(await files(),updatedBefore);
+});
+test('CLI reports only safe JSON and treats successful offline inspection as no live validation',async()=>{
+  let text='';const output={write:value=>{text+=value;}};
+  assert.equal(await runPrivateReadiness(['inspect',...Object.values(options)],{output}),0);
+  const result=JSON.parse(text);safe(result);assert.equal(result.status,'offline-bindings-verified');
+  text='';assert.equal(await runPrivateReadiness(['inspect','secret-sentinel'],{output}),1);
+  const blocked=JSON.parse(text);safe(blocked);assert.equal(blocked.code,'ARGUMENTS_INVALID');
+});
+
+test('hidden readiness binds both gateway storage profiles to the immutable bundle commitment',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'coolbears-hidden-readiness-TEST-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const hiddenOptions={bundleDirectory:join(root,'bundle'),ownerGatewayDirectory:join(root,'owner'),buyerGatewayDirectory:join(root,'buyer')};
+  const hiddenCommitmentSha256='1'.repeat(64);
+  const created=await createDeploymentSignerVault({id:'hidden-readiness-TEST',cluster:'devnet',
+    blockhash:new PublicKey(new Uint8Array(32).fill(17)).toBase58(),lastValidBlockHeight:2000,
+    machineRentLamports:'3962400',passphrase:phrase,storageMode:'hidden-settings',hiddenCommitmentSha256});
+  await createDeploymentBundle({directory:hiddenOptions.bundleDirectory,...created});
+  const machine=created.manifest.steps[2].expected;
+  const hiddenPolicy=await compileDeploymentRpcPolicy(created.manifest,{allowSimulation:true});
+  assert.equal(hiddenPolicy.version,2);assert.equal(hiddenPolicy.messageIdentities.length,3);
+  const hiddenConfig={version:2,cluster:'devnet',origin:'https://hidden-readiness.test',machine:machine.machine,
+    collection:machine.collection,guard:machine.guard,storageMode:'hidden-settings',hiddenCommitmentSha256};
+  for(const directory of [hiddenOptions.ownerGatewayDirectory,hiddenOptions.buyerGatewayDirectory])await mkdir(directory,{mode:0o700});
+  for(const [directory,file,value]of [[hiddenOptions.ownerGatewayDirectory,'policy.json',JSON.stringify(hiddenPolicy)],
+    [hiddenOptions.ownerGatewayDirectory,'entry.mjs',ownerEntry(false)],
+    [hiddenOptions.buyerGatewayDirectory,'config.json',JSON.stringify(hiddenConfig)],[hiddenOptions.buyerGatewayDirectory,'entry.mjs',buyerEntry]])
+    await writeFile(join(directory,file),value,{mode:0o600});
+  const before=await files(root),result=await inspectPrivateReadiness(hiddenOptions);safe(result);
+  assert.equal(result.status,'offline-bindings-verified');assert.ok(Object.values(result.checks).every(value=>value.status==='verified'));
+  assert.equal(result.binding.storageMode,'hidden-settings');assert.equal(result.binding.hiddenCommitmentSha256,hiddenCommitmentSha256);
+  assert.equal(result.binding.privateMappingVerified,false);assert.deepEqual(await files(root),before);
+  const legacy={...hiddenConfig,version:1};delete legacy.storageMode;delete legacy.hiddenCommitmentSha256;
+  for(const changed of [legacy,{...hiddenConfig,hiddenCommitmentSha256:'2'.repeat(64)}]){
+    await mutation(hiddenOptions.buyerGatewayDirectory,'config.json',()=>JSON.stringify(changed),async()=>{
+      const saved=await files(root),blocked=await inspectPrivateReadiness(hiddenOptions);safe(blocked);
+      assert.equal(blocked.status,'blocked');assert.equal(blocked.checks.buyerGateway.code,'BUYER_STORAGE_PROFILE_MISMATCH');
+      assert.equal(blocked.binding,null);assert.deepEqual(await files(root),saved);
+    });
+  }
+  await mutation(hiddenOptions.ownerGatewayDirectory,'policy.json',()=>JSON.stringify({...hiddenPolicy,hiddenCommitmentSha256:'2'.repeat(64)}),async()=>{
+    const blocked=await inspectPrivateReadiness(hiddenOptions);safe(blocked);
+    assert.equal(blocked.checks.ownerGateway.code,'OWNER_POLICY_STALE_OR_MISMATCHED');assert.equal(blocked.binding,null);
+  });
+  assert.deepEqual(await files(root),before);
+});
+
+test('legacy readiness rejects a crossed hidden buyer profile even when all account addresses match',async()=>{
+  await mutation(options.buyerGatewayDirectory,'config.json',bytes=>JSON.stringify({...JSON.parse(bytes),version:2,
+    storageMode:'hidden-settings',hiddenCommitmentSha256:'1'.repeat(64)}),async()=>{
+    const before=await files(),result=await inspectPrivateReadiness(options);safe(result);
+    assert.equal(result.status,'blocked');assert.equal(result.checks.buyerGateway.code,'BUYER_STORAGE_PROFILE_MISMATCH');
+    assert.equal(result.binding,null);assert.deepEqual(await files(),before);
+  });
+});
+
+test('legacy readiness accepts the newly prepared Devnet read-only entry without changing the report shape',async()=>{
+  await mutation(options.ownerGatewayDirectory,'entry.mjs',()=>ownerNetworkEntry(false,false,false),async()=>{
+    const before=await files(),result=await inspectPrivateReadiness(options);safe(result);
+    assert.equal(result.status,'offline-bindings-verified');assert.equal(result.binding.cluster,'devnet');
+    assert.equal(Object.hasOwn(result.binding,'genesisHash'),false);assert.deepEqual(await files(),before);
+  });
+});
+
+async function mainnetReadinessFixture(t){
+  const root=await mkdtemp(join(tmpdir(),'coolbears-mainnet-readiness-TEST-'));
+  t.after(()=>rm(root,{recursive:true,force:true}));
+  const selected={bundleDirectory:join(root,'bundle'),ownerGatewayDirectory:join(root,'owner'),buyerGatewayDirectory:join(root,'buyer')};
+  const trustedHiddenCommitmentSha256='3'.repeat(64);
+  const created=await createDeploymentSignerVault({id:'mainnet-readiness-TEST',cluster:'mainnet-beta',
+    blockhash:new PublicKey(new Uint8Array(32).fill(19)).toBase58(),lastValidBlockHeight:2000,
+    machineRentLamports:'3962400',passphrase:phrase,storageMode:'hidden-settings',hiddenCommitmentSha256:trustedHiddenCommitmentSha256});
+  await createDeploymentBundle({directory:selected.bundleDirectory,...created});
+  const machine=created.manifest.steps[2].expected;
+  const pinned=await compileDeploymentRpcPolicy(created.manifest,{allowSimulation:true,authorizeMainnet:true,trustedHiddenCommitmentSha256});
+  const config={version:2,cluster:'mainnet-beta',origin:'https://mainnet-readiness.test',machine:machine.machine,
+    collection:machine.collection,guard:machine.guard,genesisHash:networkProfile('mainnet-beta').genesisHash,
+    storageMode:'hidden-settings',hiddenCommitmentSha256:trustedHiddenCommitmentSha256};
+  for(const directory of [selected.ownerGatewayDirectory,selected.buyerGatewayDirectory])await mkdir(directory,{mode:0o700});
+  for(const [directory,file,value]of [[selected.ownerGatewayDirectory,'policy.json',JSON.stringify(pinned)],
+    [selected.ownerGatewayDirectory,'entry.mjs',ownerNetworkEntry(false,true,false,trustedHiddenCommitmentSha256)],
+    [selected.buyerGatewayDirectory,'config.json',JSON.stringify(config)],[selected.buyerGatewayDirectory,'entry.mjs',buyerMainnetEntry(trustedHiddenCommitmentSha256)]])
+    await writeFile(join(directory,file),value,{mode:0o600});
+  return{root,selected,created,pinned,config,trustedHiddenCommitmentSha256};
+}
+
+test('Mainnet readiness binds the full shared genesis, closed gateway entries and explicit external hidden digest offline',async t=>{
+  const f=await mainnetReadinessFixture(t),input={...f.selected,trustedHiddenCommitmentSha256:f.trustedHiddenCommitmentSha256};
+  const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+  assert.equal(result.status,'offline-bindings-verified');assert.ok(Object.values(result.checks).every(value=>value.status==='verified'));
+  assert.equal(result.binding.cluster,'mainnet-beta');assert.equal(result.binding.genesisHash,networkProfile('mainnet-beta').genesisHash);
+  assert.equal(result.binding.hiddenCommitmentSha256,f.trustedHiddenCommitmentSha256);assert.equal(result.binding.privateMappingVerified,false);
+  assert.equal(JSON.stringify(result).includes(f.root),false);assert.equal(JSON.stringify(result).includes(f.created.vault.ciphertextBase64),false);
+  assert.deepEqual(await files(f.root),before);
+  for(const digest of [undefined,'4'.repeat(64)]){
+    const missing=await inspectPrivateReadiness({...input,trustedHiddenCommitmentSha256:digest});safe(missing);
+    assert.equal(missing.status,'blocked');assert.equal(missing.binding,null);
+    assert.equal(missing.checks.bundle.code,'BUNDLE_TRUSTED_HIDDEN_COMMITMENT_REQUIRED');
+    assert.deepEqual(await files(f.root),before);
+  }
+  for(const value of ['',true,'0'.repeat(64),'3'.repeat(63),f.trustedHiddenCommitmentSha256.toUpperCase()+'A']){
+    const invalid=await inspectPrivateReadiness({...input,trustedHiddenCommitmentSha256:value});safe(invalid);
+    assert.equal(invalid.code,'ARGUMENTS_INVALID');assert.equal(invalid.binding,null);assert.deepEqual(await files(f.root),before);
+  }
+  let text='';const output={write:value=>{text+=value;}};
+  assert.equal(await runPrivateReadiness(['inspect',...Object.values(f.selected)],{output,env:{}}),1);
+  assert.equal(JSON.parse(text).checks.bundle.code,'BUNDLE_TRUSTED_HIDDEN_COMMITMENT_REQUIRED');
+  text='';assert.equal(await runPrivateReadiness(['inspect',...Object.values(f.selected)],{output,
+    env:{COOLBEARS_HIDDEN_COMMITMENT_SHA256:f.trustedHiddenCommitmentSha256,COOLBEARS_CLUSTER:'devnet'}}),0);
+  assert.equal(JSON.parse(text).binding.cluster,'mainnet-beta');assert.deepEqual(await files(f.root),before);
+});
+
+test('Mainnet readiness rejects crossed gateway scope and any send-enabled or noncanonical prepared entry',async t=>{
+  const f=await mainnetReadinessFixture(t),input={...f.selected,trustedHiddenCommitmentSha256:f.trustedHiddenCommitmentSha256};
+  for(const entry of [ownerNetworkEntry(true,true,false),ownerNetworkEntry(false,true,true),ownerEntry(true),
+    ownerNetworkEntry(false,true,true,f.trustedHiddenCommitmentSha256)])
+    await mutation(f.selected.ownerGatewayDirectory,'entry.mjs',()=>entry,async()=>{
+      const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+      assert.equal(result.checks.ownerGateway.code,'OWNER_SUBMISSION_ENABLED');assert.equal(result.binding,null);
+      assert.deepEqual(await files(f.root),before);
+    });
+  for(const entry of [ownerEntry(false),ownerNetworkEntry(false,false,false),ownerNetworkEntry(false,true,false),
+    ownerNetworkEntry(false,true,false,'4'.repeat(64)),ownerNetworkEntry(false,true,false,f.trustedHiddenCommitmentSha256)+'signTransaction();\n'])
+    await mutation(f.selected.ownerGatewayDirectory,'entry.mjs',()=>entry,async()=>{
+      const result=await inspectPrivateReadiness(input);safe(result);assert.equal(result.checks.ownerGateway.status,'blocked');
+      assert.equal(result.binding,null);
+    });
+  const buyerSource=buyerMainnetEntry(f.trustedHiddenCommitmentSha256);
+  for(const entry of [buyerEntry,buyerMainnetEntry(undefined),buyerMainnetEntry('4'.repeat(64)),
+    buyerSource.replace('{allowMainnet:true,','{allowMainnet:true,allowMainnetSubmission:true,'),buyerSource+'signTransaction();\n'])
+    await mutation(f.selected.buyerGatewayDirectory,'entry.mjs',()=>entry,async()=>{
+      const result=await inspectPrivateReadiness(input);safe(result);assert.equal(result.checks.buyerGateway.status,'blocked');
+      assert.equal(result.binding,null);
+    });
+  await mutation(f.selected.ownerGatewayDirectory,'policy.json',()=>JSON.stringify({...f.pinned,cluster:'devnet'}),async()=>{
+    const result=await inspectPrivateReadiness(input);safe(result);assert.equal(result.checks.ownerGateway.status,'blocked');
+    assert.equal(result.binding,null);
+  });
+  await mutation(f.selected.buyerGatewayDirectory,'config.json',()=>{
+    const crossed={...f.config,cluster:'devnet'};delete crossed.genesisHash;return JSON.stringify(crossed);
+  },async()=>{
+    await mutation(f.selected.buyerGatewayDirectory,'entry.mjs',()=>buyerEntry,async()=>{
+      const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+      assert.equal(result.checks.buyerGateway.code,'BUYER_NETWORK_SCOPE_MISMATCH');assert.equal(result.binding,null);
+      assert.deepEqual(await files(f.root),before);
+    });
+  });
+  for(const genesisHash of [undefined,networkProfile('devnet').genesisHash,'secret-sentinel'])
+    await mutation(f.selected.buyerGatewayDirectory,'config.json',()=>JSON.stringify({...f.config,genesisHash}),async()=>{
+      const before=await files(f.root),result=await inspectPrivateReadiness(input);safe(result);
+      assert.equal(result.checks.buyerGateway.code,'BUYER_GATEWAY_INVALID');assert.equal(result.binding,null);
+      assert.deepEqual(await files(f.root),before);
+    });
+});

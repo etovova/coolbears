@@ -1,5 +1,7 @@
 name: Wallet browser compatibility
 on:
+  pull_request:
+    paths: ['app.js', 'index.html', 'public-mainnet/**', 'scripts/**', 'tests/main.browser.mjs', 'tests/public-*.checks.mjs', 'package.json', 'package-lock.json', 'operator/orders/**', 'operator/package-lock.json', '.github/workflows/wallet-browsers.yml']
   push:
     branches: [main, 'rpc-wallet-additions-*']
   workflow_dispatch:
@@ -26,10 +28,12 @@ jobs:
           node-version: '24.19.0'
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
       - run: npm run test:devnet
       - run: npm run build:wallet
       - run: npm run build:site
-      - run: node scripts/verify-static.mjs --check-committed
+      - run: npm run test:public-mainnet
+      - run: npm run verify -- --check-committed
       - name: Install test browser
         id: install-browser
         run: |
@@ -37,9 +41,10 @@ jobs:
           node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps "${{ matrix.engine }}"
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Main site and wallet picker
+        id: main
         run: node tests/main.browser.mjs
       - name: Devnet failures and recovery
-        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.install-browser.outcome == 'success' && steps.main.outcome == 'success' }}
         run: node tests/devnet-matrix.browser.mjs
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
@@ -49,3 +54,4 @@ jobs:
             build/main-${{ matrix.engine }}/
             build/devnet-${{ matrix.engine }}/
           if-no-files-found: warn
+

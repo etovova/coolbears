@@ -4,9 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:site": "node scripts/stage-site.mjs",
+    "build:site": "npm run build:public-mainnet && node scripts/stage-site.mjs",
+    "build:public-mainnet": "node scripts/build-public-mainnet.mjs",
     "build:wallet": "node scripts/build-wallet.mjs",
-    "verify": "node scripts/verify-static.mjs",
+    "verify": "node scripts/verify-static.mjs && node scripts/verify-public-mainnet.mjs",
+    "test:public-mainnet": "node --experimental-vm-modules --test tests/public-*.checks.mjs",
     "test:devnet": "node --test tests/*.test.mjs",
     "build:rpc": "wrangler deploy --config rpc-proxy/wrangler.jsonc --dry-run --outdir ../build/rpc-proxy",
     "test:rpc-runtime": "node tests/rpc-proxy.runtime.mjs",

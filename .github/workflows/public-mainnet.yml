@@ -1,0 +1,33 @@
+name: Public Mainnet frontend
+on:
+  pull_request:
+    paths: ['app.js', 'index.html', 'public-mainnet/**', 'scripts/**', 'tests/public-*.checks.mjs', 'package.json', 'package-lock.json', 'operator/orders/**', 'operator/package-lock.json', '.github/workflows/public-mainnet.yml']
+  push:
+    branches: [main]
+    paths: ['app.js', 'index.html', 'public-mainnet/**', 'scripts/**', 'tests/public-*.checks.mjs', 'package.json', 'package-lock.json', 'operator/orders/**', 'operator/package-lock.json', '.github/workflows/public-mainnet.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            operator/package-lock.json
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: npm run test:devnet
+      - run: npm run build:wallet
+      - run: npm run build:site
+      - run: npm run test:public-mainnet
+      - run: npm run verify

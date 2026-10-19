@@ -1,0 +1,599 @@
+// Separate trusted public Mainnet gateway. No request or environment flag opens the on-chain guard.
+// Derived from the preserved closed gateway; native order/signing/recovery protocols are unchanged.
+import policy from '../../../metadata/policy.json' with {type:'json'};
+import { PublicKey } from '@solana/web3.js';
+import { createOrderModel } from '../journal-model.mjs';
+import { createOrderPlanner } from '../transaction-model.mjs';
+import {createPublicSaleAccountVerifier} from '../../public-sale/accounts.mjs';
+import {createPublicPrefixReceiptCache} from './public-prefix-receipt-cache.mjs';
+import {validatePublicReleaseProfile,publicReleaseProfileSha256} from '../../public-sale/profile.mjs';
+import {MPL_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-core';
+import {MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID,MPL_CORE_CANDY_GUARD_PROGRAM_ID} from '@metaplex-foundation/mpl-core-candy-machine';
+import { createOrderChecker } from '../public-preflight-model.mjs';
+import {currentItemIndex,assertCurrentItem,validateSequentialOrder} from '../sequential.mjs';
+import {createCostQuote,costQuoteKey,validateCostApproval,enforceCostCeiling} from '../cost-approval.mjs';
+import { anchorKey, attemptKey, validateBlockhashAnchor } from '../blockhash-anchor.mjs';
+import { preparationFor, validatePreparation } from '../preparation.mjs';
+import { validateAssetRequest } from '../signing.mjs';
+import { validateBuyerSubmission, submissionBinding, signedBytesId } from '../submission.mjs';
+import { recoverBuyerOrder } from '../recovery.mjs';
+import {discoverBuyerResponse} from '../discover-response.mjs';
+import {validateMissingBuyerResponse,recoveredSubmission,responseRecoveryKey,responseRecoveryRecord,restoreResponseRecovery,restoreDiscoveredSubmission,responseRecoveryReport} from '../response-recovery.mjs';
+import {validatePrewalletInput,prewalletRecoveryKey,prewalletRecoveryRecord,restorePrewalletRecovery,restorePrewalletSubmission,prewalletFailurePrior} from '../prewallet-recovery.mjs';
+import {discoverPrewalletResult} from '../discover-prewallet.mjs';
+import {prewalletExpiryKey,prewalletExpiryRecord,restorePrewalletExpiry} from '../prewallet-expiry.mjs';
+import {reviewPrewalletExpiry} from '../review-prewallet-expiry.mjs';
+import {responseExpiryKey,responseExpiryRecord,restoreResponseExpiry,restoreResponseExpirySubmission} from '../response-expiry.mjs';
+import {reviewResponseExpiry} from '../review-response-expiry.mjs';
+import {validatePrewalletExpiryReplacementSource} from '../prewallet-expiry-replacement.mjs';
+import {validateResponseExpiryReplacementSource} from '../response-expiry-replacement.mjs';
+import {reviewBuyerExpiry} from '../review-expiry.mjs';
+import {expiryKey,expiryRecord,restoreExpiryReport} from '../expiry-review.mjs';
+import {failureKey,failureRecord,restoreFailureReport} from '../failure-record.mjs';
+import {replacementKey,validateReplacementSource,validateReplacementPrior,validateReplacementAcknowledgment,replacementAccountFloor,replacementSourceFloor,replacementFor,replacementReport,validateReplacementClaim} from '../replacement.mjs';
+import { createDeploymentRpc, assertCluster } from '../../deployment/rpc.mjs';
+import { networkProfile, networkSendAuthorized } from '../../deployment/network.mjs';
+import { BuyerCheckError, need, exact, readJson } from './http.mjs';
+const KEY='buyer-check-budget:v1',GLOBAL='buyer-check-global-v1',HOLD=45000,INTERVAL=200;
+const METHODS=new Set(['getGenesisHash','getMultipleAccounts','getBalance','getFeeForMessage',
+  'getMinimumBalanceForRentExemption','simulateTransaction','isBlockhashValid','getBlockHeight',
+  'getSignatureStatuses','getTransaction','getLatestBlockhash']);
+const EXPIRY_METHODS=new Set(['getBlock','getFirstAvailableBlock','getSignaturesForAddress']);
+const HEADERS={'content-type':'application/json; charset=utf-8','cache-control':'no-store',
+  'x-content-type-options':'nosniff','cross-origin-resource-policy':'same-origin','referrer-policy':'no-referrer'};
+const integer=n=>Number.isSafeInteger(n)&&n>=0;
+const reply=(status,value,extra={})=>new Response(JSON.stringify(value),{status,headers:{...HEADERS,...extra}});
+function failure(error){const known=error instanceof BuyerCheckError;
+  return reply(known?error.status:503,{status:'blocked',code:known?error.code:'CHECK_UNAVAILABLE',readyToSign:false,readyToSubmit:false,salesOpen:false},
+    known&&integer(error.retryAfter)?{'retry-after':String(error.retryAfter)}:{});}
+function cap(value,limit,fallback){if(value===undefined)return fallback;need(typeof value==='string'&&/^[1-9][0-9]*$/.test(value)&&+value<=limit,'CONFIGURATION',503);return +value;}
+function validateBuyerGatewayConfig(input){
+  const hidden=input?.version===2,mainnet=input?.cluster==='mainnet-beta';
+  need(exact(input,'version cluster origin machine collection guard'+(hidden?' storageMode hiddenCommitmentSha256':'')+(mainnet?' genesisHash':''))&&input.version===(hidden?2:1),'CONFIGURATION',503);
+  let network;try{network=networkProfile(input.cluster);}catch{throw new BuyerCheckError('CONFIGURATION',503);}
+  if(mainnet)need(input.genesisHash===network.genesisHash,'CONFIGURATION',503);
+  if(hidden)need(input.storageMode==='hidden-settings'&&typeof input.hiddenCommitmentSha256==='string'&&/^[a-f0-9]{64}$/.test(input.hiddenCommitmentSha256)&&input.hiddenCommitmentSha256!=='0'.repeat(64),'CONFIGURATION',503);
+  try{const u=new URL(input.origin);need(u.protocol==='https:'&&u.origin===input.origin&&!u.username&&!u.password,'CONFIGURATION',503);
+    for(const field of ['machine','collection','guard'])need(new PublicKey(input[field]).toBase58()===input[field],'CONFIGURATION',503);
+    need(new Set([input.machine,input.collection,input.guard]).size===3,'CONFIGURATION',503);
+  }catch{throw new BuyerCheckError('CONFIGURATION',503);}
+  return structuredClone(input);
+}
+function authorize(request,config,env){
+  const u=new URL(request.url);need(u.origin===config.origin&&['/api/buyer/readiness','/api/buyer/prepare','/api/buyer/check','/api/buyer/send','/api/buyer/recover','/api/buyer/recover-response','/api/buyer/review-response-expiry','/api/buyer/recover-prewallet','/api/buyer/review-prewallet-expiry','/api/buyer/replace-prewallet-expiry','/api/buyer/replace-response-expiry','/api/buyer/review-expiry','/api/buyer/replace'].includes(u.pathname)&&!u.search&&!u.hash,'ROUTE',404);
+  const readiness=u.pathname==='/api/buyer/readiness';
+  need(request.method===(readiness?'GET':'POST'),'METHOD',405);
+  need((request.headers.get('origin')===config.origin||(readiness&&!request.headers.has('origin')))
+    &&!request.headers.has('cookie')&&!request.headers.has('authorization')
+    &&(!request.headers.has('sec-fetch-site')||request.headers.get('sec-fetch-site')==='same-origin'),'ORIGIN',403);
+  need(env.MAINNET_RPC&&typeof env.MAINNET_RPC.fetch==='function','CONFIGURATION',503);
+}
+function ledger(value,now,network){
+  need(integer(now),'CLOCK',503);const day=Math.floor(now/86400000);
+  const mainnet=network.cluster==='mainnet-beta',identity=mainnet?{version:2,cluster:network.cluster,genesisHash:network.genesisHash}:{version:1};
+  if(value===undefined)return{...identity,day,checks:0,rpc:0,simulations:0,nextAt:0,holdUntil:0,cooldownUntil:0};
+  need(exact(value,'version day checks rpc simulations nextAt holdUntil cooldownUntil'+(mainnet?' cluster genesisHash':''))
+    &&Object.entries(identity).every(([key,expected])=>value[key]===expected)
+    &&['day','checks','rpc','simulations','nextAt','holdUntil','cooldownUntil'].every(key=>integer(value[key]))
+    &&value.simulations<=value.rpc,'LEDGER',503);
+  return day>value.day?{...value,day,checks:0,rpc:0,simulations:0}:{...value};
+}
+function retryAfter(value,now){const s=typeof value==='string'&&/^\d+$/.test(value)?+value:Math.ceil((Date.parse(value)-now)/1000);return Number.isFinite(s)?Math.max(1,Math.min(300,s)):5;}
+export function makePublicBuyerGateway(input,{releaseProfile}={}){
+  const release=validatePublicReleaseProfile(releaseProfile),profileSha256=publicReleaseProfileSha256(release);
+  const config=validateBuyerGatewayConfig(input),network=networkProfile(config.cluster);
+  need(config.version===2&&config.origin===release.website
+    &&['cluster','genesisHash','machine','collection','guard','storageMode','hiddenCommitmentSha256'].every(key=>config[key]===release[key]),'TRUSTED_PUBLIC_PROFILE',503);
+  const allowMainnet=true,submissionEnabled=true;
+  const ledgerKey=`buyer-public-budget:v1:${profileSha256}`,globalName=`buyer-public-global:v1:${profileSha256}`;
+  const readinessKey=`buyer-public-readiness:v1:${profileSha256}`;
+  const storageOptions={storageMode:release.storageMode,hiddenCommitmentSha256:release.hiddenCommitmentSha256};
+  const accountVerifier=createPublicSaleAccountVerifier(policy,release);
+  const model=createOrderModel(policy,storageOptions),planner=createOrderPlanner(model);
+  const checker=createOrderChecker(policy,{...model,...planner,...accountVerifier},storageOptions);
+  const programs=[MPL_CORE_PROGRAM_ID,MPL_CORE_CANDY_MACHINE_CORE_PROGRAM_ID,MPL_CORE_CANDY_GUARD_PROGRAM_ID];
+  const programOwners=new Set(['BPFLoaderUpgradeab1e11111111111111111111111','BPFLoader2111111111111111111111111111111111']);
+  async function readPublicState(rpc,minimum=0){
+    const result=await rpc.call('getMultipleAccounts',[[...programs,release.machine,release.guard,release.collection],
+      {encoding:'base64',commitment:'finalized',minContextSlot:minimum}]);
+    need(integer(result?.context?.slot)&&result.context.slot>=minimum&&Array.isArray(result.value)&&result.value.length===6,'RPC_CONTEXT',503);
+    need(result.value.slice(0,3).every(value=>value?.executable===true&&programOwners.has(value.owner)
+      &&integer(value.lamports)&&value.lamports>0),'PROGRAM_UNAVAILABLE',503);
+    let state;try{state=accountVerifier.inspectPublicSaleAccounts(result.value.slice(3));}
+    catch{throw new BuyerCheckError('PUBLIC_SALE_ACCOUNT_STATE',409);}
+    return {...state,slot:result.context.slot};
+  }
+  function readinessReply(status,checkedAt){
+    return {version:1,cluster:release.cluster,genesisHash:release.genesisHash,machine:release.machine,
+      collection:release.collection,guard:release.guard,storageMode:release.storageMode,
+      hiddenCommitmentSha256:release.hiddenCommitmentSha256,unitPriceLamports:release.unitPriceLamports,
+      maximumPerOrder:release.maxPerOrder,profileSha256,checkedAt,expiresAt:checkedAt+8000,status,salesOpen:status==='open'};
+  }
+  class BuyerCheckGate{
+    constructor(state,env,{fetchImpl,clock=Date.now,pause=ms=>new Promise(r=>setTimeout(r,ms))}={}){
+      this.storage=state.storage;this.env=env;this.fetchImpl=fetchImpl??((url,init)=>env.MAINNET_RPC.fetch(new Request(url,init)));
+      this.clock=clock;this.pause=pause;this.busy=false;this.readinessPending=null;
+    }
+    async readiness(request){
+      const respond=({value,networkVerified})=>reply(200,value,{'x-coolbears-network-verified':networkVerified?'1':'0'});
+      const cached=await this.storage.get(readinessKey),now=this.clock();
+      const canonical=cached&&integer(cached.checkedAt)&&['closed','open','sold-out'].includes(cached.status)
+        ?readinessReply(cached.status,cached.checkedAt):null;
+      if(canonical&&exact(cached,Object.keys(canonical).join(' '))
+        &&Object.entries(canonical).every(([key,value])=>cached[key]===value)
+        &&cached.checkedAt<=now&&now<cached.expiresAt)return respond({value:cached,networkVerified:true});
+      if(this.readinessPending)return this.readinessPending.then(respond);
+      this.readinessPending=(async()=>{
+        let reserved=false,own=false;
+        try{
+          need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
+          await this.storage.transaction(async tx=>{
+            const now=this.clock(),v=ledger(await tx.get(ledgerKey),now,network),until=Math.max(v.nextAt,v.holdUntil,v.cooldownUntil);
+            need(until<=now,'COOLDOWN',429,Math.max(1,Math.ceil((until-now)/1000)));
+            v.holdUntil=now+HOLD;await tx.put(ledgerKey,v);
+          });reserved=true;
+          const endpoint=network.rpcUpstream;
+          const fetchImpl=async(url,init)=>{
+            const payload=JSON.parse(init.body);
+            need(url===endpoint&&['getGenesisHash','getMultipleAccounts'].includes(payload.method),'RPC_METHOD',503);
+            await this.reserveRpc(payload.method);need(!init.signal.aborted,'RPC_TIMEOUT',504);
+            const response=await this.fetchImpl(url,{...init,redirect:'manual'});
+            if([429,503].includes(response.status)){
+              const seconds=retryAfter(response.headers.get('retry-after'),this.clock());
+              await this.storage.transaction(async tx=>{const v=ledger(await tx.get(ledgerKey),this.clock(),network);v.cooldownUntil=Math.max(v.cooldownUntil,this.clock()+seconds*1000);await tx.put(ledgerKey,v);});
+            }
+            return response;
+          };
+          const rpc=createDeploymentRpc({endpoint,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000,cluster:network.cluster,authorizeMainnet:true});
+          await assertCluster(rpc,network.cluster);
+          const state=await readPublicState(rpc);
+          const result=readinessReply(state.status==='public'?'open':state.status,this.clock());
+          await this.storage.put(readinessKey,result);
+          return {value:result,networkVerified:true};
+        }catch(error){return {value:readinessReply('unavailable',this.clock()),
+          networkVerified:error instanceof BuyerCheckError&&error.code==='PUBLIC_SALE_ACCOUNT_STATE'};}
+        finally{
+          if(reserved)try{await this.storage.transaction(async tx=>{const v=ledger(await tx.get(ledgerKey),this.clock(),network);v.holdUntil=0;await tx.put(ledgerKey,v);});}catch{}
+          if(own)this.busy=false;
+        }
+      })();
+      try{return respond(await this.readinessPending);}finally{this.readinessPending=null;}
+    }
+    async reserveCheck(){
+      const daily=cap(this.env.DAILY_CHECK_CAP,500,100);
+      await this.storage.transaction(async tx=>{
+        const now=this.clock(),v=ledger(await tx.get(ledgerKey),now,network),until=Math.max(v.nextAt,v.holdUntil,v.cooldownUntil);
+        need(until<=now,'COOLDOWN',429,Math.max(1,Math.ceil((until-now)/1000)));
+        need(v.checks<daily,'DAILY_LIMIT',429,Math.max(1,Math.ceil(((v.day+1)*86400000-now)/1000)));
+        v.checks++;v.holdUntil=now+HOLD;await tx.put(ledgerKey,v);
+      });
+    }
+    async reserveRpc(method){
+      const daily=cap(this.env.DAILY_RPC_CAP,5000,2000),sim=cap(this.env.DAILY_SIMULATION_CAP,500,100);
+      const initial=ledger(await this.storage.get(ledgerKey),this.clock(),network),wait=initial.nextAt-this.clock();
+      need(wait<=INTERVAL,'COOLDOWN',429,Math.max(1,Math.ceil(wait/1000)));if(wait>0)await this.pause(wait);
+      await this.storage.transaction(async tx=>{
+        const now=this.clock(),v=ledger(await tx.get(ledgerKey),now,network);
+        need(v.holdUntil>now&&v.nextAt<=now,'LEASE',503);
+        need(v.rpc<daily&&(method!=='simulateTransaction'||v.simulations<sim),'DAILY_LIMIT',429,86400);
+        v.rpc++;if(method==='simulateTransaction')v.simulations++;v.nextAt=now+INTERVAL;await tx.put(ledgerKey,v);
+      });
+    }
+    async validateResponseExpiryRetention(order,prior,request,walletClaim,sendBase,storage=this.storage){
+      const itemIndex=request.itemIndex;
+      need(JSON.stringify(prior)===JSON.stringify(await storage.get(responseExpiryKey(order,1,itemIndex)))
+        &&await storage.get(prewalletExpiryKey(order,1,itemIndex))===undefined&&await storage.get(prewalletRecoveryKey(order,1,itemIndex))===undefined
+        &&await storage.get(expiryKey(order,1,itemIndex))===undefined&&await storage.get(failureKey(order,1,itemIndex))===undefined
+        &&await storage.get(responseRecoveryKey(order,1,itemIndex))===undefined&&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
+      const preparation=await storage.get(anchorKey(order,1,itemIndex));
+      validateBlockhashAnchor(preparation?.anchor,request);
+      need(preparation.anchor.sourceSlot===prior.evidence.anchorSlot,'REPLACEMENT_REQUIRED',409);
+      if(walletClaim.version===2)need(JSON.stringify(await storage.get(costQuoteKey(walletClaim.costApproval.quote.quoteId)))
+        ===JSON.stringify(walletClaim.costApproval.quote),'COST_QUOTE_NOT_SAVED',409);
+    }
+    async validateReplacementProvenance(order,claim,sendBase,storage=this.storage){
+      const itemIndex=claim.itemIndex;
+      const replacement=await storage.get(replacementKey(order,itemIndex));
+      try{validateReplacementClaim(order,claim,replacement);
+        const firstFailed=order.items[itemIndex].attempts[0].state==='failed';
+        if(replacement.version!==5)need(await storage.get(responseExpiryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+        if(replacement.version===5){
+          need(!firstFailed,'REPLACEMENT_REQUIRED',409);
+          await this.validateResponseExpiryRetention(order,replacement.prior,replacement.responseExpiry.request,replacement.responseExpiry.walletClaim,sendBase,storage);
+        }else if(replacement.version===4){
+          need(!firstFailed&&JSON.stringify(replacement.prior)===JSON.stringify(await storage.get(prewalletExpiryKey(order,1,itemIndex)))
+            &&await storage.get(prewalletRecoveryKey(order,1,itemIndex))===undefined&&await storage.get(expiryKey(order,1,itemIndex))===undefined
+            &&await storage.get(failureKey(order,1,itemIndex))===undefined&&await storage.get(responseRecoveryKey(order,1,itemIndex))===undefined
+            &&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
+        }else if(replacement.version===3){
+          need(await storage.get(prewalletExpiryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(firstFailed&&JSON.stringify(replacement.prewallet)===JSON.stringify(await storage.get(prewalletRecoveryKey(order,1,itemIndex)))
+            &&await storage.get(expiryKey(order,1,itemIndex))===undefined&&await storage.get(failureKey(order,1,itemIndex))===undefined
+            &&await storage.get(responseRecoveryKey(order,1,itemIndex))===undefined&&await storage.get(sendBase)===undefined,'REPLACEMENT_REQUIRED',409);
+        }else{
+          need(await storage.get(prewalletExpiryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(await storage.get(prewalletRecoveryKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(await storage.get(firstFailed?expiryKey(order,1,itemIndex):failureKey(order,1,itemIndex))===undefined,'REPLACEMENT_REQUIRED',409);
+          need(JSON.stringify(replacement.prior)===JSON.stringify(await storage.get(firstFailed?failureKey(order,1,itemIndex):expiryKey(order,1,itemIndex))),'REPLACEMENT_REQUIRED',409);
+        }}
+      catch{throw new BuyerCheckError('REPLACEMENT_REQUIRED',409);}
+    }
+    async fetch(request){
+      let own=false,reserved=false,settled=false,infra,sendBudgetReport;
+      const started=performance.now(),route=new URL(request.url).pathname.split('/').at(-1);
+      const unsignedReplace=route==='replace-prewallet-expiry',responseReplace=route==='replace-response-expiry',replacing=unsignedReplace||responseReplace||route==='replace';
+      try{
+        authorize(request,config,this.env);if(route==='readiness')return await this.readiness(request);need(route!=='send'||submissionEnabled,'SUBMISSION_DISABLED',403);need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
+        const body=await readJson(request,{signal:request.signal});
+        need(exact(body,responseReplace?'version nonce order claim request walletClaim authorizeReplacement':unsignedReplace?'version nonce order claim request authorizeReplacement':route==='prepare'?'version nonce order':route==='review-response-expiry'?'version nonce order claim request walletClaim authorizeExpiryReview':route==='recover-response'?'version nonce order claim request walletClaim':['check','recover-prewallet'].includes(route)?'version nonce order claim request':route==='review-prewallet-expiry'?'version nonce order claim request authorizeExpiryReview':route==='send'?'version nonce order claim request response costApproval':route==='review-expiry'?'version nonce order claim request response authorizeExpiryReview':route==='replace'?'version nonce order claim request response authorizeReplacement'+(body.order?.items?.[body.claim?.itemIndex]?.attempts?.[0]?.state==='failed'?' acknowledgedFeeLamports':''):'version nonce order claim request response')&&body.version===1&&typeof body.nonce==='string'&&/^[a-f0-9]{64}$/.test(body.nonce),'REQUEST',400);
+        if(['review-expiry','review-prewallet-expiry','review-response-expiry'].includes(route))need(body.authorizeExpiryReview===true,'EXPLICIT_EXPIRY_REVIEW_REQUIRED',400);
+        if(replacing)need(body.authorizeReplacement===true,'EXPLICIT_REPLACEMENT_REQUIRED',400);
+        const {order,claim,request:partial}=body;
+        need(order&&['cluster','machine','collection','guard'].every(k=>order[k]===config[k]),'DEPLOYMENT_SCOPE',400);
+        need(config.version===2
+          ?order.storageMode===config.storageMode&&order.hiddenCommitmentSha256===config.hiddenCommitmentSha256
+          :!Object.hasOwn(order,'storageMode')&&!Object.hasOwn(order,'hiddenCommitmentSha256'),'DEPLOYMENT_STORAGE_PROFILE',400);
+        // Arbitrary buyers are admitted only by the fresh canonical public guard verifier below.
+        const submission={order,claim,request:partial,response:body.response};
+        const missing={order,claim,request:partial,walletClaim:body.walletClaim};
+        const prewallet={order,claim,request:partial};
+        const replacementInput=responseReplace?missing:unsignedReplace?prewallet:submission;
+        let signed,itemIndex;
+        try{
+          model.validateOrder(order);
+          validateSequentialOrder(order);
+          itemIndex=route==='prepare'?currentItemIndex(order):claim?.itemIndex;
+          need(Number.isSafeInteger(itemIndex)&&itemIndex>=0&&itemIndex<order.quantity,'REQUEST',400);
+          if(route==='prepare'){assertCurrentItem(order,itemIndex);need(!order.paused&&order.items[itemIndex].attempts.length===0&&(itemIndex>0||order.revision===0),'REQUEST',400);}
+          else if(['recover-response','review-response-expiry'].includes(route))validateMissingBuyerResponse(missing);
+          else if(['recover-prewallet','review-prewallet-expiry'].includes(route))validatePrewalletInput(prewallet);
+          else if(responseReplace)validateResponseExpiryReplacementSource(missing);
+          else if(unsignedReplace)validatePrewalletExpiryReplacementSource(prewallet);
+          else if(route==='replace')signed=validateReplacementSource(submission);
+          else if(route!=='check')signed=validateBuyerSubmission(submission);
+          else{validateAssetRequest(order,claim,partial);model.validateOrder(order);
+          assertCurrentItem(order,itemIndex);
+          need(order.revision===claim.orderRevision&&!order.paused&&order.items[itemIndex].attempts.length===claim.attempt&&order.items[itemIndex].attempts.at(-1).state==='wallet-pending'
+            &&order.items.slice(itemIndex+1).every(item=>!item.attempts.length),'REQUEST',400);}
+        }catch{throw new BuyerCheckError('REQUEST',400);}
+        const prefixCache=['prepare','check','send'].includes(route)
+          ?createPublicPrefixReceiptCache({storage:this.storage,profileSha256,order,itemIndex}):null;
+        // Stable asset identity excludes order id/hash so a replay cannot evade a consumed send.
+        const number=claim?.attempt??1;
+        const sendBase='buyer-send:v1:'+signedBytesId(JSON.stringify([config.cluster,config.machine,config.collection,config.guard,order.buyer,order.items[itemIndex].asset]));
+        const sendKey=attemptKey(sendBase,number);
+        const retiredKey=expiryKey(order,number,itemIndex),retired=await this.storage.get(retiredKey);
+        const failedKey=failureKey(order,number,itemIndex),failed=await this.storage.get(failedKey);
+        need(!(retired!==undefined&&failed!==undefined),'TERMINAL_RECORD_CONFLICT',409);
+        const discoveredKey=responseRecoveryKey(order,number,itemIndex),discovered=await this.storage.get(discoveredKey);
+        const prewalletKey=prewalletRecoveryKey(order,number,itemIndex),prewalletRecord=await this.storage.get(prewalletKey);
+        const prewalletRetiredKey=prewalletExpiryKey(order,number,itemIndex),prewalletRetired=await this.storage.get(prewalletRetiredKey);
+        const responseRetiredKey=responseExpiryKey(order,number,itemIndex),responseRetired=await this.storage.get(responseRetiredKey);
+        if(number===2)await this.validateReplacementProvenance(order,claim,sendBase);
+        if(responseRetired!==undefined){
+          need(retired===undefined&&failed===undefined&&discovered===undefined&&prewalletRecord===undefined&&prewalletRetired===undefined
+            &&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          if(number===1&&!responseReplace)need(await this.storage.get(replacementKey(order,itemIndex))===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          need(responseReplace||['review-response-expiry','review-expiry'].includes(route),'ATTEMPT_EXPIRED',409);
+          if(!responseReplace){
+            let report;try{report=route==='review-expiry'?restoreResponseExpirySubmission(submission,responseRetired):restoreResponseExpiry(missing,responseRetired);}
+            catch{throw new BuyerCheckError('RESPONSE_EXPIRY_CONFLICT',409);}
+            return reply(200,{version:1,nonce:body.nonce,report});
+          }
+        }
+        if(responseReplace)need(responseRetired!==undefined,'EXPIRY_RECORD_REQUIRED',409);
+        if(prewalletRetired!==undefined){
+          need(retired===undefined&&failed===undefined&&discovered===undefined&&prewalletRecord===undefined
+            &&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          need(unsignedReplace||route==='review-prewallet-expiry','ATTEMPT_EXPIRED',409);
+          if(!unsignedReplace){
+            let report;try{report=restorePrewalletExpiry(prewallet,prewalletRetired);}catch{throw new BuyerCheckError('PREWALLET_EXPIRY_CONFLICT',409);}
+            return reply(200,{version:1,nonce:body.nonce,report});
+          }
+        }
+        if(unsignedReplace)need(prewalletRetired!==undefined,'EXPIRY_RECORD_REQUIRED',409);
+        if(route==='review-response-expiry')need(retired===undefined&&failed===undefined&&discovered===undefined&&prewalletRecord===undefined
+          &&prewalletRetired===undefined&&await this.storage.get(sendKey)===undefined
+          &&(number===2||await this.storage.get(replacementKey(order,itemIndex))===undefined),'RESPONSE_EXPIRY_CONFLICT',409);
+        let prewalletPrior;
+        if(prewalletRecord!==undefined){
+          need(retired===undefined&&failed===undefined&&discovered===undefined&&await this.storage.get(sendKey)===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          let restored;
+          try{
+            if(route==='replace')prewalletPrior=prewalletFailurePrior(submission,prewalletRecord);
+            else if(route==='recover-prewallet')restored=restorePrewalletRecovery(prewallet,prewalletRecord);
+            else if(route==='recover')restored=restorePrewalletSubmission(submission,prewalletRecord);
+            else if(route==='recover-response'){
+              const full=recoveredSubmission(missing,prewalletRecord.response).input;
+              restored=responseRecoveryReport(missing,{response:prewalletRecord.response,result:restorePrewalletSubmission(full,prewalletRecord),restored:true});
+            }else throw new BuyerCheckError('ATTEMPT_RECOVERED',409);
+          }catch(e){if(e instanceof BuyerCheckError)throw e;throw new BuyerCheckError('PREWALLET_RECORD_CONFLICT',409);}
+          if(restored)return reply(200,{version:1,nonce:body.nonce,report:restored});
+        }
+        if(['recover-prewallet','review-prewallet-expiry'].includes(route))need(retired===undefined&&failed===undefined&&discovered===undefined
+          &&await this.storage.get(sendKey)===undefined,'PREWALLET_RECORD_CONFLICT',409);
+        if(discovered!==undefined){
+          need(retired===undefined,'TERMINAL_RECORD_CONFLICT',409);
+          let restored,full;
+          try{
+            if(route==='recover-response'){restored=restoreResponseRecovery(missing,discovered);full=recoveredSubmission(missing,restored.response).input;}
+            else if(route==='recover'){restored=restoreDiscoveredSubmission(submission,discovered);full=submission;}
+            else if(route==='replace'){
+              need(discovered.proof.kind==='failed'&&failed!==undefined,'ATTEMPT_RECOVERED',409);
+              const active=structuredClone(submission);active.order.items[itemIndex].attempts[0].state='unknown';active.order.items[itemIndex].attempts[0].proof=null;
+              const result=restoreDiscoveredSubmission(active,discovered);
+              need(JSON.stringify(failureRecord(active,result))===JSON.stringify(failed),'TERMINAL_RECORD_CONFLICT',409);
+            }else throw new BuyerCheckError('ATTEMPT_RECOVERED',409);
+            if(restored){
+              const result=route==='recover-response'?restored.result:restored;
+              need(result.status==='failed'?JSON.stringify(failureRecord(full,result))===JSON.stringify(failed):failed===undefined,'TERMINAL_RECORD_CONFLICT',409);
+            }
+          }catch(e){if(e instanceof BuyerCheckError)throw e;throw new BuyerCheckError('RESPONSE_RECORD_CONFLICT',409);}
+          if(restored)return reply(200,{version:1,nonce:body.nonce,report:restored});
+        }
+        if(failed!==undefined&&route!=='replace'){
+          need(route==='recover','ATTEMPT_FAILED',409);
+          let report;try{report=restoreFailureReport(submission,failed);}catch{throw new BuyerCheckError('FAILURE_RECORD_CONFLICT',409);}
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(retired!==undefined&&route!=='replace'){
+          if(route==='review-expiry'){
+            let report;try{report=restoreExpiryReport(submission,retired);}catch{throw new BuyerCheckError('EXPIRY_RECORD_CONFLICT',409);}
+            return reply(200,{version:1,nonce:body.nonce,report});
+          }
+          need(route==='recover','ATTEMPT_EXPIRED',409);
+        }
+        const replaceKey=replacementKey(order,itemIndex),replacement=(number===2||replacing)?await this.storage.get(replaceKey):undefined;
+        const prior=responseReplace?responseRetired:unsignedReplace?prewalletRetired:prewalletPrior??(order.items[itemIndex].attempts[0]?.state==='failed'?failed:retired);
+        if(replacing){
+          try{validateReplacementPrior(replacementInput,prior);
+            if(responseReplace)await this.validateResponseExpiryRetention(order,prior,partial,body.walletClaim,sendBase);}catch{throw new BuyerCheckError(prior?.proof?.kind==='failed'||order.items[itemIndex].attempts[0].state==='failed'?'FAILURE_RECORD_REQUIRED':'EXPIRY_RECORD_REQUIRED',409);}
+          try{validateReplacementAcknowledgment(replacementInput,prior,body.acknowledgedFeeLamports);}catch{throw new BuyerCheckError('PAID_FEE_ACKNOWLEDGMENT_REQUIRED',409);}
+          if(replacement!==undefined){
+            let report;try{need(JSON.stringify(replacement.prior)===JSON.stringify(prior)
+              &&JSON.stringify(replacement.prewallet)===JSON.stringify(prewalletRecord),'REPLACEMENT_CONFLICT',409);report=replacementReport(replacementInput,replacement,true);}
+            catch{throw new BuyerCheckError('REPLACEMENT_CONFLICT',409);}
+            return reply(200,{version:1,nonce:body.nonce,report});
+          }
+        }
+        if(route==='send'){
+          need(!order.paused,'ORDER_PAUSED',409);
+          need(await this.storage.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
+        }
+        const blockKey=anchorKey(order,number,itemIndex),savedPreparation=route==='recover'?undefined:number===2?{anchor:replacement.anchor}:await this.storage.get(blockKey);
+        if(unsignedReplace||responseReplace||['check','send','review-expiry','recover-response','review-response-expiry','recover-prewallet','review-prewallet-expiry'].includes(route)){
+          try{validateBlockhashAnchor(savedPreparation?.anchor,claim);}catch{throw new BuyerCheckError('BLOCKHASH_ANCHOR_REQUIRED',409);}
+        }
+        if(route==='send'){
+          try{validateCostApproval(body.costApproval,submission,{now:Date.now()});}
+          catch(e){throw new BuyerCheckError(/^COST_[A-Z_]+$/.test(e.message)?e.message:'COST_APPROVAL_INVALID',409);}
+          need(JSON.stringify(await this.storage.get(costQuoteKey(body.costApproval.quote.quoteId)))===JSON.stringify(body.costApproval.quote),'COST_QUOTE_NOT_SAVED',409);
+        }
+        await this.reserveCheck();reserved=true;
+        if(route==='send')await this.storage.transaction(async tx=>{
+          need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+          need(await tx.get(sendKey)===undefined,'SEND_ALREADY_CLAIMED',409);
+          await tx.put(sendKey,{version:1,signature:signed.signature,transactionSha256:signedBytesId(signed.transactionBase64),costApproval:structuredClone(body.costApproval)});
+        });
+        const endpoint=new URL(network.rpcUpstream);
+        const fetchImpl=async(url,init)=>{
+            try{
+              const rpc=JSON.parse(init.body);need(url===endpoint.href&&(METHODS.has(rpc.method)||(['review-expiry','review-prewallet-expiry','review-response-expiry'].includes(route)&&EXPIRY_METHODS.has(rpc.method))||(['recover-response','recover-prewallet'].includes(route)&&rpc.method==='getSignaturesForAddress')||(route==='send'&&submissionEnabled&&rpc.method==='sendTransaction')),'RPC_METHOD',503);
+              if(rpc.method==='sendTransaction'){
+                need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+                const consumed=await this.storage.get(sendKey);
+                need(consumed?.signature===signed.signature&&consumed?.transactionSha256===signedBytesId(rpc.params[0])&&JSON.stringify(consumed.costApproval)===JSON.stringify(body.costApproval),'SEND_CLAIM',503);
+              }
+              const historical=prefixCache?await prefixCache.read(rpc.method,rpc.params,rpc.id):null;
+              if(historical){need(!init.signal.aborted,'RPC_TIMEOUT',504);return historical;}
+              await this.reserveRpc(rpc.method);need(!init.signal.aborted,'RPC_TIMEOUT',504);
+              if(rpc.method==='sendTransaction'){try{enforceCostCeiling(body.costApproval,submission,sendBudgetReport);}catch{settled=true;throw new BuyerCheckError('COST_APPROVAL_EXPIRED',409);}}
+              const response=await this.fetchImpl(url,{...init,redirect:'manual'});
+              if(prefixCache&&rpc.method==='getTransaction'&&response.status===200)await prefixCache.remember(rpc.method,rpc.params,response.clone(),rpc.id);
+              if([429,503].includes(response.status)){
+                const seconds=retryAfter(response.headers.get('retry-after'),this.clock());
+                await this.storage.transaction(async tx=>{const v=ledger(await tx.get(ledgerKey),this.clock(),network);v.cooldownUntil=Math.max(v.cooldownUntil,this.clock()+seconds*1000);await tx.put(ledgerKey,v);});
+                infra=new BuyerCheckError('UPSTREAM_UNAVAILABLE',response.status,seconds);
+              }
+              return response;
+            }catch(error){infra=error instanceof BuyerCheckError?error:new BuyerCheckError('UPSTREAM_UNAVAILABLE',503);throw error;}
+          };
+        if(route==='prepare'){
+          const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000,cluster:network.cluster,authorizeMainnet:allowMainnet});
+          await assertCluster(rpc,network.cluster);
+          let sourceFloor;
+          try{sourceFloor=(await checker.checkSequentialReadiness({rpc,order,itemIndex})).slot;}
+          catch(error){if(error.checkCode)throw new BuyerCheckError(error.checkCode,409);throw error;}
+          if(savedPreparation!==undefined){
+            try{validatePreparation(order,savedPreparation);}catch{throw new BuyerCheckError('PREPARATION_CONFLICT',409);}
+            settled=true;
+            return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...savedPreparation,restored:true,readyToSign:false,readyToSubmit:false,salesOpen:false}});
+          }
+          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:sourceFloor}]);
+          need(integer(latest?.context?.slot)&&latest.context.slot>=sourceFloor,'RPC_CONTEXT',503);
+          const record=preparationFor(order,latest.value,latest.context.slot);
+          const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
+          need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
+          need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+          await this.storage.transaction(async tx=>{
+            need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+            need(await tx.get(blockKey)===undefined,'PREPARATION_CONFLICT',409);await tx.put(blockKey,record);
+          });
+          need(JSON.stringify(await this.storage.get(blockKey))===JSON.stringify(record),'PREPARATION_UNCONFIRMED',503);
+          settled=true;
+          return reply(200,{version:1,nonce:body.nonce,report:{status:'prepared',...record,restored:false,readyToSign:false,readyToSubmit:false,salesOpen:false}});
+        }
+        if(replacing){
+          const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:30000,cluster:network.cluster,authorizeMainnet:allowMainnet});
+          await assertCluster(rpc,network.cluster);
+          let floor=replacementAccountFloor(prior);
+          const publicState=await readPublicState(rpc,floor);need(publicState.salesOpen,'SALES_CLOSED',409);floor=publicState.slot;
+          if(itemIndex>0){try{floor=(await checker.checkSequentialReadiness({rpc,order,itemIndex,minimum:floor})).slot;}
+            catch(error){if(error.checkCode)throw new BuyerCheckError(error.checkCode,409);throw error;}}
+          const accounts=await rpc.call('getMultipleAccounts',[[claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:floor}]);
+          need(integer(accounts?.context?.slot)&&accounts.context.slot>=floor&&Array.isArray(accounts.value)&&accounts.value.length===1&&accounts.value[0]===null,'REPLACEMENT_ASSET_OBSERVED',409);
+          const sourceFloor=Math.max(replacementSourceFloor(prior),accounts.context.slot);
+          const latest=await rpc.call('getLatestBlockhash',[{commitment:'confirmed',minContextSlot:sourceFloor}]);
+          need(integer(latest?.context?.slot)&&latest.context.slot>=sourceFloor,'RPC_CONTEXT',503);
+          const record=replacementFor(replacementInput,prior,latest.value,latest.context.slot,body.acknowledgedFeeLamports,prewalletRecord);
+          const height=await rpc.call('getBlockHeight',[{commitment:'confirmed',minContextSlot:record.anchor.sourceSlot}]);
+          need(integer(height)&&record.anchor.lastValidBlockHeight-height>=80,'BLOCKHASH_TOO_OLD',409);
+          need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+          await this.storage.transaction(async tx=>{
+            if(!responseReplace)need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+            need(await tx.get(replaceKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            if(responseReplace){
+              await this.validateResponseExpiryRetention(order,prior,partial,body.walletClaim,sendBase,tx);
+              need(JSON.stringify(await tx.get(blockKey))===JSON.stringify(savedPreparation),'REPLACEMENT_CONFLICT',409);
+            }else if(unsignedReplace)need(JSON.stringify(await tx.get(prewalletRetiredKey))===JSON.stringify(prior)
+              &&await tx.get(prewalletKey)===undefined&&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined
+              &&await tx.get(discoveredKey)===undefined&&await tx.get(sendKey)===undefined
+              &&JSON.stringify(await tx.get(blockKey))===JSON.stringify(savedPreparation),'REPLACEMENT_CONFLICT',409);
+            else if(prewalletRecord)need(JSON.stringify(await tx.get(prewalletKey))===JSON.stringify(prewalletRecord)
+              &&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined&&await tx.get(discoveredKey)===undefined
+              &&await tx.get(sendKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            else need(JSON.stringify(await tx.get(prior.proof.kind==='failed'?failedKey:retiredKey))===JSON.stringify(prior)
+              &&await tx.get(prior.proof.kind==='failed'?retiredKey:failedKey)===undefined&&await tx.get(prewalletKey)===undefined,'REPLACEMENT_CONFLICT',409);
+            await tx.put(replaceKey,record);
+          });
+          need(JSON.stringify(await this.storage.get(replaceKey))===JSON.stringify(record),'REPLACEMENT_NOT_SAVED',503);settled=true;
+          return reply(200,{version:1,nonce:body.nonce,report:replacementReport(replacementInput,record)});
+        }
+        if(route==='review-response-expiry'){
+          const report=await reviewResponseExpiry({input:missing,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl,authorizeMainnet:allowMainnet});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='response-expired'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=responseExpiryRecord(missing,report);
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(responseRetiredKey)===undefined&&await tx.get(prewalletRetiredKey)===undefined&&await tx.get(prewalletKey)===undefined
+                &&await tx.get(discoveredKey)===undefined&&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined
+                &&await tx.get(sendKey)===undefined,'RESPONSE_EXPIRY_CONFLICT',409);
+              if(number===1)need(await tx.get(replaceKey)===undefined,'RESPONSE_EXPIRY_CONFLICT',409);
+              need(JSON.stringify(await tx.get(number===2?replaceKey:blockKey))===JSON.stringify(number===2?replacement:savedPreparation),'BLOCKHASH_ANCHOR_REQUIRED',409);
+              if(number===2)await this.validateReplacementProvenance(order,claim,sendBase,tx);
+              await tx.put(responseRetiredKey,record);need(JSON.stringify(await tx.get(responseRetiredKey))===JSON.stringify(record),'RESPONSE_EXPIRY_NOT_SAVED',503);
+            });
+            need(JSON.stringify(await this.storage.get(responseRetiredKey))===JSON.stringify(record),'RESPONSE_EXPIRY_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(route==='review-prewallet-expiry'){
+          const report=await reviewPrewalletExpiry({input:prewallet,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl,authorizeMainnet:allowMainnet});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='prewallet-expired'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=prewalletExpiryRecord(prewallet,report);
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+              need(await tx.get(prewalletRetiredKey)===undefined&&await tx.get(prewalletKey)===undefined&&await tx.get(discoveredKey)===undefined
+                &&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined&&await tx.get(sendKey)===undefined,'PREWALLET_EXPIRY_CONFLICT',409);
+              need(JSON.stringify(await tx.get(number===2?replaceKey:blockKey))===JSON.stringify(number===2?replacement:savedPreparation),'BLOCKHASH_ANCHOR_REQUIRED',409);
+              await tx.put(prewalletRetiredKey,record);need(JSON.stringify(await tx.get(prewalletRetiredKey))===JSON.stringify(record),'PREWALLET_EXPIRY_NOT_SAVED',503);
+            });
+            need(JSON.stringify(await this.storage.get(prewalletRetiredKey))===JSON.stringify(record),'PREWALLET_EXPIRY_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(route==='recover-prewallet'){
+          const report=await discoverPrewalletResult({input:prewallet,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl,authorizeMainnet:allowMainnet});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='prewallet-recovered'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=prewalletRecoveryRecord(prewallet,report);
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+              need(await tx.get(prewalletKey)===undefined&&await tx.get(discoveredKey)===undefined&&await tx.get(failedKey)===undefined
+                &&await tx.get(retiredKey)===undefined&&await tx.get(sendKey)===undefined&&await tx.get(prewalletRetiredKey)===undefined,'PREWALLET_RECORD_CONFLICT',409);
+              need(JSON.stringify(await tx.get(number===2?replaceKey:blockKey))===JSON.stringify(number===2?replacement:savedPreparation),'BLOCKHASH_ANCHOR_REQUIRED',409);
+              await tx.put(prewalletKey,record);need(JSON.stringify(await tx.get(prewalletKey))===JSON.stringify(record),'PREWALLET_NOT_SAVED',503);
+            });
+            need(JSON.stringify(await this.storage.get(prewalletKey))===JSON.stringify(record),'PREWALLET_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(route==='recover-response'){
+          const report=await discoverBuyerResponse({input:missing,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl,authorizeMainnet:allowMainnet});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='response-recovered'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+            const record=responseRecoveryRecord(missing,report),full=recoveredSubmission(missing,report.response).input;
+            const failure=report.result.status==='failed'?failureRecord(full,report.result):undefined;
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+              need(await tx.get(discoveredKey)===undefined&&await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined,'RESPONSE_RECORD_CONFLICT',409);
+              await tx.put(discoveredKey,record);if(failure)await tx.put(failedKey,failure);
+              need(JSON.stringify(await tx.get(discoveredKey))===JSON.stringify(record)
+                &&JSON.stringify(await tx.get(failedKey))===JSON.stringify(failure),'RESPONSE_NOT_SAVED',503);
+            });
+            need(JSON.stringify(await this.storage.get(discoveredKey))===JSON.stringify(record)
+              &&JSON.stringify(await this.storage.get(failedKey))===JSON.stringify(failure),'RESPONSE_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(route==='recover'){
+          const report=await recoverBuyerOrder({input:submission,endpoint:endpoint.href,fetchImpl,authorizeMainnet:allowMainnet});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='failed'){
+            settled=false;need(retired===undefined,'TERMINAL_RECORD_CONFLICT',409);
+            need(performance.now()-started<30000,'CHECK_TOO_OLD',409);const record=failureRecord(submission,report);
+            await this.storage.transaction(async tx=>{
+              need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+              need(await tx.get(failedKey)===undefined&&await tx.get(retiredKey)===undefined,'FAILURE_RECORD_CONFLICT',409);await tx.put(failedKey,record);
+            });
+            need(JSON.stringify(await this.storage.get(failedKey))===JSON.stringify(record),'FAILURE_NOT_SAVED',503);settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        if(route==='review-expiry'){
+          const report=await reviewBuyerExpiry({input:submission,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,fetchImpl,authorizeMainnet:allowMainnet});
+          settled=!report.code?.startsWith('RPC_');if(infra)throw infra;
+          if(report.status==='expired'){
+            settled=false;need(performance.now()-started<30000,'CHECK_TOO_OLD',409);
+            const record=expiryRecord(submission,report);
+            await this.storage.transaction(async tx=>{need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);need(await tx.get(retiredKey)===undefined,'EXPIRY_RECORD_CONFLICT',409);await tx.put(retiredKey,record);});
+            need(JSON.stringify(await this.storage.get(retiredKey))===JSON.stringify(record),'EXPIRY_NOT_SAVED',503);
+            settled=true;
+          }
+          return reply(200,{version:1,nonce:body.nonce,report});
+        }
+        const report=await checker[route==='send'?'checkSignedOrder':'checkPreparedOrder']({readOrder:()=>structuredClone(order),
+          claim,request:partial,response:body.response,blockhashAnchor:savedPreparation.anchor,endpoint:endpoint.href,timeoutMs:12000,fetchImpl,authorizeMainnet:allowMainnet});
+        // Keep the crash hold after uncertain transport/timeout or storage failure.
+        settled=['wallet-check-passed','submission-check-passed'].includes(report.status)||(report.status==='blocked'&&!report.code?.startsWith('RPC_'));
+        if(infra)throw infra;
+        if(route==='send'&&report.status==='submission-check-passed'){
+          settled=false;sendBudgetReport=report;
+          try{enforceCostCeiling(body.costApproval,submission,report);}catch(e){settled=true;throw new BuyerCheckError(/^COST_[A-Z_]+$/.test(e.message)?e.message:'COST_APPROVAL_INVALID',409);}
+          need(report.simulationMode==='signed'&&report.candidate.transactionBase64===signed.transactionBase64,'SIGNED_CHECK',409);
+          const rpc=createDeploymentRpc({endpoint:endpoint.href,fetchImpl,timeoutMs:12000,totalTimeoutMs:15000,maxResponseBytes:16384,
+            cluster:network.cluster,authorizeMainnet:allowMainnet,authorizeMainnetSend:network.cluster==='mainnet-beta'&&submissionEnabled,
+            submission:{transactionBase64:signed.transactionBase64,minContextSlot:report.checkedSlot}});
+          await assertCluster(rpc,network.cluster);
+          need(performance.now()-started<30000&&Date.now()<report.expiresAt,'CHECK_TOO_OLD',409);
+          try{enforceCostCeiling(body.costApproval,submission,report);}catch{settled=true;throw new BuyerCheckError('COST_APPROVAL_EXPIRED',409);}
+          await rpc.call('sendTransaction',[signed.transactionBase64,{encoding:'base64',skipPreflight:false,preflightCommitment:'confirmed',maxRetries:0,minContextSlot:report.checkedSlot}]);
+          settled=true;
+          return reply(200,{version:1,nonce:body.nonce,report:{...submissionBinding(submission),status:'accepted',cluster:network.cluster,
+            ...(network.cluster==='mainnet-beta'?{genesisHash:network.genesisHash}:{}),
+            chainVerified:false,readyToSubmit:false,salesOpen:false,networkRequests:report.networkRequests+rpc.requests,
+            costQuoteId:body.costApproval.quote.quoteId,maxTotalLamports:body.costApproval.maxTotalLamports,checkedTotalLamports:report.budget.nextItemKnownMinimumLamports}});
+        }
+        if(report.status!=='wallet-check-passed')return reply(409,{version:1,nonce:body.nonce,report});
+        settled=false;
+        const costQuote=createCostQuote({order,claim,request:partial},report),quoteKey=costQuoteKey(costQuote.quoteId);
+        await this.storage.transaction(async tx=>{const previous=await tx.get(quoteKey);
+          need(await tx.get(responseRetiredKey)===undefined,'ATTEMPT_EXPIRED',409);
+          need(previous===undefined||JSON.stringify(previous)===JSON.stringify(costQuote),'COST_QUOTE_CONFLICT',503);await tx.put(quoteKey,costQuote);});
+        need(JSON.stringify(await this.storage.get(quoteKey))===JSON.stringify(costQuote),'COST_QUOTE_NOT_SAVED',503);
+        settled=true;
+        return reply(200,{version:1,nonce:body.nonce,report:{...report,costQuote}});
+      }catch(error){return failure(infra??error);}
+      finally{
+        if(own){
+          try{if(reserved&&settled)await this.storage.transaction(async tx=>{const v=ledger(await tx.get(ledgerKey),this.clock(),network);v.holdUntil=0;await tx.put(ledgerKey,v);});}
+          catch{/* Keep the charged hold when release is uncertain. */}
+          this.busy=false;
+        }
+      }
+    }
+  }
+  return{BuyerCheckGate,worker:{async fetch(request,env){try{authorize(request,config,env);return await env.BUYER_CHECK_GATE.get(env.BUYER_CHECK_GATE.idFromName(globalName)).fetch(request);}catch(error){return failure(error);}}}};
+}

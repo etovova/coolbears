@@ -9,3 +9,8 @@ __pycache__/
 .wrangler/
 .dev.vars*
 rpc-proxy/.env*
+
+# Build diagnostics and compatibility alias are not site inputs.
+public-mainnet/browser-assets-binding.SAFE.json
+public-mainnet/site-entry.built.mjs
+

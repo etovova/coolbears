@@ -1,0 +1,50 @@
+{
+  "checkedAt": "2026-09-23T11:04:17.050027+00:00",
+  "connectionOverride": "104.21.72.44",
+  "publicDnsRouteTested": false,
+  "checks": [
+    {
+      "url": "https://www.coolbears-nfts.com/",
+      "status": "HTTP/2 301 ",
+      "location": "https://coolbears-nfts.com/",
+      "server": "cloudflare",
+      "passed": true
+    },
+    {
+      "url": "https://www.coolbears-nfts.com/devnet/?via=www&value=a%2Fb",
+      "status": "HTTP/2 301 ",
+      "location": "https://coolbears-nfts.com/devnet/?via=www&value=a%2Fb",
+      "server": "cloudflare",
+      "passed": true
+    },
+    {
+      "url": "https://www.coolbears-nfts.com/metadata/hidden/0001.json",
+      "status": "HTTP/2 301 ",
+      "location": "https://coolbears-nfts.com/metadata/hidden/0001.json",
+      "server": "cloudflare",
+      "passed": true
+    },
+    {
+      "url": "https://www.coolbears-nfts.com/assets/collection/gif.gif",
+      "status": "HTTP/2 301 ",
+      "location": "https://coolbears-nfts.com/assets/collection/gif.gif",
+      "server": "cloudflare",
+      "passed": true
+    },
+    {
+      "url": "https://www.coolbears-nfts.com//example.org/path?q=1",
+      "status": "HTTP/2 301 ",
+      "location": "https://coolbears-nfts.com//example.org/path?q=1",
+      "server": "cloudflare",
+      "passed": true
+    },
+    {
+      "url": "https://www.coolbears-nfts.com/_redirects",
+      "status": "HTTP/2 301 ",
+      "location": "https://coolbears-nfts.com/_redirects",
+      "server": "cloudflare",
+      "passed": true
+    }
+  ],
+  "passed": true
+}
