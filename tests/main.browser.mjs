@@ -87,7 +87,10 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
 }
 async function closed(page) {
   const button=page.locator('#mintBtn');
-  if(!await button.isDisabled())assert.match(await button.innerText(),/CONNECT WALLET TO MINT|ПОДКЛЮЧИТЬ КОШЕЛЁК|连接钱包开始铸造|CHECK & MINT|ПРОВЕРИТЬ И ЗАМИНТИТЬ|检查并铸造/,'unverified page can only recheck availability');
+  if(!await button.isDisabled() && await page.locator('#walletBtn').getAttribute('title')){
+    const qty=await page.locator('#qty').inputValue(),label=await button.innerText();
+    assert.ok(['MINT '+qty+' NFT','ЗАМИНТИТЬ '+qty+' NFT','铸造 '+qty+' 个 NFT','CHECK & MINT','ПРОВЕРИТЬ И ЗАМИНТИТЬ','检查并铸造'].includes(label));
+  }else if(!await button.isDisabled())assert.match(await button.innerText(),/CONNECT WALLET TO MINT|ПОДКЛЮЧИТЬ КОШЕЛЁК|连接钱包开始铸造|CHECK & MINT|ПРОВЕРИТЬ И ЗАМИНТИТЬ|检查并铸造/,'unverified page can only recheck availability');
   assert.equal(await page.locator('#marketplaceTop').isVisible(), false, 'unverified market link remains hidden');
 }
 async function modal(page) {
@@ -187,6 +190,11 @@ try {
     await page.locator('.public-mint-dialog button', { hasText: /^Phantom$/ }).click();
     await page.waitForFunction(address => document.querySelector('#walletBtn').title === address, owner);
     await closed(page);
+    // A connected wallet and a stable label do not authorize a mint when readiness fails.
+    await page.locator('#mintBtn').click();
+    await page.waitForFunction(()=>document.querySelector('#minted').textContent==='STATUS UNAVAILABLE');
+    assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(await page.evaluate(()=>window.__testWallet.signatures),0);
+
     await page.evaluate(address => window.__testWallet.provider.emit('accountChanged', address), other);
     await page.waitForFunction(() => document.querySelector('#walletBtn').title === '');
     await closed(page);
