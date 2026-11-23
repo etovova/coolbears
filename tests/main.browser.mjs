@@ -87,7 +87,7 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
 }
 async function closed(page) {
   const button=page.locator('#mintBtn');
-  if(!await button.isDisabled())assert.match(await button.innerText(),/CHECK & MINT|ПРОВЕРИТЬ И ЗАМИНТИТЬ|检查并铸造/,'unverified page can only recheck availability');
+  if(!await button.isDisabled())assert.match(await button.innerText(),/CONNECT WALLET TO MINT|ПОДКЛЮЧИТЬ КОШЕЛЁК|连接钱包开始铸造|CHECK & MINT|ПРОВЕРИТЬ И ЗАМИНТИТЬ|检查并铸造/,'unverified page can only recheck availability');
   assert.equal(await page.locator('#marketplaceTop').isVisible(), false, 'unverified market link remains hidden');
 }
 async function modal(page) {
@@ -272,9 +272,11 @@ try {
     assert.equal(test.readinessCalls(),1);assert.equal(await page.locator('dialog[open]').count(),0);
     if(readiness==='open'){
       assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');
+      const snapshot=()=>page.evaluate(()=>{const button=document.querySelector('#mintBtn'),title=document.querySelector('[data-i18n="mintTitle"]'),link=document.querySelector('a[data-i18n="mintNow"]'),box=button.getBoundingClientRect(),hero=link.getBoundingClientRect();return {title:title.innerText,hero:link.innerText,href:link.getAttribute('href'),cta:button.innerText,top:Math.round(box.top+scrollY),width:Math.round(hero.width)};});
+      const before=await snapshot();assert.equal(before.hero,'MINT COOLBEARS');assert.equal(before.href,'#mint');
       await page.clock.fastForward(8001);
-      await page.waitForFunction(()=>document.querySelector('#minted').textContent==='' && getComputedStyle(document.querySelector('.mint-topline')).display==='none');
-      assert.equal(await cta.innerText(),'CHECK & MINT');assert.equal(test.readinessCalls(),1);
+      await page.waitForFunction(()=>!document.querySelector('#minted').textContent.trim() && getComputedStyle(document.querySelector('.mint-topline')).visibility==='hidden');
+      assert.deepEqual(await snapshot(),before);assert.equal(test.readinessCalls(),1);
       await cta.click();await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
       assert.doesNotMatch(await page.locator('.public-mint-dialog [data-view="message"]').innerText(),/Waiting for the result|Mint is currently unavailable/);
       await page.locator('.public-mint-dialog [data-action="close"]').click();

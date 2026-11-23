@@ -5,7 +5,7 @@
 
   const tr = {
     en: {
-      prelaunchStatus:'PUBLIC MINT', prelaunchButton:'MINT COOLBEARS', mintFeeNote:'The price shown is for the NFT. Network fees and creation costs are shown before you sign.', navMint:'Mint', navReveal:'Reveal', navCollection:'Collection', navRarity:'Rarity', navFaq:'FAQ',
+      prelaunchStatus:'PUBLIC MINT', prelaunchButton:'CONNECT WALLET TO MINT', mintFeeNote:'The price shown is for the NFT. Network fees and creation costs are shown before you sign.', navMint:'Mint', navReveal:'Reveal', navCollection:'Collection', navRarity:'Rarity', navFaq:'FAQ',
       connectWallet:'Connect wallet', connected:'Wallet connected', disconnectWallet:'Disconnect wallet', walletDisconnected:'Wallet disconnected.', disconnectFailed:'Could not disconnect. Please try again.', walletLoading:'Opening wallet…', walletFailed:'Could not open wallets. Please try again.', walletChoose:'Choose a wallet in the window.',
       kicker:'10,000 UNIQUE BEARS • BUILT ON Solana',
       heroLine1:'EVERYONE GETS A BEAR.', heroLine2:'NOT EVERYONE GETS A LEGEND.',
@@ -27,7 +27,7 @@
       pageTitle:'CoolBears — 10,000 Bears on Solana', pageDescription:'CoolBears — 10,000 unique bears on Solana. Public mint: 0.2 SOL per NFT.'
     },
     ru: {
-      prelaunchStatus:'ПУБЛИЧНЫЙ МИНТ', prelaunchButton:'МИНТ COOLBEARS', mintFeeNote:'Здесь указана цена NFT. Комиссию сети и расходы на создание ты увидишь до подписи.', navMint:'Минт', navReveal:'Раскрытие', navCollection:'Коллекция', navRarity:'Редкость', navFaq:'Вопросы',
+      prelaunchStatus:'ПУБЛИЧНЫЙ МИНТ', prelaunchButton:'ПОДКЛЮЧИТЬ КОШЕЛЁК', mintFeeNote:'Здесь указана цена NFT. Комиссию сети и расходы на создание ты увидишь до подписи.', navMint:'Минт', navReveal:'Раскрытие', navCollection:'Коллекция', navRarity:'Редкость', navFaq:'Вопросы',
       connectWallet:'Подключить кошелёк', connected:'Кошелёк подключён', disconnectWallet:'Отключить кошелёк', walletDisconnected:'Кошелёк отключён.', disconnectFailed:'Не удалось отключить кошелёк. Попробуй ещё раз.', walletLoading:'Открываю кошелёк…', walletFailed:'Не удалось открыть кошельки. Нажми ещё раз.', walletChoose:'Выбери кошелёк в открывшемся окне.',
       kicker:'10 000 УНИКАЛЬНЫХ МЕДВЕДЕЙ • НА Solana',
       heroLine1:'МЕДВЕДЯ ПОЛУЧИТ КАЖДЫЙ.', heroLine2:'ЛЕГЕНДУ — НЕ КАЖДЫЙ.',
@@ -49,7 +49,7 @@
       pageTitle:'CoolBears — 10 000 медведей на Solana', pageDescription:'CoolBears — 10 000 уникальных медведей на Solana. Цена минта: 0,2 SOL за NFT.'
     },
     zh: {
-      prelaunchStatus:'公开铸造', prelaunchButton:'铸造 COOLBEARS', mintFeeNote:'此处显示 NFT 价格。签名前会显示网络费用和创建成本。', navMint:'铸造', navReveal:'揭晓', navCollection:'系列', navRarity:'稀有度', navFaq:'常见问题',
+      prelaunchStatus:'公开铸造', prelaunchButton:'连接钱包开始铸造', mintFeeNote:'此处显示 NFT 价格。签名前会显示网络费用和创建成本。', navMint:'铸造', navReveal:'揭晓', navCollection:'系列', navRarity:'稀有度', navFaq:'常见问题',
       connectWallet:'连接钱包', connected:'钱包已连接', disconnectWallet:'断开钱包', walletDisconnected:'钱包已断开。', disconnectFailed:'无法断开钱包，请重试。', walletLoading:'正在打开钱包…', walletFailed:'无法打开钱包，请重试。', walletChoose:'请在窗口中选择钱包。',
       kicker:'10,000 只独特酷熊 • 基于 Solana',
       heroLine1:'每个人都能得到一只熊。', heroLine2:'但不是每个人都能得到传奇。',
