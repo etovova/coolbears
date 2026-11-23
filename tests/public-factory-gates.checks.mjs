@@ -16,7 +16,7 @@ const mocks=new Map();for(const[path,name,value]of[
  ['operator/orders/buyer-console/controller.mjs','createPrivateBuyerController',options=>{assert.equal(options.sendingEnabled,true);native.state=()=>{options.index.list();return{...nativeState};};return native;}]
 ])mocks.set(pathRoute(path),{[name]:value});
 let mode='closed',calls=0,config,release;
-const now=Date.now();class SharedDate extends Date{static now(){return now;}}
+let now=Date.now();class SharedDate extends Date{static now(){return now;}}
 const readinessWindow=(clock=SharedDate.now)=>{const checkedAt=clock();return{checkedAt,expiresAt:checkedAt+10000};};
 const ctx=vm.createContext({console,Date:SharedDate,TextEncoder,TextDecoder,URL,Headers,Request,Response,Event,EventTarget,AbortController,AbortSignal,setTimeout,clearTimeout,crypto:webcrypto,atob,btoa,window:new EventTarget(),location:{origin:'https://coolbears-nfts.com'},navigator:{},localStorage:{getItem:()=>null},
  fetch:async(url,options)=>{calls++;assert.equal(url,'https://coolbears-nfts.com/api/buyer/readiness');assert.equal(options.credentials,'omit');if(mode==='error')throw Error('network');return new Response(JSON.stringify({...release,status:mode,salesOpen:mode==='open',...readinessWindow()}),{headers:{'content-type':'application/json'}});}});vm.runInContext('globalThis.self=globalThis;globalThis.structuredClone=value=>JSON.parse(JSON.stringify(value));',ctx);
@@ -29,6 +29,10 @@ assert.equal(oldWindow.expiresAt-oldWindow.checkedAt,10001);assert.throws(()=>en
 assert.equal(fixedWindow.expiresAt-fixedWindow.checkedAt,10000);assert.equal(entry.namespace.validatePublicReadiness({...release,...fixedWindow},config,tick).status,'closed');cases.push({name:'one-clock-capture-keeps-fixture-within-production-ten-second-freshness-limit',passed:true});
 for(const name of guarded){await assert.rejects(()=>client[name](),/PUBLIC_SALES_CLOSED/);assert.equal(nativeCalls[name]??0,0);}assert.equal(calls,guarded.length);cases.push({name:'all-seven-financial-entrypoints-block-before-native-call-when-closed',passed:true});
 mode='open';for(const name of guarded){const before=calls;await client[name]();assert.equal(calls,before+1);assert.equal(nativeCalls[name],1);}assert.equal(client.state().salesOpen,true);assert.equal(client.state().canSend,true);cases.push({name:'all-seven-financial-entrypoints-require-a-fresh-server-check',passed:true});
+now+=10001;const stale=client.state();assert.equal(stale.readiness.expiredOpen,true);assert.equal(stale.salesOpen,false);
+for(const key of ['canCreate','canPrepare','canQuote','canSign','canSend']){assert.equal(stale[key],false);assert.equal(stale.recheckActions[key],true);}
+mode='closed';await assert.rejects(()=>client.create(),/PUBLIC_SALES_CLOSED/);assert.equal(nativeCalls.create,1);assert.equal(Object.keys(client.state().recheckActions).length,0);
+cases.push({name:'expired-last-open-allows-only-a-recheck-and-never-forwards-after-closure',passed:true});
 mode='error';for(const name of guarded){await assert.rejects(()=>client[name](),/PUBLIC_READINESS_UNAVAILABLE/);assert.equal(nativeCalls[name],1);}assert.equal(client.state().salesOpen,false);assert.equal(client.state().canSign,false);assert.equal(client.state().canSend,false);cases.push({name:'lost-readiness-response-revokes-old-open-evidence-and-never-forwards',passed:true});
 const before=calls;for(const name of ['recover','recoverNative','recoverWalletResponse','reviewExpiry'])await client[name]();assert.equal(calls,before);for(const name of ['recover','recoverNative','recoverWalletResponse','reviewExpiry'])assert.equal(nativeCalls[name],1);cases.push({name:'read-only-custody-and-outcome-recovery-remain-available-when-closed',passed:true});
 client.dispose();await assert.rejects(()=>client.send(),/PUBLIC_READINESS_UNAVAILABLE/);assert.equal(nativeCalls.send,1);cases.push({name:'disposed-public-factory-cannot-send',passed:true});

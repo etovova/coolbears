@@ -14,7 +14,7 @@ export function validatePublicReadiness(value,input,now=Date.now()){
 export function createPublicReadinessClient(input,{fetchImpl=globalThis.fetch,clock=Date.now,onChange=()=>{},origin=globalThis.location?.origin}={}){
   const config=validatePublicBuyerConfig(input);if(origin!==config.origin||typeof fetchImpl!=='function')throw Error('PUBLIC_ORIGIN');
   let evidence=blocked(),pending=null,disposed=false,generation=0;
-  const state=()=>{if(evidence.expiresAt!==null&&evidence.expiresAt<=clock())return blocked();return{...evidence,pending:!!pending};};
+  const state=()=>{if(evidence.expiresAt!==null&&evidence.expiresAt<=clock())return {...blocked(),expiredOpen:evidence.status==='open'};return{...evidence,pending:!!pending};};
   const emit=()=>{try{onChange(state());}catch{}};
   async function refresh(){
     if(disposed)throw Error('PUBLIC_READINESS_UNAVAILABLE');if(pending)return pending;

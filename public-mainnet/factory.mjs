@@ -42,6 +42,8 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
       sender:createBuyerSender({storage,scope,authorizeMainnet:true,transport}),response:createBuyerResponseRecovery({storage,scope,transport}),
       prewallet:createBuyerPrewalletRecovery({storage,scope,transport}),custody:createBuyerCustodyRecovery({storage,scope,transport})})});
   function state(){const value=client?.state()??{},gate=readiness.state(),allowed=gate.salesOpen===true&&!indexUnavailable&&!gateBusy;return{...value,busy:gateBusy||value.busy===true,salesOpen:gate.salesOpen===true,saleStatus:gate.status,readiness:gate,storageAvailable:!indexUnavailable,approvedQuote:approvedQuote?structuredClone(approvedQuote):null,
+    recheckActions:gate.expiredOpen===true&&!indexUnavailable&&!gateBusy&&!value.busy?Object.fromEntries(
+      ['canCreate','canPrepare','canQuote','canSign','canSend'].map(k=>[k,value[k]===true])):{},
     canCreate:value.canCreate===true&&allowed,canPrepare:value.canPrepare===true&&allowed,
     canQuote:value.canQuote===true&&allowed,canSign:value.canSign===true&&allowed,canSend:value.canSend===true&&allowed};}
   const guarded=new Set(['create','prepare','quoteCost','sign','send','reviewReplacement','prepareReviewedReplacement']);
