@@ -15,7 +15,6 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   dialog.innerHTML='<div class="public-mint-head"><h2 id="publicMintTitle"></h2><button data-action="close" type="button"></button></div><p data-view="network">Solana Mainnet · 0.2 SOL / NFT</p><p data-view="message" role="status" aria-live="polite"></p><div data-view="wallets"></div><div data-view="purchase"><button type="button" data-action="connect"></button><p data-view="storageNote"></p><label data-view="persistLabel"><input data-input="persist" type="checkbox"><span></span></label><button data-action="persist" type="button"></button><div data-view="saved"><label></label><select aria-label="Saved purchases"></select><button data-action="restore" type="button"></button></div><p data-view="progress"></p><button data-action="create" type="button"></button><div data-view="quote"></div><label data-view="costConsent"><input data-input="cost" type="checkbox"><span></span></label><label data-view="feeConsent"><input data-input="fee" type="checkbox"><span></span></label><p data-view="failedFee"></p><div class="public-mint-actions"></div></div>';
   document.body.append(dialog);const view=name=>dialog.querySelector(`[data-view="${name}"]`),input=name=>dialog.querySelector(`[data-input="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
   const savedButton=document.createElement('button');savedButton.type='button';savedButton.dataset.savedPurchase='';savedButton.className='btn btn-outline btn-full';savedButton.hidden=true;$('mintBtn')?.insertAdjacentElement('afterend',savedButton);
-  const availabilityButton=document.createElement('button');availabilityButton.type='button';availabilityButton.className='btn btn-outline btn-full';savedButton.insertAdjacentElement('afterend',availabilityButton);
   const refreshButton=document.createElement('button');refreshButton.type='button';view('message').insertAdjacentElement('afterend',refreshButton);
   const actions=['prepare','quote','sign','send','check','save','nativeRecovery','reviewExpiry','reviewReplacement','prepareReplacement','pause','resume','newOrder'];
   for(const name of actions){const node=document.createElement('button');node.type='button';node.dataset.action=name;dialog.querySelector('.public-mint-actions').append(node);}
@@ -33,13 +32,13 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(hero)hero.textContent=sold?text('sold'):open?copy.openHero:closed?copy.closedHero:'CoolBears · Solana · 0.2 SOL / NFT';
     if($('walletBtn')){$('walletBtn').textContent=connected?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
     savedButton.textContent=text('restore');savedButton.hidden=!state.saved?.length;
-    const availability={en:'Check mint availability',ru:'Проверить доступность минта',zh:'检查铸造是否可用'}[language()]??'Check mint availability';availabilityButton.textContent=availability;refreshButton.textContent=availability;availabilityButton.disabled=busy||pending;refreshButton.disabled=busy||pending;
+    refreshButton.textContent=({en:'Try again',ru:'Повторить',zh:'重试'})[language()]??'Try again';refreshButton.disabled=busy||pending;
     $('publicMintTitle').textContent=text('title');button('close').textContent=text('close');
     for(const name of ['persist','create','restore',...actions])button(name).textContent=text(name);
     view('storageNote').textContent=text('persistNote');view('persistLabel').querySelector('span').textContent=text('persistConsent');view('costConsent').querySelector('span').textContent=text('costConsent');view('feeConsent').querySelector('span').textContent=text('feeConsent');view('saved').querySelector('label').textContent=text('saved');
     const expired=state.readiness?.expiredOpen===true,offered=k=>state[k]===true||(expired&&state.recheckActions?.[k]===true);
     const messageKey=storageUnavailable?'unavailable':walletStep??(pending?'checking':busy?'waiting':message??(state.quantity&&state.verified===state.quantity?'done':state.unknown?'pending':sold?'sold':closed?'closed':open?(connected?'ready':'needWallet'):expired?'recheck':'unknown'));
-    const activeOrder=!!(state.scope&&state.quantity);view('message').hidden=activeOrder&&['ready','recheck'].includes(messageKey);view('storageNote').hidden=activeOrder||persisted;view('message').textContent=text(messageKey);refreshButton.hidden=!!walletStep||open||expired;
+    const activeOrder=!!(state.scope&&state.quantity);view('message').hidden=activeOrder&&['ready','recheck'].includes(messageKey);view('storageNote').hidden=activeOrder||persisted;view('message').textContent=text(messageKey);refreshButton.hidden=!!walletStep||pending||!failed;
     button('connect').textContent=text('connect');button('connect').hidden=connected||!(open||expired);button('connect').disabled=busy||pending||storageUnavailable;
     view('progress').textContent=state.quantity?text('progress').replace('{done}',String(state.verified??0)).replace('{total}',String(state.quantity)):'';
     const savedSelect=view('saved').querySelector('select'),prior=savedSelect.value;savedSelect.replaceChildren();for(const [index,row]of(state.saved??[]).entries()){const option=document.createElement('option');option.value=row.id;option.textContent=`${text('order')} ${index+1} · ${row.buyer.slice(0,4)}…${row.buyer.slice(-4)}`;savedSelect.append(option);}if([...savedSelect.options].some(option=>option.value===prior))savedSelect.value=prior;view('saved').hidden=!state.saved?.length||(activeOrder&&!choosingSaved);button('restore').disabled=busy||state.busy===true;
@@ -73,7 +72,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     checking=Promise.resolve().then(()=>client.refreshReadiness()).then(()=>{failed=snapshot().saleStatus==='unavailable';},()=>{failed=true;}).finally(()=>{checking=null;if(!disposed)render();});
     render();return checking;
   }
-  availabilityButton.onclick=refreshButton.onclick=()=>run(checkStatus);
+  refreshButton.onclick=()=>run(checkStatus);
   button('connect').onclick=async()=>{if(snapshot().salesOpen!==true)await checkStatus();if(disposed||snapshot().salesOpen!==true)return;await connect();if(connectedAddress&&!disposed){view('purchase').hidden=false;show();}};
   bind('persist',async()=>{if(!input('persist').checked)return;await client.requestPersistence({authorizePersistence:true});persisted=true;});
   bind('restore',async()=>{const id=view('saved').querySelector('select').value;if(id){await client.load(id);choosingSaved=false;if(selectedWallet){await client.connectWallet(selectedWallet);await client.selectAccount(snapshot().scope.buyer);emitWallet(snapshot().selectedAccount);}}});
@@ -100,5 +99,5 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     observer.observe(card);
   }
   void globalThis.navigator?.storage?.persisted?.().then(value=>{persisted=value===true;render();}).catch(()=>{});
-  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();savedButton.remove();availabilityButton.remove();}});
+  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();savedButton.remove();}});
 }

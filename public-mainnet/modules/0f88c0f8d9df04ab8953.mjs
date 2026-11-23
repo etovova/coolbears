@@ -22,7 +22,8 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
       if(response.status!==200){
         let code='CHECK_HTTP';
         try{const failure=await readJson(response,{limit:2048,timeoutMs,signal:controller.signal,decodedResponse:true});
-          if(failure.status==='blocked'&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD'].includes(failure.code))code=failure.code;
+          const blocked=failure.status==='blocked'?failure:failure.version===1&&failure.nonce===nonce&&failure.report?.status==='blocked'?failure.report:null;
+          if(blocked&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD'].includes(blocked.code))code=blocked.code;
         }catch{}
         const error=new BuyerCheckError('CHECK_HTTP',response.status);error.reason=code;throw error;
       }

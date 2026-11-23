@@ -278,10 +278,9 @@ try {
       await cta.click();await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
       assert.doesNotMatch(await page.locator('.public-mint-dialog [data-view="message"]').innerText(),/Waiting for the result|Mint is currently unavailable/);
       await page.locator('.public-mint-dialog [data-action="close"]').click();
-      await page.getByRole('button',{name:'Check mint availability',exact:true}).first().click();
-      await page.waitForFunction(()=>document.querySelector('#minted').textContent==='MINT IS OPEN');
+      assert.equal(await page.getByRole('button',{name:'Check mint availability',exact:true}).count(),0);
       assert.equal(await page.locator('dialog[open]').count(),0);
-      assert.equal(test.readinessCalls(),3);
+      assert.equal(test.readinessCalls(),2);
     }else if(readiness==='closed')assert.equal(await cta.isDisabled(),true);
     else{
       await cta.click();await page.waitForFunction(()=>document.querySelector('#minted').textContent==='STATUS UNAVAILABLE');
