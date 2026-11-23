@@ -273,7 +273,7 @@ try {
     if(readiness==='open'){
       assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');
       await page.clock.fastForward(8001);
-      await page.waitForFunction(()=>document.querySelector('#minted').textContent==='LAST CHECK: OPEN');
+      await page.waitForFunction(()=>document.querySelector('#minted').textContent==='' && getComputedStyle(document.querySelector('.mint-topline')).display==='none');
       assert.equal(await cta.innerText(),'CHECK & MINT');assert.equal(test.readinessCalls(),1);
       await cta.click();await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
       assert.doesNotMatch(await page.locator('.public-mint-dialog [data-view="message"]').innerText(),/Waiting for the result|Mint is currently unavailable/);
