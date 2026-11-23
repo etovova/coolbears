@@ -6,9 +6,9 @@ export const need = (ok, code, status = 400, retryAfter) => { if (!ok) throw new
 export const exact = (value, fields) => value && typeof value==='object' && !Array.isArray(value)
   && Object.keys(value).sort().join(',')===fields.split(' ').sort().join(',');
 export const BUYER_BODY_LIMIT=262144;
-export async function readJson(message, {limit=BUYER_BODY_LIMIT,timeoutMs=4000,signal,canonical=true}={}) {
+export async function readJson(message, {limit=BUYER_BODY_LIMIT,timeoutMs=4000,signal,canonical=true,decodedResponse=false}={}) {
   need(/^application\/json(?:\s*;\s*charset=utf-8)?$/i.test(message.headers.get('content-type')??'')
-    && !message.headers.has('content-encoding'),'CONTENT_TYPE',415);
+    && (!message.headers.has('content-encoding')||(decodedResponse&&message instanceof Response&&/^(gzip|br|deflate|zstd)$/i.test(message.headers.get('content-encoding')))),'CONTENT_TYPE',415);
   const length=message.headers.get('content-length');
   need(length===null||(/^\d+$/.test(length)&&Number(length)<=limit),'BODY_SIZE',413);
   need(message.body?.getReader,'BODY',400);

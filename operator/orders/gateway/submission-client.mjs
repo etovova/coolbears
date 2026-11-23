@@ -28,7 +28,7 @@ export function createBuyerSubmissionTransport({origin=globalThis.location?.orig
         new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new BuyerCheckError('SUBMISSION_TIMEOUT'));},timeoutMs);})]);
       need(!response.redirected&&(!response.url||response.url===endpoint),'SUBMISSION_REDIRECT',502);
       need(response.status===200,'SUBMISSION_HTTP',response.status);
-      const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal});
+      const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal,decodedResponse:true});
       need(exact(result,'version nonce report')&&result.version===1&&result.nonce===nonce,'SUBMISSION_RESPONSE',502);
       const report=route==='review-response-expiry'?validateResponseExpiry(result.report,value):route==='review-prewallet-expiry'?validatePrewalletExpiry(result.report,value):route==='recover-prewallet'?validatePrewalletRecovery(result.report,value):route==='recover-response'?validateResponseRecovery(result.report,value):replacing?validateReplacementResult(result.report,value):route==='review-expiry'?validateBuyerExpiryResult(result.report,value):validateBuyerResult(result.report,value,{recovery:route==='recover'});
       if(replacing)need(report.record.acknowledgedFeeLamports===acknowledgedFeeLamports,'REPLACEMENT_BINDING',502);

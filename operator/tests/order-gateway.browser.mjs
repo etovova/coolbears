@@ -1,6 +1,7 @@
 // Native browser -> HTTPS -> workerd/SQLite -> intercepted SDK account RPC -> fake Wallet Standard.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:https';
+import {gzipSync} from 'node:zlib';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdtemp,mkdir,readFile,rm,writeFile} from 'node:fs/promises';
@@ -26,7 +27,8 @@ const server=createServer({key:await readFile(path.join(parent,'key.pem')),cert:
       const parts=[];for await(const chunk of req)parts.push(chunk);
       const response=await runtime.dispatch(origin+req.url,{method:req.method,headers:req.headers,body:Buffer.concat(parts)});
       let body=await response.text();if(alter&&response.status===200){const value=JSON.parse(body);value.report.candidate.messageSha256='0'.repeat(64);body=JSON.stringify(value);}
-      res.writeHead(response.status,Object.fromEntries(response.headers));res.end(body);
+      // Production edge may compress JSON. Fetch decodes the stream but retains the header.
+      const payload=gzipSync(body);res.writeHead(response.status,{...Object.fromEntries(response.headers),'content-encoding':'gzip','content-length':String(payload.length)});res.end(payload);
     }else if(req.url==='/fixture.js'){res.writeHead(200,{'content-type':'text/javascript'});res.end(bytes);}
     else{res.writeHead(200,{'content-type':'text/html'});res.end('<!doctype html><title>Disposable buyer gateway integration</title><script type="module" src="/fixture.js"></script>');}
   }catch(e){report.pageErrors.push('bridge:'+e.message);res.writeHead(503);res.end('{}');}

@@ -19,8 +19,14 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
         signal:controller.signal,redirect:'error',credentials:'omit',cache:'no-store',mode:'same-origin',referrerPolicy:'no-referrer'}),
         new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new BuyerCheckError('CHECK_TIMEOUT'));},timeoutMs);})]);
       need(!response.redirected&&(!response.url||response.url===endpoint),'CHECK_REDIRECT',502);
-      need(response.status===200,'CHECK_HTTP',response.status);
-      const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal});
+      if(response.status!==200){
+        let code='CHECK_HTTP';
+        try{const failure=await readJson(response,{limit:2048,timeoutMs,signal:controller.signal,decodedResponse:true});
+          if(failure.status==='blocked'&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD'].includes(failure.code))code=failure.code;
+        }catch{}
+        const error=new BuyerCheckError('CHECK_HTTP',response.status);error.reason=code;throw error;
+      }
+      const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal,decodedResponse:true});
       need(exact(result,'version nonce report')&&result.version===1&&result.nonce===nonce,'CHECK_RESPONSE',502);
       validateWalletCheck(result.report,value.order,value.request);return result.report;
     }catch(error){
