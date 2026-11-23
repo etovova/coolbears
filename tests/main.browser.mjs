@@ -86,7 +86,8 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
   } };
 }
 async function closed(page) {
-  assert.equal(await page.locator('#mintBtn').isDisabled(), true, 'public mint remains closed');
+  const button=page.locator('#mintBtn');
+  if(!await button.isDisabled())assert.match(await button.innerText(),/CHECK & MINT|ПРОВЕРИТЬ И ЗАМИНТИТЬ|检查并铸造/,'unverified page can only recheck availability');
   assert.equal(await page.locator('#marketplaceTop').isVisible(), false, 'unverified market link remains hidden');
 }
 async function modal(page) {
@@ -263,19 +264,25 @@ try {
   }
   for(const readiness of ['open','closed','wrong-profile']){
     const test=await open({readiness,clock:true});const {page}=test;
-    assert.equal(test.readinessCalls(),0,'passive homepage makes no readiness RPC');
-    await page.getByRole('button',{name:'Check mint availability',exact:true}).first().click();
-    await page.waitForFunction(()=>!document.querySelector('.public-mint-dialog [data-view="message"]').textContent.includes('Waiting'));
-    assert.equal(test.readinessCalls(),1);
-    assert.equal(await page.locator('#mintBtn').isDisabled(),readiness!=='open');
+    assert.equal(test.readinessCalls(),0,'passive homepage does not poll');
+    const cta=page.locator('#mintBtn');
+    await cta.scrollIntoViewIfNeeded();
+    const status=readiness==='open'?'MINT IS OPEN':readiness==='closed'?'NOT OPEN YET':'STATUS UNAVAILABLE';
+    await page.waitForFunction(s=>document.querySelector('#minted').textContent===s,status);
+    assert.equal(test.readinessCalls(),1);assert.equal(await page.locator('dialog[open]').count(),0);
     if(readiness==='open'){
-      assert.equal(await page.locator('#minted').textContent(),'MINT IS OPEN');
+      assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');
       await page.clock.fastForward(8001);
-      await page.waitForFunction(()=>document.querySelector('#mintBtn').disabled===true);
-      assert.equal(await page.locator('#mintBtn').isDisabled(),true,'expired proof closes mint without a timer fetch');
-      assert.equal(test.readinessCalls(),1);
+      await page.waitForFunction(()=>document.querySelector('#minted').textContent==='LAST CHECK: OPEN');
+      assert.equal(await cta.innerText(),'CHECK & MINT');assert.equal(test.readinessCalls(),1);
+      await cta.click();await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
+      assert.equal(test.readinessCalls(),2);
+    }else if(readiness==='closed')assert.equal(await cta.isDisabled(),true);
+    else{
+      await cta.click();await page.waitForFunction(()=>document.querySelector('#minted').textContent==='STATUS UNAVAILABLE');
+      assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),2);
     }
-    await test.done('strict public readiness '+readiness+' and no passive polling',{syntheticReadiness:true});
+    await test.done('visible mint card and verified click: '+readiness,{syntheticReadiness:true});
   }
   assert.equal(unexpectedWrites, 0);
   report.networkWrites = unexpectedWrites;

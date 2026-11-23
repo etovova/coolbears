@@ -1,4 +1,4 @@
-// Read-only operational gate for the exact closed deployment. No wallet or send.
+// Read-only operational gate for the exact public deployment. No wallet or send.
 import assert from 'node:assert/strict';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -25,10 +25,10 @@ const readiness=await get('/api/buyer/readiness'),state=JSON.parse(readiness.byt
 assert.equal(readiness.response.headers.get('x-coolbears-network-verified'),'1');
 assert.equal(Object.keys(state).sort().join(' '),'checkedAt cluster collection expiresAt genesisHash guard hiddenCommitmentSha256 machine maximumPerOrder profileSha256 salesOpen status storageMode unitPriceLamports version');assert.equal(state.version,1);assert.equal(state.profileSha256,config.profileSha256);
 for(const k of ['cluster','genesisHash','machine','collection','guard','storageMode','hiddenCommitmentSha256'])assert.equal(state[k],config[k]);
-assert.equal(state.unitPriceLamports,'200000000');assert.equal(state.maximumPerOrder,50);assert.equal(state.salesOpen,false);
-assert.ok(['closed','unavailable'].includes(state.status));const now=Date.now();
+assert.equal(state.unitPriceLamports,'200000000');assert.equal(state.maximumPerOrder,50);assert.equal(state.salesOpen,state.status==='open');
+assert.ok(['open','closed','sold-out','unavailable'].includes(state.status));const now=Date.now();
 assert.ok(Number.isSafeInteger(state.checkedAt)&&Number.isSafeInteger(state.expiresAt)&&state.checkedAt<=now&&now<state.expiresAt&&state.expiresAt-state.checkedAt===8000);
-checks.push({kind:'mainnet-network-and-closed-readiness',verified:true,status:state.status});
+checks.push({kind:'mainnet-network-and-live-readiness',verified:true,status:state.status});
 const files=JSON.parse(await readFile('scripts/public-files.json','utf8'));
 const overlay=[...files.filter(x=>x.startsWith('public-mainnet/')).map(file=>({file,path:'/'+file})),
  {file:'app.js',path:'/app.js?v=public-mainnet-20261018-1'},{file:'index.html',path:'/'},{file:'index.html',path:'/index.html'}];
