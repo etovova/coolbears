@@ -1,0 +1,27 @@
+name: Check live readiness and restore a different selected quantity
+on:
+  push:
+    branches: ['qa/check-staged-v32']
+permissions:
+  contents: read
+env:
+  QA_WORKER_VERSION: ce4d425d-a3fe-44a5-833b-13e38385ff41
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: |
+          npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Reopen the same browser order after real network expiry without payment
+        run: |
+          node tests/mobile-production-regression.qa.mjs
+          QA_FRESH_TWO_ONLY=1 node tests/mobile-production-regression.qa.mjs
