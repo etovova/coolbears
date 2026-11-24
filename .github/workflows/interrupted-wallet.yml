@@ -8,8 +8,6 @@ jobs:
   checkout:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      QA_WORKER_VERSION: 'ec0dfdc4-4a1a-445a-a5bf-fc146c8a166b'
     steps:
       - uses: actions/checkout@v4
         with:

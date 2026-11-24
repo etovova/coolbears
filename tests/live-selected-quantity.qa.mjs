@@ -68,5 +68,11 @@ try{
   assert.equal(calls,before+Number(interrupted));
   await approve(next,before+Number(interrupted)+1);assert.equal(blocked,0);
   assert.equal(traces.some(x=>/recover|expiry|replace/.test(x[0])),false);
+  if(engine==='chromium'&&!worker){
+    await next.close();const fresh=await openQuantity(2);
+    const all=await ids(fresh);assert.equal(all.length,3);assert.equal(new Set(all).size,3);
+    assert.equal(calls,before+Number(interrupted)+1);assert.equal(blocked,0);
+    await fresh.close();
+  }
   console.log('SELECTED_QUANTITY_PASS',JSON.stringify({engine,interrupted,prompts:calls,submitted:0}));
 }finally{await browser.close();}
