@@ -16,11 +16,12 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   document.body.append(dialog);
   const view=name=>dialog.querySelector(`[data-view="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
   const notices={en:{cancelled:'Signature cancelled.',pending:'The payment result is unknown. Checking your saved order; no second payment will be sent.'},ru:{cancelled:'Подпись отменена.',pending:'Результат оплаты пока неизвестен. Проверяем заказ. Повторной оплаты не будет.'},zh:{cancelled:'已取消签名。',pending:'付款结果尚未确认。正在检查已保存的订单，不会重复付款。'}};
+  const stageText={en:{pricing:'Calculating the total…',refreshing:'Refreshing the unsigned order…',awaitExpiry:'Waiting for Solana to verify the previous preparation. No payment was sent.',exhausted:'This order expired. No further attempt is available for this NFT.'},ru:{pricing:'Рассчитываем сумму…',refreshing:'Обновляем неподписанный заказ…',awaitExpiry:'Ждём проверки прежней подготовки в Solana. На этом шаге оплата не отправлялась.',exhausted:'Срок этого заказа истёк. Для этого NFT в заказе больше нет попыток.'},zh:{pricing:'正在计算总额…',refreshing:'正在更新未签名的订单…',awaitExpiry:'正在等待 Solana 验证上次准备。此步骤未付款。',exhausted:'订单已过期，当前订单中的此 NFT 已无剩余尝试次数。'}};
   const caption=()=>({en:'MINT',ru:'МИНТ',zh:'铸造'})[language()]??'MINT';
   let client,disposed=false,busy=false,message=null,selectedWallet=null,connectedAddress='',timer,storageUnavailable=false,observer=null,checking=null,failed=false,requested=false,entering=false,walletStep=null;
-  let session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0;
+  let session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0,priceTimer,priceRetries=0;
   function clearReview(){review=null;}
-  function dismiss(){session++;clearReview();picking=false;clearTimeout(recoveryTimer);}
+  function dismiss(){session++;clearReview();picking=false;clearTimeout(recoveryTimer);clearTimeout(priceTimer);}
   dialog.addEventListener('close',dismiss);
   button('close').onclick=()=>dialog.close();
   const emitWallet=address=>{connectedAddress=address??'';onWalletChange(connectedAddress);};
@@ -37,22 +38,22 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     const card=$('mintBtn');if(card){card.disabled=busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length);card.setAttribute('aria-busy',String(pending||entering));card.textContent=caption();}
     if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
     $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));button('mint').textContent=caption();
-    const key=storageUnavailable?'unavailable':walletStep??(busy?'waiting':message??(completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:null));
-    view('message').textContent=key?((notices[language()]??notices.en)[key]??text(key)):'';view('message').hidden=!key;
+    const key=storageUnavailable?'unavailable':walletStep??(busy?(['quote','prepare','opening'].includes(phase)?'pricing':phase==='expiry'?'refreshing':'waiting'):message??(exhausted(s)?'exhausted':completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:null));
+    view('message').textContent=key?((stageText[language()]??stageText.en)[key]??(notices[language()]??notices.en)[key]??text(key)):'';view('message').hidden=!key;
     const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;
     const select=view('saved').querySelector('select');view('saved').hidden=!picking;
     if(picking){select.setAttribute('aria-label',text('saved'));const prev=select.value;select.replaceChildren();for(const [i,row] of savedRows(s).entries()){const o=document.createElement('option');o.value=row.id;o.textContent=text('order')+' '+(i+1)+' · '+row.id.slice(-6);select.append(o);}if([...select.options].some(o=>o.value===prev))select.value=prev;}
     const cost=view('quote');cost.replaceChildren();const ok=currentReview(s);
     if(ok){const q=quoteOf(s),list=document.createElement('dl');for(const [label,k] of [['price','unitPriceLamports'],['fee','networkFeeLamports'],['rent','assetRentLamports'],['protocol','protocolChargeLamports'],['total','totalLamports'],...(s.quantity>1?[['projection','projectedOrderTotalLamports']]:[])]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=text(label);dd.textContent=exactSol(q.budget[k])+' SOL';list.append(dt,dd);}cost.append(list);}
     if(s.canReplace&&s.failedFeeLamports){const n=document.createElement('p');n.textContent=text('failedFee')+': '+exactSol(s.failedFeeLamports)+' SOL. '+text('feeConsent');cost.append(n);}
-    button('mint').hidden=!!walletStep||completed(s)||(!busy&&s.paymentUncertain&&!ok&&!s.canReplace&&!s.canRecoverWalletResponse);
+    button('mint').hidden=!!walletStep||completed(s)||exhausted(s)||(!busy&&s.paymentUncertain&&!ok&&!s.canReplace&&!s.canRecoverWalletResponse);
     button('mint').disabled=busy||entering||storageUnavailable||!!s.busy||(!s.salesOpen&&!s.readiness?.expiredOpen&&!s.scope&&!savedRows(s).length);
   }
   async function run(fn){if(busy||disposed)return;busy=true;phase='';message=null;render();try{return await fn();}catch(error){const code=String(error?.reason??error?.code??error?.message??'');
     if(code==='SAVED_ORDER_REVIEW_REQUIRED'){picking=true;message='saved';}
     else if(code==='WALLET_CANCELLED')message=snapshot().paymentUncertain?'pending':'cancelled';
     else if(snapshot().paymentUncertain||/WALLET_RESPONSE_(UNKNOWN|PENDING)/.test(code))message='pending';
-    else message=/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||['QuotaExceededError','SecurityError'].includes(error?.name)?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':/COOLDOWN|BUSY|DAILY_LIMIT/.test(code)||error?.status===429?'serviceBusy':phase==='quote'?'quoteRefused':phase==='prepare'?'prepareFailed':code==='PUBLIC_SALES_CLOSED'?'closed':/WALLET|ACCOUNT/.test(code)?'walletError':snapshot().paymentUncertain?'pending':'error';
+    else message=/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||['QuotaExceededError','SecurityError'].includes(error?.name)?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':/COOLDOWN|BUSY|DAILY_LIMIT/.test(code)||error?.status===429?'serviceBusy':code==='PUBLIC_SALES_CLOSED'?'closed':code==='PUBLIC_READINESS_UNAVAILABLE'?'unknown':phase==='quote'?'quoteRefused':phase==='prepare'?'prepareFailed':/WALLET|ACCOUNT/.test(code)?'walletError':snapshot().paymentUncertain?'pending':'error';
   }finally{busy=false;render();scheduleRecovery();}}
   function show(){if(!dialog.open)dialog.showModal();render();}
   async function chooseWallet(){
@@ -87,6 +88,37 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   }
   function scheduleRecovery(){clearTimeout(recoveryTimer);if(disposed||busy||!dialog.open||!snapshot().paymentUncertain||recoveryCount>=4)return;
     const token=session;recoveryTimer=setTimeout(()=>{if(token!==session||disposed||!dialog.open||busy)return;recoveryCount++;void run(checkExisting);},[4500,9000,16000,30000][recoveryCount]);}
+  const item=s=>s.items?.find(i=>i.index===s.currentItemIndex);
+  function exhausted(s){const v=item(s);return v?.attempt===2&&v.state==='expired'&&!s.canReplace&&!s.canPrepareReplacement;}
+  function rememberPhase(label){phase=label;render();}
+  function unsignedExpiry(e,s){
+    return e?.status===409&&['ATTEMPT_EXPIRED','BLOCKHASH_EXPIRED','BLOCKHASH_TOO_OLD','SIMULATION_FAILED','RPC_AMOUNT','FEE_UNAVAILABLE'].includes(e.reason)
+      &&s.canReviewExpiry&&item(s)?.state==='wallet-pending'&&!s.paymentUncertain&&!s.canRecoverWalletResponse&&!s.canSend;
+  }
+  async function prepareNewQuote(live){
+    const before=snapshot();rememberPhase('quote');
+    try{await client.quoteCost();}catch(e){
+      const prior=snapshot();if(!live()||!unsignedExpiry(e,prior))throw e;
+      const id=prior.scope?.id,index=prior.currentItemIndex,attempt=item(prior).attempt;
+      const same=s=>s.scope?.id===id&&s.currentItemIndex===index&&s.selectedAccount===s.scope.buyer;
+      rememberPhase('expiry');await client.reviewExpiry({authorizeExpiryReview:true});
+      if(!live())return;let s=snapshot();if(!same(s)||s.paymentUncertain||s.canRecoverWalletResponse||s.canSend)return;
+      if(item(s)?.state!=='expired'||item(s)?.attempt!==attempt){
+        message='awaitExpiry';clearTimeout(priceTimer);
+        if(priceRetries<3){const round=priceRetries++;priceTimer=setTimeout(()=>{if(live()&&!busy&&same(snapshot())&&!snapshot().paymentUncertain)void run(()=>progress());},[12000,26000,46000][round]);}return;
+      }
+      if(!s.canReplace||attempt!==1){message='exhausted';return;}
+      // The native expiry port has recorded finalized proof. A new template is unsigned;
+      // the displayed quote and buyer approval must both be obtained again.
+      await client.reviewReplacement({authorizeReplacement:true});if(!live())return;
+      s=snapshot();if(!same(s)||!s.canPrepareReplacement)return;
+      await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;
+      s=snapshot();if(!same(s)||item(s)?.attempt!==2||!allowed(s,'canQuote'))return;
+      rememberPhase('quote');await client.quoteCost();
+    }
+    if(!live())return;const s=snapshot();if(s.scope?.id!==before.scope?.id||s.currentItemIndex!==before.currentItemIndex)return;
+    clearTimeout(priceTimer);if(s.canSign||s.canSend)present(s);
+  }
   function present(s){const q=quoteOf(s);if(!q||!s.scope||s.scope.buyer!==connectedAddress)return;review={id:q.quoteId,total:q.budget.totalLamports,scope:s.scope.id,item:s.currentItemIndex};}
   async function restore(id,buyer){await client.load(id);await client.selectAccount(buyer);emitWallet(snapshot().selectedAccount);}
   async function progress({approve=false,fresh=false}={}){
@@ -105,7 +137,8 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     // Only the click on a previously displayed, matching estimate may reach a wallet.
     if(approve&&currentReview(s)&&(allowed(s,'canSign')||allowed(s,'canSend'))&&!s.paymentUncertain){
       const agreed={...review};clearReview();
-      if(allowed(s,'canSign')){await client.sign({authorizeCost:true,quoteId:agreed.id,maxTotalLamports:agreed.total});if(!live())return;}
+      if(allowed(s,'canSign')){try{await client.sign({authorizeCost:true,quoteId:agreed.id,maxTotalLamports:agreed.total});}
+        catch(e){if(live()&&unsignedExpiry(e,snapshot())){await prepareNewQuote(live);return;}throw e;}if(!live())return;}
       s=snapshot();if(s.scope?.id!==agreed.scope||s.currentItemIndex!==agreed.item||s.approvedQuote?.quoteId!==agreed.id||s.approvedQuote?.budget.totalLamports!==agreed.total||!allowed(s,'canSend'))return;
       await client.send({authorizeSend:true});if(live()&&snapshot().canRecover)await client.recover({authorizeOutcomeCheck:true});return;
     }
@@ -115,19 +148,19 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     }
     if(!s.salesOpen){await checkStatus();if(!live())return;s=snapshot();if(!s.salesOpen){message='notReady';return;}}
     if(s.canReplace){if(!approve)return;await client.reviewReplacement({authorizeReplacement:true,...(s.failedFeeLamports?{acknowledgedFeeLamports:s.failedFeeLamports}:{})});if(!live())return;await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;s=snapshot();}
-    if(s.canPrepare){phase='prepare';await client.prepare({authorizePreparation:true});if(!live())return;s=snapshot();}
-    if(s.canQuote){phase='quote';await client.quoteCost();if(!live())return;s=snapshot();}
+    if(s.canPrepare){rememberPhase('prepare');await client.prepare({authorizePreparation:true});if(!live())return;s=snapshot();}
+    if(s.canQuote){await prepareNewQuote(live);return;}
     if(s.canSign||s.canSend)present(s);
   }
   button('mint').onclick=()=>run(()=>progress({approve:true}));
   $('mintBtn')?.addEventListener('click',async()=>{
-    if(entering||busy||disposed||storageUnavailable)return;requested=true;entering=true;recoveryCount=0;clearReview();message=null;render();
+    if(entering||busy||disposed||storageUnavailable)return;requested=true;entering=true;recoveryCount=0;priceRetries=0;clearTimeout(priceTimer);clearReview();message=null;render();
     try{
       if(snapshot().salesOpen!==true)await checkStatus();if(disposed||storageUnavailable)return;
       const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length)return;
       await run(async()=>{view('wallets').replaceChildren();view('purchase').hidden=false;show();const token=session;
         if(!connectedAddress&&!(await attach(true)))return;if(!dialog.open||session!==token||disposed)return;
-        view('wallets').replaceChildren();view('purchase').hidden=false;await progress({fresh:true});});
+        view('wallets').replaceChildren();view('purchase').hidden=false;rememberPhase('opening');await progress({fresh:true});});
     }finally{entering=false;render();}
   });
   client=factory(config,{onChange:state=>{if(selectedWallet&&state.selectedAccount===null&&connectedAddress)emitWallet('');clearTimeout(timer);if(Number.isSafeInteger(state.readiness?.expiresAt))timer=setTimeout(render,Math.max(0,state.readiness.expiresAt-Date.now())+1);render();}});
@@ -137,5 +170,5 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     observer=new globalThis.IntersectionObserver(entries=>{if(!disposed&&observer&&entries.some(e=>e.target===card&&e.isIntersecting)){void checkStatus();}},{threshold:0});
     observer.observe(card);
   }
-  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();clearTimeout(recoveryTimer);}});
+  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();clearTimeout(recoveryTimer);clearTimeout(priceTimer);}});
 }

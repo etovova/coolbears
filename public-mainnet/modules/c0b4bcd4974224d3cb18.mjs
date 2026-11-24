@@ -16,12 +16,16 @@ export function createPublicReadinessClient(input,{fetchImpl=globalThis.fetch,cl
   let evidence=blocked(),pending=null,disposed=false,generation=0;
   const state=()=>{if(evidence.expiresAt!==null&&evidence.expiresAt<=clock())return {...blocked(),expiredOpen:evidence.status==='open'};return{...evidence,pending:!!pending};};
   const emit=()=>{try{onChange(state());}catch{}};
+  const pause=()=>new Promise(resolve=>setTimeout(resolve,450));
   async function refresh(){
     if(disposed)throw Error('PUBLIC_READINESS_UNAVAILABLE');if(pending)return pending;
     const epoch=++generation;evidence=blocked();
     pending=(async()=>{try{
       for(let attempt=0;attempt<2;attempt++){
-      const response=await fetchImpl(config.origin+'/api/buyer/readiness',{method:'GET',credentials:'omit',cache:'no-store',redirect:'error',headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)});
+      let response;try{response=await fetchImpl(config.origin+'/api/buyer/readiness',{method:'GET',credentials:'omit',cache:'no-store',redirect:'error',headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)});}catch(error){
+        if(!attempt&&!disposed&&epoch===generation){await pause();if(disposed||epoch!==generation)throw error;continue;}throw error;}
+      if(!attempt&&[502,503,504].includes(response.status)&&!response.headers.has('retry-after')){
+        await pause();if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');continue;}
       if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const text=await response.text();if(text.length>8192)throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const checked=validatePublicReadiness(JSON.parse(text),config,clock());if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');

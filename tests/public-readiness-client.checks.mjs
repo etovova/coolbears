@@ -33,5 +33,15 @@ assert.throws(()=>createPublicReadinessClient(config,{origin:'https://other.exam
  let attempts=0;const test=createPublicReadinessClient(config,{origin:config.origin,clock:()=>1000,fetchImpl:async()=>{attempts++;return new Response(JSON.stringify({...base,status:attempts===1?'unavailable':'open',salesOpen:attempts!==1}),{headers:{'content-type':'application/json','x-coolbears-network-verified':attempts===1?'0':'1'}});}});
  assert.equal((await test.requireOpen()).status,'open');assert.equal(attempts,2);test.dispose();pass('transient-server-unavailability-rechecks-once-with-fresh-validated-proof');
 }
+for(const mode of ['network','bad-gateway','rate-limit','retry-after','wrong-chain']){
+ let calls=0;const test=createPublicReadinessClient(config,{origin:config.origin,clock:()=>1000,fetchImpl:async()=>{calls++;
+   if(calls===1&&mode==='network')throw new TypeError('synthetic mobile network interruption');
+   if(calls===1&&['bad-gateway','rate-limit','retry-after'].includes(mode))return new Response('busy',{status:mode==='rate-limit'?429:503,headers:mode==='retry-after'?{'retry-after':'20'}:{}});
+   return new Response(JSON.stringify({...base,...(mode==='wrong-chain'?{genesisHash:config.guard}:{})}),{headers:{'content-type':'application/json'}});
+ }});
+ if(['network','bad-gateway'].includes(mode)){await test.requireOpen();assert.equal(calls,2);}
+ else{await assert.rejects(test.requireOpen());assert.equal(calls,1);assert.equal(test.state().salesOpen,false);}
+ test.dispose();pass('transient-readiness-respects-fresh-proof-and-retry-limits:'+mode);
+}
 const sources={};for(const name of ['config.mjs','readiness-client.mjs','factory.mjs','main.mjs','style.css']){const bytes=await readFile(new URL('../public-mainnet/'+name,import.meta.url));sources[name]={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
 const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,sources,liveRpcRequests:0,realWalletCalls:0,limitations:['Readiness client/config boundaries were executed with synthetic same-origin Response objects. This does not attest deployed readiness, actual accounts, Chromium, Phantom or a successful purchase.','A separately reviewed public gateway must recheck canonical public accounts before preparation, simulation and sending.']};await writeFile(new URL('../build/public-mainnet/public-readiness-client-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length}));
