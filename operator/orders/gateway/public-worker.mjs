@@ -124,7 +124,7 @@ export function makePublicBuyerGateway(input,{releaseProfile}={}){
         &&cached.checkedAt<=now&&now<cached.expiresAt)return respond({value:cached,networkVerified:true});
       if(this.readinessPending)return this.readinessPending.then(respond);
       this.readinessPending=(async()=>{
-        let reserved=false,own=false;
+        let reserved=false,own=false,refusal=null;
         try{
           need(!this.busy,'BUSY',429,1);this.busy=true;own=true;
           await this.storage.transaction(async tx=>{
@@ -136,7 +136,7 @@ export function makePublicBuyerGateway(input,{releaseProfile}={}){
           const fetchImpl=async(url,init)=>{
             const payload=JSON.parse(init.body);
             need(url===endpoint&&['getGenesisHash','getMultipleAccounts'].includes(payload.method),'RPC_METHOD',503);
-            await this.reserveRpc(payload.method);need(!init.signal.aborted,'RPC_TIMEOUT',504);
+            try{await this.reserveRpc(payload.method);}catch(error){if(error instanceof BuyerCheckError)refusal=error;throw error;}need(!init.signal.aborted,'RPC_TIMEOUT',504);
             const response=await this.fetchImpl(url,{...init,redirect:'manual'});
             if([429,503].includes(response.status)){
               const seconds=retryAfter(response.headers.get('retry-after'),this.clock());
@@ -151,7 +151,7 @@ export function makePublicBuyerGateway(input,{releaseProfile}={}){
           await this.storage.put(readinessKey,result);
           return {value:result,networkVerified:true};
         }catch(error){
-          const known=error instanceof BuyerCheckError,reason=known&&['BUSY','COOLDOWN','DAILY_LIMIT','PUBLIC_SALE_ACCOUNT_STATE'].includes(error.code)?error.code:'UPSTREAM_UNAVAILABLE';
+          error=refusal??error;const known=error instanceof BuyerCheckError,reason=known&&['BUSY','COOLDOWN','DAILY_LIMIT','PUBLIC_SALE_ACCOUNT_STATE'].includes(error.code)?error.code:'UPSTREAM_UNAVAILABLE';
           return {value:readinessReply('unavailable',this.clock()),networkVerified:reason==='PUBLIC_SALE_ACCOUNT_STATE',reason,
             after:known&&['BUSY','COOLDOWN','DAILY_LIMIT'].includes(reason)&&integer(error.retryAfter)?error.retryAfter:undefined};
         }
