@@ -22,4 +22,6 @@ jobs:
           node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
       - name: Reopen the same browser order after real network expiry without payment
-        run: node tests/mobile-production-regression.qa.mjs
+        run: |
+          node tests/mobile-production-regression.qa.mjs
+          QA_FRESH_TWO_ONLY=1 node tests/mobile-production-regression.qa.mjs
