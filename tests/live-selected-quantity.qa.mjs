@@ -30,7 +30,7 @@ ctx.on('response',async res=>{
  traces.push(row);console.log('endpoint',...row);
 });
 await ctx.exposeBinding('recordPrompt',()=>{calls++;console.log('WALLET PROMPT',calls);});
-await ctx.addInitScript(()=>{const address="FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y";let n=0n;for(const c of address)n=n*58n+BigInt('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.indexOf(c));const pub=new Uint8Array(32);for(let i=31;i>=0;i--){pub[i]=Number(n&255n);n>>=8n;}const account={address,publicKey:pub,chains:['solana:mainnet'],features:['solana:signTransaction']};const wallet={name:'Read-only QA',icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',version:'1.0.0',chains:account.chains,accounts:[account],features:{'standard:connect':{connect:async()=>{if(window.__slowConnect){window.__slowConnect=false;await new Promise(r=>setTimeout(r,10500));}return {accounts:[account]};}},'standard:events':{on:()=>()=>{}},'solana:signTransaction':{supportedTransactionVersions:[0],signTransaction:async()=>{await window.recordPrompt();return new Promise(()=>{});}}}};window.addEventListener('wallet-standard:app-ready',e=>e.detail.register(wallet));window.dispatchEvent(new CustomEvent('wallet-standard:register-wallet',{detail:({register})=>register(wallet)}));});
+await ctx.addInitScript(()=>{const address="FNytKprG3JukM81svBhCrgHAEHht3oUgpXZFUkUbCW6y";let n=0n;for(const c of address)n=n*58n+BigInt('123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'.indexOf(c));const pub=new Uint8Array(32);for(let i=31;i>=0;i--){pub[i]=Number(n&255n);n>>=8n;}const account={address,publicKey:pub,chains:['solana:mainnet'],features:['solana:signTransaction']};const wallet={name:'Read-only QA',icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg"/>',version:'1.0.0',chains:account.chains,accounts:[account],features:{'standard:connect':{connect:async()=>{if(window.__slowConnect){window.__slowConnect=false;await new Promise(r=>setTimeout(r,10500));}return {accounts:[account]};}},'standard:events':{on:()=>()=>{}},'solana:signTransaction':{supportedTransactionVersions:[0],signTransaction:async input=>{const tx=input.transaction;if(tx[0]!==2||tx.slice(1,129).some(Boolean))throw Error('EXPECTED_TWO_EMPTY_SIGNATURES');await window.recordPrompt();return new Promise(()=>{});}}}};window.addEventListener('wallet-standard:app-ready',e=>e.detail.register(wallet));window.dispatchEvent(new CustomEvent('wallet-standard:register-wallet',{detail:({register})=>register(wallet)}));});
 const ids=page=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('coolbears:private-buyer-index:')))).orders.map(o=>o.id));
 const quote='dialog[open] [data-view=quote] dl', action='dialog[open] [data-action=mint]';
 const press=locator=>engine==='firefox'?locator.click():locator.tap();
@@ -60,8 +60,8 @@ async function approve(page,expected){
   assert.equal(calls,expected,'approval must open the wallet exactly once');
 }
 try{
-  const transport=await ctx.request.get(origin+'/public-mainnet/modules/4b03b537b1daf8c91c30.mjs');
-  assert.equal(createHash('sha256').update(await transport.body()).digest('hex'),'219fb6412e14dc5cd91729ff3019d32ab80a2dcb1ea80486e914cdc13f30aefe');
+  const proof=await ctx.request.get(origin+'/api/buyer/deployment',{timeout:30000});
+  assert.equal(proof.status(),200);assert.equal((await proof.json()).buildSha256,'e916f0275cf10e4953f8e9c80558d0397394e9fb86e522e18ab3e984caa7f5d9');
   const versionCheck=await ctx.request.get(origin+'/api/buyer/readiness');
   console.log('readiness',versionCheck.status(),(await versionCheck.json()).status);
   let page=await openQuantity(1);let first=await ids(page);assert.equal(first.length,1);

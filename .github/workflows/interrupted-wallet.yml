@@ -1,13 +1,15 @@
-name: Verify selected quantity through wallet approval
+name: Check buyer-first mint on the staged site
 on:
   push:
-    branches: ['qa/wallet-interruption-v36']
+    branches: ['qa/buyer-first-check-v41']
 permissions:
   contents: read
 jobs:
   checkout:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      QA_WORKER_VERSION: 2d6178ea-ae5d-47db-ae7f-1022f39a7af6
     steps:
       - uses: actions/checkout@v4
         with:
@@ -24,3 +26,5 @@ jobs:
         run: QA_ENGINE=chromium QA_INTERRUPTED=1 node tests/live-selected-quantity.qa.mjs
       - if: ${{ !cancelled() }}
         run: QA_ENGINE=firefox node tests/live-selected-quantity.qa.mjs
+      - name: Close the phone tab during the wallet request and restore the same order
+        run: node tests/live-wallet-interruption.qa.mjs
