@@ -88,7 +88,7 @@ try{
  ok('restored-quantity-and-total-match-even-if-preparation-outlives-readiness');
  // Losing proof for an unverified order must never advance to signing or silently do nothing.
  await action('close').click();state={...state,scope:null,saved:[],quantity:null,selectedAccount:buyer,canPrepare:false,canQuote:false,canSign:false,salesOpen:false,saleStatus:'unavailable',readiness:{},recheckActions:{},quote:null};emit();
- client.refreshReadiness=async()=>{};await card.click();assert.ok(dialog.open);assert.ok(msg().length>0);assert.equal(counts.sign,sBefore);ok('unverified-fresh-sale-shows-result-and-does-not-create-or-sign');client.prepare=savedPrepare;
+ client.refreshReadiness=async()=>{};await card.click();assert.equal(dialog.open,false);assert.match(document.getElementById('minted').textContent,/СТАТУС НЕДОСТУПЕН/);assert.equal(counts.sign,sBefore);ok('unverified-fresh-sale-shows-inline-result-and-does-not-create-or-sign');client.prepare=savedPrepare;
  state={...state,salesOpen:true,saleStatus:'open',readiness:{status:'open'},storageAvailable:true};emit();
  assert.equal(document.getElementById('minted').textContent,'','old failed check must not survive new verified open state');
  ok('fresh-confirmation-clears-obsolete-status-unavailable');

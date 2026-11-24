@@ -180,7 +180,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(entering||busy||disposed||storageUnavailable)return;requested=true;entering=true;recoveryCount=0;priceRetries=0;clearTimeout(priceTimer);clearReview();message=null;render();
     try{
       if(snapshot().salesOpen!==true)await checkStatus();if(disposed||storageUnavailable)return;
-      const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length){view('wallets').replaceChildren();walletStep=null;view('purchase').hidden=false;message=s.saleStatus==='closed'?'closed':s.saleStatus==='sold-out'?'sold':'unknown';show();return;}
+      const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length)return;
       await run(async()=>{view('wallets').replaceChildren();view('purchase').hidden=false;show();const token=session;
         if(!connectedAddress&&!(await attach(true)))return;if(!dialog.open||session!==token||disposed)return;
         view('wallets').replaceChildren();view('purchase').hidden=false;rememberPhase('opening');await progress({fresh:true});});
