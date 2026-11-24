@@ -1,7 +1,7 @@
-name: Verify mobile checkout after actual unsigned expiry
+name: Verify deployed mobile checkout after expired unsigned order
 on:
   push:
-    branches: ['qa/expired-quote-v23']
+    branches: ['qa/coolbears-live-v24']
 permissions:
   contents: read
 jobs:
