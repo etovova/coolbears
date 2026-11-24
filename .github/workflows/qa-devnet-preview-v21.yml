@@ -1,0 +1,43 @@
+name: Verify supplemental release checks on public Devnet
+on:
+  push:
+    branches: ['qa/mobile-checkout-v21-coverage']
+    paths: ['.github/workflows/qa-devnet-preview-v21.yml']
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: operator/package-lock.json
+      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - id: setup
+        run: npm run --prefix operator setup
+      - name: Isolated lifecycle and cost calibration
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: node operator/costs/cli.mjs
+      - name: Isolated deployment
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: node operator/deployment/isolated-cli.mjs
+      - name: Unsigned public Devnet deployment preview
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        run: node operator/deployment/preview-cli.mjs
+      - name: Save results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devnet-supplemental-checks
+          path: |
+            operator/build/lifecycle-costs/report.json
+            operator/build/isolated-deployment/report.json
+            build/devnet-cost-preview.json
+          retention-days: 14
