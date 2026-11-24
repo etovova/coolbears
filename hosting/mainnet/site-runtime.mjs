@@ -1,3 +1,4 @@
+import { createIndexedMetadataWorker } from '../indexed-metadata-worker.mjs';
 // Fixed overlay of the current site; original static assets remain in ASSETS.
 // No request or environment value selects a release or opens a guard.
 const HEADERS={'cache-control':'no-store','x-content-type-options':'nosniff','cross-origin-resource-policy':'same-origin','referrer-policy':'no-referrer'};
@@ -7,6 +8,7 @@ const key=value=>typeof value==='string'&&/^[a-f0-9]{64}$/.test(value);
 export function makePublicSiteRuntime({origin,profileSha256,sourcePolicySha256,buildSha256,overlay,originalAssets,buyerWorker}){
  if(origin!=='https://coolbears-nfts.com'||![profileSha256,sourcePolicySha256,buildSha256].every(key)
    ||!overlay||!originalAssets||Object.keys(originalAssets).length!==3||typeof buyerWorker?.fetch!=='function')throw Error('PUBLIC_SITE_BUILD');
+ const metadata=createIndexedMetadataWorker();
  const entries=new Map();
  for(const [route,value]of Object.entries(overlay)){
   if(!/^(?:\/|\/index\.html|\/app\.js|\/public-mainnet\/[A-Za-z0-9_./-]+)$/.test(route)||route.split('/').includes('..')
@@ -51,7 +53,7 @@ export function makePublicSiteRuntime({origin,profileSha256,sourcePolicySha256,b
     if(!['GET','HEAD'].includes(request.method)||(url.search&&!pinnedAppQuery)||url.hash)return reply(404,{status:'unavailable'});
     return new Response(request.method==='HEAD'?null:item.body,{headers:{...HEADERS,'content-type':item.contentType}});
    }
-   return await env.ASSETS.fetch(request);
+   return await metadata.fetch(request,env);
   }catch{return reply(503,{status:'unavailable',salesOpen:false});}
  }});
 }

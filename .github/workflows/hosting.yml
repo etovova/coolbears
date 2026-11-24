@@ -29,7 +29,7 @@ jobs:
       - run: npm run test:public-mainnet
       - run: npm run verify
       - run: node --test hosting/audit.test.mjs
-      - run: node --test hosting/indexed-metadata.test.mjs
+      - run: node --test hosting/indexed-metadata.test.mjs hosting/mainnet/site-runtime.metadata.test.mjs
       - run: node hosting/prepare.mjs
       - run: node hosting/runtime.mjs
       - run: node hosting/www-redirect/runtime.mjs

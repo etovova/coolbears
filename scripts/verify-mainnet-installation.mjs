@@ -29,6 +29,16 @@ assert.equal(state.unitPriceLamports,'200000000');assert.equal(state.maximumPerO
 assert.ok(['open','closed','sold-out','unavailable'].includes(state.status));const now=Date.now();
 assert.ok(Number.isSafeInteger(state.checkedAt)&&Number.isSafeInteger(state.expiresAt)&&state.checkedAt<=now&&now<state.expiresAt&&state.expiresAt-state.checkedAt===8000);
 checks.push({kind:'mainnet-network-and-live-readiness',verified:true,status:state.status});
+// These are the actual unpadded URIs used by the Candy Machine.
+const hidden=JSON.parse(await readFile('metadata/0000.json','utf8')), policy=JSON.parse(policyBytes);
+for(const i of [1,10,99,1000,5000,9999]){
+ const path='/metadata/hidden-indexed/'+i+'.json',padded='/metadata/hidden/'+String(i).padStart(4,'0')+'.json';
+ const {bytes,response}=await get(path);
+ assert.match(response.headers.get('content-type')??'',/^application\/json/);
+ assert.deepEqual(JSON.parse(bytes),{...hidden,name:policy.hiddenName.replace('{index:04d}',String(i).padStart(4,'0'))},path);
+ assert.deepEqual(bytes,(await get(padded)).bytes,path);
+ checks.push({kind:'hidden-mint-uri',path,verified:true});
+}
 const files=JSON.parse(await readFile('scripts/public-files.json','utf8'));
 const overlay=[...files.filter(x=>x.startsWith('public-mainnet/')).map(file=>({file,path:'/'+file})),
  {file:'app.js',path:'/app.js?v=public-mainnet-20261018-1'},{file:'index.html',path:'/'},{file:'index.html',path:'/index.html'}];
