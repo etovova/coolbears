@@ -101,7 +101,15 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
       const prior=snapshot();if(!live()||!unsignedExpiry(e,prior))throw e;
       const id=prior.scope?.id,index=prior.currentItemIndex,attempt=item(prior).attempt;
       const same=s=>s.scope?.id===id&&s.currentItemIndex===index&&s.selectedAccount===s.scope.buyer;
-      rememberPhase('expiry');await client.reviewExpiry({authorizeExpiryReview:true});
+      rememberPhase('expiry');
+      for(let retry=0;;retry++){
+        try{await client.reviewExpiry({authorizeExpiryReview:true});break;}
+        catch(error){
+          if(retry||error?.code!=='UNSIGNED_REVIEW_COOLDOWN'||!Number.isSafeInteger(error.retryAfter)||error.retryAfter<1||error.retryAfter>45)throw error;
+          await new Promise(resolve=>setTimeout(resolve,error.retryAfter*1000+200));
+          const saved=snapshot();if(!live()||!same(saved)||item(saved)?.attempt!==attempt||item(saved)?.state!=='wallet-pending'||!saved.canReviewExpiry||saved.paymentUncertain||saved.canSend||saved.canRecoverWalletResponse)return;
+        }
+      }
       if(!live())return;let s=snapshot();if(!same(s)||s.paymentUncertain||s.canRecoverWalletResponse||s.canSend)return;
       if(item(s)?.state!=='expired'||item(s)?.attempt!==attempt){
         message='awaitExpiry';clearTimeout(priceTimer);

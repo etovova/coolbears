@@ -27,6 +27,13 @@ export function createBuyerSubmissionTransport({origin=globalThis.location?.orig
         redirect:'error',credentials:'omit',cache:'no-store',mode:'same-origin',referrerPolicy:'no-referrer'}),
         new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new BuyerCheckError('SUBMISSION_TIMEOUT'));},timeoutMs);})]);
       need(!response.redirected&&(!response.url||response.url===endpoint),'SUBMISSION_REDIRECT',502);
+      if(route==='review-prewallet-expiry'&&response.status===429){
+        const seconds=response.headers.get('retry-after');
+        if(/^(?:[1-9]|[1-3][0-9]|4[0-5])$/.test(seconds??'')){
+          let result;try{result=await readJson(response,{limit:1024,timeoutMs,signal:controller.signal,decodedResponse:true});}catch{}
+          if(result?.status==='blocked'&&['BUSY','COOLDOWN'].includes(result.code))throw new BuyerCheckError('UNSIGNED_REVIEW_COOLDOWN',429,Number(seconds));
+        }
+      }
       need(response.status===200,'SUBMISSION_HTTP',response.status);
       const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal,decodedResponse:true});
       need(exact(result,'version nonce report')&&result.version===1&&result.nonce===nonce,'SUBMISSION_RESPONSE',502);
