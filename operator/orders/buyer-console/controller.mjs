@@ -19,7 +19,7 @@ export function explainConsoleError(error){
   if(/CHECK|SUBMISSION|RPC|OFFLINE|TIMEOUT/.test(code))return 'The check could not finish. The outcome may still be unknown. Review saved progress before another action.';
   return 'This action is blocked. Saved progress is retained; review the order before continuing.';
 }
-export function createPrivateBuyerController({config,storage,index,prepare,makePorts,storageManager=globalThis.navigator?.storage,
+export function createPrivateBuyerController({config,storage,index,prepare,makePorts,recoveryStorage,storageManager=globalThis.navigator?.storage,
   crypto=globalThis.crypto,clock=()=>Date.now(),onChange=()=>{},sendingEnabled=false}={}){
   config=validateConsoleConfig(config);const network=networkProfile(config.cluster);need(storage?.readRecoverySnapshot&&index?.list&&index?.save&&typeof prepare==='function'&&typeof makePorts==='function','CONSOLE_CONFIGURATION');
   let scope=null,ports=null,evidence=null,summary=null,quote=null,quoteRevision=null,busy=false,error=null,result=null,reviewedReplacement=null,loaded=false;
@@ -51,7 +51,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
       saved:index.list(),accounts:accounts.map(a=>({address:a.address})),selectedAccount:account?.address??null,walletName:wallet?.name??null,
       salesOpen:false,unitPriceSol:'0.2',sendingEnabled:sendingEnabled===true,custody:evidence?.custody?.status??null,
       paused:order?.paused??false,quantity:order?.quantity??null,verified:order?.items.filter(i=>i.attempts.at(-1)?.state==='verified').length??0,
-      currentItemIndex:active?.index??null,items:order?.items.map(i=>({index:i.index,state:i.attempts.at(-1)?.state??'not-started',attempt:i.attempts.at(-1)?.number??0}))??[],
+      paymentUncertain:unknown&&!!(evidence?.buyerWallet?.status==='wallet-response-unknown'||signed?.status==='send-claimed'),currentItemIndex:active?.index??null,items:order?.items.map(i=>({index:i.index,state:i.attempts.at(-1)?.state??'not-started',attempt:i.attempts.at(-1)?.number??0}))??[],
       quote:freshQuote?copy(quote):null,costSummary:copy(summary),unknown,
       canCreate:!scope&&!!account&&!busy,canStartNew:!busy&&!pendingResponse&&!!scope&&loaded&&(!order||order.items.every(i=>i.attempts.at(-1)?.state==='verified')),
       canPrepare:!busy&&canPrepare,canQuote:!busy&&!!canQuote,
@@ -89,7 +89,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
     async startNew({authorizeNewOrder=false}={}){return run(async()=>{consent(authorizeNewOrder,'NEW_ORDER');await refresh();enabled('canStartNew');
       ports?.wallet.dispose?.();scope=null;ports=null;evidence=null;summary=null;loaded=false;clearQuote();reviewedReplacement=null;result=null;return stateUnlocked();});},
     async refresh(){return run(async()=>{await refresh();return stateUnlocked();});},
-    async requestPersistence({authorizePersistence=false}={}){return run(async()=>{consent(authorizePersistence,'PERSISTENCE');
+    async requestPersistence({authorizePersistence=false}={}){return run(async()=>{consent(authorizePersistence,'PERSISTENCE');if(recoveryStorage)return recoveryStorage.authorize();
       need(typeof storageManager?.persist==='function'&&await storageManager.persist()===true&&await storageManager.persisted()===true,'PERSISTENT_STORAGE_REQUIRED');return true;});},
     async connectWallet(selected){return run(async()=>{noPendingMemory();need(compatibleBuyerWallet(selected,network.cluster),'WALLET_UNSUPPORTED');off?.();ports?.wallet.dispose?.();clearQuote();
       const generation=++epoch;wallet=selected;account=null;accounts=[];off=null;
@@ -100,7 +100,7 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
       account=chosen;clearQuote();if(scope){bind();await connectPortWallet();await refresh();}return stateUnlocked();});},
     disconnectWallet(){off?.();off=null;wallet=null;invalidate();},
     async create({quantity,authorizeCreate=false}={}){return run(async()=>{consent(authorizeCreate,'CREATE');need(!scope&&account,'ACCOUNT_REQUIRED');
-      need(Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=50,'INVALID_QUANTITY');need(await storageManager?.persisted?.()===true,'PERSISTENT_STORAGE_REQUIRED');
+      need(Number.isSafeInteger(quantity)&&quantity>=1&&quantity<=50,'INVALID_QUANTITY');if(recoveryStorage)await recoveryStorage.check();else need(await storageManager?.persisted?.()===true,'PERSISTENT_STORAGE_REQUIRED');
       const generation=epoch,id='buyer-'+[...crypto.getRandomValues(new Uint8Array(16))].map(v=>v.toString(16).padStart(2,'0')).join('');
       scope={id,buyer:account.address,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};
       // Save the scope before creation so a lost commit reply is resumable. Never erase an uncertain pointer.

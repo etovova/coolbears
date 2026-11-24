@@ -5,7 +5,7 @@ import {validateBuyerExpiryResult} from './expiry-review.mjs';
 import {validateReplacementResult,validateReplacementAcknowledgment} from './replacement.mjs';
 import {networkProfile,networkSendAuthorized} from '../deployment/network.mjs';
 const need=(v,code)=>{if(!v)throw Error(code);};
-export function createBuyerSender({storage,scope,transport,storageManager=globalThis.navigator?.storage,authorizeMainnet=false}={}){
+export function createBuyerSender({storage,scope,transport,recoveryStorage,storageManager=globalThis.navigator?.storage,authorizeMainnet=false}={}){
   need(storage&&transport&&typeof transport.send==='function'&&typeof transport.recover==='function','SENDER_CONFIGURATION');
   const frozenScope=structuredClone(scope),network=networkProfile(frozenScope?.cluster??'devnet');let busy=false;
   need(typeof authorizeMainnet==='boolean','SENDER_CONFIGURATION');
@@ -15,7 +15,7 @@ export function createBuyerSender({storage,scope,transport,storageManager=global
     async sendOnce({authorizeDevnetSend=false,authorizeMainnetSend=false}={}){
       need(networkSendAuthorized(network.cluster,{authorizeDevnetSend,authorizeMainnetSend}),'EXPLICIT_SEND_REQUIRED');need(!busy,'BUSY');busy=true;
       try{
-        let timer;try{need(await Promise.race([storageManager?.persisted?.(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('PERSISTENT_STORAGE_REQUIRED')),5000);})])===true,'PERSISTENT_STORAGE_REQUIRED');}finally{clearTimeout(timer);}
+        if(recoveryStorage)await recoveryStorage.check(frozenScope);else {let timer;try{need(await Promise.race([storageManager?.persisted?.(),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('PERSISTENT_STORAGE_REQUIRED')),5000);})])===true,'PERSISTENT_STORAGE_REQUIRED');}finally{clearTimeout(timer);}}
         const before=await storage.readBuyerSubmission(frozenScope);need(before?.status==='ready'&&!before.input.order.paused,'SEND_NOT_READY');
         need(before.input.order.cluster===network.cluster,'SEND_CLUSTER_MISMATCH');
         validateBuyerSubmission(before.input);

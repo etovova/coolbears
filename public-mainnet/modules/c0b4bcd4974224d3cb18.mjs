@@ -20,14 +20,19 @@ export function createPublicReadinessClient(input,{fetchImpl=globalThis.fetch,cl
     if(disposed)throw Error('PUBLIC_READINESS_UNAVAILABLE');if(pending)return pending;
     const epoch=++generation;evidence=blocked();
     pending=(async()=>{try{
+      for(let attempt=0;attempt<2;attempt++){
       const response=await fetchImpl(config.origin+'/api/buyer/readiness',{method:'GET',credentials:'omit',cache:'no-store',redirect:'error',headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)});
       if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const text=await response.text();if(text.length>8192)throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const checked=validatePublicReadiness(JSON.parse(text),config,clock());if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');
-      evidence=checked;return state();
+      if(attempt===0&&checked.status==='unavailable'&&response.headers.get('x-coolbears-network-verified')==='0'&&!response.headers.has('retry-after')){
+        await new Promise(resolve=>setTimeout(resolve,450));if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');continue;
+      }
+      evidence=checked;return state();}
+
     }catch{evidence=blocked();throw Error('PUBLIC_READINESS_UNAVAILABLE');}
     finally{pending=null;emit();}})();emit();return pending;
   }
-  return Object.freeze({state,refresh,async requireOpen(){const value=await refresh();if(value.salesOpen!==true||value.status!=='open')throw Error('PUBLIC_SALES_CLOSED');return value;},
+  return Object.freeze({state,refresh,async requireOpen(){const value=await refresh();if(value.status==='unavailable')throw Error('PUBLIC_READINESS_UNAVAILABLE');if(value.salesOpen!==true||value.status!=='open')throw Error('PUBLIC_SALES_CLOSED');return value;},
     dispose(){disposed=true;generation++;evidence=blocked();emit();}});
 }

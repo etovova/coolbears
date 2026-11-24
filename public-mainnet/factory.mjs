@@ -36,10 +36,29 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
   const emit=()=>{try{onChange(state());}catch{}};
   const readiness=createPublicReadinessClient(deployment,{onChange:emit});
   const storage=createBuyerStorage({cluster:'mainnet-beta',authorizeMainnet:true,storageOptions:consoleStorageOptions(config)});
+  const consentKey='coolbears:public-recovery:v1:'+deployment.profileSha256;
+  const recoveryStorage={
+    async authorize(){
+      // Eviction protection is optional; never represent best-effort storage as a browser grant.
+      let timer;try{await Promise.race([globalThis.navigator?.storage?.persist?.(),new Promise(resolve=>{timer=setTimeout(resolve,2000);})]);}catch{}finally{clearTimeout(timer);}
+      await storage.verifyJournalStorage();
+      globalThis.localStorage.setItem(consentKey,'yes');
+      if(globalThis.localStorage.getItem(consentKey)!=='yes')throw Error('STORAGE_UNAVAILABLE');
+      return true;
+    },
+    async check(scope){
+      if(scope){
+        if(!index.list().some(row=>row.id===scope.id&&row.buyer===scope.buyer))throw Error('STORAGE_UNAVAILABLE');
+        const evidence=await storage.readRecoverySnapshot(scope);
+        if(evidence?.custody.status!=='available')throw Error('STORAGE_UNAVAILABLE');
+      }else if(globalThis.localStorage.getItem(consentKey)!=='yes')throw Error('PERSISTENCE_CONSENT_REQUIRED');
+      await storage.verifyJournalStorage();
+    }
+  };
   const transport=createBuyerSubmissionTransport({origin:config.origin});
-  client=createPrivateBuyerController({config,storage,index,prepare:createBuyerPreparationClient({origin:config.origin}),onChange:emit,sendingEnabled:true,
-    makePorts:scope=>({wallet:createBuyerWalletClient({storage,scope,authorizeMainnet:true,checkPrepared:createBuyerCheckClient({origin:config.origin}),onChange:emit}),
-      sender:createBuyerSender({storage,scope,authorizeMainnet:true,transport}),response:createBuyerResponseRecovery({storage,scope,transport}),
+  client=createPrivateBuyerController({config,storage,index,recoveryStorage,prepare:createBuyerPreparationClient({origin:config.origin}),onChange:emit,sendingEnabled:true,
+    makePorts:scope=>({wallet:createBuyerWalletClient({storage,scope,recoveryStorage,authorizeMainnet:true,checkPrepared:createBuyerCheckClient({origin:config.origin}),onChange:emit}),
+      sender:createBuyerSender({storage,scope,recoveryStorage,authorizeMainnet:true,transport}),response:createBuyerResponseRecovery({storage,scope,transport}),
       prewallet:createBuyerPrewalletRecovery({storage,scope,transport}),custody:createBuyerCustodyRecovery({storage,scope,transport})})});
   function state(){const value=client?.state()??{},gate=readiness.state(),allowed=gate.salesOpen===true&&!indexUnavailable&&!gateBusy;return{...value,busy:gateBusy||value.busy===true,salesOpen:gate.salesOpen===true,saleStatus:gate.status,readiness:gate,storageAvailable:!indexUnavailable,approvedQuote:approvedQuote?structuredClone(approvedQuote):null,
     recheckActions:gate.expiredOpen===true&&!indexUnavailable&&!gateBusy&&!value.busy?Object.fromEntries(
@@ -58,6 +77,25 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
   for(const name of Object.keys(client))if(!['state','dispose'].includes(name))api[name]=async(...args)=>{
     if(gateBusy)throw Error('BUSY');if(guarded.has(name)){gateBusy=true;emit();}
     try{if(guarded.has(name)){state();if(indexUnavailable)throw Error('STORAGE_UNAVAILABLE');await readiness.requireOpen();}
+      if(name==='create'&&client.state().selectedAccount){
+        if(args[0]?.authorizeCreate!==true)throw Error('EXPLICIT_CREATE_REQUIRED');
+        const buyer=client.state().selectedAccount;
+        return await navigator.locks.request(consentKey+':order:'+buyer,async()=>{
+          if(client.state().selectedAccount!==buyer||client.state().scope)throw Error('ACCOUNT_CHANGED');
+          let retained=null;
+          for(const row of index.list().filter(row=>row.buyer===buyer)){
+            const scope={...row,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};
+            const record=await storage.readRecoverySnapshot(scope);
+            if(!record||!record.order.items.every(i=>i.attempts.at(-1)?.state==='verified')){
+              if(!record||retained)throw Error('SAVED_ORDER_REVIEW_REQUIRED');
+              retained=row;
+            }
+          }
+          if(client.state().selectedAccount!==buyer)throw Error('ACCOUNT_CHANGED');
+          if(retained){await client.load(retained.id);return client.selectAccount(buyer);}
+          return client.create(...args);
+        });
+      }
       return await client[name](...(name==='connectWallet'?[boundedConnectWallet(args[0]),...args.slice(1)]:args));}
     finally{if(sync.has(name))try{await refreshApprovedQuote();}catch{approvedQuote=null;}gateBusy=false;emit();}
   };

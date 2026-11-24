@@ -318,6 +318,21 @@ try {
     await page.locator('.bear-lang[data-lang="zh"]').click();await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
     await test.done('mobile passive network failure and explicit refusal keep native CTA: '+locale);
   }
+  if(engine==='chromium'){
+    const test=await open({device:'Pixel 7',wallet:true,readiness:'open'}),{page}=test;
+    const start=async()=>{
+      await page.locator('#mintBtn').click();await page.getByRole('button',{name:'Phantom',exact:true}).click();
+      const dialog=page.locator('dialog[open]'),create=dialog.locator('[data-action="create"]');
+      await create.waitFor();assert.equal(await create.isDisabled(),true);
+      await dialog.locator('[data-input="persist"]').check();await create.click();
+      await dialog.locator('[data-action="prepare"]').waitFor({timeout:15000});
+      return page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('coolbears:private-buyer-index:')))).orders);
+    };
+    const original=await start();assert.equal(original.length,1);
+    await page.reload({waitUntil:'networkidle'});assert.deepEqual(await start(),original);
+    assert.equal(await page.evaluate(()=>window.__testWallet.signatures),0);
+    await test.done('mobile order survives reload; the same wallet resumes instead of creating a second order, using real browser storage');
+  }
   assert.equal(unexpectedWrites, 0);
   report.networkWrites = unexpectedWrites;
   report.status='passed';await saveReport();

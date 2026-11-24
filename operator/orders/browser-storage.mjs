@@ -545,6 +545,17 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
       });
   }
   return {
+    // Fixed non-order key, under a lock. Test a completed strict write and an
+    // independent read from the same durable journal used for custody.
+    async verifyJournalStorage() {
+      requireCapabilities();
+      return locks.request('coolbears:journal-health:v1', {mode:'exclusive'}, async () => {
+        const marker='public-journal-health:v1', nonce=crypto.randomUUID();
+        await transaction('readwrite',(tx,done)=>{tx.objectStore('events').put(nonce,marker);done();});
+        const actual=await transaction('readonly',(tx,done)=>{const r=tx.objectStore('events').get(marker);r.onsuccess=()=>done(r.result);});
+        requireThat(actual===nonce,'STORAGE_UNAVAILABLE');return true;
+      });
+    },
     async create(input) {
       const frozen = structuredClone(input);
       return locked(frozen, async (scope, scopeKey) => {

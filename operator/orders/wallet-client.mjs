@@ -48,7 +48,7 @@ export function validateWalletCheck(report, order, request, now = Date.now()) {
   checkedBudget(report,order);
 }
 export function createBuyerWalletClient({ storage, scope, checkPrepared,
-  storageManager = globalThis.navigator?.storage, onChange = () => {}, walletTimeoutMs = 120000, authorizeMainnet = false } = {}) {
+  recoveryStorage, storageManager = globalThis.navigator?.storage, onChange = () => {}, walletTimeoutMs = 120000, authorizeMainnet = false } = {}) {
   need(storage && typeof checkPrepared === 'function' && Number.isSafeInteger(walletTimeoutMs)
     && walletTimeoutMs >= 20 && walletTimeoutMs <= 180000, 'CLIENT_CONFIGURATION');
   scope = structuredClone(scope); const network = networkProfile(scope.cluster), chain = network.walletChain;
@@ -59,6 +59,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
   const notify = () => { try { onChange(); } catch {} };
   const changed = () => { epoch++; account = null; costQuote = null; notify(); };
   async function persistent() {
+    if(recoveryStorage){await recoveryStorage.check(scope);return;}
     need(typeof storageManager?.persisted === 'function', 'PERSISTENT_STORAGE_REQUIRED');
     need(await bounded(storageManager.persisted(), 5000, 'STORAGE_UNAVAILABLE') === true, 'PERSISTENT_STORAGE_REQUIRED');
   }
