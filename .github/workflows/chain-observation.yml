@@ -1,0 +1,18 @@
+name: Read finalized collection settings and recent buyer activity
+on:
+  push:
+    branches: ['qa/coolbears-collection-chain-v29']
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - run: node tests/chain-observation.qa.mjs
