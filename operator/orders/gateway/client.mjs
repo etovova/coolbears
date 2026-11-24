@@ -23,12 +23,13 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
         let code='CHECK_HTTP';
         try{const failure=await readJson(response,{limit:2048,timeoutMs,signal:controller.signal,decodedResponse:true});
           const blocked=failure.status==='blocked'?failure:failure.version===1&&failure.nonce===nonce&&failure.report?.status==='blocked'?failure.report:null;
-          if(blocked&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD','BLOCKHASH_EXPIRED','ATTEMPT_EXPIRED','SIMULATION_FAILED','RPC_AMOUNT','FEE_UNAVAILABLE','BLOCKHASH_ANCHOR_REQUIRED','MINT_INDEX_CHANGED','CHECK_TOO_OLD','ATTEMPT_RECOVERED','ATTEMPT_FAILED','SALES_CLOSED','INSUFFICIENT_SUPPLY','RPC_RPC','RPC_CONTEXT'].includes(blocked.code))code=blocked.code;
+          if(blocked&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','CHECK_UNAVAILABLE','BLOCKHASH_TOO_OLD','BLOCKHASH_EXPIRED','ATTEMPT_EXPIRED','SIMULATION_FAILED','RPC_AMOUNT','FEE_UNAVAILABLE','BLOCKHASH_ANCHOR_REQUIRED','MINT_INDEX_CHANGED','CHECK_TOO_OLD','ATTEMPT_RECOVERED','ATTEMPT_FAILED','SALES_CLOSED','INSUFFICIENT_SUPPLY','RPC_RPC','RPC_CONTEXT'].includes(blocked.code))code=blocked.code;
           if(blocked===failure.report&&blocked?.code==='RPC_RPC'&&response.status===409&&['accounts','balance','cost','simulation','freshness'].includes(blocked.phase))code=blocked.phase==='freshness'?'QUOTE_FRESHNESS_RPC':'QUOTE_READ_RPC';
         }catch{}
         const header=response.headers.get('retry-after');
-        const delay=response.status===429&&['COOLDOWN','BUSY'].includes(code)&&/^(?:[1-9]|[1-3][0-9]|4[0-5])$/.test(header??'')?Number(header):undefined;
-        const error=new BuyerCheckError('CHECK_HTTP',response.status,delay);error.reason=code;throw error;
+        const retryable=(response.status===429&&['COOLDOWN','BUSY'].includes(code))||(response.status===503&&['CHECK_UNAVAILABLE','UPSTREAM_UNAVAILABLE'].includes(code));
+        const delay=retryable&&/^(?:[1-9]|[1-3][0-9]|4[0-5])$/.test(header??'')?Number(header):undefined;
+        const error=new BuyerCheckError('CHECK_HTTP',response.status,delay);error.reason=code;if(retryable&&header!==null&&delay===undefined)error.retryAfterUnsupported=true;throw error;
       }
       const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal,decodedResponse:true});
       need(exact(result,'version nonce report')&&result.version===1&&result.nonce===nonce,'CHECK_RESPONSE',502);

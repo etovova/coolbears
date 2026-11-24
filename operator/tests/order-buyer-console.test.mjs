@@ -72,6 +72,19 @@ test('no creation, persistence, preparation, signing, sends or replacement effec
   await sign(c,q);assert.equal(f.calls.wallet,1);assert.equal(f.calls.send,0);assert.equal(c.state().unknown,true);assert.equal(c.state().canPrepare,false);
   await assert.rejects(c.send({authorizeSend:true}),/SEND_DISABLED/);assert.equal(f.calls.send,0);
 });
+test('automatic renewal requires an exclusively asset-signed draft with no buyer claim or receipt',async()=>{
+  const f=buyerConsoleFixture(),c=f.controller;await f.ready(6);await prepare(c);
+  const evidence=f.snapshot;
+  evidence.readOnly=true;evidence.order.items[0].attempts[0].signature=null;await c.refresh();
+  assert.equal(c.state().canRenewUnsigned,true);
+  for(const [field,value] of [['buyerWallet',{status:'wallet-response-unknown'}],['responseRecovery',{status:'wallet-response-unknown'}],['submission',{status:'send-claimed'}]]){
+    evidence[field]=value;await c.refresh();assert.equal(c.state().canRenewUnsigned,false);
+    await assert.rejects(c.startNew({authorizeNewOrder:true,renewUnsigned:true}),/ACTION_BLOCKED/);
+    assert.equal(c.state().quantity,6);evidence[field]=null;
+  }
+  await c.refresh();await c.startNew({authorizeNewOrder:true,renewUnsigned:true});assert.equal(c.state().scope,null);
+  assert.equal(f.calls.wallet,0);assert.equal(f.calls.send,0);
+});
 test('stale quote, changed account and mismatched cost cap cannot call the wallet',async()=>{
   for(const change of ['expired','account','cap','revision']){
     const f=buyerConsoleFixture(),c=f.controller;await f.ready();await prepare(c);const q=await c.quoteCost();

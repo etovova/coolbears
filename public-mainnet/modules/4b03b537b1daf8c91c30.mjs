@@ -120,8 +120,11 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
       try{return await operation();}catch(error){
         const cooldown=error?.status===429&&['COOLDOWN','BUSY'].includes(error.reason)&&Number.isInteger(error.retryAfter)&&error.retryAfter>=1&&error.retryAfter<=45;
         const lag=kind==='quote'&&error?.status===409&&['QUOTE_FRESHNESS_RPC','QUOTE_READ_RPC'].includes(error.reason);
-        const seconds=cooldown?error.retryAfter:lag?45:0;
-        if(!live()||!seconds||retries>=3||waited+seconds>45)throw error;
+        // Both endpoints retain the same order and asset. A temporary gateway
+        // outage can finish before the next read; never replay a wallet action.
+        const unavailable=error?.status===503&&['CHECK_UNAVAILABLE','UPSTREAM_UNAVAILABLE'].includes(error.reason)&&!error.retryAfterUnsupported;
+        const seconds=cooldown?error.retryAfter:lag?45:unavailable?(error.retryAfter??[1,4,10][retries]):0;
+        if(!live()||!seconds||retries>=3||waited+seconds>50)throw error;
         waited+=seconds;rememberPhase(kind);await new Promise(resolve=>setTimeout(resolve,seconds*1000+200));
         const s=snapshot();if(!live()||!id||s.scope?.id!==id||s.scope.buyer!==s.selectedAccount||s.currentItemIndex!==index||item(s)?.attempt!==attempt||s.paymentUncertain||s.canSend||s.canRecoverWalletResponse||
           (kind==='quote'?item(s)?.state!=='wallet-pending':item(s)?.state!=='not-started'))return;

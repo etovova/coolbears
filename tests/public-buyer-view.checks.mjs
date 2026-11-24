@@ -130,6 +130,12 @@ try{
  client.quoteCost=async()=>{if(++reads===1)throw Object.assign(Error('CHECK_HTTP'),{reason:'FEE_UNAVAILABLE',status:409});return oldQ();};
  await primary.click();assert.equal(renewals,1);assert.equal(reads,2);assert.equal(newQty,6);assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],priorTerminalPayments);
  ok('expired-unsigned-quote-refreshes-once-and-preserves-six-without-a-wallet-prompt');
+ state={...state,canSign:false,canQuote:true,canRenewUnsigned:false,quote:null};emit();
+ let outageReads=0;
+ client.quoteCost=async()=>{if(++outageReads===1)throw Object.assign(Error('CHECK_HTTP'),{status:503,reason:'CHECK_UNAVAILABLE'});return oldQ();};
+ await primary.click();assert.equal(outageReads,2);assert.equal(state.quantity,6);assert.match(cost(),/0.203010000 SOL/);
+ assert.deepEqual([counts.sign,counts.send],priorTerminalPayments);
+ ok('temporary-gateway-503-retries-only-the-unsigned-read-for-the-selected-quantity');
 const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
   limitations:['Production public view and complete fixed module graph executed in a small Node VM DOM adapter with trusted synthetic controller ports. Native custody, wallet signatures, RPC and actual browser layout are not attested by these view tests.','Readiness/state gates and genuine browser-native offline instruction planning have separate tests; real account verification remains on the public gateway.']};await writeFile(new URL('../build/public-mainnet/public-buyer-view-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length,counts}));
 }finally{mounted.dispose();loaded.stop();}
