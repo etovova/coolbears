@@ -4,7 +4,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {PublicKey} from '@solana/web3.js';
 import {createPrivateBuyerController} from '../operator/orders/buyer-console/controller.mjs';
-import {consoleStorageOptions,spentUnsignedOrder} from '../operator/orders/buyer-console/config.mjs';
+import {consoleStorageOptions,spentUnsignedOrder,unpaidDraft} from '../operator/orders/buyer-console/config.mjs';
 import {validatePublicBuyerConfig,buyerScopeConfig} from '../public-mainnet/config.mjs';
 import config from '../public-mainnet/deployment.mjs';
 
@@ -15,7 +15,7 @@ const context=vm.createContext({structuredClone,location:{origin:config.origin},
 const values={
   '../operator/orders/browser-storage.mjs':{createBuyerStorage:()=>({readRecoverySnapshot:async()=>null,readBuyerSubmission:async()=>null})},
   '../operator/orders/buyer-console/controller.mjs':{createPrivateBuyerController},
-  '../operator/orders/buyer-console/config.mjs':{consoleStorageOptions,spentUnsignedOrder,createScopeIndex:()=>({list:()=>[],save:async()=>{}})},
+  '../operator/orders/buyer-console/config.mjs':{consoleStorageOptions,spentUnsignedOrder,unpaidDraft,createScopeIndex:()=>({list:()=>[],save:async()=>{}})},
   './config.mjs':{validatePublicBuyerConfig,buyerScopeConfig},
   './readiness-client.mjs':{createPublicReadinessClient:()=>({state:()=>({status:'closed',salesOpen:false}),dispose(){},refresh:async()=>{},requireOpen:async()=>{throw Error('PUBLIC_SALES_CLOSED');}})},
 };

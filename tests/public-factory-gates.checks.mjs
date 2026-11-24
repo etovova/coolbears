@@ -68,6 +68,34 @@ client.dispose();await assert.rejects(()=>client.send(),/PUBLIC_READINESS_UNAVAI
      journal=structuredClone(exact);change(journal);await c.create({quantity:2,authorizeCreate:true});
    }assert.equal(created,1);assert.equal(restored,7);
    cases.push({name:'only-two-proven-unsigned-expiries-with-zero-receipts-unblock-fresh-order',passed:true});
+   const afterPrompt=structuredClone(exact);
+   delete afterPrompt.prewalletRecovery;
+   afterPrompt.responseRecovery={status:'expired',report:{status:'response-expired',chainVerified:true}};
+   journal=afterPrompt;
+   await c.create({quantity:2,authorizeCreate:true});
+   assert.equal(created,2,'two proven expirations must release an unanswered wallet order');
+   for(const change of [
+     r=>{r.responseRecovery.report.chainVerified=false;},
+     r=>{r.responseRecovery.report.status='unknown';},
+     r=>{r.order.items[0].attempts[0].proof.signatureAbsent=false;},
+     r=>{r.order.items[0].attempts[1].proof.blockhashValid=true;}
+   ]){
+     journal=structuredClone(afterPrompt);change(journal);
+     await c.create({quantity:2,authorizeCreate:true});
+   }
+   assert.equal(created,2);assert.equal(restored,11);
+   cases.push({name:'two-finalized-unpaid-attempts-release-the-order-after-a-lost-wallet-response',passed:true});
+   const start=()=>c.create({quantity:2,authorizeCreate:true,newPurchase:true});
+   const draft={readOnly:true,custody:{status:'available'},order:{quantity:1,items:[{attempts:[{state:'unknown',signature:null}]}]},buyerWallet:{status:'wallet-response-unknown'}};
+   const beforeCreates=created,beforeLoads=restored;
+   journal=structuredClone(draft);await start();
+   journal.order.quantity=2;await start();
+   assert.equal(created,beforeCreates+2);assert.equal(restored,beforeLoads);
+   journal.submission={status:'send-claimed'};await start();
+   assert.equal(restored,beforeLoads+1);
+   journal={...draft,order:{quantity:2,items:[{attempts:[]},{attempts:[]}]}};await start();
+   assert.equal(restored,beforeLoads+2);
+   cases.push({name:'storefront-keeps-selected-quantity-skips-unanswered-prompts-and-recognizes-in-flight-payments',passed:true});
  }finally{c.dispose();Object.assign(native,saved);delete nativeState.selectedAccount;ctx.localStorage.getItem=()=>null;}
 }
 const beforeBlocked=calls;vm.runInContext("Object.defineProperty(globalThis,'localStorage',{configurable:true,get(){throw Error('blocked');}});",ctx);const blockedClient=entry.namespace.createPublicBuyerConsole(config);assert.equal(blockedClient.state().storageAvailable,false);await blockedClient.connectWallet();assert.equal(nativeCalls.connectWallet,1);for(const name of guarded)await assert.rejects(()=>blockedClient[name](),/STORAGE_UNAVAILABLE/);assert.equal(calls,beforeBlocked);assert.equal(nativeCalls.create,1);blockedClient.dispose();cases.push({name:'blocked-browser-index-preserves-wallet-connection-and-blocks-finance-before-rpc',passed:true});

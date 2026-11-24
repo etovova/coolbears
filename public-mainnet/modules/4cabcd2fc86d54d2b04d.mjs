@@ -1,7 +1,7 @@
 // Private UI coordinator. Injected ports are trusted application dependencies, never UI input.
 import {PublicKey} from '/public-mainnet/modules/60139917f8765411c2c3.mjs';
 import {compatibleBuyerWallet} from '/public-mainnet/modules/567c67902474bc169c81.mjs';
-import {validateConsoleConfig,consoleStorageOptions,spentUnsignedOrder} from '/public-mainnet/modules/a691d422982ddd4e45cc.mjs';
+import {validateConsoleConfig,consoleStorageOptions,spentUnsignedOrder,unpaidDraft} from '/public-mainnet/modules/a691d422982ddd4e45cc.mjs';
 import {networkProfile} from '/public-mainnet/modules/16494c413cb2c41805ca.mjs';
 const need=(v,c)=>{if(!v)throw Error(c);},copy=v=>structuredClone(v);
 const terminal=s=>['verified','failed','expired'].includes(s);
@@ -53,6 +53,8 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
       paused:order?.paused??false,quantity:order?.quantity??null,verified:order?.items.filter(i=>i.attempts.at(-1)?.state==='verified').length??0,
       paymentUncertain:unknown&&!!(evidence?.buyerWallet?.status==='wallet-response-unknown'||signed?.status==='send-claimed'),currentItemIndex:active?.index??null,items:order?.items.map(i=>({index:i.index,state:i.attempts.at(-1)?.state??'not-started',attempt:i.attempts.at(-1)?.number??0}))??[],
       quote:freshQuote?copy(quote):null,costSummary:copy(summary),unknown,
+      canChooseQuantity:!busy&&!pendingResponse&&selected&&available,
+      canLeaveDraft:!busy&&!pendingResponse&&selected&&unpaidDraft(evidence),
       canRestartExpired:!busy&&!pendingResponse&&selected&&spentUnsignedOrder(evidence),
       canCreate:!scope&&!!account&&!busy,canStartNew:!busy&&!pendingResponse&&!!scope&&loaded&&(!order||(selected&&spentUnsignedOrder(evidence))||order.items.every(i=>i.attempts.at(-1)?.state==='verified')),
       canPrepare:!busy&&canPrepare,canQuote:!busy&&!!canQuote,
@@ -87,7 +89,10 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
   return Object.freeze({state,
     async load(id){return run(async()=>{noPendingMemory();const row=index.list().find(v=>v.id===id);need(row,'ORDER_NOT_FOUND');
       scope={id:row.id,buyer:row.buyer,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};account=null;bind();clearQuote();reviewedReplacement=null;loaded=false;result=null;await refresh();return stateUnlocked();});},
-    async startNew({authorizeNewOrder=false}={}){return run(async()=>{consent(authorizeNewOrder,'NEW_ORDER');await refresh();enabled('canStartNew');
+    async startNew({authorizeNewOrder=false,leaveDraft=false,nextQuantity}={}){return run(async()=>{consent(authorizeNewOrder,'NEW_ORDER');await refresh();if(nextQuantity!==undefined){
+        need(Number.isInteger(nextQuantity)&&nextQuantity>=1&&nextQuantity<=50&&nextQuantity!==evidence?.order?.quantity,'INVALID_QUANTITY');
+        enabled('canChooseQuantity');
+      }else if(leaveDraft)enabled('canLeaveDraft');else enabled('canStartNew');
       ports?.wallet.dispose?.();scope=null;ports=null;evidence=null;summary=null;loaded=false;clearQuote();reviewedReplacement=null;result=null;return stateUnlocked();});},
     async refresh(){return run(async()=>{await refresh();return stateUnlocked();});},
     async requestPersistence({authorizePersistence=false}={}){return run(async()=>{consent(authorizePersistence,'PERSISTENCE');if(recoveryStorage)return recoveryStorage.authorize();

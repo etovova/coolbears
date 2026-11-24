@@ -139,7 +139,20 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
         const costInput={order:before,claim:bundle.claim,request:bundle.request};
         validateCostApproval(approval,costInput,{now:Date.now()});
         const started = performance.now();
-        const report = await bounded(checkPrepared({order:structuredClone(before),claim:bundle.claim,request:bundle.request}), 35000, 'PREFLIGHT_TIMEOUT');
+        const verify = () => bounded(checkPrepared({order:structuredClone(before),claim:bundle.claim,request:bundle.request}), 35000, 'PREFLIGHT_TIMEOUT');
+        let report;
+        try { report = await verify(); }
+        catch (error) {
+          // A quick approval can share the gateway's short read cooldown with the quote.
+          // Only repeat the read, before claiming or opening the wallet.
+          const seconds = error?.retryAfter;
+          if (error?.status !== 429 || !['COOLDOWN','BUSY'].includes(error.reason) ||
+              !Number.isInteger(seconds) || seconds < 1 || seconds > 2) throw error;
+          await new Promise(resolve => setTimeout(resolve, seconds * 1000 + 100));
+          stableWallet();
+          validateCostApproval(approval,costInput,{now:Date.now()});
+          report = await verify();
+        }
         validateWalletCheck(report, before, bundle.request);
         need(performance.now() - started <= 30000, 'PREFLIGHT_BLOCKED');
         enforceCostCeiling(approval,costInput,report);

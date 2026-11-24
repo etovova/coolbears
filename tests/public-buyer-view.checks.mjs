@@ -67,7 +67,7 @@ try{
  client.reviewExpiry=async a=>{events.push('expiry');assert.equal(a.authorizeExpiryReview,true);if(!verifiedExpiry)return {status:'unknown'};state={...state,items:[{index:0,state:'expired',attempt:1}],unknown:false,canQuote:false,canReviewExpiry:false,canReplace:true};emit();return {status:'expired',outcome:'expired'};};
  client.reviewReplacement=async a=>{events.push('review');assert.equal(a.authorizeReplacement,true);state.canPrepareReplacement=true;emit();};
  client.prepareReviewedReplacement=async a=>{events.push('replace');assert.equal(a.authorizeReplacementSigning,true);reject=false;state={...state,items:[{index:0,state:'wallet-pending',attempt:2}],canQuote:true,canReplace:false,canPrepareReplacement:false};emit();};
- if(dialog.open)await action('close').click();stale();await card.click();assert.deepEqual(events,['quote','expiry']);assert.equal(counts.sign,1);assert.equal(counts.send,1);ok('unsigned-409-does-not-replace-an-unproven-expiration');
+ if(dialog.open)await action('close').click();document.getElementById('qty').value='1';stale();await card.click();assert.deepEqual(events,['quote','expiry']);assert.equal(counts.sign,1);assert.equal(counts.send,1);ok('unsigned-409-does-not-replace-an-unproven-expiration');
  const reviewAfterWait=client.reviewExpiry;let busyOnce=true;client.reviewExpiry=async opts=>{if(busyOnce){busyOnce=false;events.push('cooldown');throw Object.assign(Error('UNSIGNED_REVIEW_COOLDOWN'),{code:'UNSIGNED_REVIEW_COOLDOWN',status:429,retryAfter:1});}return await reviewAfterWait(opts);};
  events.length=0;verifiedExpiry=true;await primary.click();assert.deepEqual(events,['quote','cooldown','expiry','review','replace','quote']);assert.ok(cost().includes('0.203010000 SOL'));assert.equal(counts.sign,1);assert.equal(counts.send,1);ok('expired-unsigned-order-reuses-the-same-order-and-presents-a-new-total-before-signature');
  stale();events.length=0;reject=true;client.quoteCost=async()=>{throw Object.assign(Error('CHECK_HTTP'),{reason:'INSUFFICIENT_BALANCE',status:409});};await primary.click();assert.deepEqual(events,[]);assert.match(msg(),/недостаточно/);ok('balance-refusal-never-initiates-replacement');
@@ -79,13 +79,16 @@ try{
  if(dialog.open)await action('close').click();
  stale();state={...state,canQuote:false,canPrepare:true,canReviewExpiry:false,canRecover:false,unknown:false,items:[{index:0,state:'not-started',attempt:0}],readiness:null,recheckActions:{}};
  document.getElementById('qty').value='2';
- const savedPrepare=client.prepare;
+ const savedPrepare=client.prepare,savedCreate=client.create;
+ state.canLeaveDraft=true;state.canChooseQuantity=true;
+ client.startNew=async opts=>{assert.equal(opts.nextQuantity,2);state={...state,scope:null,quantity:null,canChooseQuantity:false,canLeaveDraft:false};emit();};
+ client.create=async opts=>{assert.deepEqual([opts.quantity,opts.newPurchase],[2,true]);state={...state,scope:{id:'selected-two',buyer},quantity:2,canPrepare:true};emit();};
  client.prepare=async()=>{state={...state,salesOpen:false,saleStatus:'unavailable',canPrepare:false,canQuote:false,readiness:{expiredOpen:true},recheckActions:{canQuote:true},items:[{index:0,state:'wallet-pending',attempt:1}]};emit();};
  client.quoteCost=async()=>{await oldQ();state={...state,salesOpen:true,saleStatus:'open',canSign:true};emit();};
  const qBefore=counts.quote,sBefore=counts.sign;
  await card.click();assert.equal(counts.quote,qBefore+1,'prepare outlived readiness but quote was never requested');assert.match(cost(),/0.203010000 SOL/);
- assert.equal(String(document.getElementById('qty').value),'1','card must match the one retained item');assert.equal(counts.sign,sBefore);
- ok('restored-quantity-and-total-match-even-if-preparation-outlives-readiness');
+ assert.equal(String(document.getElementById('qty').value),'2');assert.equal(state.quantity,2);client.create=savedCreate;assert.equal(counts.sign,sBefore);
+ ok('newly-selected-quantity-and-total-survive-old-draft-and-slow-preparation');
  // Losing proof for an unverified order must never advance to signing or silently do nothing.
  await action('close').click();state={...state,scope:null,saved:[],quantity:null,selectedAccount:buyer,canPrepare:false,canQuote:false,canSign:false,salesOpen:false,saleStatus:'unavailable',readiness:{},recheckActions:{},quote:null};emit();
  client.refreshReadiness=async()=>{};await card.click();assert.equal(dialog.open,false);assert.match(document.getElementById('minted').textContent,/СТАТУС НЕДОСТУПЕН/);assert.equal(counts.sign,sBefore);ok('unverified-fresh-sale-shows-inline-result-and-does-not-create-or-sign');client.prepare=savedPrepare;
@@ -93,7 +96,7 @@ try{
  assert.equal(document.getElementById('minted').textContent,'','old failed check must not survive new verified open state');
  ok('fresh-confirmation-clears-obsolete-status-unavailable');
  // A real gateway can refuse an unsigned quote for one second after preparation.
- if(dialog.open)await action('close').click();stale();const beforePaid=[counts.sign,counts.send];let busyChecks=0;
+ if(dialog.open)await action('close').click();document.getElementById('qty').value='1';stale();const beforePaid=[counts.sign,counts.send];let busyChecks=0;
  client.quoteCost=async()=>{busyChecks++;if(busyChecks===1)throw Object.assign(Error('CHECK_HTTP'),{status:429,reason:'COOLDOWN',retryAfter:1});await oldQ();};
  await card.click();assert.equal(busyChecks,2,'retry a refused unsigned quote once the advertised hold ends');assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],beforePaid);
  for(const refusal of [{reason:'DAILY_LIMIT',retryAfter:1},{reason:'COOLDOWN',retryAfter:90},{reason:'COOLDOWN'}]){await action('close').click();stale();busyChecks=0;client.quoteCost=async()=>{busyChecks++;throw Object.assign(Error('CHECK_HTTP'),{status:429,...refusal});};await card.click();assert.equal(busyChecks,1);assert.deepEqual([counts.sign,counts.send],beforePaid);}
