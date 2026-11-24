@@ -111,6 +111,25 @@ try{
  client.prepare=async()=>{state={...state,canPrepare:false,canQuote:true,items:[{index:0,state:'wallet-pending',attempt:1}]};emit();};client.quoteCost=oldQ;
  await card.click();assert.equal(reopened,1,'exhausted saved order must release checkout');assert.equal(newQty,2);assert.equal(document.getElementById('qty').value,'2');assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],priorTerminalPayments);
  ok('fully-expired-empty-order-allows-explicit-new-quantity-without-signing');
+ // A slow wallet connection must not let expired readiness select the previous one-item order.
+ await action('close').click();await mounted.connect();
+ const connectBefore=client.connectWallet,loadBefore=client.load;
+ let readinessRenewals=0;
+ state={...state,scope:null,quantity:null,selectedAccount:null,accounts:[],saved:[{id:'saved-one',buyer}],salesOpen:true,saleStatus:'open',canRestartExpired:false,canPrepare:false,canQuote:false,canSign:false,canRecover:false,quote:null,approvedQuote:null};
+ document.getElementById('qty').value='6';emit();
+ client.connectWallet=async wallet=>{await connectBefore(wallet);state={...state,salesOpen:false,saleStatus:'unavailable',readiness:{expiredOpen:true}};emit();};
+ client.refreshReadiness=async()=>{readinessRenewals++;state={...state,salesOpen:true,saleStatus:'open',readiness:{expiredOpen:false}};emit();};
+ client.load=async()=>assert.fail('a fresh mint must never restore a different quantity after connection');
+ await card.click();assert.equal(readinessRenewals,1);assert.equal(newQty,6);assert.equal(state.quantity,6);assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],priorTerminalPayments);
+ ok('six-selected-after-slow-wallet-connection-does-not-open-old-one-item-order');
+ client.connectWallet=connectBefore;client.load=loadBefore;
+ // An expired asset-only estimate gets one new template for the same six,
+ // while any retained buyer response keeps its existing recovery path.
+ let renewals=0,reads=0;state={...state,canRenewUnsigned:true,canQuote:true,canSign:false,quote:null};emit();
+ client.startNew=async opts=>{assert.equal(opts.renewUnsigned,true);renewals++;state={...state,scope:null,quantity:null,items:[],canQuote:false,canSign:false,canRenewUnsigned:false};emit();};
+ client.quoteCost=async()=>{if(++reads===1)throw Object.assign(Error('CHECK_HTTP'),{reason:'FEE_UNAVAILABLE',status:409});return oldQ();};
+ await primary.click();assert.equal(renewals,1);assert.equal(reads,2);assert.equal(newQty,6);assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],priorTerminalPayments);
+ ok('expired-unsigned-quote-refreshes-once-and-preserves-six-without-a-wallet-prompt');
 const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
   limitations:['Production public view and complete fixed module graph executed in a small Node VM DOM adapter with trusted synthetic controller ports. Native custody, wallet signatures, RPC and actual browser layout are not attested by these view tests.','Readiness/state gates and genuine browser-native offline instruction planning have separate tests; real account verification remains on the public gateway.']};await writeFile(new URL('../build/public-mainnet/public-buyer-view-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length,counts}));
 }finally{mounted.dispose();loaded.stop();}

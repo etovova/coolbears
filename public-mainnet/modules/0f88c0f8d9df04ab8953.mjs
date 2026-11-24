@@ -23,8 +23,8 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
         let code='CHECK_HTTP';
         try{const failure=await readJson(response,{limit:2048,timeoutMs,signal:controller.signal,decodedResponse:true});
           const blocked=failure.status==='blocked'?failure:failure.version===1&&failure.nonce===nonce&&failure.report?.status==='blocked'?failure.report:null;
-          if(blocked&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD','BLOCKHASH_EXPIRED','ATTEMPT_EXPIRED','SIMULATION_FAILED','RPC_AMOUNT','FEE_UNAVAILABLE'].includes(blocked.code))code=blocked.code;
-          if(blocked===failure.report&&blocked?.code==='RPC_RPC'&&blocked.phase==='freshness'&&response.status===409)code='QUOTE_FRESHNESS_RPC';
+          if(blocked&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD','BLOCKHASH_EXPIRED','ATTEMPT_EXPIRED','SIMULATION_FAILED','RPC_AMOUNT','FEE_UNAVAILABLE','BLOCKHASH_ANCHOR_REQUIRED','MINT_INDEX_CHANGED','CHECK_TOO_OLD','ATTEMPT_RECOVERED','ATTEMPT_FAILED','SALES_CLOSED','INSUFFICIENT_SUPPLY','RPC_RPC','RPC_CONTEXT'].includes(blocked.code))code=blocked.code;
+          if(blocked===failure.report&&blocked?.code==='RPC_RPC'&&response.status===409&&['accounts','balance','cost','simulation','freshness'].includes(blocked.phase))code=blocked.phase==='freshness'?'QUOTE_FRESHNESS_RPC':'QUOTE_READ_RPC';
         }catch{}
         const header=response.headers.get('retry-after');
         const delay=response.status===429&&['COOLDOWN','BUSY'].includes(code)&&/^(?:[1-9]|[1-3][0-9]|4[0-5])$/.test(header??'')?Number(header):undefined;
@@ -32,6 +32,13 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
       }
       const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal,decodedResponse:true});
       need(exact(result,'version nonce report')&&result.version===1&&result.nonce===nonce,'CHECK_RESPONSE',502);
+      // A device clock can trail the check service slightly. Keep both ends
+      // of the original validity window and still validate every report field.
+      const ahead=result.report?.checkedAt-Date.now();
+      if(Number.isSafeInteger(ahead)&&ahead>0&&ahead<=2000){
+        validateWalletCheck(result.report,value.order,value.request,result.report.checkedAt);
+        await new Promise(resolve=>setTimeout(resolve,ahead+10));
+      }
       validateWalletCheck(result.report,value.order,value.request);return result.report;
     }catch(error){
       if(error instanceof BuyerCheckError)throw error;

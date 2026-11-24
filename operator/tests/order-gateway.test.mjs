@@ -90,6 +90,16 @@ test('real client fixes URL/headers and validates nonce plus server report',asyn
     await assert.rejects(bad(input));
   }
 });
+test('a slightly slow buyer clock keeps the exact server check window',async()=>{
+  const h=harness();let issued,expires;
+  const client=createBuyerCheckClient({origin,fetchImpl:async(url,init)=>{
+    const body=await(await h.dispatch(init.body)).json();
+    issued=Date.now()+250;expires=issued+20000;
+    Object.assign(body.report,{checkedAt:issued,expiresAt:expires});return Response.json(body);
+  }});
+  const report=await client(input);
+  assert.ok(Date.now()>=issued);assert.equal(report.checkedAt,issued);assert.equal(report.expiresAt,expires);
+});
 test('client timeout covers fetch and stalled response, rejects status and cancels body',async()=>{
   for(const fetchImpl of [()=>new Promise(()=>{}),async()=>new Response(new ReadableStream({pull(){return new Promise(()=>{});}}),{headers:{'content-type':'application/json'}})]){
     const start=Date.now();await assert.rejects(createBuyerCheckClient({origin,fetchImpl,timeoutMs:20})(input));assert.ok(Date.now()-start<2000);

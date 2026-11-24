@@ -54,6 +54,8 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
       paymentUncertain:unknown&&!!(evidence?.buyerWallet?.status==='wallet-response-unknown'||signed?.status==='send-claimed'),currentItemIndex:active?.index??null,items:order?.items.map(i=>({index:i.index,state:i.attempts.at(-1)?.state??'not-started',attempt:i.attempts.at(-1)?.number??0}))??[],
       quote:freshQuote?copy(quote):null,costSummary:copy(summary),unknown,
       canChooseQuantity:!busy&&!pendingResponse&&selected&&available,
+      canRenewUnsigned:!busy&&!pendingResponse&&selected&&unpaidDraft(evidence)&&!evidence.buyerWallet&&!evidence.responseRecovery
+        &&latest?.state==='wallet-pending'&&order.items.every(i=>i.attempts.every(a=>a.state==='wallet-pending')),
       canLeaveDraft:!busy&&!pendingResponse&&selected&&unpaidDraft(evidence),
       canRestartExpired:!busy&&!pendingResponse&&selected&&spentUnsignedOrder(evidence),
       canCreate:!scope&&!!account&&!busy,canStartNew:!busy&&!pendingResponse&&!!scope&&loaded&&(!order||(selected&&spentUnsignedOrder(evidence))||order.items.every(i=>i.attempts.at(-1)?.state==='verified')),
@@ -89,10 +91,10 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
   return Object.freeze({state,
     async load(id){return run(async()=>{noPendingMemory();const row=index.list().find(v=>v.id===id);need(row,'ORDER_NOT_FOUND');
       scope={id:row.id,buyer:row.buyer,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};account=null;bind();clearQuote();reviewedReplacement=null;loaded=false;result=null;await refresh();return stateUnlocked();});},
-    async startNew({authorizeNewOrder=false,leaveDraft=false,nextQuantity}={}){return run(async()=>{consent(authorizeNewOrder,'NEW_ORDER');await refresh();if(nextQuantity!==undefined){
+    async startNew({authorizeNewOrder=false,leaveDraft=false,renewUnsigned=false,nextQuantity}={}){return run(async()=>{consent(authorizeNewOrder,'NEW_ORDER');await refresh();if(nextQuantity!==undefined){
         need(Number.isInteger(nextQuantity)&&nextQuantity>=1&&nextQuantity<=50&&nextQuantity!==evidence?.order?.quantity,'INVALID_QUANTITY');
         enabled('canChooseQuantity');
-      }else if(leaveDraft)enabled('canLeaveDraft');else enabled('canStartNew');
+      }else if(renewUnsigned)enabled('canRenewUnsigned');else if(leaveDraft)enabled('canLeaveDraft');else enabled('canStartNew');
       ports?.wallet.dispose?.();scope=null;ports=null;evidence=null;summary=null;loaded=false;clearQuote();reviewedReplacement=null;result=null;return stateUnlocked();});},
     async refresh(){return run(async()=>{await refresh();return stateUnlocked();});},
     async requestPersistence({authorizePersistence=false}={}){return run(async()=>{consent(authorizePersistence,'PERSISTENCE');if(recoveryStorage)return recoveryStorage.authorize();
