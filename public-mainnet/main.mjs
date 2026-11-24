@@ -97,15 +97,22 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   }
   // A confirmed-bank RPC can briefly lag between simulation and its final read.
   // Retry unsigned pricing once after the gateway's existing 45-second hold.
-  async function quoteRead(live){
-    const saved=snapshot(),id=saved.scope?.id,index=saved.currentItemIndex;
-    try{return await client.quoteCost();}catch(error){
-      if(error?.status!==409||error.reason!=='QUOTE_FRESHNESS_RPC'||!live())throw error;
-      rememberPhase('quote');await new Promise(resolve=>setTimeout(resolve,45200));
-      const s=snapshot();if(!live()||!id||s.scope?.id!==id||s.scope.buyer!==s.selectedAccount||s.currentItemIndex!==index||s.paymentUncertain||s.canSend||s.canRecoverWalletResponse||item(s)?.state!=='wallet-pending')return;
-      return await client.quoteCost();
+  async function unsignedRead(live,kind,operation){
+    const saved=snapshot(),id=saved.scope?.id,index=saved.currentItemIndex,attempt=item(saved)?.attempt;
+    let waited=0;
+    for(let retries=0;;retries++){
+      try{return await operation();}catch(error){
+        const cooldown=error?.status===429&&['COOLDOWN','BUSY'].includes(error.reason)&&Number.isInteger(error.retryAfter)&&error.retryAfter>=1&&error.retryAfter<=45;
+        const lag=kind==='quote'&&error?.status===409&&error.reason==='QUOTE_FRESHNESS_RPC';
+        const seconds=cooldown?error.retryAfter:lag?45:0;
+        if(!live()||!seconds||retries>=3||waited+seconds>45)throw error;
+        waited+=seconds;rememberPhase(kind);await new Promise(resolve=>setTimeout(resolve,seconds*1000+200));
+        const s=snapshot();if(!live()||!id||s.scope?.id!==id||s.scope.buyer!==s.selectedAccount||s.currentItemIndex!==index||item(s)?.attempt!==attempt||s.paymentUncertain||s.canSend||s.canRecoverWalletResponse||
+          (kind==='quote'?item(s)?.state!=='wallet-pending':item(s)?.state!=='not-started'))return;
+      }
     }
   }
+  const quoteRead=live=>unsignedRead(live,'quote',()=>client.quoteCost());
   async function prepareNewQuote(live){
     const before=snapshot();rememberPhase('quote');
     try{await quoteRead(live);}catch(e){
@@ -170,7 +177,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     }
     if(!s.salesOpen){await checkStatus();if(!live())return;s=snapshot();if(!s.salesOpen){message='notReady';return;}}
     if(s.canReplace){if(!approve&&s.failedFeeLamports){message='ready';return;}if(!s.canPrepareReplacement)await client.reviewReplacement({authorizeReplacement:true,...(s.failedFeeLamports?{acknowledgedFeeLamports:s.failedFeeLamports}:{})});if(!live())return;await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;s=snapshot();}
-    if(allowed(s,'canPrepare')){rememberPhase('prepare');await client.prepare({authorizePreparation:true});if(!live())return;s=snapshot();}
+    if(allowed(s,'canPrepare')){rememberPhase('prepare');await unsignedRead(live,'prepare',()=>client.prepare({authorizePreparation:true}));if(!live())return;s=snapshot();}
     if(allowed(s,'canQuote')){await prepareNewQuote(live);return;}
     if(allowed(s,'canSign')||allowed(s,'canSend')){present(s);return;}
     if(!completed(s)&&!exhausted(s))message=s.paymentUncertain?'pending':s.custody&&s.custody!=='available'?'unavailable':!s.salesOpen?'unknown':'prepareFailed';

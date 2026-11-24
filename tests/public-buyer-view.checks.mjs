@@ -92,6 +92,12 @@ try{
  state={...state,salesOpen:true,saleStatus:'open',readiness:{status:'open'},storageAvailable:true};emit();
  assert.equal(document.getElementById('minted').textContent,'','old failed check must not survive new verified open state');
  ok('fresh-confirmation-clears-obsolete-status-unavailable');
+ // A real gateway can refuse an unsigned quote for one second after preparation.
+ if(dialog.open)await action('close').click();stale();const beforePaid=[counts.sign,counts.send];let busyChecks=0;
+ client.quoteCost=async()=>{busyChecks++;if(busyChecks===1)throw Object.assign(Error('CHECK_HTTP'),{status:429,reason:'COOLDOWN',retryAfter:1});await oldQ();};
+ await card.click();assert.equal(busyChecks,2,'retry a refused unsigned quote once the advertised hold ends');assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],beforePaid);
+ for(const refusal of [{reason:'DAILY_LIMIT',retryAfter:1},{reason:'COOLDOWN',retryAfter:90},{reason:'COOLDOWN'}]){await action('close').click();stale();busyChecks=0;client.quoteCost=async()=>{busyChecks++;throw Object.assign(Error('CHECK_HTTP'),{status:429,...refusal});};await card.click();assert.equal(busyChecks,1);assert.deepEqual([counts.sign,counts.send],beforePaid);}
+ ok('only-time-bounded-explicit-unsigned-cooldown-repeats-never-a-daily-limit-or-payment');
  const source=await readFile(new URL('public-mainnet/main.mjs',root));const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
   limitations:['Production public view and complete fixed module graph executed in a small Node VM DOM adapter with trusted synthetic controller ports. Native custody, wallet signatures, RPC and actual browser layout are not attested by these view tests.','Readiness/state gates and genuine browser-native offline instruction planning have separate tests; real account verification remains on the public gateway.']};await writeFile(new URL('../build/public-mainnet/public-buyer-view-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length,counts}));
 }finally{mounted.dispose();loaded.stop();}

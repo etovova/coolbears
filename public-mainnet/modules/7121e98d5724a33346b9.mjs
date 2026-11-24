@@ -23,7 +23,9 @@ export function createBuyerPreparationClient({origin=globalThis.location?.origin
         try{const failure=await readJson(response,{limit:2048,timeoutMs,signal:controller.signal,decodedResponse:true});
           if(failure.status==='blocked'&&['COOLDOWN','BUSY','DAILY_LIMIT','INSUFFICIENT_BALANCE','ORIGIN','UPSTREAM_UNAVAILABLE','BLOCKHASH_TOO_OLD'].includes(failure.code))code=failure.code;
         }catch{}
-        const error=new BuyerCheckError('CHECK_HTTP',response.status);error.reason=code;throw error;
+        const header=response.headers.get('retry-after');
+        const delay=response.status===429&&['COOLDOWN','BUSY'].includes(code)&&/^(?:[1-9]|[1-3][0-9]|4[0-5])$/.test(header??'')?Number(header):undefined;
+        const error=new BuyerCheckError('CHECK_HTTP',response.status,delay);error.reason=code;throw error;
       }
       const result=await readJson(response,{limit:16384,timeoutMs,signal:controller.signal,decodedResponse:true});
       need(exact(result,'version nonce report')&&result.version===1&&result.nonce===nonce,'CHECK_RESPONSE',502);
