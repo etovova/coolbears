@@ -20,7 +20,7 @@ await mkdir(output, { recursive: true });
 const saveReport=()=>writeFile(path.join(output,'main-browser-report.json'),JSON.stringify(report,null,2)+'\n');
 const browser = await playwright[engine].launch({ executablePath: process.env.COOLBEARS_CHROMIUM || undefined, headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [] });
 
-async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, clock = false, locale = 'en-US' } = {}) {
+async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, holdRead = null, clock = false, locale = 'en-US' } = {}) {
   const { defaultBrowserType: _engine, ...descriptor } = devices[device];
   if (engine === 'firefox') delete descriptor.isMobile;
   const context = await browser.newContext({...descriptor,locale});
@@ -37,7 +37,7 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
     const url = new URL(request.url());
     if (stallPublicModule && url.pathname === '/public-mainnet/site-entry.mjs') return; // Explicit stalled-download fixture.
     if(url.pathname==='/api/buyer/readiness'&&readiness!==null){
-      readinessCalls++;
+      readinessCalls++;if(holdRead)await holdRead;
       // The synthetic HTTPS response uses the actual pinned public deployment;
       // no UI option, legacy wallet adapter or query string can enable minting.
       const checkedAt=await page.evaluate(()=>Date.now());
@@ -276,7 +276,7 @@ try {
     const cta=page.locator('#mintBtn');
     const firstResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/readiness');
     await cta.scrollIntoViewIfNeeded();await (await firstResponse).finished();
-    await page.waitForFunction(closed=>document.querySelector('#minted').textContent===(closed?'NOT OPEN YET':'') && (closed||!document.querySelector('#mintBtn').disabled),readiness==='closed');
+    await page.waitForFunction(closed=>document.querySelector('#minted').textContent===(closed?'NOT OPEN YET':'') && document.querySelector('#mintBtn').getAttribute('aria-busy')==='false' && (closed||!document.querySelector('#mintBtn').disabled),readiness==='closed');
     await page.waitForLoadState('networkidle');
     assert.equal(test.readinessCalls(),1);assert.equal(await page.locator('dialog[open]').count(),0);
     if(readiness==='open'){
@@ -299,11 +299,21 @@ try {
     }
     await test.done('visible mint card and verified click: '+readiness,{syntheticReadiness:true});
   }
+  for(const readiness of ['open','wrong-profile']){
+    let release;const holdRead=new Promise(resolve=>{release=resolve;});
+    const test=await open({device:'Pixel 7',readiness,holdRead});const {page}=test,cta=page.locator('#mintBtn');
+    const waitRead=page.waitForRequest(r=>new URL(r.url()).pathname==='/api/buyer/readiness');await cta.scrollIntoViewIfNeeded();await waitRead;
+    assert.equal(await cta.isEnabled(),true);await cta.click();assert.equal(await cta.isDisabled(),true);
+    assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),1);release();
+    if(readiness==='open')await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
+    else {await page.locator('#minted').filter({hasText:'STATUS UNAVAILABLE'}).waitFor();assert.equal(await page.locator('dialog[open]').count(),0);}
+    assert.equal(test.readinessCalls(),1);assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');await test.done('click during pending background read: '+readiness);
+  }
   for(const [locale,lang,ctaText] of [['ru-RU','ru','ПОДКЛЮЧИТЬ КОШЕЛЁК'],['en-US','en','CONNECT WALLET TO MINT'],['zh-CN','zh-CN','连接钱包开始铸造']]){
     const test=await open({device:'Pixel 7',locale,readiness:'wrong-profile',clock:true});const {page}=test,cta=page.locator('#mintBtn'),badge=page.locator('.mint-topline');
     const baseline=await cta.innerText();const top=()=>cta.evaluate(n=>Math.round(n.getBoundingClientRect().top+scrollY)),initialTop=await top();assert.equal(baseline,ctaText);assert.equal(await page.locator('html').getAttribute('lang'),lang);
     for(const selector of ['.brand','#mintBtn','#walletBtn','a[data-i18n="mintNow"]'])assert.equal(await page.locator(selector).getAttribute('translate'),'no');
-    const firstResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/readiness');await cta.scrollIntoViewIfNeeded();await (await firstResponse).finished();await page.waitForFunction(()=>!document.querySelector('#mintBtn').disabled);assert.equal(test.readinessCalls(),1);assert.equal(await top(),initialTop);assert.equal(await cta.innerText(),baseline);assert.equal(await badge.isVisible(),false);
+    const firstResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/readiness');await cta.scrollIntoViewIfNeeded();await (await firstResponse).finished();await page.waitForFunction(()=>document.querySelector('#mintBtn').getAttribute('aria-busy')==='false');assert.equal(test.readinessCalls(),1);assert.equal(await top(),initialTop);assert.equal(await cta.innerText(),baseline);assert.equal(await badge.isVisible(),false);
     await cta.click();await badge.waitFor({state:'visible'});assert.equal(await top(),initialTop);assert.equal(await cta.innerText(),baseline);assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),2);
     await page.locator('.bear-lang[data-lang="zh"]').click();await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
     await test.done('mobile passive network failure and explicit refusal keep native CTA: '+locale);

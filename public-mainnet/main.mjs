@@ -25,7 +25,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(disposed)return;const state=snapshot(),open=state.salesOpen===true,closed=state.saleStatus==='closed',sold=state.saleStatus==='sold-out',pending=!!checking||!!state.readiness?.pending;
     const connected=!!connectedAddress,notice=sold?'sold':closed?'closed':failed&&requested?'unknown':null;
     const badge=$('minted');if(badge){const value=notice?text(notice):'';if(badge.textContent!==value)badge.textContent=value;const row=badge.parentElement;if(row?.classList?.contains('mint-topline'))row.style.visibility=notice?'visible':'hidden';}
-    const cta=$('mintBtn');if(cta){cta.disabled=closed||sold||busy||entering||pending||storageUnavailable;const value=closed||sold?text(notice):connected?text('mint').replace('{n}',String($('qty')?.value??1)):text('connectMint');if(cta.textContent!==value)cta.textContent=value;}
+    const cta=$('mintBtn');if(cta){cta.disabled=closed||sold||busy||entering||storageUnavailable;cta.setAttribute('aria-busy',String(pending||entering));const value=closed||sold?text(notice):connected?text('mint').replace('{n}',String($('qty')?.value??1)):text('connectMint');if(cta.textContent!==value)cta.textContent=value;}
     if($('walletBtn')){$('walletBtn').textContent=connected?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
     savedButton.textContent=text('restore');savedButton.hidden=!state.saved?.length;
     refreshButton.textContent=({en:'Try again',ru:'Повторить',zh:'重试'})[language()]??'Try again';refreshButton.disabled=busy||pending;
@@ -79,7 +79,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   bind('reviewReplacement',()=>{const state=snapshot();return client.reviewReplacement({authorizeReplacement:true,...(state.failedFeeLamports?{acknowledgedFeeLamports:state.failedFeeLamports}:{})});});bind('prepareReplacement',()=>client.prepareReviewedReplacement({authorizeReplacementSigning:true}));
   bind('pause',()=>client.setPaused(true,{authorizeChange:true}));bind('resume',()=>client.setPaused(false,{authorizeChange:true}));bind('newOrder',()=>client.startNew({authorizeNewOrder:true}));
   $('mintBtn')?.addEventListener('click',async()=>{
-    if(entering||busy||disposed||storageUnavailable)return;choosingSaved=false;requested=true;entering=true;
+    if(entering||busy||disposed||storageUnavailable)return;choosingSaved=false;requested=true;entering=true;render();
     try{
       if(snapshot().salesOpen!==true)await checkStatus();
       if(disposed||storageUnavailable||snapshot().salesOpen!==true)return;

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "kind": "coolbears-public-site-deployment",
-  "buildSha256": "d498a9501e3008788dc8a188dff23edcbb0daacbaca6936a4e7715df03c2a732",
+  "buildSha256": "db9787c9a4c9030e56c423172095d2dafa282e0d54f10d45bc16a4aa87298d58",
   "profileSha256": "4e3d6c7102460550e0eb2c4c354455111bf9624406de6c84b3b2165f6cd7e3f1",
   "sourcePolicySha256": "da221551ba5567a163dcd1c923bed2643baeb0147ca77a076157718712602d57",
   "preservedAssets": {
