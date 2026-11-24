@@ -75,6 +75,20 @@ try{
  await primary.click();assert.deepEqual(events,['read','read']);assert.ok(cost().includes('0.203010000 SOL'));assert.equal(counts.sign,1);assert.equal(counts.send,1);
  ok('expired-status-during-slow-unsigned-quote-still-displays-valid-total-and-never-signs');
  client.quoteCost=oldQ;
+ // The status proof can age out while the native preparer is in flight; cost has its own live gate.
+ if(dialog.open)await action('close').click();
+ stale();state={...state,canQuote:false,canPrepare:true,canReviewExpiry:false,canRecover:false,unknown:false,items:[{index:0,state:'not-started',attempt:0}],readiness:null,recheckActions:{}};
+ document.getElementById('qty').value='2';
+ const savedPrepare=client.prepare;
+ client.prepare=async()=>{state={...state,salesOpen:false,saleStatus:'unavailable',canPrepare:false,canQuote:false,readiness:{expiredOpen:true},recheckActions:{canQuote:true},items:[{index:0,state:'wallet-pending',attempt:1}]};emit();};
+ client.quoteCost=async()=>{await oldQ();state={...state,salesOpen:true,saleStatus:'open',canSign:true};emit();};
+ const qBefore=counts.quote,sBefore=counts.sign;
+ await card.click();assert.equal(counts.quote,qBefore+1,'prepare outlived readiness but quote was never requested');assert.match(cost(),/0.203010000 SOL/);
+ assert.equal(String(document.getElementById('qty').value),'1','card must match the one retained item');assert.equal(counts.sign,sBefore);
+ ok('restored-quantity-and-total-match-even-if-preparation-outlives-readiness');
+ // Losing proof for an unverified order must never advance to signing or silently do nothing.
+ await action('close').click();state={...state,scope:null,saved:[],quantity:null,selectedAccount:buyer,canPrepare:false,canQuote:false,canSign:false,salesOpen:false,saleStatus:'unavailable',readiness:{},recheckActions:{},quote:null};emit();
+ client.refreshReadiness=async()=>{};await card.click();assert.ok(dialog.open);assert.ok(msg().length>0);assert.equal(counts.sign,sBefore);ok('unverified-fresh-sale-shows-result-and-does-not-create-or-sign');client.prepare=savedPrepare;
  const source=await readFile(new URL('public-mainnet/main.mjs',root));const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
   limitations:['Production public view and complete fixed module graph executed in a small Node VM DOM adapter with trusted synthetic controller ports. Native custody, wallet signatures, RPC and actual browser layout are not attested by these view tests.','Readiness/state gates and genuine browser-native offline instruction planning have separate tests; real account verification remains on the public gateway.']};await writeFile(new URL('../build/public-mainnet/public-buyer-view-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length,counts}));
 }finally{mounted.dispose();loaded.stop();}

@@ -16,12 +16,12 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   document.body.append(dialog);
   const view=name=>dialog.querySelector(`[data-view="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
   const notices={en:{cancelled:'Signature cancelled.',pending:'The payment result is unknown. Checking your saved order; no second payment will be sent.'},ru:{cancelled:'Подпись отменена.',pending:'Результат оплаты пока неизвестен. Проверяем заказ. Повторной оплаты не будет.'},zh:{cancelled:'已取消签名。',pending:'付款结果尚未确认。正在检查已保存的订单，不会重复付款。'}};
-  const stageText={en:{pricing:'Calculating the total…',refreshing:'Refreshing the unsigned order…',awaitExpiry:'Waiting for Solana to verify the previous preparation. No payment was sent.',exhausted:'This order expired. No further attempt is available for this NFT.'},ru:{pricing:'Рассчитываем сумму…',refreshing:'Обновляем неподписанный заказ…',awaitExpiry:'Ждём проверки прежней подготовки в Solana. На этом шаге оплата не отправлялась.',exhausted:'Срок этого заказа истёк. Для этого NFT в заказе больше нет попыток.'},zh:{pricing:'正在计算总额…',refreshing:'正在更新未签名的订单…',awaitExpiry:'正在等待 Solana 验证上次准备。此步骤未付款。',exhausted:'订单已过期，当前订单中的此 NFT 已无剩余尝试次数。'}};
+  const stageText={en:{resumeQty:'Saved order: {n} NFT.',refreshPrice:'Tap Mint to get the current total.',pricing:'Calculating the total…',refreshing:'Refreshing the unsigned order…',awaitExpiry:'Waiting for Solana to verify the previous preparation. No payment was sent.',exhausted:'This order expired. No further attempt is available for this NFT.'},ru:{resumeQty:'Сохранённый заказ: {n} NFT.',refreshPrice:'Нажмите «Минт», чтобы получить актуальную сумму.',pricing:'Рассчитываем сумму…',refreshing:'Обновляем неподписанный заказ…',awaitExpiry:'Ждём проверки прежней подготовки в Solana. На этом шаге оплата не отправлялась.',exhausted:'Срок этого заказа истёк. Для этого NFT в заказе больше нет попыток.'},zh:{resumeQty:'已保存订单：{n} 个 NFT。',refreshPrice:'点击「铸造」获取当前总额。',pricing:'正在计算总额…',refreshing:'正在更新未签名的订单…',awaitExpiry:'正在等待 Solana 验证上次准备。此步骤未付款。',exhausted:'订单已过期，当前订单中的此 NFT 已无剩余尝试次数。'}};
   const caption=()=>({en:'MINT',ru:'МИНТ',zh:'铸造'})[language()]??'MINT';
   let client,disposed=false,busy=false,message=null,selectedWallet=null,connectedAddress='',timer,storageUnavailable=false,observer=null,checking=null,failed=false,requested=false,entering=false,walletStep=null;
-  let session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0,priceTimer,priceRetries=0;
-  function clearReview(){review=null;}
-  function dismiss(){session++;clearReview();picking=false;clearTimeout(recoveryTimer);clearTimeout(priceTimer);}
+  let quoteTimer,restoredQuantity=false,session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0,priceTimer,priceRetries=0;
+  function clearReview(){clearTimeout(quoteTimer);review=null;}
+  function dismiss(){session++;clearReview();restoredQuantity=false;picking=false;clearTimeout(recoveryTimer);clearTimeout(priceTimer);}
   dialog.addEventListener('close',dismiss);
   button('close').onclick=()=>dialog.close();
   const emitWallet=address=>{connectedAddress=address??'';onWalletChange(connectedAddress);};
@@ -38,16 +38,16 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     const card=$('mintBtn');if(card){card.disabled=busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length);card.setAttribute('aria-busy',String(pending||entering));card.textContent=caption();}
     if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
     $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));button('mint').textContent=caption();
-    const key=storageUnavailable?'unavailable':walletStep??(busy?(['quote','prepare','opening'].includes(phase)?'pricing':phase==='expiry'?'refreshing':'waiting'):message??(exhausted(s)?'exhausted':completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:null));
+    const key=storageUnavailable?'unavailable':walletStep??(busy?(['quote','prepare','opening'].includes(phase)?'pricing':phase==='expiry'?'refreshing':'waiting'):message??(exhausted(s)?'exhausted':completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:s.quantity&&!currentReview(s)&&(allowed(s,'canQuote')||s.canPrepareReplacement||s.canReplace)?'refreshPrice':null));
     view('message').textContent=key?((stageText[language()]??stageText.en)[key]??(notices[language()]??notices.en)[key]??text(key)):'';view('message').hidden=!key;
-    const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;
+    const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;if(restoredQuantity&&s.quantity)progress.textContent=(stageText[language()]??stageText.en).resumeQty.replace('{n}',String(s.quantity))+' '+progress.textContent;
     const select=view('saved').querySelector('select');view('saved').hidden=!picking;
     if(picking){select.setAttribute('aria-label',text('saved'));const prev=select.value;select.replaceChildren();for(const [i,row] of savedRows(s).entries()){const o=document.createElement('option');o.value=row.id;o.textContent=text('order')+' '+(i+1)+' · '+row.id.slice(-6);select.append(o);}if([...select.options].some(o=>o.value===prev))select.value=prev;}
     const cost=view('quote');cost.replaceChildren();const ok=currentReview(s);
     if(ok){const q=quoteOf(s),list=document.createElement('dl');for(const [label,k] of [['price','unitPriceLamports'],['fee','networkFeeLamports'],['rent','assetRentLamports'],['protocol','protocolChargeLamports'],['total','totalLamports'],...(s.quantity>1?[['projection','projectedOrderTotalLamports']]:[])]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=text(label);dd.textContent=exactSol(q.budget[k])+' SOL';list.append(dt,dd);}cost.append(list);}
     if(s.canReplace&&s.failedFeeLamports){const n=document.createElement('p');n.textContent=text('failedFee')+': '+exactSol(s.failedFeeLamports)+' SOL. '+text('feeConsent');cost.append(n);}
     button('mint').hidden=!!walletStep||completed(s)||exhausted(s)||(!busy&&s.paymentUncertain&&!ok&&!s.canReplace&&!s.canRecoverWalletResponse);
-    button('mint').disabled=busy||entering||storageUnavailable||!!s.busy||(!s.salesOpen&&!s.readiness?.expiredOpen&&!s.scope&&!savedRows(s).length);
+    button('mint').disabled=busy||entering||storageUnavailable||!!s.busy||((closed||sold)&&!s.scope&&!savedRows(s).length);
   }
   async function run(fn){if(busy||disposed)return;busy=true;phase='';message=null;render();try{return await fn();}catch(error){const code=String(error?.reason??error?.code??error?.message??'');
     if(code==='SAVED_ORDER_REVIEW_REQUIRED'){picking=true;message='saved';}
@@ -138,7 +138,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(!live())return;const s=snapshot();if(s.scope?.id!==before.scope?.id||s.currentItemIndex!==before.currentItemIndex)return;
     clearTimeout(priceTimer);if(allowed(s,'canSign')||allowed(s,'canSend'))present(s);
   }
-  function present(s){const q=quoteOf(s);if(!q||!s.scope||s.scope.buyer!==connectedAddress)return;review={id:q.quoteId,total:q.budget.totalLamports,scope:s.scope.id,item:s.currentItemIndex};}
+  function present(s){const q=quoteOf(s);if(!q||!s.scope||s.scope.buyer!==connectedAddress)return;review={id:q.quoteId,total:q.budget.totalLamports,scope:s.scope.id,item:s.currentItemIndex};clearTimeout(quoteTimer);if(Number.isSafeInteger(q.expiresAt)&&q.expiresAt>Date.now())quoteTimer=setTimeout(render,q.expiresAt-Date.now()+1);}
   async function restore(id,buyer){await client.load(id);await client.selectAccount(buyer);emitWallet(snapshot().selectedAccount);}
   async function progress({approve=false,fresh=false}={}){
     const token=session,buyer=connectedAddress,live=()=>!disposed&&dialog.open&&token===session&&buyer===connectedAddress;
@@ -151,7 +151,10 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
       const qty=Number($('qty')?.value??1);await client.requestPersistence({authorizePersistence:true});if(!live())return;
       await client.create({quantity:qty,authorizeCreate:true});s=snapshot();if(s.selectedAccount===buyer&&s.scope?.buyer===buyer)emitWallet(buyer);if(!live())return;
     }
-    if(s.scope?.buyer!==buyer||completed(s))return;
+    if(s.scope?.buyer!==buyer){message='walletError';return;}if(completed(s))return;
+    const selector=$('qty');if(fresh&&selector&&Number.isSafeInteger(s.quantity)&&s.quantity>=1&&s.quantity<=50&&Number(selector.value)!==s.quantity){
+      restoredQuantity=true;selector.value=String(s.quantity);selector.dispatchEvent?.(new Event('input',{bubbles:true}));
+    }
     if(s.canResume){await client.setPaused(false,{authorizeChange:true});if(!live())return;s=snapshot();}
     // Only the click on a previously displayed, matching estimate may reach a wallet.
     if(approve&&currentReview(s)&&(allowed(s,'canSign')||allowed(s,'canSend'))&&!s.paymentUncertain){
@@ -166,22 +169,24 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
       await checkExisting();if(!live())return;const after=snapshot();if(allowed(after,'canSend')&&!after.paymentUncertain)present(after);return;
     }
     if(!s.salesOpen){await checkStatus();if(!live())return;s=snapshot();if(!s.salesOpen){message='notReady';return;}}
-    if(s.canReplace){if(!approve)return;await client.reviewReplacement({authorizeReplacement:true,...(s.failedFeeLamports?{acknowledgedFeeLamports:s.failedFeeLamports}:{})});if(!live())return;await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;s=snapshot();}
-    if(s.canPrepare){rememberPhase('prepare');await client.prepare({authorizePreparation:true});if(!live())return;s=snapshot();}
-    if(s.canQuote){await prepareNewQuote(live);return;}
-    if(s.canSign||s.canSend)present(s);
+    if(s.canReplace){if(!approve&&s.failedFeeLamports){message='ready';return;}if(!s.canPrepareReplacement)await client.reviewReplacement({authorizeReplacement:true,...(s.failedFeeLamports?{acknowledgedFeeLamports:s.failedFeeLamports}:{})});if(!live())return;await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;s=snapshot();}
+    if(allowed(s,'canPrepare')){rememberPhase('prepare');await client.prepare({authorizePreparation:true});if(!live())return;s=snapshot();}
+    if(allowed(s,'canQuote')){await prepareNewQuote(live);return;}
+    if(allowed(s,'canSign')||allowed(s,'canSend')){present(s);return;}
+    if(!completed(s)&&!exhausted(s))message=s.paymentUncertain?'pending':s.custody&&s.custody!=='available'?'unavailable':!s.salesOpen?'unknown':'prepareFailed';
   }
-  button('mint').onclick=()=>run(()=>progress({approve:true}));
-  $('mintBtn')?.addEventListener('click',async()=>{
+  button('mint').onclick=()=>snapshot().scope&&connectedAddress?run(()=>progress({approve:true})):enterPurchase();
+  async function enterPurchase(){
     if(entering||busy||disposed||storageUnavailable)return;requested=true;entering=true;recoveryCount=0;priceRetries=0;clearTimeout(priceTimer);clearReview();message=null;render();
     try{
       if(snapshot().salesOpen!==true)await checkStatus();if(disposed||storageUnavailable)return;
-      const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length)return;
+      const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length){view('wallets').replaceChildren();walletStep=null;view('purchase').hidden=false;message=s.saleStatus==='closed'?'closed':s.saleStatus==='sold-out'?'sold':'unknown';show();return;}
       await run(async()=>{view('wallets').replaceChildren();view('purchase').hidden=false;show();const token=session;
         if(!connectedAddress&&!(await attach(true)))return;if(!dialog.open||session!==token||disposed)return;
         view('wallets').replaceChildren();view('purchase').hidden=false;rememberPhase('opening');await progress({fresh:true});});
     }finally{entering=false;render();}
-  });
+  }
+  $('mintBtn')?.addEventListener('click',enterPurchase);
   client=factory(config,{onChange:state=>{if(selectedWallet&&state.selectedAccount===null&&connectedAddress)emitWallet('');clearTimeout(timer);if(Number.isSafeInteger(state.readiness?.expiresAt))timer=setTimeout(render,Math.max(0,state.readiness.expiresAt-Date.now())+1);render();}});
   const off=[registry.on('register',render),registry.on('unregister',render)];render();
   const card=$('mintBtn');
@@ -189,5 +194,5 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     observer=new globalThis.IntersectionObserver(entries=>{if(!disposed&&observer&&entries.some(e=>e.target===card&&e.isIntersecting)){void checkStatus();}},{threshold:0});
     observer.observe(card);
   }
-  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();clearTimeout(recoveryTimer);clearTimeout(priceTimer);}});
+  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();clearTimeout(recoveryTimer);clearTimeout(priceTimer);clearTimeout(quoteTimer);}});
 }
