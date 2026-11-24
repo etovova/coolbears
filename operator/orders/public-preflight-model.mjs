@@ -18,6 +18,23 @@ import { createDeploymentRpc, assertCluster, DeploymentRpcError } from '../deplo
 import { resolveStorageProfile } from '../storage-mode.mjs';
 import { networkProfile } from '../deployment/network.mjs';
 
+// A short bank disagreement must not consume the whole lifetime of an unsigned
+// replacement. Every re-read uses the original commitment and minimum slot,
+// goes through the same metered RPC transport, and must pass all original checks.
+export function unsignedFreshnessReader(rpc, wait = ms => new Promise(resolve => setTimeout(resolve,ms))) {
+  const delays = [350, 900], eligible = new Set(['getMultipleAccounts','getBalance','isBlockhashValid','getBlockHeight']);
+  let used = 0;
+  return { async call(method, params) {
+    for (;;) {
+      try { return await rpc.call(method, params); }
+      catch (error) {
+        if (!(error instanceof DeploymentRpcError) || error.code !== 'RPC' || !eligible.has(method) || used >= delays.length) throw error;
+        await wait(delays[used++]);
+      }
+    }
+  }};
+}
+
 export function createOrderChecker(policy, { validateOrder, buildOrderTransactions, verifyOrderAccounts }, storageOptions = {}) {
 storageOptions = validateOrderStorageOptions(storageOptions);
 const profile = resolveStorageProfile(policy, storageOptions);
@@ -154,7 +171,7 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     phase = 'cost';
     const feeResult = await rpc.call('getFeeForMessage', [Buffer.from(tx.message.serialize()).toString('base64'),
       { commitment: 'confirmed', minContextSlot: slot }]);
-    slot = context(feeResult, slot); const fee = amount(feeResult.value); need(fee > 0n, 'FEE_UNAVAILABLE');
+    slot = context(feeResult, slot); need(feeResult.value !== null, 'FEE_UNAVAILABLE'); const fee = amount(feeResult.value); need(fee > 0n, 'FEE_UNAVAILABLE');
     const expectedMintIndex = hidden ? initial.nextMintIndex : undefined;
     if (hidden) need(Number.isSafeInteger(expectedMintIndex) && expectedMintIndex >= 1
       && expectedMintIndex < policy.supply, 'MINT_INDEX_UNVERIFIED');
@@ -182,16 +199,17 @@ async function checkOrder({ readOrder, endpoint, fetchImpl, timeoutMs, claim, re
     verifySimulatedMintCost(policy, order, simulation.value.accounts, rent,
       { ...storageOptions, ...(hidden ? { expectedIndex: expectedMintIndex } : {}) });
     phase = 'freshness';
+    const finalRpc = prepared && !signedMode ? unsignedFreshnessReader(rpc) : rpc;
     // Finalized accounts need not overtake a confirmed simulation bank.
-    const final = await readState(rpc, order, itemIndex, initial.slot, receipts);
+    const final = await readState(finalRpc, order, itemIndex, initial.slot, receipts);
     need(final.itemsRemaining <= initial.itemsRemaining, 'INVENTORY_ROLLBACK');
     if (hidden) need(final.nextMintIndex === expectedMintIndex, 'MINT_INDEX_CHANGED');
-    const latestBalance = await rpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: Math.max(slot, final.slot) }]);
+    const latestBalance = await finalRpc.call('getBalance', [order.buyer, { commitment: 'confirmed', minContextSlot: Math.max(slot, final.slot) }]);
     slot = context(latestBalance, Math.max(slot, final.slot));
     need(amount(latestBalance.value) >= knownMinimum, 'INSUFFICIENT_BALANCE');
-    const valid = await rpc.call('isBlockhashValid', [template.blockhash, { commitment: 'confirmed', minContextSlot: slot }]);
+    const valid = await finalRpc.call('isBlockhashValid', [template.blockhash, { commitment: 'confirmed', minContextSlot: slot }]);
     slot = context(valid, slot); need(valid.value === true, 'BLOCKHASH_EXPIRED');
-    const height = await rpc.call('getBlockHeight', [{ commitment: 'confirmed', minContextSlot: slot }]);
+    const height = await finalRpc.call('getBlockHeight', [{ commitment: 'confirmed', minContextSlot: slot }]);
     need(Number.isSafeInteger(height) && height >= 0 && template.lastValidBlockHeight - height >= 80, 'BLOCKHASH_TOO_OLD');
     phase = 'order-recheck';
     need(hash(validateOrder(await readOrder())) === orderSha256, 'ORDER_CHANGED');
