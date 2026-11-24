@@ -4,7 +4,7 @@ import {assertCurrentItem} from './sequential.mjs';
 import policy from '../../metadata/policy.json' with {type:'json'};
 import {VersionedTransaction} from '@solana/web3.js';
 import {createProtocolOrderModel} from './journal-model.mjs';
-import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from './signing.mjs';
+import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse,buyerRequestId,WALLET_FIRST_REQUEST} from './signing.mjs';
 import {validateHistoricalFailure} from './failure-record.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from './submission.mjs';
 import {anchorKey} from './blockhash-anchor.mjs';
@@ -31,7 +31,8 @@ export function prewalletSubmission(input,response){
   const tx=VersionedTransaction.deserialize(bytes);need(Buffer.from(tx.serialize()).equals(bytes));
   // Reconstruct the partial from the observed asset signature, never a signing operation.
   const request=finalizeAssetRequest(input.order,input.claim,tx.signatures[1]);
-  need(input.request===null||same(input.request,request),'PREWALLET_NATIVE_CONFLICT');
+  if (input.request?.kind === WALLET_FIRST_REQUEST) verifyBuyerSigningResponse(input.order,input.claim,input.request,response);
+  else need(input.request===null||same(input.request,request),'PREWALLET_NATIVE_CONFLICT');
   const signed=verifyBuyerSigningResponse(input.order,input.claim,request,response);
   // Internal receipt-verifier projection only; these are not wallet claims/events.
   let order=model.transitionOrder(input.order,{type:'unknown',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt});

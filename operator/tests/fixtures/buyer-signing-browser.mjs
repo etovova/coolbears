@@ -26,6 +26,13 @@ const subtle=new Proxy(native.subtle,{get(target,property){
       const rows=await raw(['signing'],'readonly',tx=>tx.objectStore('signing').getAll(IDBKeyRange.bound([key],[key,[]])));
       const observed={revision:order?.revision,state:order?.items[0].attempts.at(-1)?.state,phases:rows.map(r=>r.phase)};
       window.persistedBeforeSign.push(observed);
+      if (rows[1]?.record.kind === 'coolbears-buyer-unsigned') {
+        if (rows.at(-1).phase !== 'wallet-claimed' || observed.state !== 'unknown' || !window.walletReturned)
+          throw Error('ASSET_SIGNED_BEFORE_BUYER');
+        const signature=await target.sign(...args);
+        window.assetSignatures++;
+        return signature;
+      }
       const claimed=rows.at(-1),number=order?.items[0].attempts.length;
       if(observed.revision!==claimed?.record?.orderRevision||observed.state!=='wallet-pending'||claimed.phase!=='claimed'
         ||claimed.record.attempt!==number||(number===1?rows.length!==1:!claimed.replacement||!['expired','failed'].includes(order.items[0].attempts[0].state)))throw Error('SIGN_BEFORE_COMMIT');
@@ -62,7 +69,7 @@ const subtle=new Proxy(native.subtle,{get(target,property){
     const signature=await target.sign(...args);if(transaction){window.assetSignatures++;window.lastNativeSignature=[...new Uint8Array(signature)];}return signature;
   };
 }});
-const makeStore=()=>createBuyerStorage({crypto:{subtle,getRandomValues:native.getRandomValues.bind(native)}});
+const makeStore=(walletFirst=false)=>createBuyerStorage({walletFirst,crypto:{subtle,getRandomValues:native.getRandomValues.bind(native)}});
 const originalAdd=IDBObjectStore.prototype.add;
 IDBObjectStore.prototype.add=function(value,key){
   if(this.name==='signing'&&value.phase==='claimed'&&window.loseNativeClaimReadback){

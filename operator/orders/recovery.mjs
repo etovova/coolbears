@@ -4,7 +4,8 @@ import policy from '../../metadata/policy.json' with {type:'json'};
 import {lamports} from '@metaplex-foundation/umi';
 import {VersionedTransaction} from '@solana/web3.js';
 import {deserializeAssetV1,Key,MPL_CORE_PROGRAM_ID} from '@metaplex-foundation/mpl-core';
-import {createSigningRequest,verifySigningResponse} from '../deployment/signing.mjs';
+import {verifySigningResponse} from '../deployment/signing.mjs';
+import {receiptSigningRequest} from './signing.mjs';
 import {verifyFinalizedReceipt,verifyFinalizedFailedTransaction} from '../deployment/receipt.mjs';
 import {createDeploymentRpc,assertCluster,DeploymentRpcError} from '../deployment/rpc.mjs';
 import {validateBuyerSubmission,submissionBinding,validateBuyerResult} from './submission.mjs';
@@ -39,8 +40,7 @@ export async function recoverBuyerOrder({input,endpoint,fetchImpl,timeoutMs=1200
         payerDebitLamports:String(meta.fee),payerPreBalanceLamports:String(meta.preBalances[0]),payerPostBalanceLamports:String(meta.postBalances[0])};
       return validateBuyerResult({...fixed,status:'failed',chainVerified:true,proof,evidence,retryAuthorized:false,restored:false,networkRequests:rpc.requests},frozen,{recovery:true});
     }
-    const request=createSigningRequest({deploymentId:frozen.order.id,stepId:`item-${frozen.claim.itemIndex}`,attempt:frozen.claim.attempt,cluster:frozen.order.cluster,owner:frozen.order.buyer,
-      transactionBase64:frozen.request.transactionBase64,lastValidBlockHeight:frozen.request.lastValidBlockHeight});
+    const request=receiptSigningRequest(frozen.request,frozen.response);
     const receipt=verifyFinalizedReceipt({request,signed:verifySigningResponse(request,{transactionBase64:signed.transactionBase64}),statusResult,transactionResult});
     const state=await rpc.call('getMultipleAccounts',[[frozen.claim.asset],{commitment:'finalized',encoding:'base64',minContextSlot:receipt.slot}]);
     need(Number.isSafeInteger(state?.context?.slot)&&state.context.slot>=receipt.slot&&Array.isArray(state.value)&&state.value.length===1,'ACCOUNT_CONTEXT');

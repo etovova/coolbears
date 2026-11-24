@@ -3,12 +3,13 @@
 import { PublicKey } from '@solana/web3.js';
 import { sha256 } from '@noble/hashes/sha256';
 import { bytesToHex } from '@noble/hashes/utils';
-import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from './signing.mjs';
+import { validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId, WALLET_FIRST_REQUEST, verifyWalletFirstResponse } from './signing.mjs';
 import {checkedBudget,createCostQuote,validateCostApproval,enforceCostCeiling} from './cost-approval.mjs';
 import {networkProfile} from '../deployment/network.mjs';
 const feature = 'solana:signTransaction';
 const need = (ok, code) => { if (!ok) throw Error(code); };
 const hash = value => bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(value))));
+const preparedForWallet = bundle => ['unsigned-request-saved','asset-partial-saved'].includes(bundle?.status);
 async function bounded(promise, ms, code) {
   let timer;
   try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(Error(code)), ms); })]); }
@@ -74,15 +75,17 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
     return {orderId:scope.id, connected:!!account, busy, disposed,
       status:saved?.status ?? partial?.status ?? 'not-prepared', canRecover:!!memory,
       canRequestSignature:!disposed && !!account && !busy && !saved && !!order && order.revision === partial?.claim?.orderRevision
-        && !order.paused && partial?.status === 'asset-partial-saved',
+        && !order.paused && preparedForWallet(partial),
       readyToSign:false, readyToSubmit:false, salesOpen:false};
   }
   async function saveMemory() {
     need(memory, 'NO_RESPONSE_TO_RECOVER');
     const pending = memory;
-    const result = await storage.saveBuyerResponse(scope, pending);
-    need(result?.status === 'buyer-response-saved' && result.response?.transactionBase64 === pending.transactionBase64
-      && result.claim.claimId === pending.claimId, 'SAVE_UNCONFIRMED');
+    const {claimId}=pending;
+    const transactionBase64=pending.needsAsset ? await storage.completeBuyerSignature(scope,{claimId,transactionBase64:pending.transactionBase64}) : pending.transactionBase64;
+    const result = await storage.saveBuyerResponse(scope, {claimId,transactionBase64});
+    need(result?.status === 'buyer-response-saved' && result.response?.transactionBase64 === transactionBase64
+      && result.claim.claimId === claimId, 'SAVE_UNCONFIRMED');
     saved = result; if (memory === pending) memory = null; notify(); return result;
   }
   return Object.freeze({
@@ -108,7 +111,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
       need(state().canRequestSignature,'NOT_READY');busy=true;costQuote=null;
       const generation=epoch;
       try{
-        await persistent();await load();need(!saved&&order.revision===partial?.claim?.orderRevision&&!order.paused&&partial?.status==='asset-partial-saved','NOT_READY');
+        await persistent();await load();need(!saved&&order.revision===partial?.claim?.orderRevision&&!order.paused&&preparedForWallet(partial),'NOT_READY');
         const before=structuredClone(order),bundle=structuredClone(partial),started=performance.now();
         const report=await bounded(checkPrepared({order:before,claim:bundle.claim,request:bundle.request}),35000,'PREFLIGHT_TIMEOUT');
         validateWalletCheck(report,before,bundle.request);
@@ -130,7 +133,7 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
         && compatibleBuyerWallet(selected, network.cluster), 'WALLET_CHANGED');
       try {
         await persistent(); await load();
-        need(!saved && order.revision === partial?.claim?.orderRevision && !order.paused && partial?.status === 'asset-partial-saved', 'NOT_READY');
+        need(!saved && order.revision === partial?.claim?.orderRevision && !order.paused && preparedForWallet(partial), 'NOT_READY');
         const before = structuredClone(order), bundle = structuredClone(partial);
         validateAssetRequest(before, bundle.claim, bundle.request); stableWallet();
         need(authorizeCost===true&&approvedQuote&&quoteId===approvedQuote.quoteId,'COST_APPROVAL_REQUIRED');
@@ -177,8 +180,10 @@ export function createBuyerWalletClient({ storage, scope, checkPrepared,
           // Account changes/timeout do not discard a valid old response. Save evidence.
           // Verify against the immutable pre-call snapshot before any storage await.
           // saveBuyerResponse independently checks the current journal and claim.
-          verifyBuyerSigningResponse(before, bundle.claim, bundle.request, {transactionBase64});
-          memory = {claimId:claimed.claim.claimId,transactionBase64};
+          const needsAsset=bundle.request.kind===WALLET_FIRST_REQUEST;
+          if (needsAsset) verifyWalletFirstResponse(before,bundle.claim,bundle.request,transactionBase64);
+          else verifyBuyerSigningResponse(before, bundle.claim, bundle.request, {transactionBase64});
+          memory = {claimId:claimed.claim.claimId,transactionBase64,needsAsset};
           return saveMemory();
         });
         // work continues to validate/store a late response, never invokes the wallet again.

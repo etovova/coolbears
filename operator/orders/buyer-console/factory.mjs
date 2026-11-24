@@ -14,7 +14,7 @@ export function createPrivateBuyerConsole(config,{onChange=()=>{},authorizeMainn
   config=validateConsoleConfig(config);const network=networkProfile(config.cluster);
   if(typeof authorizeMainnet!=='boolean'||(network.cluster==='mainnet-beta')!==authorizeMainnet)throw Error('CONSOLE_NETWORK_AUTHORIZATION');
   if(globalThis.location?.origin!==config.origin)throw Error('CONSOLE_ORIGIN');
-  const storage=createBuyerStorage({cluster:network.cluster,authorizeMainnet,storageOptions:consoleStorageOptions(config)}),transport=createBuyerSubmissionTransport({origin:config.origin}),
+  const storage=createBuyerStorage({cluster:network.cluster,authorizeMainnet,walletFirst:authorizeMainnet,storageOptions:consoleStorageOptions(config)}),transport=createBuyerSubmissionTransport({origin:config.origin}),
     checkPrepared=createBuyerCheckClient({origin:config.origin}),prepare=createBuyerPreparationClient({origin:config.origin});
   // Neither build configuration, query strings nor UI options can enable sending.
   return createPrivateBuyerController({config,storage,index:createScopeIndex({config}),prepare,onChange,sendingEnabled:false,

@@ -26,8 +26,10 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
       if(window.walletMode==='throw')throw Error('fixture transport failed');
       if(window.walletMode==='hold')await new Promise(resolve=>window.releaseWallet=resolve);
       const tx=VersionedTransaction.deserialize(input.transaction);
+      if(rows[1].record.kind==='coolbears-buyer-unsigned' && tx.signatures.some(signature=>signature.some(Boolean)))throw Error('UNEXPECTED_PRIOR_SIGNATURE');
       if(window.walletMode==='tamper')tx.message.compiledInstructions[0].data[1]^=1;
       tx.sign([buyer]);
+      window.walletReturned=true;
       if(window.walletMode==='storage-unavailable')window.storageUnavailable=true;
       if(window.walletMode==='account-change'){wallet.accounts=[];changed?.({accounts:[]});}
       return [{signedTransaction:tx.serialize()}];
@@ -52,6 +54,7 @@ async function openClient(scope, {walletSeed=1,walletTimeoutMs=3000}={}) {
     return report;
   };
   const wrapped={read:async(...args)=>{if(window.storageUnavailable)throw Error('STORAGE_UNAVAILABLE');return store.read(...args);},readAssetSigning:store.readAssetSigning,readBuyerResponse:store.readBuyerResponse,
+    completeBuyerSignature:store.completeBuyerSignature,
     claimBuyerWallet:async(...args)=>{const r=await store.claimBuyerWallet(...args);if(window.loseCostClaimAck)throw Error('LOST_COST_ACK');return r;},
     saveBuyerResponse:async(...args)=>{if(window.storageUnavailable)throw Error('STORAGE_UNAVAILABLE');const result=await store.saveBuyerResponse(...args);if(window.loseAck)throw Error('LOST_ACK');return result;}};
   window.fakeWallet=wallet;window.walletChanged=()=>{wallet.accounts=[];changed?.({accounts:[]});};
