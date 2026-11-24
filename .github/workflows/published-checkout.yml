@@ -1,0 +1,33 @@
+name: Verify released mint, quantity, slow preparation and expired order
+on:
+  push:
+    branches: ['qa/final-coolbears-v34']
+permissions:
+  contents: read
+jobs:
+  recovery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: |
+          npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Exercise a rejected final read and a truly failed simulation using SDK fixtures
+        run: |
+          npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+          node --test operator/tests/quote-recovery.integration.mjs
+      - name: Finalized Mainnet collection and wallet history
+        run: node tests/chain-observation.qa.mjs
+      - name: Mobile checkout after real network expiry without payment
+        run: |
+          node tests/mobile-production-regression.qa.mjs
+          QA_FRESH_TWO_ONLY=1 node tests/mobile-production-regression.qa.mjs
+      - name: Restore a genuinely expired unsigned order on the live release
+        run: node tests/live-unsigned-expiry.qa.mjs
