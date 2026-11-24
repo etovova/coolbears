@@ -1,0 +1,19 @@
+name: Mint all 50 assets as an independent buyer on a read-only copy of finalized Mainnet
+on:
+  push:
+    branches: ['qa/quantity-contract-v34']
+permissions:
+  contents: read
+jobs:
+  signed-replica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - run: node operator/tests/ordinary-buyer-quantity.mjs
