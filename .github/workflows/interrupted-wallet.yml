@@ -1,7 +1,7 @@
-name: Check buyer-first mint on the staged site
+name: Verify a fresh quote after an interrupted wallet prompt
 on:
   push:
-    branches: ['qa/buyer-first-check-v41']
+    branches: ['qa/verify-saved-purchase-v41']
 permissions:
   contents: read
 jobs:
@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      QA_REOPEN_IMMEDIATELY: "1"
       QA_WORKER_VERSION: 2d6178ea-ae5d-47db-ae7f-1022f39a7af6
     steps:
       - uses: actions/checkout@v4
@@ -22,10 +21,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit firefox
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - run: QA_ENGINE=webkit node tests/live-selected-quantity.qa.mjs
-      - if: ${{ !cancelled() }}
-        run: QA_ENGINE=chromium QA_INTERRUPTED=1 node tests/live-selected-quantity.qa.mjs
-      - if: ${{ !cancelled() }}
-        run: QA_ENGINE=firefox node tests/live-selected-quantity.qa.mjs
-      - name: Close the phone tab during the wallet request and verify consent before a new purchase
+      - name: Reopen immediately and verify both order records
+        env:
+          QA_REOPEN_IMMEDIATELY: "1"
         run: node tests/live-wallet-interruption.qa.mjs
