@@ -274,7 +274,8 @@ try {
     const test=await open({readiness,clock:true});const {page}=test;
     assert.equal(test.readinessCalls(),0,'passive homepage does not poll');
     const cta=page.locator('#mintBtn');
-    await cta.scrollIntoViewIfNeeded();
+    const firstResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/readiness');
+    await cta.scrollIntoViewIfNeeded();await (await firstResponse).finished();
     await page.waitForFunction(closed=>document.querySelector('#minted').textContent===(closed?'NOT OPEN YET':'') && (closed||!document.querySelector('#mintBtn').disabled),readiness==='closed');
     await page.waitForLoadState('networkidle');
     assert.equal(test.readinessCalls(),1);assert.equal(await page.locator('dialog[open]').count(),0);
@@ -300,10 +301,10 @@ try {
   }
   for(const [locale,lang,ctaText] of [['ru-RU','ru','ПОДКЛЮЧИТЬ КОШЕЛЁК'],['en-US','en','CONNECT WALLET TO MINT'],['zh-CN','zh-CN','连接钱包开始铸造']]){
     const test=await open({device:'Pixel 7',locale,readiness:'wrong-profile',clock:true});const {page}=test,cta=page.locator('#mintBtn'),badge=page.locator('.mint-topline');
-    const baseline=await cta.innerText();assert.equal(baseline,ctaText);assert.equal(await page.locator('html').getAttribute('lang'),lang);
+    const baseline=await cta.innerText();const top=()=>cta.evaluate(n=>Math.round(n.getBoundingClientRect().top+scrollY)),initialTop=await top();assert.equal(baseline,ctaText);assert.equal(await page.locator('html').getAttribute('lang'),lang);
     for(const selector of ['.brand','#mintBtn','#walletBtn','a[data-i18n="mintNow"]'])assert.equal(await page.locator(selector).getAttribute('translate'),'no');
-    await cta.scrollIntoViewIfNeeded();await page.waitForLoadState('networkidle');assert.equal(test.readinessCalls(),1);assert.equal(await cta.innerText(),baseline);assert.equal(await badge.isVisible(),false);
-    await cta.click();await badge.waitFor({state:'visible'});assert.equal(await cta.innerText(),baseline);assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),2);
+    const firstResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/readiness');await cta.scrollIntoViewIfNeeded();await (await firstResponse).finished();await page.waitForFunction(()=>!document.querySelector('#mintBtn').disabled);assert.equal(test.readinessCalls(),1);assert.equal(await top(),initialTop);assert.equal(await cta.innerText(),baseline);assert.equal(await badge.isVisible(),false);
+    await cta.click();await badge.waitFor({state:'visible'});assert.equal(await top(),initialTop);assert.equal(await cta.innerText(),baseline);assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),2);
     await page.locator('.bear-lang[data-lang="zh"]').click();await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
     await test.done('mobile passive network failure and explicit refusal keep native CTA: '+locale);
   }
