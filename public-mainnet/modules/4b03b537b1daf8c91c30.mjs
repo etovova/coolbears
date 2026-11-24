@@ -15,6 +15,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   dialog.innerHTML='<div class="public-mint-head"><h2 id="publicMintTitle"></h2><button data-action="close" type="button">×</button></div><p data-view="network">Solana Mainnet · 0.2 SOL / NFT</p><p data-view="message" role="status" aria-live="polite"></p><div data-view="wallets"></div><div data-view="purchase"><div data-view="saved"><select aria-label="Saved purchases"></select></div><p data-view="progress"></p><div data-view="quote"></div><button data-action="mint" type="button"></button></div>';
   document.body.append(dialog);
   const view=name=>dialog.querySelector(`[data-view="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
+  const notices={en:{cancelled:'Signature cancelled.',pending:'The payment result is unknown. Checking your saved order; no second payment will be sent.'},ru:{cancelled:'Подпись отменена.',pending:'Результат оплаты пока неизвестен. Проверяем заказ. Повторной оплаты не будет.'},zh:{cancelled:'已取消签名。',pending:'付款结果尚未确认。正在检查已保存的订单，不会重复付款。'}};
   const caption=()=>({en:'MINT',ru:'МИНТ',zh:'铸造'})[language()]??'MINT';
   let client,disposed=false,busy=false,message=null,selectedWallet=null,connectedAddress='',timer,storageUnavailable=false,observer=null,checking=null,failed=false,requested=false,entering=false,walletStep=null;
   let session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0;
@@ -37,7 +38,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
     $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));button('mint').textContent=caption();
     const key=storageUnavailable?'unavailable':walletStep??(busy?'waiting':message??(completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:null));
-    view('message').textContent=key?text(key):'';view('message').hidden=!key;
+    view('message').textContent=key?((notices[language()]??notices.en)[key]??text(key)):'';view('message').hidden=!key;
     const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;
     const select=view('saved').querySelector('select');view('saved').hidden=!picking;
     if(picking){select.setAttribute('aria-label',text('saved'));const prev=select.value;select.replaceChildren();for(const [i,row] of savedRows(s).entries()){const o=document.createElement('option');o.value=row.id;o.textContent=text('order')+' '+(i+1)+' · '+row.id.slice(-6);select.append(o);}if([...select.options].some(o=>o.value===prev))select.value=prev;}
@@ -49,6 +50,8 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   }
   async function run(fn){if(busy||disposed)return;busy=true;phase='';message=null;render();try{return await fn();}catch(error){const code=String(error?.reason??error?.code??error?.message??'');
     if(code==='SAVED_ORDER_REVIEW_REQUIRED'){picking=true;message='saved';}
+    else if(code==='WALLET_CANCELLED')message=snapshot().paymentUncertain?'pending':'cancelled';
+    else if(snapshot().paymentUncertain||/WALLET_RESPONSE_(UNKNOWN|PENDING)/.test(code))message='pending';
     else message=/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||['QuotaExceededError','SecurityError'].includes(error?.name)?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':/COOLDOWN|BUSY|DAILY_LIMIT/.test(code)||error?.status===429?'serviceBusy':phase==='quote'?'quoteRefused':phase==='prepare'?'prepareFailed':code==='PUBLIC_SALES_CLOSED'?'closed':/WALLET|ACCOUNT/.test(code)?'walletError':snapshot().paymentUncertain?'pending':'error';
   }finally{busy=false;render();scheduleRecovery();}}
   function show(){if(!dialog.open)dialog.showModal();render();}
