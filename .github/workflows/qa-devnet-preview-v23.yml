@@ -1,7 +1,7 @@
 name: Verify supplemental release checks on public Devnet
 on:
   push:
-    branches: ['qa/coolbears-live-v28']
+    branches: ['qa/coolbears-devnet-v28']
     paths: ['.github/workflows/qa-devnet-preview-v23.yml']
 permissions:
   contents: read
