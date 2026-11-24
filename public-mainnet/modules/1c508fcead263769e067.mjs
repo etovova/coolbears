@@ -10,7 +10,7 @@ import {createBuyerResponseRecovery} from '/public-mainnet/modules/b643423d6a2d1
 import {createBuyerPrewalletRecovery} from '/public-mainnet/modules/e04e204d208d7c75d365.mjs';
 import {createBuyerCustodyRecovery} from '/public-mainnet/modules/cd1528887587842c7656.mjs';
 import {createPrivateBuyerController} from '/public-mainnet/modules/4cabcd2fc86d54d2b04d.mjs';
-import {createScopeIndex,consoleStorageOptions} from '/public-mainnet/modules/a691d422982ddd4e45cc.mjs';
+import {createScopeIndex,consoleStorageOptions,spentUnsignedOrder} from '/public-mainnet/modules/a691d422982ddd4e45cc.mjs';
 import {validateCostApproval} from '/public-mainnet/modules/496495ca692686787c96.mjs';
 import {validatePublicBuyerConfig,buyerScopeConfig} from '/public-mainnet/modules/9609056ec7e489d2b838.mjs';
 import {createPublicReadinessClient} from '/public-mainnet/modules/c0b4bcd4974224d3cb18.mjs';
@@ -86,6 +86,7 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
           for(const row of index.list().filter(row=>row.buyer===buyer)){
             const scope={...row,cluster:config.cluster,machine:config.machine,collection:config.collection,guard:config.guard,...consoleStorageOptions(config)};
             const record=await storage.readRecoverySnapshot(scope);
+            if(spentUnsignedOrder(record))continue;
             if(!record||!record.order.items.every(i=>i.attempts.at(-1)?.state==='verified')){
               if(!record||retained)throw Error('SAVED_ORDER_REVIEW_REQUIRED');
               retained=row;

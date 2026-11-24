@@ -7,8 +7,8 @@ const pathRoute=path=>bindings.sourceBindings.find(row=>row.path===path).route;
 const nativeCalls={},guarded=['create','prepare','quoteCost','sign','send','reviewReplacement','prepareReviewedReplacement'],readonly=['load','refresh','connectWallet','selectAccount','disconnectWallet','recover','recoverNative','recoverWalletResponse','reviewExpiry','setPaused','requestPersistence','startNew'];
 const nativeState={scope:null,sendingEnabled:true,canCreate:true,canPrepare:true,canQuote:true,canSign:true,canSend:true,canRecover:true};
 const native={state:()=>({...nativeState}),dispose:()=>{}};for(const name of [...guarded,...readonly])native[name]=async()=>{nativeCalls[name]=(nativeCalls[name]??0)+1;return{name};};
-let reads=[];const mocks=new Map();for(const[path,name,value]of[
- ['operator/orders/browser-storage.mjs','createBuyerStorage',()=>({readBuyerSubmission:async scope=>{reads.push(scope.id);return undefined;},readRecoverySnapshot:async()=>({order:{items:[{attempts:[]}]}})})],
+let journal={order:{items:[{attempts:[]}]}},reads=[];const mocks=new Map();for(const[path,name,value]of[
+ ['operator/orders/browser-storage.mjs','createBuyerStorage',()=>({readBuyerSubmission:async scope=>{reads.push(scope.id);return undefined;},readRecoverySnapshot:async()=>journal})],
  ['operator/orders/wallet-client.mjs','createBuyerWalletClient',()=>({})],['operator/orders/gateway/preparation-client.mjs','createBuyerPreparationClient',()=>()=>{}],
  ['operator/orders/gateway/client.mjs','createBuyerCheckClient',()=>()=>{}],['operator/orders/gateway/submission-client.mjs','createBuyerSubmissionTransport',()=>({})],
  ['operator/orders/sender.mjs','createBuyerSender',()=>({})],['operator/orders/response-recovery-client.mjs','createBuyerResponseRecovery',()=>({})],
@@ -52,6 +52,23 @@ client.dispose();await assert.rejects(()=>client.send(),/PUBLIC_READINESS_UNAVAI
     assert.equal(restored.state().approvedQuote,null);
     cases.push({name:'automatic-resume-refreshes-the-current-order-approval-without-signing-or-sending',passed:true});
   }finally{restored.dispose();Object.assign(native,was);delete nativeState.selectedAccount;nativeState.scope=null;ctx.localStorage.getItem=()=>null;}
+}
+// Real public factory scans the persisted index again on a fresh visit.
+{
+ const buyer=config.machine,row={id:'old-scope',buyer};ctx.localStorage.getItem=()=>JSON.stringify({version:1,orders:[row]});
+ const first={number:1,state:'expired',signature:null,lastValidBlockHeight:100,proof:{kind:'expired',signature:null,commitment:'finalized',blockhashValid:false,blockHeight:101,accountAbsent:true,signatureAbsent:true,addressHistoryEmpty:true}};
+ const exact={readOnly:true,custody:{status:'available'},prewalletRecovery:{status:'expired',report:{status:'prewallet-expired',chainVerified:true}},
+   order:{items:[{attempts:[first,{...first,number:2}]}]}};
+ const saved={create:native.create,load:native.load,selectAccount:native.selectAccount};
+ let created=0,restored=0;native.create=async a=>{assert.equal(a.quantity,2);created++;};
+ native.load=async id=>{assert.equal(id,row.id);restored++;};native.selectAccount=async()=>{};
+ nativeState.selectedAccount=buyer;const c=entry.namespace.createPublicBuyerConsole(config);
+ try{journal=structuredClone(exact);await c.create({quantity:2,authorizeCreate:true});assert.equal(created,1);assert.equal(restored,0);
+   for(const change of [r=>r.order.items[0].attempts.pop(),r=>r.order.items[0].attempts[1].proof.accountAbsent=false,r=>r.order.items[0].attempts[1].signature='possibly-signed',r=>r.prewalletRecovery=null,r=>r.order.items.push({attempts:[{state:'verified'}]}),r=>r.custody.status='unknown',r=>r.order.items[0].attempts[1].state='wallet-pending']){
+     journal=structuredClone(exact);change(journal);await c.create({quantity:2,authorizeCreate:true});
+   }assert.equal(created,1);assert.equal(restored,7);
+   cases.push({name:'only-two-proven-unsigned-expiries-with-zero-receipts-unblock-fresh-order',passed:true});
+ }finally{c.dispose();Object.assign(native,saved);delete nativeState.selectedAccount;ctx.localStorage.getItem=()=>null;}
 }
 const beforeBlocked=calls;vm.runInContext("Object.defineProperty(globalThis,'localStorage',{configurable:true,get(){throw Error('blocked');}});",ctx);const blockedClient=entry.namespace.createPublicBuyerConsole(config);assert.equal(blockedClient.state().storageAvailable,false);await blockedClient.connectWallet();assert.equal(nativeCalls.connectWallet,1);for(const name of guarded)await assert.rejects(()=>blockedClient[name](),/STORAGE_UNAVAILABLE/);assert.equal(calls,beforeBlocked);assert.equal(nativeCalls.create,1);blockedClient.dispose();cases.push({name:'blocked-browser-index-preserves-wallet-connection-and-blocks-finance-before-rpc',passed:true});
 const factoryBytes=await readFile(new URL('public-mainnet/factory.mjs',root));const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,nativeCalls,readinessFetchCalls:calls,

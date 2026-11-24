@@ -16,10 +16,10 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   document.body.append(dialog);
   const view=name=>dialog.querySelector(`[data-view="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
   const notices={en:{cancelled:'Signature cancelled.',pending:'The payment result is unknown. Checking your saved order; no second payment will be sent.'},ru:{cancelled:'Подпись отменена.',pending:'Результат оплаты пока неизвестен. Проверяем заказ. Повторной оплаты не будет.'},zh:{cancelled:'已取消签名。',pending:'付款结果尚未确认。正在检查已保存的订单，不会重复付款。'}};
-  const stageText={en:{resumeQty:'Saved order: {n} NFT.',refreshPrice:'Tap Mint to get the current total.',pricing:'Calculating the total…',refreshing:'Refreshing the unsigned order…',awaitExpiry:'Waiting for Solana to verify the previous preparation. No payment was sent.',exhausted:'This order expired. No further attempt is available for this NFT.'},ru:{resumeQty:'Сохранённый заказ: {n} NFT.',refreshPrice:'Нажмите «Минт», чтобы получить актуальную сумму.',pricing:'Рассчитываем сумму…',refreshing:'Обновляем неподписанный заказ…',awaitExpiry:'Ждём проверки прежней подготовки в Solana. На этом шаге оплата не отправлялась.',exhausted:'Срок этого заказа истёк. Для этого NFT в заказе больше нет попыток.'},zh:{resumeQty:'已保存订单：{n} 个 NFT。',refreshPrice:'点击「铸造」获取当前总额。',pricing:'正在计算总额…',refreshing:'正在更新未签名的订单…',awaitExpiry:'正在等待 Solana 验证上次准备。此步骤未付款。',exhausted:'订单已过期，当前订单中的此 NFT 已无剩余尝试次数。'}};
+  const stageText={en:{resumeQty:'Saved order: {n} NFT.',restart:'Previous order expired without a payment. Mint starts a new order.',refreshPrice:'Tap Mint to get the current total.',pricing:'Calculating the total…',refreshing:'Refreshing the unsigned order…',awaitExpiry:'Waiting for Solana to verify the previous preparation. No payment was sent.',exhausted:'This order expired. No further attempt is available for this NFT.'},ru:{resumeQty:'Сохранённый заказ: {n} NFT.',restart:'Предыдущий заказ истёк без оплаты. Нажмите «Минт» для нового заказа.',refreshPrice:'Нажмите «Минт», чтобы получить актуальную сумму.',pricing:'Рассчитываем сумму…',refreshing:'Обновляем неподписанный заказ…',awaitExpiry:'Ждём проверки прежней подготовки в Solana. На этом шаге оплата не отправлялась.',exhausted:'Срок этого заказа истёк. Для этого NFT в заказе больше нет попыток.'},zh:{resumeQty:'已保存订单：{n} 个 NFT。',restart:'上一订单已过期且未付款。点击「铸造」开始新订单。',refreshPrice:'点击「铸造」获取当前总额。',pricing:'正在计算总额…',refreshing:'正在更新未签名的订单…',awaitExpiry:'正在等待 Solana 验证上次准备。此步骤未付款。',exhausted:'订单已过期，当前订单中的此 NFT 已无剩余尝试次数。'}};
   const caption=()=>({en:'MINT',ru:'МИНТ',zh:'铸造'})[language()]??'MINT';
   let client,disposed=false,busy=false,message=null,selectedWallet=null,connectedAddress='',timer,storageUnavailable=false,observer=null,checking=null,failed=false,requested=false,entering=false,walletStep=null;
-  let quoteTimer,restoredQuantity=false,session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0,priceTimer,priceRetries=0;
+  let selectedOnEntry=null,quoteTimer,restoredQuantity=false,session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0,priceTimer,priceRetries=0;
   function clearReview(){clearTimeout(quoteTimer);review=null;}
   function dismiss(){session++;clearReview();restoredQuantity=false;picking=false;clearTimeout(recoveryTimer);clearTimeout(priceTimer);}
   dialog.addEventListener('close',dismiss);
@@ -38,7 +38,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     const card=$('mintBtn');if(card){card.disabled=busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length);card.setAttribute('aria-busy',String(pending||entering));card.textContent=caption();}
     if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
     $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));button('mint').textContent=caption();
-    const key=storageUnavailable?'unavailable':walletStep??(busy?(['quote','prepare','opening'].includes(phase)?'pricing':phase==='expiry'?'refreshing':'waiting'):message??(exhausted(s)?'exhausted':completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:s.quantity&&!currentReview(s)&&(allowed(s,'canQuote')||s.canPrepareReplacement||s.canReplace)?'refreshPrice':null));
+    const key=storageUnavailable?'unavailable':walletStep??(busy?(['quote','prepare','opening'].includes(phase)?'pricing':phase==='expiry'?'refreshing':'waiting'):message??(exhausted(s)?(s.canRestartExpired?'restart':'exhausted'):completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:s.quantity&&!currentReview(s)&&(allowed(s,'canQuote')||s.canPrepareReplacement||s.canReplace)?'refreshPrice':null));
     view('message').textContent=key?((stageText[language()]??stageText.en)[key]??(notices[language()]??notices.en)[key]??text(key)):'';view('message').hidden=!key;
     const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;if(restoredQuantity&&s.quantity)progress.textContent=(stageText[language()]??stageText.en).resumeQty.replace('{n}',String(s.quantity))+' '+progress.textContent;
     const select=view('saved').querySelector('select');view('saved').hidden=!picking;
@@ -46,7 +46,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     const cost=view('quote');cost.replaceChildren();const ok=currentReview(s);
     if(ok){const q=quoteOf(s),list=document.createElement('dl');for(const [label,k] of [['price','unitPriceLamports'],['fee','networkFeeLamports'],['rent','assetRentLamports'],['protocol','protocolChargeLamports'],['total','totalLamports'],...(s.quantity>1?[['projection','projectedOrderTotalLamports']]:[])]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=text(label);dd.textContent=exactSol(q.budget[k])+' SOL';list.append(dt,dd);}cost.append(list);}
     if(s.canReplace&&s.failedFeeLamports){const n=document.createElement('p');n.textContent=text('failedFee')+': '+exactSol(s.failedFeeLamports)+' SOL. '+text('feeConsent');cost.append(n);}
-    button('mint').hidden=!!walletStep||completed(s)||exhausted(s)||(!busy&&s.paymentUncertain&&!ok&&!s.canReplace&&!s.canRecoverWalletResponse);
+    button('mint').hidden=!!walletStep||completed(s)||(exhausted(s)&&!s.canRestartExpired)||(!busy&&s.paymentUncertain&&!ok&&!s.canReplace&&!s.canRecoverWalletResponse);
     button('mint').disabled=busy||entering||storageUnavailable||!!s.busy||((closed||sold)&&!s.scope&&!savedRows(s).length);
   }
   async function run(fn){if(busy||disposed)return;busy=true;phase='';message=null;render();try{return await fn();}catch(error){const code=String(error?.reason??error?.code??error?.message??'');
@@ -133,7 +133,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
         message='awaitExpiry';clearTimeout(priceTimer);
         if(priceRetries<3){const round=priceRetries++;priceTimer=setTimeout(()=>{if(live()&&!busy&&same(snapshot())&&!snapshot().paymentUncertain)void run(()=>progress());},[12000,26000,46000][round]);}return;
       }
-      if(!s.canReplace||attempt!==1){message='exhausted';return;}
+      if(!s.canReplace||attempt!==1){message=s.canRestartExpired?'restart':'exhausted';if(s.canRestartExpired&&selectedOnEntry)syncQuantity(selectedOnEntry);return;}
       // The native expiry port has recorded finalized proof. A new template is unsigned;
       // the displayed quote and buyer approval must both be obtained again.
       await client.reviewReplacement({authorizeReplacement:true});if(!live())return;
@@ -147,11 +147,15 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   }
   function present(s){const q=quoteOf(s);if(!q||!s.scope||s.scope.buyer!==connectedAddress)return;review={id:q.quoteId,total:q.budget.totalLamports,scope:s.scope.id,item:s.currentItemIndex};clearTimeout(quoteTimer);if(Number.isSafeInteger(q.expiresAt)&&q.expiresAt>Date.now())quoteTimer=setTimeout(render,q.expiresAt-Date.now()+1);}
   async function restore(id,buyer){await client.load(id);await client.selectAccount(buyer);emitWallet(snapshot().selectedAccount);}
+  function syncQuantity(n){const el=$('qty');if(el&&Number.isInteger(n)&&n>=1&&n<=50&&Number(el.value)!==n){el.value=String(n);el.dispatchEvent?.(new Event('input',{bubbles:true}));}}
   async function progress({approve=false,fresh=false}={}){
     const token=session,buyer=connectedAddress,live=()=>!disposed&&dialog.open&&token===session&&buyer===connectedAddress;
     let s=snapshot();if(!buyer||!live())return;
     if(picking){const id=view('saved').querySelector('select').value;if(!savedRows(s).some(row=>row.id===id))return;await restore(id,buyer);picking=false;if(!live())return;s=snapshot();}
-    if(fresh&&completed(s)){await client.startNew({authorizeNewOrder:true});s=snapshot();}
+    if((fresh&&completed(s))||((fresh||approve)&&s.canRestartExpired)){
+      if(!s.salesOpen){await checkStatus();if(!live()||!snapshot().salesOpen){message='notReady';return;}}
+      clearReview();restoredQuantity=false;await client.startNew({authorizeNewOrder:true});if(!live())return;s=snapshot();approve=false;
+    }
     if(!s.scope&&!s.salesOpen){const rows=savedRows(s);if(rows.length>1){picking=true;message='saved';return;}if(rows.length===1){await restore(rows[0].id,buyer);s=snapshot();}}
     if(!s.scope){
       if(!s.salesOpen){message='notReady';return;}
@@ -184,7 +188,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   }
   button('mint').onclick=()=>snapshot().scope&&connectedAddress?run(()=>progress({approve:true})):enterPurchase();
   async function enterPurchase(){
-    if(entering||busy||disposed||storageUnavailable)return;requested=true;entering=true;recoveryCount=0;priceRetries=0;clearTimeout(priceTimer);clearReview();message=null;render();
+    if(entering||busy||disposed||storageUnavailable)return;selectedOnEntry=Number($('qty')?.value??1);requested=true;entering=true;recoveryCount=0;priceRetries=0;clearTimeout(priceTimer);clearReview();message=null;render();
     try{
       if(snapshot().salesOpen!==true)await checkStatus();if(disposed||storageUnavailable)return;
       const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length)return;

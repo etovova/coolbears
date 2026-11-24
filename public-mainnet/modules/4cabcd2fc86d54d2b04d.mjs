@@ -1,7 +1,7 @@
 // Private UI coordinator. Injected ports are trusted application dependencies, never UI input.
 import {PublicKey} from '/public-mainnet/modules/60139917f8765411c2c3.mjs';
 import {compatibleBuyerWallet} from '/public-mainnet/modules/567c67902474bc169c81.mjs';
-import {validateConsoleConfig,consoleStorageOptions} from '/public-mainnet/modules/a691d422982ddd4e45cc.mjs';
+import {validateConsoleConfig,consoleStorageOptions,spentUnsignedOrder} from '/public-mainnet/modules/a691d422982ddd4e45cc.mjs';
 import {networkProfile} from '/public-mainnet/modules/16494c413cb2c41805ca.mjs';
 const need=(v,c)=>{if(!v)throw Error(c);},copy=v=>structuredClone(v);
 const terminal=s=>['verified','failed','expired'].includes(s);
@@ -53,7 +53,8 @@ export function createPrivateBuyerController({config,storage,index,prepare,makeP
       paused:order?.paused??false,quantity:order?.quantity??null,verified:order?.items.filter(i=>i.attempts.at(-1)?.state==='verified').length??0,
       paymentUncertain:unknown&&!!(evidence?.buyerWallet?.status==='wallet-response-unknown'||signed?.status==='send-claimed'),currentItemIndex:active?.index??null,items:order?.items.map(i=>({index:i.index,state:i.attempts.at(-1)?.state??'not-started',attempt:i.attempts.at(-1)?.number??0}))??[],
       quote:freshQuote?copy(quote):null,costSummary:copy(summary),unknown,
-      canCreate:!scope&&!!account&&!busy,canStartNew:!busy&&!pendingResponse&&!!scope&&loaded&&(!order||order.items.every(i=>i.attempts.at(-1)?.state==='verified')),
+      canRestartExpired:!busy&&!pendingResponse&&selected&&spentUnsignedOrder(evidence),
+      canCreate:!scope&&!!account&&!busy,canStartNew:!busy&&!pendingResponse&&!!scope&&loaded&&(!order||(selected&&spentUnsignedOrder(evidence))||order.items.every(i=>i.attempts.at(-1)?.state==='verified')),
       canPrepare:!busy&&canPrepare,canQuote:!busy&&!!canQuote,
       canSign:!busy&&!!canQuote&&!!freshQuote,canSend:!busy&&sendingEnabled===true&&available&&!pendingResponse&&selected&&!order?.paused&&signed?.status==='ready'
         &&signed.costApproval?.quote.expiresAt>clock(),canRecover:!busy&&(!pendingResponse||!available)&&!!(signed||evidence?.responseRecovery||evidence?.prewalletRecovery),

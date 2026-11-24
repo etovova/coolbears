@@ -15,6 +15,18 @@ export function validateConsoleConfig(value){
   return Object.freeze(Object.fromEntries(keys.map(key=>[key,value[key]])));
 }
 export const consoleStorageOptions=config=>config.version===2?{storageMode:config.storageMode,hiddenCommitmentSha256:config.hiddenCommitmentSha256}:{};
+// Accept only a validated native journal: both unsigned attempts expired on chain,
+// no NFT was issued, and no other item was attempted. The journal stays intact.
+export function spentUnsignedOrder(record){
+  const items=record?.order?.items,final=record?.prewalletRecovery;
+  if(record?.readOnly!==true||record.custody?.status!=='available'||!Array.isArray(items)||!items.length||
+     final?.status!=='expired'||final.report?.status!=='prewallet-expired'||final.report.chainVerified!==true)return false;
+  const [first,...rest]=items;
+  return first.attempts?.length===2&&rest.every(i=>i.attempts?.length===0)&&first.attempts.every((a,i)=>
+    a.number===i+1&&a.state==='expired'&&a.signature===null&&a.proof?.kind==='expired'&&a.proof.signature===null&&
+    a.proof.commitment==='finalized'&&a.proof.blockhashValid===false&&a.proof.blockHeight>a.lastValidBlockHeight&&
+    a.proof.signatureAbsent===true&&a.proof.accountAbsent===true&&a.proof.addressHistoryEmpty===true);
+}
 export function createScopeIndex({config,localStorage=globalThis.localStorage,locks=globalThis.navigator?.locks}={}){
   config=validateConsoleConfig(config);const key='coolbears:private-buyer-index:v1:'+JSON.stringify(config);
   const valid=row=>row&&Object.keys(row).sort().join(' ')==='buyer id'&&/^[A-Za-z0-9_-]{1,64}$/.test(row.id)

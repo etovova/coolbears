@@ -98,6 +98,16 @@ try{
  await card.click();assert.equal(busyChecks,2,'retry a refused unsigned quote once the advertised hold ends');assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],beforePaid);
  for(const refusal of [{reason:'DAILY_LIMIT',retryAfter:1},{reason:'COOLDOWN',retryAfter:90},{reason:'COOLDOWN'}]){await action('close').click();stale();busyChecks=0;client.quoteCost=async()=>{busyChecks++;throw Object.assign(Error('CHECK_HTTP'),{status:429,...refusal});};await card.click();assert.equal(busyChecks,1);assert.deepEqual([counts.sign,counts.send],beforePaid);}
  ok('only-time-bounded-explicit-unsigned-cooldown-repeats-never-a-daily-limit-or-payment');
- const source=await readFile(new URL('public-mainnet/main.mjs',root));const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
+ const source=await readFile(new URL('public-mainnet/main.mjs',root)); // Same browser, second expiry with zero receipts: one explicit click starts the selected new order.
+ if(dialog.open)await action('close').click();stale();
+ state={...state,quantity:1,canQuote:false,canReviewExpiry:false,canRecover:false,canStartNew:true,canRestartExpired:true,
+   items:[{index:0,state:'expired',attempt:2}]};emit();
+ document.getElementById('qty').value='2';let reopened=0,newQty=0;const priorTerminalPayments=[counts.sign,counts.send];
+ client.startNew=async arg=>{assert.equal(arg.authorizeNewOrder,true);reopened++;state={...state,scope:null,quantity:null,items:[],canRestartExpired:false,canStartNew:false,canCreate:true};emit();};
+ client.create=async({quantity})=>{newQty=quantity;state={...state,scope:{id:'new-scope',buyer},quantity,canPrepare:true,currentItemIndex:0,items:[{index:0,state:'not-started',attempt:0}]};emit();};
+ client.prepare=async()=>{state={...state,canPrepare:false,canQuote:true,items:[{index:0,state:'wallet-pending',attempt:1}]};emit();};client.quoteCost=oldQ;
+ await card.click();assert.equal(reopened,1,'exhausted saved order must release checkout');assert.equal(newQty,2);assert.equal(document.getElementById('qty').value,'2');assert.match(cost(),/0.203010000 SOL/);assert.deepEqual([counts.sign,counts.send],priorTerminalPayments);
+ ok('fully-expired-empty-order-allows-explicit-new-quantity-without-signing');
+const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
   limitations:['Production public view and complete fixed module graph executed in a small Node VM DOM adapter with trusted synthetic controller ports. Native custody, wallet signatures, RPC and actual browser layout are not attested by these view tests.','Readiness/state gates and genuine browser-native offline instruction planning have separate tests; real account verification remains on the public gateway.']};await writeFile(new URL('../build/public-mainnet/public-buyer-view-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length,counts}));
 }finally{mounted.dispose();loaded.stop();}
