@@ -60,7 +60,7 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
     makePorts:scope=>({wallet:createBuyerWalletClient({storage,scope,recoveryStorage,authorizeMainnet:true,checkPrepared:createBuyerCheckClient({origin:config.origin}),onChange:emit}),
       sender:createBuyerSender({storage,scope,recoveryStorage,authorizeMainnet:true,transport}),response:createBuyerResponseRecovery({storage,scope,transport}),
       prewallet:createBuyerPrewalletRecovery({storage,scope,transport}),custody:createBuyerCustodyRecovery({storage,scope,transport})})});
-  function state(){const value=client?.state()??{},gate=readiness.state(),allowed=gate.salesOpen===true&&!indexUnavailable&&!gateBusy;return{...value,busy:gateBusy||value.busy===true,salesOpen:gate.salesOpen===true,saleStatus:gate.status,readiness:gate,storageAvailable:!indexUnavailable,approvedQuote:approvedQuote?structuredClone(approvedQuote):null,
+  function state(){const value=client?.state()??{},gate=readiness.state(),allowed=gate.salesOpen===true&&!indexUnavailable&&!gateBusy;return{...value,busy:gateBusy||value.busy===true,salesOpen:gate.salesOpen===true,saleStatus:gate.status,readiness:gate,storageAvailable:!indexUnavailable,approvedQuote:value.canSend===true&&approvedQuote?structuredClone(approvedQuote):null,
     recheckActions:gate.expiredOpen===true&&!indexUnavailable&&!gateBusy&&!value.busy?Object.fromEntries(
       ['canCreate','canPrepare','canQuote','canSign','canSend'].map(k=>[k,value[k]===true])):{},
     canCreate:value.canCreate===true&&allowed,canPrepare:value.canPrepare===true&&allowed,
@@ -72,7 +72,7 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
     const saved=await storage.readBuyerSubmission(scope);if(saved?.status!=='ready')return;
     validateCostApproval(saved.costApproval,saved.input,{now:Date.now()});approvedQuote=structuredClone(saved.costApproval.quote);
   }
-  const sync=new Set(['load','refresh','sign','recoverWalletResponse','recover','prepareReviewedReplacement','send']);
+  const sync=new Set(['create','load','refresh','sign','recoverWalletResponse','recover','prepareReviewedReplacement','send']);
   const api={state,refreshReadiness:()=>{state();if(indexUnavailable)throw Error('STORAGE_UNAVAILABLE');return readiness.refresh();},dispose(){readiness.dispose();client.dispose();}};
   for(const name of Object.keys(client))if(!['state','dispose'].includes(name))api[name]=async(...args)=>{
     if(gateBusy)throw Error('BUSY');if(guarded.has(name)){gateBusy=true;emit();}
