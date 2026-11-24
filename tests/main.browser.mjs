@@ -20,10 +20,10 @@ await mkdir(output, { recursive: true });
 const saveReport=()=>writeFile(path.join(output,'main-browser-report.json'),JSON.stringify(report,null,2)+'\n');
 const browser = await playwright[engine].launch({ executablePath: process.env.COOLBEARS_CHROMIUM || undefined, headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [] });
 
-async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, clock = false } = {}) {
+async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, clock = false, locale = 'en-US' } = {}) {
   const { defaultBrowserType: _engine, ...descriptor } = devices[device];
   if (engine === 'firefox') delete descriptor.isMobile;
-  const context = await browser.newContext(descriptor);
+  const context = await browser.newContext({...descriptor,locale});
   const page = await context.newPage();
   // Readiness captures Date.now when mounted; install the test clock before
   // navigation so all client clocks, UI timers and fixtures share it.
@@ -89,8 +89,8 @@ async function closed(page) {
   const button=page.locator('#mintBtn');
   if(!await button.isDisabled() && await page.locator('#walletBtn').getAttribute('title')){
     const qty=await page.locator('#qty').inputValue(),label=await button.innerText();
-    assert.ok(['MINT '+qty+' NFT','ЗАМИНТИТЬ '+qty+' NFT','铸造 '+qty+' 个 NFT','CHECK & MINT','ПРОВЕРИТЬ И ЗАМИНТИТЬ','检查并铸造'].includes(label));
-  }else if(!await button.isDisabled())assert.match(await button.innerText(),/CONNECT WALLET TO MINT|ПОДКЛЮЧИТЬ КОШЕЛЁК|连接钱包开始铸造|CHECK & MINT|ПРОВЕРИТЬ И ЗАМИНТИТЬ|检查并铸造/,'unverified page can only recheck availability');
+    assert.ok(['MINT '+qty+' NFT','ЗАМИНТИТЬ '+qty+' NFT','铸造 '+qty+' 个 NFT'].includes(label));
+  }else if(!await button.isDisabled())assert.match(await button.innerText(),/^(CONNECT WALLET TO MINT|ПОДКЛЮЧИТЬ КОШЕЛЁК|连接钱包开始铸造)$/,'unverified page can only recheck availability');
   assert.equal(await page.locator('#marketplaceTop').isVisible(), false, 'unverified market link remains hidden');
 }
 async function modal(page) {
@@ -275,8 +275,8 @@ try {
     assert.equal(test.readinessCalls(),0,'passive homepage does not poll');
     const cta=page.locator('#mintBtn');
     await cta.scrollIntoViewIfNeeded();
-    const status=readiness==='open'?'MINT IS OPEN':readiness==='closed'?'NOT OPEN YET':'STATUS UNAVAILABLE';
-    await page.waitForFunction(s=>document.querySelector('#minted').textContent===s,status);
+    await page.waitForFunction(closed=>document.querySelector('#minted').textContent===(closed?'NOT OPEN YET':'') && (closed||!document.querySelector('#mintBtn').disabled),readiness==='closed');
+    await page.waitForLoadState('networkidle');
     assert.equal(test.readinessCalls(),1);assert.equal(await page.locator('dialog[open]').count(),0);
     if(readiness==='open'){
       assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');
@@ -297,6 +297,15 @@ try {
       assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),2);
     }
     await test.done('visible mint card and verified click: '+readiness,{syntheticReadiness:true});
+  }
+  for(const [locale,lang,ctaText] of [['ru-RU','ru','ПОДКЛЮЧИТЬ КОШЕЛЁК'],['en-US','en','CONNECT WALLET TO MINT'],['zh-CN','zh-CN','连接钱包开始铸造']]){
+    const test=await open({device:'Pixel 7',locale,readiness:'wrong-profile',clock:true});const {page}=test,cta=page.locator('#mintBtn'),badge=page.locator('.mint-topline');
+    const baseline=await cta.innerText();assert.equal(baseline,ctaText);assert.equal(await page.locator('html').getAttribute('lang'),lang);
+    for(const selector of ['.brand','#mintBtn','#walletBtn','a[data-i18n="mintNow"]'])assert.equal(await page.locator(selector).getAttribute('translate'),'no');
+    await cta.scrollIntoViewIfNeeded();await page.waitForLoadState('networkidle');assert.equal(test.readinessCalls(),1);assert.equal(await cta.innerText(),baseline);assert.equal(await badge.isVisible(),false);
+    await cta.click();await badge.waitFor({state:'visible'});assert.equal(await cta.innerText(),baseline);assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),2);
+    await page.locator('.bear-lang[data-lang="zh"]').click();await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
+    await test.done('mobile passive network failure and explicit refusal keep native CTA: '+locale);
   }
   assert.equal(unexpectedWrites, 0);
   report.networkWrites = unexpectedWrites;

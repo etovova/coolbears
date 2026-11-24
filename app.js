@@ -72,9 +72,9 @@
   };
 
   // Language persistence is optional; blocked storage must not disable the site.
-  let lang = 'en';
-  try { lang = localStorage.getItem('coolbears_lang') || 'en'; } catch {}
-  if (!tr[lang]) lang = 'en';
+  const preferred = (globalThis.navigator?.languages ?? [globalThis.navigator?.language]).map(tag => String(tag ?? '').toLowerCase().split('-')[0]).find(tag => Object.hasOwn(tr, tag));
+  let lang = preferred || 'en';
+  try { const saved = localStorage.getItem('coolbears_lang'); if (Object.hasOwn(tr, saved)) lang = saved; } catch {}
   let connected = false;
   let wallet = null;
   let walletAddress = '';
@@ -99,7 +99,7 @@
     if (publicMint) { publicMint.render(); return; }
     if (walletBtn) { walletBtn.textContent = connected ? walletAddress.slice(0, 4) + '…' + walletAddress.slice(-4) + '\n' + t('disconnectWallet') : t('connectWallet'); walletBtn.title = walletAddress; }
     if (mintBtn) { mintBtn.textContent = t('prelaunchButton'); mintBtn.disabled = true; }
-    if ($('#minted')) $('#minted').textContent = t('prelaunchStatus');
+
   }
 
   function apply(l) {
