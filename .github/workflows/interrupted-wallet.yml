@@ -1,13 +1,15 @@
-name: Verify interrupted mobile wallet prompt without signing
+name: Verify selected quantity through wallet approval
 on:
   push:
     branches: ['qa/wallet-interruption-v36']
 permissions:
   contents: read
 jobs:
-  recovery:
+  checkout:
     runs-on: ubuntu-latest
-    timeout-minutes: 28
+    timeout-minutes: 20
+    env:
+      QA_WORKER_VERSION: '7e696e27-d7db-40ad-89e8-db55e5d70287'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -17,15 +19,8 @@ jobs:
           node-version: '24.19.0'
       - run: |
           npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
-          node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit firefox
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - name: Check immediate return after wallet opened on the ordinary domain
-        run: QA_REOPEN_IMMEDIATELY=1 node tests/live-wallet-interruption.qa.mjs
-      - name: Check a later return after wallet opened on the ordinary domain
-        run: node tests/live-wallet-interruption.qa.mjs
-      - name: Check restored quantity, a fresh two-item order and slow preparation
-        run: |
-          node tests/mobile-production-regression.qa.mjs
-          QA_FRESH_TWO_ONLY=1 node tests/mobile-production-regression.qa.mjs
-      - name: Retire the unpaid order after two proven unsigned expirations
-        run: node tests/live-unsigned-expiry.qa.mjs
+      - run: QA_ENGINE=chromium QA_INTERRUPTED=1 node tests/live-selected-quantity.qa.mjs
+      - run: QA_ENGINE=webkit node tests/live-selected-quantity.qa.mjs
+      - run: QA_ENGINE=firefox node tests/live-selected-quantity.qa.mjs
