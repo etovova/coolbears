@@ -43,6 +43,17 @@ for(const mode of ['network','bad-gateway','rate-limit','retry-after','wrong-cha
  else{await assert.rejects(test.requireOpen());assert.equal(calls,1);assert.equal(test.state().salesOpen,false);}
  test.dispose();pass('transient-readiness-respects-fresh-proof-and-retry-limits:'+mode);
 }
+// The public readiness endpoint was observed returning two consecutive bare HTTP 503s.
+for(const scenario of ['recovers','stays-down','returns-closed']){
+ let calls=0;const gate=createPublicReadinessClient(config,{origin:config.origin,clock:()=>1000,fetchImpl:async(url,init)=>{
+  assert.equal(init.method,'GET');calls++;
+  if(calls<=2||scenario==='stays-down')return Response.json({status:'blocked',code:'CHECK_UNAVAILABLE'},{status:503});
+  return Response.json(scenario==='returns-closed'?{...base,status:'closed',salesOpen:false}:base);
+ }});
+ if(scenario==='recovers'){assert.equal((await gate.requireOpen()).status,'open');}
+ else{await assert.rejects(gate.requireOpen());assert.equal(gate.state().salesOpen,false);}
+ assert.equal(calls,scenario==='stays-down'?4:3);gate.dispose();pass('two-consecutive-503s:'+scenario);
+}
 for(const reason of ['COOLDOWN','DAILY_LIMIT','PUBLIC_SALE_ACCOUNT_STATE']){
  let attempts=0;const gate=createPublicReadinessClient(config,{origin:config.origin,clock:()=>1000,fetchImpl:async()=>{attempts++;
  if(attempts===1)return new Response(JSON.stringify({...base,status:'unavailable',salesOpen:false}),{headers:{'content-type':'application/json','retry-after':reason==='DAILY_LIMIT'?'86400':'1','x-coolbears-network-verified':reason==='PUBLIC_SALE_ACCOUNT_STATE'?'1':'0','x-coolbears-readiness-reason':reason}});
