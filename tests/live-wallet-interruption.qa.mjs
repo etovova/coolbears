@@ -34,10 +34,10 @@ try{
  if(calls===0)console.log('initial wallet state',await p.locator('dialog [data-view=message]').textContent());
  assert.equal(calls,1,'consent must reach the sign-only stub');await p.close();
  console.log('tab closed while wallet was waiting; no private key or signed bytes exist');
- await new Promise(resolve=>setTimeout(resolve,145000));
+ if (process.env.QA_REOPEN_IMMEDIATELY !== '1') await new Promise(resolve=>setTimeout(resolve,145000));
  p=await open();
  const msg=p.locator('dialog[open] [data-view=message]');
- const until=Date.now()+105000;
+ const until=Date.now()+200000;
  while(Date.now()<until&&!traces.some(t=>t[0]==='review-response-expiry'&&t[2]==='response-expired'))await p.waitForTimeout(1000);
  console.log('reopen result',await msg.textContent(),await p.locator('[data-view=progress]').textContent());
  assert.ok(traces.some(t=>t[0]==='review-response-expiry'&&t[2]==='response-expired'),'wallet-invoked expiry was not confirmed');

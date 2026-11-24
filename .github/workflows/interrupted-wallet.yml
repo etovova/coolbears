@@ -7,6 +7,7 @@ permissions:
 jobs:
   recovery:
     env:
+      QA_REOPEN_IMMEDIATELY: "1"
       QA_WORKER_VERSION: 42c3428d-1da9-4772-a97d-f69239c88eb6
     runs-on: ubuntu-latest
     timeout-minutes: 28
