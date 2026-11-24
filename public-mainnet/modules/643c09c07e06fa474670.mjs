@@ -24,7 +24,7 @@ export function createBuyerSubmissionTransport({origin=globalThis.location?.orig
     const endpoint=origin+'/api/buyer/'+route,controller=new AbortController();let timer,response;
     try{
       response=await Promise.race([fetchImpl(endpoint,{method:'POST',headers:{'content-type':'application/json'},body,signal:controller.signal,
-        redirect:'error',credentials:'omit',cache:'no-store',mode:'same-origin',referrerPolicy:'no-referrer'}),
+        redirect:'error',credentials:'omit',cache:'no-store',mode:'same-origin',referrerPolicy:'strict-origin'}),
         new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new BuyerCheckError('SUBMISSION_TIMEOUT'));},timeoutMs);})]);
       need(!response.redirected&&(!response.url||response.url===endpoint),'SUBMISSION_REDIRECT',502);
       if(route==='review-prewallet-expiry'&&response.status===429){

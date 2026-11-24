@@ -16,7 +16,7 @@ export function createBuyerCheckClient({origin=globalThis.location?.origin,
     const controller=new AbortController();let timer,response;
     try{
       response=await Promise.race([fetchImpl(endpoint,{method:'POST',headers:{'content-type':'application/json'},body,
-        signal:controller.signal,redirect:'error',credentials:'omit',cache:'no-store',mode:'same-origin',referrerPolicy:'no-referrer'}),
+        signal:controller.signal,redirect:'error',credentials:'omit',cache:'no-store',mode:'same-origin',referrerPolicy:'strict-origin'}),
         new Promise((_,reject)=>{timer=setTimeout(()=>{controller.abort();reject(new BuyerCheckError('CHECK_TIMEOUT'));},timeoutMs);})]);
       need(!response.redirected&&(!response.url||response.url===endpoint),'CHECK_REDIRECT',502);
       if(response.status!==200){

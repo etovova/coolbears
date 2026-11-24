@@ -317,8 +317,8 @@ try {
     await page.locator('.bear-lang[data-lang="zh"]').click();await page.reload({waitUntil:'networkidle'});assert.equal(await page.locator('html').getAttribute('lang'),'zh-CN');
     await test.done('mobile passive network failure and explicit refusal keep native CTA: '+locale);
   }
-  if(engine==='chromium'){
-    const test=await open({device:'Pixel 7',wallet:true,readiness:'open',rejectPreparation:true}),{page}=test;
+  {
+    const test=await open({device:engine==='webkit'?'iPhone 13':'Pixel 7',wallet:true,readiness:'open',rejectPreparation:true}),{page}=test;
     const start=async()=>{
       const refusal=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/prepare');
       await page.locator('#mintBtn').click();assert.equal((await refusal).status(),429);
@@ -329,7 +329,14 @@ try {
     const original=await start();assert.equal(original.length,1);
     await page.reload({waitUntil:'networkidle'});assert.deepEqual(await start(),original);
     assert.equal(await page.evaluate(()=>window.__testWallet.signatures),0);
-    await test.done('mobile order survives reload; the same wallet resumes instead of creating a second order, using real browser storage');
+    await page.reload({waitUntil:'networkidle'});
+    await page.locator('#plus').click();
+    const changed=await start();assert.equal(changed.length,2);assert.deepEqual(changed[0],original[0]);
+    assert.equal(await page.locator('#qty').inputValue(),'2');
+    assert.match(await page.locator('[data-view=progress]').textContent(),/0 of 2$/);
+    assert.equal((await page.locator('#total').textContent()).trim(),'0.4');
+    assert.equal(await page.evaluate(()=>window.__testWallet.signatures),0);
+    await test.done('same-quantity empty draft is shared and switching from one NFT to two preserves the new selection');
   }
   assert.equal(unexpectedWrites, 0);
   report.networkWrites = unexpectedWrites;
