@@ -1,0 +1,16 @@
+name: Compare read-only buyer readiness by deployment
+on:
+  push:
+    branches: ['qa/observe-readiness-v35']
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare ordinary and version-pinned HTTP responses
+        run: |
+          node --input-type=module <<'JS'
+          const site='https://coolbears-nfts.com', v=['','7df8574f-ffd6-4312-b8e7-b09b62734e2c','84888283-46b5-429d-aed9-d91ed2739e42'];
+          for(let i=0;i<3;i++){for(const version of v){const headers=version?{'Cloudflare-Workers-Version-Overrides':'coolbears-site-candidate="'+version+'"'}:{};const r=await fetch(site+'/api/buyer/readiness',{headers});const b=await r.json();console.log('READ',i,version||'default',r.status,b.status,b.code,r.headers.get('x-coolbears-network-verified'),r.headers.get('x-coolbears-readiness-reason'),r.headers.get('cf-ray'));}if(i<2)await new Promise(r=>setTimeout(r,9000));}
+          JS
