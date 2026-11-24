@@ -33,7 +33,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   const savedRows=s=>(s.saved??[]).filter(r=>r.buyer===connectedAddress);
   function render(){
     if(disposed)return;dialog.setAttribute('lang',language());const s=snapshot(),closed=s.saleStatus==='closed',sold=s.saleStatus==='sold-out',pending=!!checking||!!s.readiness?.pending;
-    const notice=sold?'sold':closed?'closed':failed&&requested?'unknown':null;
+    const notice=sold?'sold':closed?'closed':failed&&requested&&!pending&&s.saleStatus==='unavailable'&&!s.readiness?.expiredOpen?'unknown':null;
     const badge=$('minted');if(badge){badge.textContent=notice?text(notice):'';const row=badge.parentElement;if(row?.classList?.contains('mint-topline'))row.style.visibility=notice?'visible':'hidden';}
     const card=$('mintBtn');if(card){card.disabled=busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length);card.setAttribute('aria-busy',String(pending||entering));card.textContent=caption();}
     if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}

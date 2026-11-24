@@ -28,7 +28,16 @@ export function createPublicReadinessClient(input,{fetchImpl=globalThis.fetch,cl
         await pause();if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');continue;}
       if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const text=await response.text();if(text.length>8192)throw Error('PUBLIC_READINESS_UNAVAILABLE');
-      const checked=validatePublicReadiness(JSON.parse(text),config,clock());if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');
+      const raw=JSON.parse(text);let checked;
+      try{checked=validatePublicReadiness(raw,config,clock());}catch(error){
+        // Never extend the evidence window. A verified, otherwise canonical response can
+        // arrive just before its timestamp or after its server-side cache lifetime.
+        if(response.headers.get('x-coolbears-network-verified')!=='1')throw error;
+        validatePublicReadiness(raw,config,raw.checkedAt);const now=clock(),ahead=raw.checkedAt-now;
+        if(ahead>0&&ahead<=2000){await new Promise(resolve=>setTimeout(resolve,ahead+20));checked=validatePublicReadiness(raw,config,clock());}
+        else if(attempt===0&&now>=raw.expiresAt&&now-raw.expiresAt<=10000&&!disposed&&epoch===generation){await pause();if(disposed||epoch!==generation)throw error;continue;}
+        else throw error;
+      }if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');
       if(checked.status==='unavailable'&&response.headers.get('x-coolbears-network-verified')==='0'){
         const reason=response.headers.get('x-coolbears-readiness-reason'),seconds=Number(response.headers.get('retry-after'));
         if(attempt<3&&['BUSY','COOLDOWN'].includes(reason)&&Number.isSafeInteger(seconds)&&seconds>=1&&seconds+waited<=45){

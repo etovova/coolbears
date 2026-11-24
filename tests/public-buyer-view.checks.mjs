@@ -89,6 +89,9 @@ try{
  // Losing proof for an unverified order must never advance to signing or silently do nothing.
  await action('close').click();state={...state,scope:null,saved:[],quantity:null,selectedAccount:buyer,canPrepare:false,canQuote:false,canSign:false,salesOpen:false,saleStatus:'unavailable',readiness:{},recheckActions:{},quote:null};emit();
  client.refreshReadiness=async()=>{};await card.click();assert.ok(dialog.open);assert.ok(msg().length>0);assert.equal(counts.sign,sBefore);ok('unverified-fresh-sale-shows-result-and-does-not-create-or-sign');client.prepare=savedPrepare;
+ state={...state,salesOpen:true,saleStatus:'open',readiness:{status:'open'},storageAvailable:true};emit();
+ assert.equal(document.getElementById('minted').textContent,'','old failed check must not survive new verified open state');
+ ok('fresh-confirmation-clears-obsolete-status-unavailable');
  const source=await readFile(new URL('public-mainnet/main.mjs',root));const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,counts,source:{bytes:source.length,sha256:createHash('sha256').update(source).digest('hex')},graph:{bytes:graphBytes.length,sha256:createHash('sha256').update(graphBytes).digest('hex')},
   limitations:['Production public view and complete fixed module graph executed in a small Node VM DOM adapter with trusted synthetic controller ports. Native custody, wallet signatures, RPC and actual browser layout are not attested by these view tests.','Readiness/state gates and genuine browser-native offline instruction planning have separate tests; real account verification remains on the public gateway.']};await writeFile(new URL('../build/public-mainnet/public-buyer-view-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length,counts}));
 }finally{mounted.dispose();loaded.stop();}

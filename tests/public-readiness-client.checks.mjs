@@ -48,5 +48,15 @@ for(const reason of ['COOLDOWN','DAILY_LIMIT','PUBLIC_SALE_ACCOUNT_STATE']){
  if(attempts===1)return new Response(JSON.stringify({...base,status:'unavailable',salesOpen:false}),{headers:{'content-type':'application/json','retry-after':reason==='DAILY_LIMIT'?'86400':'1','x-coolbears-network-verified':reason==='PUBLIC_SALE_ACCOUNT_STATE'?'1':'0','x-coolbears-readiness-reason':reason}});
  return Response.json(base);}});
  if(reason==='COOLDOWN'){await gate.requireOpen();assert.equal(attempts,2);}else{await assert.rejects(gate.requireOpen());assert.equal(attempts,1);}gate.dispose();pass('preserve-gateway-wait-and-daily-budget:'+reason);}
+for(const mode of ['expires-in-transit','small-positive-skew','invalid-identity','excessive-skew','stale-repeatedly']){
+ let t=20000,calls=0;const gate=createPublicReadinessClient(config,{origin:config.origin,clock:()=>t,fetchImpl:async()=>{
+  calls++;const old=mode==='stale-repeatedly'||mode==='expires-in-transit'&&calls===1;
+  if(mode==='small-positive-skew'&&calls===1)setTimeout(()=>{t+=25;},4);
+  const c=old?t-8001:mode==='small-positive-skew'?t+10:mode==='excessive-skew'?t+90000:t-3;
+  return Response.json({...base,checkedAt:c,expiresAt:c+8000,...(mode==='invalid-identity'?{guard:config.collection}:{})},{headers:{'x-coolbears-network-verified':'1'}});
+ }});
+ if(mode==='expires-in-transit'||mode==='small-positive-skew'){assert.equal((await gate.requireOpen()).status,'open');assert.equal(calls,mode==='expires-in-transit'?2:1);}
+ else{await assert.rejects(gate.requireOpen());assert.equal(calls,mode==='stale-repeatedly'?2:1);assert.equal(gate.state().salesOpen,false);}
+ gate.dispose();pass('strict-evidence-window:'+mode);}
 const sources={};for(const name of ['config.mjs','readiness-client.mjs','factory.mjs','main.mjs','style.css']){const bytes=await readFile(new URL('../public-mainnet/'+name,import.meta.url));sources[name]={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
 const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,sources,liveRpcRequests:0,realWalletCalls:0,limitations:['Readiness client/config boundaries were executed with synthetic same-origin Response objects. This does not attest deployed readiness, actual accounts, Chromium, Phantom or a successful purchase.','A separately reviewed public gateway must recheck canonical public accounts before preparation, simulation and sending.']};await writeFile(new URL('../build/public-mainnet/public-readiness-client-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length}));
