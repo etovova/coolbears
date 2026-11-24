@@ -189,8 +189,11 @@ try {
     await page.waitForFunction(address => document.querySelector('#walletBtn').title === address, owner);
     await closed(page);
     // A connected wallet and a stable label do not authorize a mint when readiness fails.
+    await page.evaluate(()=>{window.__qaTap=[];for(const name of ['pointerdown','pointerup','touchend','click'])document.addEventListener(name,e=>{window.__qaTap.push([name,e.target.id||e.target.tagName,scrollY]);},true);});
     await page.locator('#mintBtn').click();
-    await page.waitForFunction(()=>document.querySelector('#minted').textContent==='STATUS UNAVAILABLE');
+    try{await page.waitForFunction(()=>document.querySelector('#minted').textContent==='STATUS UNAVAILABLE');}catch(e){
+      console.log('QA mobile click diagnostic',device,await page.evaluate(()=>({clicks:window.__qaTap,status:document.querySelector('#minted').textContent,button:document.querySelector('#mintBtn').outerHTML,dialog:document.querySelector('dialog').open,scrollY,lang:document.documentElement.lang})));throw e;
+    }
     assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(await page.evaluate(()=>window.__testWallet.signatures),0);
 
     await page.evaluate(address => window.__testWallet.provider.emit('accountChanged', address), other);
