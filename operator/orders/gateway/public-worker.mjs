@@ -115,7 +115,7 @@ export function makePublicBuyerGateway(input,{releaseProfile}={}){
       this.clock=clock;this.pause=pause;this.busy=false;this.readinessPending=null;
     }
     async readiness(request){
-      const respond=({value,networkVerified})=>reply(200,value,{'x-coolbears-network-verified':networkVerified?'1':'0'});
+      const respond=({value,networkVerified,reason,after})=>reply(200,value,{'x-coolbears-network-verified':networkVerified?'1':'0',...(reason?{'x-coolbears-readiness-reason':reason}:{}),...(integer(after)&&after>0?{'retry-after':String(after)}:{})});
       const cached=await this.storage.get(readinessKey),now=this.clock();
       const canonical=cached&&integer(cached.checkedAt)&&['closed','open','sold-out'].includes(cached.status)
         ?readinessReply(cached.status,cached.checkedAt):null;
@@ -150,8 +150,11 @@ export function makePublicBuyerGateway(input,{releaseProfile}={}){
           const result=readinessReply(state.status==='public'?'open':state.status,this.clock());
           await this.storage.put(readinessKey,result);
           return {value:result,networkVerified:true};
-        }catch(error){return {value:readinessReply('unavailable',this.clock()),
-          networkVerified:error instanceof BuyerCheckError&&error.code==='PUBLIC_SALE_ACCOUNT_STATE'};}
+        }catch(error){
+          const known=error instanceof BuyerCheckError,reason=known&&['BUSY','COOLDOWN','DAILY_LIMIT','PUBLIC_SALE_ACCOUNT_STATE'].includes(error.code)?error.code:'UPSTREAM_UNAVAILABLE';
+          return {value:readinessReply('unavailable',this.clock()),networkVerified:reason==='PUBLIC_SALE_ACCOUNT_STATE',reason,
+            after:known&&['BUSY','COOLDOWN','DAILY_LIMIT'].includes(reason)&&integer(error.retryAfter)?error.retryAfter:undefined};
+        }
         finally{
           if(reserved)try{await this.storage.transaction(async tx=>{const v=ledger(await tx.get(ledgerKey),this.clock(),network);v.holdUntil=0;await tx.put(ledgerKey,v);});}catch{}
           if(own)this.busy=false;

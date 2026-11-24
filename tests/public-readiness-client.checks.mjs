@@ -43,5 +43,10 @@ for(const mode of ['network','bad-gateway','rate-limit','retry-after','wrong-cha
  else{await assert.rejects(test.requireOpen());assert.equal(calls,1);assert.equal(test.state().salesOpen,false);}
  test.dispose();pass('transient-readiness-respects-fresh-proof-and-retry-limits:'+mode);
 }
+for(const reason of ['COOLDOWN','DAILY_LIMIT','PUBLIC_SALE_ACCOUNT_STATE']){
+ let attempts=0;const gate=createPublicReadinessClient(config,{origin:config.origin,clock:()=>1000,fetchImpl:async()=>{attempts++;
+ if(attempts===1)return new Response(JSON.stringify({...base,status:'unavailable',salesOpen:false}),{headers:{'content-type':'application/json','retry-after':reason==='DAILY_LIMIT'?'86400':'1','x-coolbears-network-verified':reason==='PUBLIC_SALE_ACCOUNT_STATE'?'1':'0','x-coolbears-readiness-reason':reason}});
+ return Response.json(base);}});
+ if(reason==='COOLDOWN'){await gate.requireOpen();assert.equal(attempts,2);}else{await assert.rejects(gate.requireOpen());assert.equal(attempts,1);}gate.dispose();pass('preserve-gateway-wait-and-daily-budget:'+reason);}
 const sources={};for(const name of ['config.mjs','readiness-client.mjs','factory.mjs','main.mjs','style.css']){const bytes=await readFile(new URL('../public-mainnet/'+name,import.meta.url));sources[name]={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
 const proof={version:1,passed:true,checksPassed:cases.length,checksFailed:0,cases,sources,liveRpcRequests:0,realWalletCalls:0,limitations:['Readiness client/config boundaries were executed with synthetic same-origin Response objects. This does not attest deployed readiness, actual accounts, Chromium, Phantom or a successful purchase.','A separately reviewed public gateway must recheck canonical public accounts before preparation, simulation and sending.']};await writeFile(new URL('../build/public-mainnet/public-readiness-client-validation.SAFE.json',import.meta.url),JSON.stringify(proof,null,2)+'\n');console.log(JSON.stringify({passed:true,checks:cases.length}));

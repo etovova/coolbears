@@ -21,7 +21,7 @@ export function createPublicReadinessClient(input,{fetchImpl=globalThis.fetch,cl
     if(disposed)throw Error('PUBLIC_READINESS_UNAVAILABLE');if(pending)return pending;
     const epoch=++generation;evidence=blocked();
     pending=(async()=>{try{
-      for(let attempt=0;attempt<2;attempt++){
+      let waited=0;for(let attempt=0;attempt<4;attempt++){
       let response;try{response=await fetchImpl(config.origin+'/api/buyer/readiness',{method:'GET',credentials:'omit',cache:'no-store',redirect:'error',headers:{accept:'application/json'},signal:AbortSignal.timeout(10000)});}catch(error){
         if(!attempt&&!disposed&&epoch===generation){await pause();if(disposed||epoch!==generation)throw error;continue;}throw error;}
       if(!attempt&&[502,503,504].includes(response.status)&&!response.headers.has('retry-after')){
@@ -29,6 +29,13 @@ export function createPublicReadinessClient(input,{fetchImpl=globalThis.fetch,cl
       if(!response.ok||!/^application\/json(?:;|$)/i.test(response.headers.get('content-type')??''))throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const text=await response.text();if(text.length>8192)throw Error('PUBLIC_READINESS_UNAVAILABLE');
       const checked=validatePublicReadiness(JSON.parse(text),config,clock());if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');
+      if(checked.status==='unavailable'&&response.headers.get('x-coolbears-network-verified')==='0'){
+        const reason=response.headers.get('x-coolbears-readiness-reason'),seconds=Number(response.headers.get('retry-after'));
+        if(attempt<3&&['BUSY','COOLDOWN'].includes(reason)&&Number.isSafeInteger(seconds)&&seconds>=1&&seconds+waited<=45){
+          waited+=seconds;await new Promise(resolve=>setTimeout(resolve,seconds*1000+200));
+          if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');continue;
+        }
+      }
       if(attempt===0&&checked.status==='unavailable'&&response.headers.get('x-coolbears-network-verified')==='0'&&!response.headers.has('retry-after')){
         await new Promise(resolve=>setTimeout(resolve,450));if(disposed||epoch!==generation)throw Error('PUBLIC_READINESS_UNAVAILABLE');continue;
       }
