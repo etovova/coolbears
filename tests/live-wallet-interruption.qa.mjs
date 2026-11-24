@@ -25,6 +25,16 @@ await ctx.addInitScript(()=>{const address="FNytKprG3JukM81svBhCrgHAEHht3oUgpXZF
 const ids=page=>page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('coolbears:private-buyer-index:')))).orders.map(o=>o.id));
 const quote='dialog[open] [data-view=quote] dl', action='dialog[open] [data-action=mint]';
 async function open(){const p=await ctx.newPage();await p.goto(origin,{waitUntil:'domcontentloaded',timeout:60000});await p.locator('dialog.public-mint-dialog').waitFor({state:'attached',timeout:70000});await p.locator('#mintBtn').tap();return p;}
+async function orderEvidence(page,id) {
+ return page.evaluate(async id=>{
+  const db=await new Promise((ok,no)=>{const q=indexedDB.open('coolbears-buyer-custody-v1');q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error);});
+  try {const tx=db.transaction(['orders','signing'],'readonly');
+   const all=store=>new Promise((ok,no)=>{const q=tx.objectStore(store).openCursor(),rows=[];q.onsuccess=()=>{const c=q.result;if(!c){ok(rows);return;}
+    const key=Array.isArray(c.key)?c.key[0]:c.key;if(JSON.parse(key).id===id)rows.push(c.value);c.continue();};q.onerror=()=>no(q.error);});
+   const [orders,signing]=await Promise.all([all('orders'),all('signing')]);return {orders,signing};
+  } finally {db.close();}
+ },id);
+}
 try{
   const proof=await ctx.request.get(origin+'/api/buyer/deployment',{timeout:30000});
   assert.equal(proof.status(),200);assert.equal((await proof.json()).buildSha256,'e916f0275cf10e4953f8e9c80558d0397394e9fb86e522e18ab3e984caa7f5d9');
@@ -34,19 +44,19 @@ try{
  await p.waitForTimeout(1150);await p.locator(action).tap();
  for(let i=0;i<30&&calls===0;i++)await p.waitForTimeout(500);
  if(calls===0)console.log('initial wallet state',await p.locator('dialog [data-view=message]').textContent());
- assert.equal(calls,1,'consent must reach the sign-only stub');await p.close();
+ assert.equal(calls,1,'consent must reach the sign-only stub');
+ const before=await orderEvidence(p,order[0]);
+ assert.deepEqual(before.signing.map(x=>x.phase),['claimed','ready','wallet-claimed']);
+ assert.equal(before.orders[0].items[0].attempts[0].signature,null);
+ assert.equal(before.signing[1].record.kind,'coolbears-buyer-unsigned');await p.close();
  console.log('tab closed while wallet was waiting; no private key or signed bytes exist');
  if (process.env.QA_REOPEN_IMMEDIATELY !== '1') await new Promise(resolve=>setTimeout(resolve,145000));
  p=await open();
- const msg=p.locator('dialog[open] [data-view=message]');
- const until=Date.now()+200000;
- while(Date.now()<until&&!traces.some(t=>t[0]==='review-response-expiry'&&t[2]==='response-expired'))await p.waitForTimeout(1000);
- console.log('reopen result',await msg.textContent(),await p.locator('[data-view=progress]').textContent());
- assert.ok(traces.some(t=>t[0]==='review-response-expiry'&&t[2]==='response-expired'),'wallet-invoked expiry was not confirmed');
- assert.deepEqual(await ids(p),order);
- assert.equal(calls,1);assert.equal(blocked,0);await p.waitForTimeout(1200);await p.locator(action).tap();
- await p.locator(quote).waitFor({timeout:60000});assert.deepEqual(await ids(p),order);
- assert.equal(calls,1);assert.equal(blocked,0);
- assert.ok(traces.some(t=>t[0]==='replace-response-expiry'&&t[2]==='replacement-prepared'));
- console.log('PASS: opened wallet, closed tab, recovered original order and fresh amount, one prompt, zero signed or sent.');
+ await p.locator(quote).waitFor({timeout:90000});const now=await ids(p);
+ assert.equal(now.length,2);assert.equal(now[0],order[0]);assert.notEqual(now[1],order[0]);
+ assert.deepEqual(await orderEvidence(p,order[0]),before);
+ const fresh=await orderEvidence(p,now[1]);assert.deepEqual(fresh.signing.map(x=>x.phase),['claimed','ready']);
+ assert.equal(fresh.orders[0].quantity,1);assert.equal(fresh.orders[0].items[0].attempts[0].signature,null);
+ assert.equal(calls,1);assert.equal(blocked,0);assert.ok(traces.every(x=>x[0]!=='send'));
+ console.log('PASS: interrupted sign-only prompt retained without signed response or send, new quote is ready, no second wallet request.');
 }finally{await browser.close();}

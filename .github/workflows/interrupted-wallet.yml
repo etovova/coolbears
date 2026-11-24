@@ -9,6 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      QA_REOPEN_IMMEDIATELY: "1"
       QA_WORKER_VERSION: 2d6178ea-ae5d-47db-ae7f-1022f39a7af6
     steps:
       - uses: actions/checkout@v4
@@ -26,5 +27,5 @@ jobs:
         run: QA_ENGINE=chromium QA_INTERRUPTED=1 node tests/live-selected-quantity.qa.mjs
       - if: ${{ !cancelled() }}
         run: QA_ENGINE=firefox node tests/live-selected-quantity.qa.mjs
-      - name: Close the phone tab during the wallet request and restore the same order
+      - name: Close the phone tab during the wallet request and verify consent before a new purchase
         run: node tests/live-wallet-interruption.qa.mjs
