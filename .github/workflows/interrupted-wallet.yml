@@ -6,9 +6,6 @@ permissions:
   contents: read
 jobs:
   recovery:
-    env:
-      QA_REOPEN_IMMEDIATELY: "1"
-      QA_WORKER_VERSION: 42c3428d-1da9-4772-a97d-f69239c88eb6
     runs-on: ubuntu-latest
     timeout-minutes: 28
     steps:
@@ -22,5 +19,13 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - name: Recover after closing the tab during an unanswered wallet prompt
+      - name: Check immediate return after wallet opened on the ordinary domain
+        run: QA_REOPEN_IMMEDIATELY=1 node tests/live-wallet-interruption.qa.mjs
+      - name: Check a later return after wallet opened on the ordinary domain
         run: node tests/live-wallet-interruption.qa.mjs
+      - name: Check restored quantity, a fresh two-item order and slow preparation
+        run: |
+          node tests/mobile-production-regression.qa.mjs
+          QA_FRESH_TWO_ONLY=1 node tests/mobile-production-regression.qa.mjs
+      - name: Retire the unpaid order after two proven unsigned expirations
+        run: node tests/live-unsigned-expiry.qa.mjs
