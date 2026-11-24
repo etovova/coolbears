@@ -5,7 +5,7 @@
 
   const tr = {
     en: {
-      prelaunchStatus:'PUBLIC MINT', prelaunchButton:'CONNECT WALLET TO MINT', mintFeeNote:'The price shown is for the NFT. Network fees and creation costs are shown before you sign.', navMint:'Mint', navReveal:'Reveal', navCollection:'Collection', navRarity:'Rarity', navFaq:'FAQ',
+      prelaunchStatus:'PUBLIC MINT', prelaunchButton:'MINT', mintFeeNote:'Mint saves this order in this browser. You’ll see the total before signing.', navMint:'Mint', navReveal:'Reveal', navCollection:'Collection', navRarity:'Rarity', navFaq:'FAQ',
       connectWallet:'Connect wallet', connected:'Wallet connected', disconnectWallet:'Disconnect wallet', walletDisconnected:'Wallet disconnected.', disconnectFailed:'Could not disconnect. Please try again.', walletLoading:'Opening wallet…', walletFailed:'Could not open wallets. Please try again.', walletChoose:'Choose a wallet in the window.',
       kicker:'10,000 UNIQUE BEARS • BUILT ON Solana',
       heroLine1:'EVERYONE GETS A BEAR.', heroLine2:'NOT EVERYONE GETS A LEGEND.',
@@ -14,7 +14,7 @@
       burst:'COOL!', speech:'WHO DID YOU GET?',
       disclaimer1:'NO GUARANTEED VALUE.', disclaimer2:'NO PROMISE OF FINANCIAL RETURNS.', disclaimer3:'NO CELEBRITY BACKING.', disclaimer4:'DON’T BUY EXPECTING PROFIT.', disclaimer5:'JUST BEARS. JUST ART. JUST FOR FUN.',
       mintKicker:'PRIMARY MINT', mintTitle:'MINT COOLBEARS', mintText:'Choose between 1 and 50 NFTs. There is no lifetime wallet limit.',
-      mintNoteLine:'NFTs are tradable immediately after mint.', mintedLabel:'MINT STATUS', quantity:'QUANTITY', total:'NFT PRICE', connectToMint:'CONNECT WALLET TO MINT', mintN:'MINT {n} NFT', mintFoot:'Up to 50 per order • no wallet limit',
+      mintNoteLine:'NFTs are tradable immediately after mint.', mintedLabel:'MINT STATUS', quantity:'QUANTITY', total:'NFT PRICE', connectToMint:'MINT', mintN:'MINT {n} NFT', mintFoot:'Up to 50 per order • no wallet limit',
       beforeReveal:'BEFORE REVEAL', revealKicker:'MYSTERY FIRST', revealTitle:'YOUR BEAR<br>IS HIDING.', revealText:'After mint, every NFT shows the official CoolBears GIF. Traits and rarity stay hidden, but the NFT can still be sold, transferred or gifted.',
       revealLabel:'REVEAL', revealDate:'JANUARY 1, 2027', revealFoot:'Reveal becomes available on January 1, 2027. After the reveal transaction, the same NFT shows its final artwork and traits. No reroll.',
       collectionKicker:'THE COLLECTION', collectionTitle:'DIFFERENT BEARS.<br>SAME VIBE.', collectionText:'10,000 unique combinations built from hand-drawn traits. Clean, weird, rare, legendary — every bear exists once.',
@@ -27,7 +27,7 @@
       pageTitle:'CoolBears — 10,000 Bears on Solana', pageDescription:'CoolBears — 10,000 unique bears on Solana. Public mint: 0.2 SOL per NFT.'
     },
     ru: {
-      prelaunchStatus:'ПУБЛИЧНЫЙ МИНТ', prelaunchButton:'ПОДКЛЮЧИТЬ КОШЕЛЁК', mintFeeNote:'Здесь указана цена NFT. Комиссию сети и расходы на создание ты увидишь до подписи.', navMint:'Минт', navReveal:'Раскрытие', navCollection:'Коллекция', navRarity:'Редкость', navFaq:'Вопросы',
+      prelaunchStatus:'ПУБЛИЧНЫЙ МИНТ', prelaunchButton:'МИНТ', mintFeeNote:'При нажатии «Минт» заказ сохранится в этом браузере. Полную сумму ты увидишь до подписи.', navMint:'Минт', navReveal:'Раскрытие', navCollection:'Коллекция', navRarity:'Редкость', navFaq:'Вопросы',
       connectWallet:'Подключить кошелёк', connected:'Кошелёк подключён', disconnectWallet:'Отключить кошелёк', walletDisconnected:'Кошелёк отключён.', disconnectFailed:'Не удалось отключить кошелёк. Попробуй ещё раз.', walletLoading:'Открываю кошелёк…', walletFailed:'Не удалось открыть кошельки. Нажми ещё раз.', walletChoose:'Выбери кошелёк в открывшемся окне.',
       kicker:'10 000 УНИКАЛЬНЫХ МЕДВЕДЕЙ • НА Solana',
       heroLine1:'МЕДВЕДЯ ПОЛУЧИТ КАЖДЫЙ.', heroLine2:'ЛЕГЕНДУ — НЕ КАЖДЫЙ.',
@@ -36,7 +36,7 @@
       burst:'КРУТО!', speech:'КТО ТЕБЕ ПОПАДЁТСЯ?',
       disclaimer1:'БЕЗ ГАРАНТИРОВАННОЙ ЦЕННОСТИ.', disclaimer2:'БЕЗ ОБЕЩАНИЙ ФИНАНСОВОЙ ДОХОДНОСТИ.', disclaimer3:'БЕЗ ПОДДЕРЖКИ ЗНАМЕНИТОСТЕЙ.', disclaimer4:'НЕ ПОКУПАЙ В ОЖИДАНИИ ПРИБЫЛИ.', disclaimer5:'ПРОСТО МЕДВЕДИ. ПРОСТО АРТ. ПРОСТО ДЛЯ УДОВОЛЬСТВИЯ.',
       mintKicker:'ПЕРВИЧНЫЙ МИНТ', mintTitle:'МИНТ COOLBEARS', mintText:'Выбери от 1 до 50 NFT за одну покупку. Общего лимита на кошелёк нет.',
-      mintNoteLine:'NFT можно перепродавать сразу после минта.', mintedLabel:'СТАТУС МИНТА', quantity:'КОЛИЧЕСТВО', total:'СТОИМОСТЬ NFT', connectToMint:'ПОДКЛЮЧИТЬ КОШЕЛЁК', mintN:'ЗАМИНТИТЬ {n} NFT', mintFoot:'До 50 за покупку • без лимита на кошелёк',
+      mintNoteLine:'NFT можно перепродавать сразу после минта.', mintedLabel:'СТАТУС МИНТА', quantity:'КОЛИЧЕСТВО', total:'СТОИМОСТЬ NFT', connectToMint:'МИНТ', mintN:'ЗАМИНТИТЬ {n} NFT', mintFoot:'До 50 за покупку • без лимита на кошелёк',
       beforeReveal:'ДО РАСКРЫТИЯ', revealKicker:'СНАЧАЛА ТАЙНА', revealTitle:'ТВОЙ МЕДВЕДЬ<br>ПОКА СКРЫТ.', revealText:'После минта каждый NFT показывает официальный GIF CoolBears. Характеристики и редкость скрыты, но NFT уже можно продавать, передавать или дарить.',
       revealLabel:'РАСКРЫТИЕ', revealDate:'1 ЯНВАРЯ 2027', revealFoot:'Раскрытие разрешено с 1 января 2027 года. После операции раскрытия тот же NFT покажет финального медведя и его атрибуты. Без повторного выбора.',
       collectionKicker:'КОЛЛЕКЦИЯ', collectionTitle:'РАЗНЫЕ МЕДВЕДИ.<br>ОДИН ХАРАКТЕР.', collectionText:'10 000 уникальных сочетаний из нарисованных характеристик. Обычные, странные, редкие и легендарные — каждый медведь существует только один раз.',
@@ -49,7 +49,7 @@
       pageTitle:'CoolBears — 10 000 медведей на Solana', pageDescription:'CoolBears — 10 000 уникальных медведей на Solana. Цена минта: 0,2 SOL за NFT.'
     },
     zh: {
-      prelaunchStatus:'公开铸造', prelaunchButton:'连接钱包开始铸造', mintFeeNote:'此处显示 NFT 价格。签名前会显示网络费用和创建成本。', navMint:'铸造', navReveal:'揭晓', navCollection:'系列', navRarity:'稀有度', navFaq:'常见问题',
+      prelaunchStatus:'公开铸造', prelaunchButton:'铸造', mintFeeNote:'点击铸造会在此浏览器保存订单。签名前将显示总额。', navMint:'铸造', navReveal:'揭晓', navCollection:'系列', navRarity:'稀有度', navFaq:'常见问题',
       connectWallet:'连接钱包', connected:'钱包已连接', disconnectWallet:'断开钱包', walletDisconnected:'钱包已断开。', disconnectFailed:'无法断开钱包，请重试。', walletLoading:'正在打开钱包…', walletFailed:'无法打开钱包，请重试。', walletChoose:'请在窗口中选择钱包。',
       kicker:'10,000 只独特酷熊 • 基于 Solana',
       heroLine1:'每个人都能得到一只熊。', heroLine2:'但不是每个人都能得到传奇。',
@@ -58,7 +58,7 @@
       burst:'酷！', speech:'你会得到哪一只？',
       disclaimer1:'不保证任何价值。', disclaimer2:'不承诺任何经济回报。', disclaimer3:'没有名人背书。', disclaimer4:'不要以获利为目的购买。', disclaimer5:'只是熊。只是艺术。只是为了好玩。',
       mintKicker:'首次铸造', mintTitle:'铸造 COOLBEARS', mintText:'每次可选择 1–50 个 NFT。钱包没有总数量限制。',
-      mintNoteLine:'NFT 铸造后即可立即交易。', mintedLabel:'铸造状态', quantity:'数量', total:'NFT 价格', connectToMint:'连接钱包开始铸造', mintN:'铸造 {n} 个 NFT', mintFoot:'每次最多 50 个 • 钱包无总量限制',
+      mintNoteLine:'NFT 铸造后即可立即交易。', mintedLabel:'铸造状态', quantity:'数量', total:'NFT 价格', connectToMint:'铸造', mintN:'铸造 {n} 个 NFT', mintFoot:'每次最多 50 个 • 钱包无总量限制',
       beforeReveal:'揭晓之前', revealKicker:'先保持神秘', revealTitle:'你的熊<br>还在隐藏。', revealText:'铸造后，每个 NFT 都显示官方 CoolBears GIF。属性和稀有度保持隐藏，但 NFT 已可出售、转移或赠送。', revealLabel:'揭晓', revealDate:'2027 年 1 月 1 日', revealFoot:'从 2027 年 1 月 1 日 起可执行揭晓。揭晓交易完成后，同一个 NFT 显示最终图像和属性，不会重新随机。',
       collectionKicker:'系列', collectionTitle:'不同的熊。<br>同一种感觉。', collectionText:'10,000 个由手绘属性组合而成的独特 CoolBears。普通、奇怪、稀有、传奇——每只熊都独一无二。',
       rarityKicker:'揭晓之后', rarityTitle:'真正有意义的<br>稀有度。', rarityText:'每个 NFT 都会根据最终属性在全部 10,000 件作品中的真实出现频率计算稀有度分数。',

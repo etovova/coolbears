@@ -12,41 +12,45 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
   const $=id=>document.getElementById(id),text=key=>(words[language()]??words.en)[key]??words.en[key];
   if(!document.querySelector('link[data-public-mint-css]')){const link=document.createElement('link');link.rel='stylesheet';link.href=config.origin+'/public-mainnet/style.css';link.dataset.publicMintCss='';document.head.append(link);}
   const dialog=document.createElement('dialog');dialog.className='public-mint-dialog';dialog.setAttribute('translate','no');dialog.setAttribute('aria-labelledby','publicMintTitle');
-  dialog.innerHTML='<div class="public-mint-head"><h2 id="publicMintTitle"></h2><button data-action="close" type="button"></button></div><p data-view="network">Solana Mainnet · 0.2 SOL / NFT</p><p data-view="message" role="status" aria-live="polite"></p><div data-view="wallets"></div><div data-view="purchase"><button type="button" data-action="connect"></button><p data-view="storageNote"></p><label data-view="persistLabel"><input data-input="persist" type="checkbox"><span></span></label><div data-view="saved"><label></label><select aria-label="Saved purchases"></select><button data-action="restore" type="button"></button></div><p data-view="progress"></p><button data-action="create" type="button"></button><div data-view="quote"></div><label data-view="costConsent"><input data-input="cost" type="checkbox"><span></span></label><label data-view="feeConsent"><input data-input="fee" type="checkbox"><span></span></label><p data-view="failedFee"></p><div class="public-mint-actions"></div></div>';
-  document.body.append(dialog);const view=name=>dialog.querySelector(`[data-view="${name}"]`),input=name=>dialog.querySelector(`[data-input="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
-  const savedButton=document.createElement('button');savedButton.type='button';savedButton.dataset.savedPurchase='';savedButton.className='btn btn-outline btn-full';savedButton.hidden=true;$('mintBtn')?.insertAdjacentElement('afterend',savedButton);
-  const refreshButton=document.createElement('button');refreshButton.type='button';view('message').insertAdjacentElement('afterend',refreshButton);
-  const actions=['prepare','quote','sign','send','check','save','nativeRecovery','reviewExpiry','reviewReplacement','prepareReplacement','pause','resume','newOrder'];
-  for(const name of actions){const node=document.createElement('button');node.type='button';node.dataset.action=name;dialog.querySelector('.public-mint-actions').append(node);}
-  let client,disposed=false,busy=false,message=null,selectedWallet=null,connectedAddress='',timer,quoteId=null,persisted=false,storageUnavailable=false,observer=null,checking=null,failed=false,requested=false,entering=false,walletStep=null,choosingSaved=false;
+  dialog.innerHTML='<div class="public-mint-head"><h2 id="publicMintTitle"></h2><button data-action="close" type="button">×</button></div><p data-view="network">Solana Mainnet · 0.2 SOL / NFT</p><p data-view="message" role="status" aria-live="polite"></p><div data-view="wallets"></div><div data-view="purchase"><div data-view="saved"><select aria-label="Saved purchases"></select></div><p data-view="progress"></p><div data-view="quote"></div><button data-action="mint" type="button"></button></div>';
+  document.body.append(dialog);
+  const view=name=>dialog.querySelector(`[data-view="${name}"]`),button=name=>dialog.querySelector(`[data-action="${name}"]`);
+  const caption=()=>({en:'MINT',ru:'МИНТ',zh:'铸造'})[language()]??'MINT';
+  let client,disposed=false,busy=false,message=null,selectedWallet=null,connectedAddress='',timer,storageUnavailable=false,observer=null,checking=null,failed=false,requested=false,entering=false,walletStep=null;
+  let session=0,review=null,picking=false,phase='',recoveryTimer,recoveryCount=0;
+  function clearReview(){review=null;}
+  function dismiss(){session++;clearReview();picking=false;clearTimeout(recoveryTimer);}
+  dialog.addEventListener('close',dismiss);
+  button('close').onclick=()=>dialog.close();
   const emitWallet=address=>{connectedAddress=address??'';onWalletChange(connectedAddress);};
   function snapshot(){try{const state=client?.state()??{};storageUnavailable=state.storageAvailable===false;return state;}catch{storageUnavailable=true;return{busy:false,salesOpen:false,saleStatus:'unavailable',saved:[]};}}
+  const completed=s=>!!s.quantity&&s.verified===s.quantity;
+  const allowed=(s,k)=>s[k]===true||(s.readiness?.expiredOpen===true&&s.recheckActions?.[k]===true);
+  const quoteOf=s=>s.quote??s.approvedQuote;
+  function currentReview(s){const q=quoteOf(s);return !!(review&&q&&q.quoteId===review.id&&q.budget.totalLamports===review.total&&s.scope?.id===review.scope&&s.scope?.buyer===connectedAddress&&s.currentItemIndex===review.item&&(!q.expiresAt||q.expiresAt>Date.now()));}
+  const savedRows=s=>(s.saved??[]).filter(r=>r.buyer===connectedAddress);
   function render(){
-    if(disposed)return;dialog.setAttribute('lang',language());const state=snapshot(),open=state.salesOpen===true,closed=state.saleStatus==='closed',sold=state.saleStatus==='sold-out',pending=!!checking||!!state.readiness?.pending;
-    const connected=!!connectedAddress,notice=sold?'sold':closed?'closed':failed&&requested?'unknown':null;
-    const badge=$('minted');if(badge){const value=notice?text(notice):'';if(badge.textContent!==value)badge.textContent=value;const row=badge.parentElement;if(row?.classList?.contains('mint-topline'))row.style.visibility=notice?'visible':'hidden';}
-    const cta=$('mintBtn');if(cta){cta.disabled=closed||sold||busy||entering||storageUnavailable;cta.setAttribute('aria-busy',String(pending||entering));const value=closed||sold?text(notice):connected?text('mint').replace('{n}',String($('qty')?.value??1)):text('connectMint');if(cta.textContent!==value)cta.textContent=value;}
-    if($('walletBtn')){$('walletBtn').textContent=connected?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
-    savedButton.textContent=text('restore');savedButton.hidden=!state.saved?.length;
-    refreshButton.textContent=({en:'Try again',ru:'Повторить',zh:'重试'})[language()]??'Try again';refreshButton.disabled=busy||pending;
-    $('publicMintTitle').textContent=text('title');button('close').textContent=text('close');
-    for(const name of ['create','restore',...actions])button(name).textContent=text(name);
-    view('storageNote').textContent=text('persistNote');view('persistLabel').querySelector('span').textContent=text('persistConsent');view('costConsent').querySelector('span').textContent=text('costConsent');view('feeConsent').querySelector('span').textContent=text('feeConsent');view('saved').querySelector('label').textContent=text('saved');
-    const expired=state.readiness?.expiredOpen===true,offered=k=>state[k]===true||(expired&&state.recheckActions?.[k]===true);
-    const messageKey=storageUnavailable?'unavailable':walletStep??(pending?'checking':busy?'waiting':message??(state.quantity&&state.verified===state.quantity?'done':(state.paymentUncertain??state.unknown)?'pending':sold?'sold':closed?'closed':open?(connected?'ready':'needWallet'):expired?'recheck':'unknown'));
-    const activeOrder=!!(state.scope&&state.quantity);view('message').hidden=messageKey==='recheck'||(activeOrder&&messageKey==='ready');view('storageNote').hidden=activeOrder||persisted;view('message').textContent=messageKey==='recheck'?'':text(messageKey);refreshButton.hidden=!!walletStep||pending||!failed;
-    button('connect').textContent=text('connect');button('connect').hidden=connected||!(open||expired);button('connect').disabled=busy||pending||storageUnavailable;
-    view('progress').textContent=state.quantity?text('progress').replace('{done}',String(state.verified??0)).replace('{total}',String(state.quantity)):'';
-    const savedSelect=view('saved').querySelector('select'),prior=savedSelect.value;savedSelect.replaceChildren();for(const [index,row]of(state.saved??[]).entries()){const option=document.createElement('option');option.value=row.id;option.textContent=`${text('order')} ${index+1} · ${row.buyer.slice(0,4)}…${row.buyer.slice(-4)}`;savedSelect.append(option);}if([...savedSelect.options].some(option=>option.value===prior))savedSelect.value=prior;view('saved').hidden=!state.saved?.length||(activeOrder&&!choosingSaved);button('restore').disabled=busy||state.busy===true;
-    view('persistLabel').hidden=activeOrder||persisted;button('create').hidden=!!state.scope;button('create').disabled=busy||pending||(!persisted&&!input('persist').checked)||!offered('canCreate');
-    const capabilities={prepare:'canPrepare',quote:'canQuote',sign:'canSign',send:'canSend',check:'canRecover',save:'canRecoverWalletResponse',nativeRecovery:'canRecoverNative',reviewExpiry:'canReviewExpiry',reviewReplacement:'canReplace',prepareReplacement:'canPrepareReplacement',pause:'canPause',resume:'canResume',newOrder:'canStartNew'};
-    for(const name of actions){button(name).hidden=!offered(capabilities[name]);button(name).disabled=busy||state.busy===true;}
-    const quote=state.quote??state.approvedQuote;if(quote?.quoteId!==quoteId){quoteId=quote?.quoteId??null;input('cost').checked=false;}view('quote').replaceChildren();
-    if(quote){const heading=document.createElement('h3');heading.textContent=text('cost');view('quote').append(heading);const list=document.createElement('dl');for(const[label,key]of[['price','unitPriceLamports'],['fee','networkFeeLamports'],['rent','assetRentLamports'],['protocol','protocolChargeLamports'],['total','totalLamports'],['projection','projectedOrderTotalLamports']]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=text(label);dd.textContent=exactSol(quote.budget[key])+' SOL';list.append(dt,dd);}const note=document.createElement('p');note.textContent=text('estimateNote');view('quote').append(list,note);}
-    view('costConsent').hidden=!quote;button('sign').disabled=button('sign').disabled||!input('cost').checked;button('send').disabled=button('send').disabled||!input('cost').checked;
-    view('failedFee').textContent=state.failedFeeLamports?`${text('failedFee')}: ${exactSol(state.failedFeeLamports)} SOL`:'';view('feeConsent').hidden=!state.failedFeeLamports;button('reviewReplacement').disabled=button('reviewReplacement').disabled||!!state.failedFeeLamports&&!input('fee').checked;
+    if(disposed)return;dialog.setAttribute('lang',language());const s=snapshot(),closed=s.saleStatus==='closed',sold=s.saleStatus==='sold-out',pending=!!checking||!!s.readiness?.pending;
+    const notice=sold?'sold':closed?'closed':failed&&requested?'unknown':null;
+    const badge=$('minted');if(badge){badge.textContent=notice?text(notice):'';const row=badge.parentElement;if(row?.classList?.contains('mint-topline'))row.style.visibility=notice?'visible':'hidden';}
+    const card=$('mintBtn');if(card){card.disabled=busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length);card.setAttribute('aria-busy',String(pending||entering));card.textContent=caption();}
+    if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
+    $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));button('mint').textContent=caption();
+    const key=storageUnavailable?'unavailable':walletStep??(busy?'waiting':message??(completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:null));
+    view('message').textContent=key?text(key):'';view('message').hidden=!key;
+    const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;
+    const select=view('saved').querySelector('select');view('saved').hidden=!picking;
+    if(picking){select.setAttribute('aria-label',text('saved'));const prev=select.value;select.replaceChildren();for(const [i,row] of savedRows(s).entries()){const o=document.createElement('option');o.value=row.id;o.textContent=text('order')+' '+(i+1)+' · '+row.id.slice(-6);select.append(o);}if([...select.options].some(o=>o.value===prev))select.value=prev;}
+    const cost=view('quote');cost.replaceChildren();const ok=currentReview(s);
+    if(ok){const q=quoteOf(s),list=document.createElement('dl');for(const [label,k] of [['price','unitPriceLamports'],['fee','networkFeeLamports'],['rent','assetRentLamports'],['protocol','protocolChargeLamports'],['total','totalLamports'],...(s.quantity>1?[['projection','projectedOrderTotalLamports']]:[])]){const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=text(label);dd.textContent=exactSol(q.budget[k])+' SOL';list.append(dt,dd);}cost.append(list);}
+    if(s.canReplace&&s.failedFeeLamports){const n=document.createElement('p');n.textContent=text('failedFee')+': '+exactSol(s.failedFeeLamports)+' SOL. '+text('feeConsent');cost.append(n);}
+    button('mint').hidden=!!walletStep||completed(s)||(!busy&&s.paymentUncertain&&!ok&&!s.canReplace&&!s.canRecoverWalletResponse);
+    button('mint').disabled=busy||entering||storageUnavailable||!!s.busy||(!s.salesOpen&&!s.readiness?.expiredOpen&&!s.scope&&!savedRows(s).length);
   }
-  async function run(fn,action){if(busy||disposed)return;busy=true;message=null;render();try{return await fn();}catch(error){const code=error?.reason??error?.code??error?.message;message=code==='SAVED_ORDER_REVIEW_REQUIRED'?'restore':/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||error?.name==='QuotaExceededError'||error?.name==='SecurityError'?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':(['COOLDOWN','BUSY','DAILY_LIMIT'].includes(code)||error?.status===429)?'serviceBusy':action==='quote'&&error?.status===409?'quoteRefused':action==='prepare'&&!(typeof code==='string'&&code.startsWith('PUBLIC_'))?'prepareFailed':/WALLET|ACCOUNT/.test(error?.code??error?.message)?'walletError':error?.message==='PUBLIC_SALES_CLOSED'?(snapshot().saleStatus==='sold-out'?'sold':'closed'):/PUBLIC_/.test(error?.message)?'unknown':'error';}finally{busy=false;render();}}
+  async function run(fn){if(busy||disposed)return;busy=true;phase='';message=null;render();try{return await fn();}catch(error){const code=String(error?.reason??error?.code??error?.message??'');
+    if(code==='SAVED_ORDER_REVIEW_REQUIRED'){picking=true;message='saved';}
+    else message=/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||['QuotaExceededError','SecurityError'].includes(error?.name)?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':/COOLDOWN|BUSY|DAILY_LIMIT/.test(code)||error?.status===429?'serviceBusy':phase==='quote'?'quoteRefused':phase==='prepare'?'prepareFailed':code==='PUBLIC_SALES_CLOSED'?'closed':/WALLET|ACCOUNT/.test(code)?'walletError':snapshot().paymentUncertain?'pending':'error';
+  }finally{busy=false;render();scheduleRecovery();}}
   function show(){if(!dialog.open)dialog.showModal();render();}
   async function chooseWallet(){
     const wallets=registry.get().filter(wallet=>compatibleBuyerWallet(wallet,'mainnet-beta'));view('wallets').replaceChildren();view('purchase').hidden=true;show();
@@ -54,13 +58,17 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(!wallets.length){walletStep='noWallet';render();const paragraph=document.createElement('p');paragraph.textContent=text('noWallet');view('wallets').append(paragraph);for(const[name,url]of(/Android|iPhone|iPad|iPod/i.test(globalThis.navigator?.userAgent??'')?[["Phantom",'https://phantom.app/ul/browse/'+encodeURIComponent(config.origin)+'?ref='+encodeURIComponent(config.origin)],["Solflare",'https://solflare.com/ul/v1/browse/'+encodeURIComponent(config.origin)+'?ref='+encodeURIComponent(config.origin)],["Backpack",'https://backpack.app/ul/v1/browse/'+encodeURIComponent(config.origin)+'?ref='+encodeURIComponent(config.origin)]]:[["Phantom",'https://phantom.com/download'],["Solflare",'https://www.solflare.com/download/'],["Backpack",'https://backpack.app/']])){const a=document.createElement('a');a.href=url;a.textContent=name;a.rel='noopener noreferrer';view('wallets').append(a);}return null;}
     return new Promise(resolve=>{let settled=false;const close=()=>{if(!settled){settled=true;resolve(null);}};dialog.addEventListener('close',close,{once:true});for(const wallet of wallets){const node=document.createElement('button');node.type='button';node.textContent=wallet.name;node.onclick=()=>{if(settled)return;settled=true;dialog.removeEventListener('close',close);view('wallets').replaceChildren();view('purchase').hidden=false;resolve(wallet);};view('wallets').append(node);}});
   }
+  async function attach(checkout=false){
+    const wallets=registry.get().filter(w=>compatibleBuyerWallet(w,'mainnet-beta'));walletStep='pick';
+    try{const wallet=checkout&&wallets.length===1?wallets[0]:await chooseWallet();if(!wallet)return false;
+      walletStep='walletApproval';render();selectedWallet=wallet;try{await walletDeadline(client.connectWallet(wallet));}catch(error){if(error?.code==='WALLET_TIMEOUT')await client.disconnectWallet();throw error;}
+      const s=snapshot(),a=s.accounts?.find(v=>v.address===s.scope?.buyer)??s.accounts?.[0];if(!a)throw Error('WALLET_ACCOUNT_REQUIRED');await client.selectAccount(a.address);emitWallet(a.address);return true;
+    }finally{walletStep=null;}
+  }
   async function connect(){return run(async()=>{
-    if(connectedAddress){if(typeof selectedWallet?.features?.['standard:disconnect']?.disconnect==='function')await walletDeadline(selectedWallet.features['standard:disconnect'].disconnect());await client.disconnectWallet();selectedWallet=null;emitWallet('');return;}
-    walletStep='pick';let wallet;try{wallet=await chooseWallet();if(!wallet)return;walletStep='walletApproval';render();selectedWallet=wallet;try{await walletDeadline(client.connectWallet(wallet));}catch(error){if(error?.code==='WALLET_TIMEOUT')await client.disconnectWallet();throw error;}const state=snapshot();const first=state.accounts?.[0];if(!first)throw Error('WALLET_ACCOUNT_REQUIRED');await client.selectAccount(first.address);emitWallet(first.address);dialog.close();}finally{walletStep=null;}
+    if(connectedAddress){if(selectedWallet?.features?.['standard:disconnect'])await walletDeadline(selectedWallet.features['standard:disconnect'].disconnect());await client.disconnectWallet();selectedWallet=null;emitWallet('');clearReview();return;}
+    if(await attach())dialog.close();
   });}
-  function bind(name,fn){button(name).onclick=()=>run(fn,name);}
-  button('close').onclick=()=>dialog.close();input('persist').onchange=render;input('cost').onchange=render;input('fee').onchange=render;
-  savedButton.onclick=()=>{choosingSaved=true;view('wallets').replaceChildren();view('purchase').hidden=false;show();};
   // One read when the mint card first becomes visible. No polling, wallet prompt, or order.
   function checkStatus(){
     if(checking)return checking;
@@ -68,22 +76,55 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     checking=Promise.resolve().then(()=>client.refreshReadiness()).then(()=>{failed=snapshot().saleStatus==='unavailable';},()=>{failed=true;}).finally(()=>{checking=null;if(!disposed)render();});
     render();return checking;
   }
-  refreshButton.onclick=()=>run(checkStatus);
-  button('connect').onclick=async()=>{if(snapshot().salesOpen!==true)await checkStatus();if(disposed||snapshot().salesOpen!==true)return;await connect();if(connectedAddress&&!disposed){view('purchase').hidden=false;show();}};
-  bind('restore',async()=>{const id=view('saved').querySelector('select').value;if(id){await client.load(id);choosingSaved=false;if(selectedWallet){await client.connectWallet(selectedWallet);await client.selectAccount(snapshot().scope.buyer);emitWallet(snapshot().selectedAccount);}}});
-  bind('create',async()=>{if(!persisted){if(!input('persist').checked)return;await client.requestPersistence({authorizePersistence:true});persisted=true;}const next=await client.create({quantity:Number($('qty')?.value??1),authorizeCreate:true});if(next?.selectedAccount)emitWallet(next.selectedAccount);return next;});bind('prepare',()=>client.prepare({authorizePreparation:true}));bind('quote',()=>client.quoteCost());
-  bind('sign',async()=>{const quote=snapshot().quote;if(!quote||!input('cost').checked)return;await client.sign({authorizeCost:true,quoteId:quote.quoteId,maxTotalLamports:quote.budget.totalLamports});await client.send({authorizeSend:true});if(snapshot().canRecover)await client.recover({authorizeOutcomeCheck:true});});
-  bind('send',async()=>{if(!input('cost').checked)return;await client.send({authorizeSend:true});if(snapshot().canRecover)await client.recover({authorizeOutcomeCheck:true});});
-  bind('check',()=>client.recover({authorizeOutcomeCheck:true}));bind('save',()=>client.recoverWalletResponse({authorizeResponseRecovery:true}));bind('nativeRecovery',()=>client.recoverNative({authorizeRecovery:true}));bind('reviewExpiry',()=>client.reviewExpiry({authorizeExpiryReview:true}));
-  bind('reviewReplacement',()=>{const state=snapshot();return client.reviewReplacement({authorizeReplacement:true,...(state.failedFeeLamports?{acknowledgedFeeLamports:state.failedFeeLamports}:{})});});bind('prepareReplacement',()=>client.prepareReviewedReplacement({authorizeReplacementSigning:true}));
-  bind('pause',()=>client.setPaused(true,{authorizeChange:true}));bind('resume',()=>client.setPaused(false,{authorizeChange:true}));bind('newOrder',()=>client.startNew({authorizeNewOrder:true}));
+  async function checkExisting(){
+    let s=snapshot();if(s.canRecoverWalletResponse)await client.recoverWalletResponse({authorizeResponseRecovery:true});
+    s=snapshot();if(s.canRecoverNative)await client.recoverNative({authorizeRecovery:true});
+    s=snapshot();if(s.canRecover&&!s.canSend&&!s.canSign&&!s.canQuote)await client.recover({authorizeOutcomeCheck:true});
+    s=snapshot();if(s.unknown&&s.canReviewExpiry&&!s.canSend&&!s.canQuote&&!s.canSign)await client.reviewExpiry({authorizeExpiryReview:true});
+  }
+  function scheduleRecovery(){clearTimeout(recoveryTimer);if(disposed||busy||!dialog.open||!snapshot().paymentUncertain||recoveryCount>=4)return;
+    const token=session;recoveryTimer=setTimeout(()=>{if(token!==session||disposed||!dialog.open||busy)return;recoveryCount++;void run(checkExisting);},[4500,9000,16000,30000][recoveryCount]);}
+  function present(s){const q=quoteOf(s);if(!q||!s.scope||s.scope.buyer!==connectedAddress)return;review={id:q.quoteId,total:q.budget.totalLamports,scope:s.scope.id,item:s.currentItemIndex};}
+  async function restore(id,buyer){await client.load(id);await client.selectAccount(buyer);emitWallet(snapshot().selectedAccount);}
+  async function progress({approve=false,fresh=false}={}){
+    const token=session,buyer=connectedAddress,live=()=>!disposed&&dialog.open&&token===session&&buyer===connectedAddress;
+    let s=snapshot();if(!buyer||!live())return;
+    if(picking){const id=view('saved').querySelector('select').value;if(!savedRows(s).some(row=>row.id===id))return;await restore(id,buyer);picking=false;if(!live())return;s=snapshot();}
+    if(fresh&&completed(s)){await client.startNew({authorizeNewOrder:true});s=snapshot();}
+    if(!s.scope&&!s.salesOpen){const rows=savedRows(s);if(rows.length>1){picking=true;message='saved';return;}if(rows.length===1){await restore(rows[0].id,buyer);s=snapshot();}}
+    if(!s.scope){
+      if(!s.salesOpen){message='notReady';return;}
+      const qty=Number($('qty')?.value??1);await client.requestPersistence({authorizePersistence:true});if(!live())return;
+      await client.create({quantity:qty,authorizeCreate:true});s=snapshot();if(s.selectedAccount===buyer&&s.scope?.buyer===buyer)emitWallet(buyer);if(!live())return;
+    }
+    if(s.scope?.buyer!==buyer||completed(s))return;
+    if(s.canResume){await client.setPaused(false,{authorizeChange:true});if(!live())return;s=snapshot();}
+    // Only the click on a previously displayed, matching estimate may reach a wallet.
+    if(approve&&currentReview(s)&&(allowed(s,'canSign')||allowed(s,'canSend'))&&!s.paymentUncertain){
+      const agreed={...review};clearReview();
+      if(allowed(s,'canSign')){await client.sign({authorizeCost:true,quoteId:agreed.id,maxTotalLamports:agreed.total});if(!live())return;}
+      s=snapshot();if(s.scope?.id!==agreed.scope||s.currentItemIndex!==agreed.item||s.approvedQuote?.quoteId!==agreed.id||s.approvedQuote?.budget.totalLamports!==agreed.total||!allowed(s,'canSend'))return;
+      await client.send({authorizeSend:true});if(live()&&snapshot().canRecover)await client.recover({authorizeOutcomeCheck:true});return;
+    }
+    clearReview();
+    if(s.paymentUncertain||s.canRecoverWalletResponse||s.canRecoverNative||(!allowed(s,'canPrepare')&&!allowed(s,'canQuote')&&!allowed(s,'canSend')&&!s.canReplace&&s.canRecover)){
+      await checkExisting();if(!live())return;const after=snapshot();if(allowed(after,'canSend')&&!after.paymentUncertain)present(after);return;
+    }
+    if(!s.salesOpen){await checkStatus();if(!live())return;s=snapshot();if(!s.salesOpen){message='notReady';return;}}
+    if(s.canReplace){if(!approve)return;await client.reviewReplacement({authorizeReplacement:true,...(s.failedFeeLamports?{acknowledgedFeeLamports:s.failedFeeLamports}:{})});if(!live())return;await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;s=snapshot();}
+    if(s.canPrepare){phase='prepare';await client.prepare({authorizePreparation:true});if(!live())return;s=snapshot();}
+    if(s.canQuote){phase='quote';await client.quoteCost();if(!live())return;s=snapshot();}
+    if(s.canSign||s.canSend)present(s);
+  }
+  button('mint').onclick=()=>run(()=>progress({approve:true}));
   $('mintBtn')?.addEventListener('click',async()=>{
-    if(entering||busy||disposed||storageUnavailable)return;choosingSaved=false;requested=true;entering=true;render();
+    if(entering||busy||disposed||storageUnavailable)return;requested=true;entering=true;recoveryCount=0;clearReview();message=null;render();
     try{
-      if(snapshot().salesOpen!==true)await checkStatus();
-      if(disposed||storageUnavailable||snapshot().salesOpen!==true)return;
-      if(!connectedAddress)await connect();
-      if(connectedAddress&&!disposed){view('wallets').replaceChildren();view('purchase').hidden=false;show();}
+      if(snapshot().salesOpen!==true)await checkStatus();if(disposed||storageUnavailable)return;
+      const s=snapshot();if(!s.salesOpen&&!s.scope&&!s.saved?.length)return;
+      await run(async()=>{view('wallets').replaceChildren();view('purchase').hidden=false;show();const token=session;
+        if(!connectedAddress&&!(await attach(true)))return;if(!dialog.open||session!==token||disposed)return;
+        view('wallets').replaceChildren();view('purchase').hidden=false;await progress({fresh:true});});
     }finally{entering=false;render();}
   });
   client=factory(config,{onChange:state=>{if(selectedWallet&&state.selectedAccount===null&&connectedAddress)emitWallet('');clearTimeout(timer);if(Number.isSafeInteger(state.readiness?.expiresAt))timer=setTimeout(render,Math.max(0,state.readiness.expiresAt-Date.now())+1);render();}});
@@ -93,5 +134,5 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     observer=new globalThis.IntersectionObserver(entries=>{if(!disposed&&observer&&entries.some(e=>e.target===card&&e.isIntersecting)){void checkStatus();}},{threshold:0});
     observer.observe(card);
   }
-  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();savedButton.remove();}});
+  return Object.freeze({connect,render,state:snapshot,dispose(){disposed=true;observer?.disconnect();observer=null;clearTimeout(timer);off.forEach(fn=>fn());client.dispose();dialog.remove();clearTimeout(recoveryTimer);}});
 }

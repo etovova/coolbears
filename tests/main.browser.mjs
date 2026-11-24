@@ -20,7 +20,7 @@ await mkdir(output, { recursive: true });
 const saveReport=()=>writeFile(path.join(output,'main-browser-report.json'),JSON.stringify(report,null,2)+'\n');
 const browser = await playwright[engine].launch({ executablePath: process.env.COOLBEARS_CHROMIUM || undefined, headless: true, args: engine === 'chromium' ? ['--no-sandbox', '--disable-dev-shm-usage', '--no-zygote'] : [] });
 
-async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, holdRead = null, clock = false, locale = 'en-US' } = {}) {
+async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = false, stallPublicModule = false, readiness = null, holdRead = null, clock = false, rejectPreparation = false, locale = 'en-US' } = {}) {
   const { defaultBrowserType: _engine, ...descriptor } = devices[device];
   if (engine === 'firefox') delete descriptor.isMobile;
   const context = await browser.newContext({...descriptor,locale});
@@ -33,6 +33,7 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
   page.on('pageerror', error => {errors.push(error.message);report.pageErrors.push({device,storage,message:error.message});});
   await context.route('**/*', async route => {
     const request = route.request();
+    if(rejectPreparation&&request.method()==='POST'&&request.url()===origin+'/api/buyer/prepare')return route.fulfill({status:429,contentType:'application/json',body:JSON.stringify({code:'COOLDOWN'})});
     if (request.method() !== 'GET') { unexpectedWrites++; return route.abort(); }
     const url = new URL(request.url());
     if (stallPublicModule && url.pathname === '/public-mainnet/site-entry.mjs') return; // Explicit stalled-download fixture.
@@ -87,10 +88,7 @@ async function open({ device = 'Desktop Chrome', storage = 'normal', wallet = fa
 }
 async function closed(page) {
   const button=page.locator('#mintBtn');
-  if(!await button.isDisabled() && await page.locator('#walletBtn').getAttribute('title')){
-    const qty=await page.locator('#qty').inputValue(),label=await button.innerText();
-    assert.ok(['MINT '+qty+' NFT','ЗАМИНТИТЬ '+qty+' NFT','铸造 '+qty+' 个 NFT'].includes(label));
-  }else if(!await button.isDisabled())assert.match(await button.innerText(),/^(CONNECT WALLET TO MINT|ПОДКЛЮЧИТЬ КОШЕЛЁК|连接钱包开始铸造)$/,'unverified page can only recheck availability');
+  if(!await button.isDisabled())assert.ok(['MINT','МИНТ','铸造'].includes(await button.innerText()));
   assert.equal(await page.locator('#marketplaceTop').isVisible(), false, 'unverified market link remains hidden');
 }
 async function modal(page) {
@@ -280,7 +278,7 @@ try {
     await page.waitForLoadState('networkidle');
     assert.equal(test.readinessCalls(),1);assert.equal(await page.locator('dialog[open]').count(),0);
     if(readiness==='open'){
-      assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');
+      assert.equal(await cta.innerText(),'MINT');
       const snapshot=()=>page.evaluate(()=>{const button=document.querySelector('#mintBtn'),title=document.querySelector('[data-i18n="mintTitle"]'),link=document.querySelector('a[data-i18n="mintNow"]'),box=button.getBoundingClientRect(),hero=link.getBoundingClientRect();return {title:title.innerText,hero:link.innerText,href:link.getAttribute('href'),cta:button.innerText,top:Math.round(box.top+scrollY),width:Math.round(hero.width)};});
       const before=await snapshot();assert.equal(before.hero,'MINT COOLBEARS');assert.equal(before.href,'#mint');
       await page.clock.fastForward(8001);
@@ -307,9 +305,9 @@ try {
     assert.equal(await page.locator('dialog[open]').count(),0);assert.equal(test.readinessCalls(),1);release();
     if(readiness==='open')await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
     else {await page.locator('#minted').filter({hasText:'STATUS UNAVAILABLE'}).waitFor();assert.equal(await page.locator('dialog[open]').count(),0);}
-    assert.equal(test.readinessCalls(),1);assert.equal(await cta.innerText(),'CONNECT WALLET TO MINT');await test.done('click during pending background read: '+readiness);
+    assert.equal(test.readinessCalls(),1);assert.equal(await cta.innerText(),'MINT');await test.done('click during pending background read: '+readiness);
   }
-  for(const [locale,lang,ctaText] of [['ru-RU','ru','ПОДКЛЮЧИТЬ КОШЕЛЁК'],['en-US','en','CONNECT WALLET TO MINT'],['zh-CN','zh-CN','连接钱包开始铸造']]){
+  for(const [locale,lang,ctaText] of [['ru-RU','ru','МИНТ'],['en-US','en','MINT'],['zh-CN','zh-CN','铸造']]){
     const test=await open({device:'Pixel 7',locale,readiness:'wrong-profile',clock:true});const {page}=test,cta=page.locator('#mintBtn'),badge=page.locator('.mint-topline');
     const baseline=await cta.innerText();const top=()=>cta.evaluate(n=>Math.round(n.getBoundingClientRect().top+scrollY)),initialTop=await top();assert.equal(baseline,ctaText);assert.equal(await page.locator('html').getAttribute('lang'),lang);
     for(const selector of ['.brand','#mintBtn','#walletBtn','a[data-i18n="mintNow"]'])assert.equal(await page.locator(selector).getAttribute('translate'),'no');
@@ -319,13 +317,12 @@ try {
     await test.done('mobile passive network failure and explicit refusal keep native CTA: '+locale);
   }
   if(engine==='chromium'){
-    const test=await open({device:'Pixel 7',wallet:true,readiness:'open'}),{page}=test;
+    const test=await open({device:'Pixel 7',wallet:true,readiness:'open',rejectPreparation:true}),{page}=test;
     const start=async()=>{
-      await page.locator('#mintBtn').click();await page.getByRole('button',{name:'Phantom',exact:true}).click();
-      const dialog=page.locator('dialog[open]'),create=dialog.locator('[data-action="create"]');
-      await create.waitFor();assert.equal(await create.isDisabled(),true);
-      await dialog.locator('[data-input="persist"]').check();await create.click();
-      await dialog.locator('[data-action="prepare"]').waitFor({timeout:15000});
+      const refusal=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/buyer/prepare');
+      await page.locator('#mintBtn').click();assert.equal((await refusal).status(),429);
+      const dialog=page.locator('dialog[open]');await dialog.getByRole('button',{name:'MINT',exact:true}).waitFor();
+      assert.deepEqual(await dialog.locator('[data-action]').evaluateAll(xs=>xs.map(x=>x.dataset.action)),['close','mint']);
       return page.evaluate(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('coolbears:private-buyer-index:')))).orders);
     };
     const original=await start();assert.equal(original.length,1);
