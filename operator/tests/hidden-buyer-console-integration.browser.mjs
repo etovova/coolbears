@@ -14,15 +14,17 @@ import {hiddenBuyerGatewayFixture} from './fixtures/hidden-buyer-gateway.mjs';
 import {buyerGatewayRuntime,fixturePolicyPlugin} from './fixtures/buyer-gateway-runtime.mjs';
 import {baseAssetBytes,CORE_CREATE_LAMPORTS} from '../orders/mint-cost.mjs';
 const playwright=await import(process.env.COOLBEARS_PLAYWRIGHT||'playwright');
-const parent=await mkdtemp(path.join(tmpdir(),'coolbears-hidden-console-chromium-'));
+const engine=process.env.COOLBEARS_ENGINE||'chromium';
+assert.ok(['chromium','firefox','webkit'].includes(engine));
+const parent=await mkdtemp(path.join(tmpdir(),'coolbears-hidden-console-'+engine+'-'));
 const cluster=process.env.COOLBEARS_BUYER_FIXTURE_CLUSTER??'devnet';assert.ok(['devnet','mainnet-beta'].includes(cluster));
 const authorizeMainnet=cluster==='mainnet-beta';
-const output=path.resolve('operator/build/hidden-buyer-console-integration-'+(authorizeMainnet?'mainnet-':'')+'chromium');await mkdir(output,{recursive:true});
+const output=path.resolve('operator/build/hidden-buyer-console-integration-'+(authorizeMainnet?'mainnet-':'')+engine);await mkdir(output,{recursive:true});
 const hash=createHash('sha256').update('SYNTHETIC HIDDEN CHROMIUM PRIVATE MAPPING FIXTURE ONLY').digest('hex');
 const fixture=hiddenBuyerGatewayFixture({syntheticOwner:true,redeemed:999,hiddenCommitmentSha256:hash,cluster});
 await promisify(execFile)('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',path.join(parent,'key.pem'),'-out',path.join(parent,'cert.pem'),'-days','1','-subj','/CN=127.0.0.1']);
 let runtime,origin,bytes,context,page;
-const report={passed:false,engine:'chromium',cluster,storageMode:'hidden-settings',
+const report={passed:false,engine,cluster,storageMode:'hidden-settings',
   adapters:'production console/factory, actual IndexedDB/Web Locks and HTTPS gateway',transport:'local workerd/SQLite with synthetic upstream RPC',
   realWallets:false,physicalPhones:false,liveRpc:false,transactionsSent:0,externalRequests:0,pageErrors:[],httpFailures:[],cases:[]};
 const httpRoutes=[];
@@ -55,7 +57,7 @@ async function ready(){await page.waitForFunction(()=>window.integration?.rawKey
   assert.equal(await button('workspace').isVisible(),true,await button('configuration').textContent());
   assert.equal(await button('error').isVisible(),false,await button('error').textContent());}
 async function click(id,{network=false}={}){if(network)await new Promise(resolve=>setTimeout(resolve,250));await button(id).click();await ready();}
-async function launch(){context=await playwright.chromium.launchPersistentContext(path.join(parent,'profile'),{headless:true,ignoreHTTPSErrors:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+async function launch(){context=await playwright[engine].launchPersistentContext(path.join(parent,'profile'),{headless:true,ignoreHTTPSErrors:true,args:engine==='chromium'?['--no-sandbox','--disable-dev-shm-usage']:[]});
   await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==origin){report.externalRequests++;return route.abort();}return route.continue();});
   page=await context.newPage();page.on('pageerror',error=>report.pageErrors.push(error.message));await page.goto(origin);await ready();}
 try{
@@ -90,7 +92,7 @@ try{
   assert.notEqual(coexist.legacy.items[0].asset,coexist.current.items[0].asset);
   report.cases.push('same identity v1 legacy and v2 hidden records coexist with separate native keys; wrong trusted commitment cannot restore or overwrite hidden custody');
 
-  await click('prepare',{network:true});assert.equal((await counters()).native,1);assert.equal((await counters()).wallet,0);
+  await click('prepare',{network:true});assert.equal((await counters()).native,authorizeMainnet?0:1);assert.equal((await counters()).wallet,0);
   const prepared=await journal(),request=prepared.signing.find(row=>row.phase==='ready').record;
   assert.equal(request.orderIdentitySha256,prepared.signing[0].record.orderIdentitySha256);
   const unsigned=VersionedTransaction.deserialize(Buffer.from(request.transactionBase64,'base64'));
@@ -98,9 +100,9 @@ try{
   assert.deepEqual(Buffer.from(unsigned.message.serialize()),Buffer.from(VersionedTransaction.deserialize(canonical.unsignedBytes).message.serialize()));
   assert.equal(unsigned.message.staticAccountKeys[0].toBase58(),fixture.policy.owner);
   assert.equal(unsigned.message.staticAccountKeys[1].toBase58(),coexist.current.items[0].asset);
-  assert.ok(unsigned.signatures[0].every(byte=>byte===0));assert.ok(unsigned.signatures[1].some(byte=>byte!==0));
+  assert.ok(unsigned.signatures[0].every(byte=>byte===0));assert.equal(unsigned.signatures[1].some(Boolean),!authorizeMainnet);
   assert.ok(unsigned.serialize().length<=1232);
-  report.cases.push('production preparation issues canonical hidden v2 purchase, persists native asset signature once and leaves buyer signature empty');
+  report.cases.push('production preparation preserves the purchase message, selected signers, and expected initial signatures');
 
   await click('quote',{network:true});
   const base=baseAssetBytes(fixture.policy,{buyer:fixture.policy.owner,collection:fixture.roles.collection,...fixture.storageOptions},1000,fixture.storageOptions);
@@ -113,8 +115,13 @@ try{
   const signed=await journal(),signedBytes=await page.evaluate(()=>integration.signedBytes),before=await counters();
   assert.deepEqual(signed.signing.map(row=>row.phase),['claimed','ready','wallet-claimed','buyer-response']);
   assert.equal(signed.signing[2].record.costApproval.maxTotalLamports,total.toString());
-  assert.equal(signed.signing.at(-1).record.transactionBase64,signedBytes);
-  assert.ok(VersionedTransaction.deserialize(Buffer.from(signedBytes,'base64')).signatures.every(signature=>signature.some(byte=>byte!==0)));
+  const walletTx=VersionedTransaction.deserialize(Buffer.from(signedBytes,'base64'));
+  const fullTx=VersionedTransaction.deserialize(Buffer.from(signed.signing.at(-1).record.transactionBase64,'base64'));
+  assert.deepEqual(fullTx.message.serialize(),unsigned.message.serialize());
+  assert.deepEqual(walletTx.message.serialize(),fullTx.message.serialize());
+  assert.deepEqual(walletTx.signatures[0],fullTx.signatures[0]);
+  assert.equal(walletTx.signatures[1].some(Boolean),!authorizeMainnet);
+  assert.ok(fullTx.signatures.every(signature=>signature.some(Boolean)));
   assert.equal(signed.orders.find(order=>order.version===2).items[0].attempts[0].state,'unknown');
   assert.equal(signed.orders.find(order=>order.version===1).revision,0);
   assert.equal(await button('send').isDisabled(),true);assert.equal(await button('sign').isDisabled(),true);
@@ -126,7 +133,7 @@ try{
   assert.equal(await button('cost-consent').isChecked(),false);assert.equal(await button('sign').isDisabled(),true);assert.equal(await button('send').isDisabled(),true);
   assert.equal(await page.evaluate(s=>integration.wrongProfile(s),hiddenScope),'ORDER_STORAGE_PROFILE_MISMATCH');
   assert.deepEqual(await journal(),signed);assert.equal(httpRoutes.length,requests);
-  report.cases.push('full Chromium/SQLite restart retains both modes and the exact signed evidence; unknown outcome cannot trigger another signature or dispatch and wrong commitment restore remains blocked');
+  report.cases.push('full browser/SQLite restart retains both modes and the exact signed evidence; unknown outcome cannot trigger another signature or dispatch and wrong commitment restore remains blocked');
   assert.equal(httpRoutes.includes('/api/buyer/send'),false);assert.equal(fixture.calls.some(call=>call.method==='sendTransaction'),false);
   assert.deepEqual(httpRoutes,['/api/buyer/prepare','/api/buyer/check','/api/buyer/check']);
   assert.deepEqual(runtime.errors,[]);assert.deepEqual(report.pageErrors,[]);assert.deepEqual(report.httpFailures,[]);assert.equal(report.externalRequests,0);

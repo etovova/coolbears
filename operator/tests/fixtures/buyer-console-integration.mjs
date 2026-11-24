@@ -27,7 +27,10 @@ SubtleCrypto.prototype.sign=async function(...args){
   const bytes=new Uint8Array(args[2]);
   if(bytes[0]===128){
     const saved=await journal();
-    if(saved.signing.at(-1)?.phase!=='claimed'||saved.orders[0]?.items[0]?.attempts.at(-1)?.state!=='wallet-pending')throw Error('NATIVE_BEFORE_DURABLE_CLAIM');
+    const buyerFirst=config.cluster==='mainnet-beta';
+    const phase=buyerFirst?'wallet-claimed':'claimed',state=buyerFirst?'unknown':'wallet-pending';
+    if(saved.signing.at(-1)?.phase!==phase||saved.orders[0]?.items[0]?.attempts.at(-1)?.state!==state)throw Error('NATIVE_BEFORE_DURABLE_CLAIM');
+    if(buyerFirst&&!window.integration.signedBytes)throw Error('ASSET_BEFORE_BUYER');
     count('native');
   }
   return nativeSign.apply(this,args);
@@ -42,7 +45,9 @@ const wallet={version:'1.0.0',name:'Disposable console integration wallet',icon:
       if(input.account!==account||input.chain!==network.walletChain)throw Error('WRONG_SYNTHETIC_ACCOUNT');
       const saved=await journal(),claim=saved.signing.at(-1);
       if(claim?.phase!=='wallet-claimed'||!claim.record.costApproval||saved.orders[0]?.items[0]?.attempts.at(-1)?.state!=='unknown')throw Error('WALLET_BEFORE_DURABLE_CONSENT');
-      count('wallet');const tx=VersionedTransaction.deserialize(input.transaction);tx.sign([buyer]);
+      count('wallet');const tx=VersionedTransaction.deserialize(input.transaction);
+      if(config.cluster==='mainnet-beta'&&tx.signatures.some(signature=>signature.some(Boolean)))throw Error('UNEXPECTED_PRIOR_SIGNATURE');
+      tx.sign([buyer]);
       window.integration.signedBytes=Buffer.from(tx.serialize()).toString('base64');return[{signedTransaction:tx.serialize()}];
     }},
     'solana:signAndSendTransaction':{version:'1.0.0',signAndSendTransaction:()=>{count('send');throw Error('SEND_FORBIDDEN');}},

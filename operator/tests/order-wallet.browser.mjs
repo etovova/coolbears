@@ -165,8 +165,10 @@ try{
   assert.equal(await page.evaluate(s=>code(store.claimBuyerSubmission(s,{orderRevision:3,transactionSha256:'x'})),legacy),'COST_APPROVAL_REQUIRED');
   assert.equal((await read(page,legacy,'read')).revision,3);assert.ok((await read(page,legacy,'readBuyerResponse')).response.transactionBase64);
   report.cases.push('legacy v1 wallet evidence remains readable without inventing consent; no new send claim is allowed');
+  const oldReceipt=await read(page,legacy,'readBuyerResponse');
   await page.evaluate(()=>{ window.store=makeStore(true); });
-  assert.equal((await read(page,good,'readBuyerResponse')).response.transactionBase64,result.response.transactionBase64);
+  assert.deepEqual(await read(page,legacy,'readBuyerResponse'),oldReceipt);
+  assert.notEqual(await page.evaluate(s=>code(store.readBuyerResponse(s)),good),'UNEXPECTED_SUCCESS');
   for (const mode of ['reject','tamper','success']) {
     await page.evaluate(mode=>{ window.walletReturned=false; window.walletMode=mode; },mode);
     const before=await stats(), scope=await setup('wallet-first-'+mode);
