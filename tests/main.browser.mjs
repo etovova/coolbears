@@ -280,10 +280,11 @@ try {
     if(readiness==='open'){
       assert.equal(await cta.innerText(),'MINT');
       const snapshot=()=>page.evaluate(()=>{const button=document.querySelector('#mintBtn'),title=document.querySelector('[data-i18n="mintTitle"]'),link=document.querySelector('a[data-i18n="mintNow"]'),box=button.getBoundingClientRect(),hero=link.getBoundingClientRect();return {title:title.innerText,hero:link.innerText,href:link.getAttribute('href'),cta:button.innerText,top:Math.round(box.top+scrollY),width:Math.round(hero.width)};});
+      await cta.evaluate(el=>{window.__initialMintLabel=el.firstChild;});
       const before=await snapshot();assert.equal(before.hero,'MINT COOLBEARS');assert.equal(before.href,'#mint');
       await page.clock.fastForward(8001);
       await page.waitForFunction(()=>!document.querySelector('#minted').textContent.trim() && getComputedStyle(document.querySelector('.mint-topline')).visibility==='hidden');
-      assert.deepEqual(await snapshot(),before);assert.equal(test.readinessCalls(),1);
+      assert.deepEqual(await snapshot(),before);assert.equal(await cta.evaluate(el=>el.firstChild===window.__initialMintLabel),true,'background refresh preserves the native click target');assert.equal(test.readinessCalls(),1);
       await cta.click();await page.getByRole('heading',{name:'Choose wallet'}).waitFor();
       assert.doesNotMatch(await page.locator('.public-mint-dialog [data-view="message"]').innerText(),/Waiting for the result|Mint is currently unavailable/);
       await page.locator('.public-mint-dialog [data-action="close"]').click();

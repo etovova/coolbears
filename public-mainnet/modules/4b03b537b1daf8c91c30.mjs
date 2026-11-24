@@ -35,9 +35,15 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(disposed)return;dialog.setAttribute('lang',language());const s=snapshot(),closed=s.saleStatus==='closed',sold=s.saleStatus==='sold-out',pending=!!checking||!!s.readiness?.pending;
     const notice=sold?'sold':closed?'closed':failed&&requested&&!pending&&s.saleStatus==='unavailable'&&!s.readiness?.expiredOpen?'unknown':null;
     const badge=$('minted');if(badge){badge.textContent=notice?text(notice):'';const row=badge.parentElement;if(row?.classList?.contains('mint-topline'))row.style.visibility=notice?'visible':'hidden';}
-    const card=$('mintBtn');if(card){card.disabled=busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length);card.setAttribute('aria-busy',String(pending||entering));card.textContent=caption();}
+    const card=$('mintBtn');if(card){
+      const disabled=!!(busy||entering||storageUnavailable||((closed||sold)&&!s.scope&&!s.saved?.length)),aria=String(pending||entering),label=caption();
+      if(card.disabled!==disabled)card.disabled=disabled;
+      if(card.getAttribute('aria-busy')!==aria)card.setAttribute('aria-busy',aria);
+      // WebKit can lose the native click when its text target is replaced between down and up.
+      if(card.textContent!==label)card.textContent=label;
+    }
     if($('walletBtn')){$('walletBtn').textContent=connectedAddress?`${connectedAddress.slice(0,4)}…${connectedAddress.slice(-4)}\n${text('disconnect')}`:text('connect');$('walletBtn').title=connectedAddress;}
-    $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));button('mint').textContent=caption();
+    $('publicMintTitle').textContent=text('title');button('close').setAttribute('aria-label',text('close'));if(button('mint').textContent!==caption())button('mint').textContent=caption();
     const key=storageUnavailable?'unavailable':walletStep??(busy?(['quote','prepare','opening'].includes(phase)?'pricing':phase==='expiry'?'refreshing':'waiting'):message??(exhausted(s)?(s.canRestartExpired?'restart':'exhausted'):completed(s)?'done':s.paymentUncertain?'pending':!s.salesOpen&&!s.readiness?.expiredOpen?notice:s.quantity&&!currentReview(s)&&(allowed(s,'canQuote')||s.canPrepareReplacement||s.canReplace)?'refreshPrice':null));
     view('message').textContent=key?((stageText[language()]??stageText.en)[key]??(notices[language()]??notices.en)[key]??text(key)):'';view('message').hidden=!key;
     const progress=view('progress');progress.textContent=s.quantity?text('progress').replace('{done}',String(s.verified??0)).replace('{total}',String(s.quantity)):'';progress.hidden=!s.quantity;if(restoredQuantity&&s.quantity)progress.textContent=(stageText[language()]??stageText.en).resumeQty.replace('{n}',String(s.quantity))+' '+progress.textContent;
