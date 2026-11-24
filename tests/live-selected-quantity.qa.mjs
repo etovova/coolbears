@@ -15,6 +15,11 @@ await ctx.route(url=>url.origin!==origin||(url.pathname.startsWith('/api/buyer/'
  if(!['GET','HEAD'].includes(req.method())&&!allowed.has(u.pathname.split('/').pop())){blocked++;console.log('blocked route',u.pathname);return route.abort();}
  return route.continue();
 });
+let outages=0;
+if(engine==='chromium')await ctx.route(origin+'/api/buyer/prepare',async route=>{
+ if(outages===0){outages++;console.log('INJECTED_UNSIGNED_503');return route.fulfill({status:503,contentType:'application/json',headers:{'retry-after':'1'},body:JSON.stringify({status:'blocked',code:'CHECK_UNAVAILABLE'})});}
+ return route.continue();
+});
 ctx.on('response',async res=>{
  const path=new URL(res.url()).pathname;if(!path.startsWith('/api/buyer/'))return;
  const json=await res.json().catch(()=>({}));const r=json.report??json;
@@ -56,7 +61,7 @@ async function approve(page,expected){
 }
 try{
   const transport=await ctx.request.get(origin+'/public-mainnet/modules/4b03b537b1daf8c91c30.mjs');
-  assert.equal(createHash('sha256').update(await transport.body()).digest('hex'),'61d0d1eb045689939fdf0f7bd90d30723298626b070700c927fe040fe3c272ea');
+  assert.equal(createHash('sha256').update(await transport.body()).digest('hex'),'219fb6412e14dc5cd91729ff3019d32ab80a2dcb1ea80486e914cdc13f30aefe');
   const versionCheck=await ctx.request.get(origin+'/api/buyer/readiness');
   console.log('readiness',versionCheck.status(),(await versionCheck.json()).status);
   let page=await openQuantity(1);let first=await ids(page);assert.equal(first.length,1);
@@ -73,5 +78,5 @@ try{
   const next=await openQuantity(6,undefined,true);const nextIds=await ids(next);
   assert.deepEqual(nextIds.slice(0,-1),first);assert.equal(nextIds.length,first.length+1);assert.ok(!first.includes(nextIds.at(-1)));
   assert.equal(calls,0);await approve(next,1);assert.equal(blocked,0);
-  console.log('SELECTED_SIX_PASS',JSON.stringify({engine,prompts:calls,submitted:0}));
+  assert.equal(outages,engine==='chromium'?1:0);console.log('SELECTED_SIX_PASS',JSON.stringify({engine,prompts:calls,submitted:0}));
 }finally{await browser.close();}
