@@ -53,7 +53,7 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     if(code==='SAVED_ORDER_REVIEW_REQUIRED'){picking=true;message='saved';}
     else if(code==='WALLET_CANCELLED')message=snapshot().paymentUncertain?'pending':'cancelled';
     else if(snapshot().paymentUncertain||/WALLET_RESPONSE_(UNKNOWN|PENDING)/.test(code))message='pending';
-    else message=/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||['QuotaExceededError','SecurityError'].includes(error?.name)?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':/COOLDOWN|BUSY|DAILY_LIMIT/.test(code)||error?.status===429?'serviceBusy':code==='PUBLIC_SALES_CLOSED'?'closed':code==='PUBLIC_READINESS_UNAVAILABLE'?'unknown':phase==='quote'?'quoteRefused':phase==='prepare'?'prepareFailed':/WALLET|ACCOUNT/.test(code)?'walletError':snapshot().paymentUncertain?'pending':'error';
+    else message=/STORAGE|PERSISTENCE|QuotaExceeded|SecurityError/.test(code)||['QuotaExceededError','SecurityError'].includes(error?.name)?'unavailable':code==='INSUFFICIENT_BALANCE'?'lowBalance':code==='QUOTE_FRESHNESS_RPC'?'serviceBusy':/COOLDOWN|BUSY|DAILY_LIMIT/.test(code)||error?.status===429?'serviceBusy':code==='PUBLIC_SALES_CLOSED'?'closed':code==='PUBLIC_READINESS_UNAVAILABLE'?'unknown':phase==='quote'?'quoteRefused':phase==='prepare'?'prepareFailed':/WALLET|ACCOUNT/.test(code)?'walletError':snapshot().paymentUncertain?'pending':'error';
   }finally{busy=false;render();scheduleRecovery();}}
   function show(){if(!dialog.open)dialog.showModal();render();}
   async function chooseWallet(){
@@ -95,9 +95,20 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
     return e?.status===409&&['ATTEMPT_EXPIRED','BLOCKHASH_EXPIRED','BLOCKHASH_TOO_OLD','SIMULATION_FAILED','RPC_AMOUNT','FEE_UNAVAILABLE'].includes(e.reason)
       &&s.canReviewExpiry&&item(s)?.state==='wallet-pending'&&!s.paymentUncertain&&!s.canRecoverWalletResponse&&!s.canSend;
   }
+  // A confirmed-bank RPC can briefly lag between simulation and its final read.
+  // Retry unsigned pricing once after the gateway's existing 45-second hold.
+  async function quoteRead(live){
+    const saved=snapshot(),id=saved.scope?.id,index=saved.currentItemIndex;
+    try{return await client.quoteCost();}catch(error){
+      if(error?.status!==409||error.reason!=='QUOTE_FRESHNESS_RPC'||!live())throw error;
+      rememberPhase('quote');await new Promise(resolve=>setTimeout(resolve,45200));
+      const s=snapshot();if(!live()||!id||s.scope?.id!==id||s.scope.buyer!==s.selectedAccount||s.currentItemIndex!==index||s.paymentUncertain||s.canSend||s.canRecoverWalletResponse||item(s)?.state!=='wallet-pending')return;
+      return await client.quoteCost();
+    }
+  }
   async function prepareNewQuote(live){
     const before=snapshot();rememberPhase('quote');
-    try{await client.quoteCost();}catch(e){
+    try{await quoteRead(live);}catch(e){
       const prior=snapshot();if(!live()||!unsignedExpiry(e,prior))throw e;
       const id=prior.scope?.id,index=prior.currentItemIndex,attempt=item(prior).attempt;
       const same=s=>s.scope?.id===id&&s.currentItemIndex===index&&s.selectedAccount===s.scope.buyer;
@@ -122,10 +133,10 @@ export function mountPublicMint({config,language=()=> 'en',onWalletChange=()=>{}
       s=snapshot();if(!same(s)||!s.canPrepareReplacement)return;
       await client.prepareReviewedReplacement({authorizeReplacementSigning:true});if(!live())return;
       s=snapshot();if(!same(s)||item(s)?.attempt!==2||!allowed(s,'canQuote'))return;
-      rememberPhase('quote');await client.quoteCost();
+      rememberPhase('quote');await quoteRead(live);
     }
     if(!live())return;const s=snapshot();if(s.scope?.id!==before.scope?.id||s.currentItemIndex!==before.currentItemIndex)return;
-    clearTimeout(priceTimer);if(s.canSign||s.canSend)present(s);
+    clearTimeout(priceTimer);if(allowed(s,'canSign')||allowed(s,'canSend'))present(s);
   }
   function present(s){const q=quoteOf(s);if(!q||!s.scope||s.scope.buyer!==connectedAddress)return;review={id:q.quoteId,total:q.budget.totalLamports,scope:s.scope.id,item:s.currentItemIndex};}
   async function restore(id,buyer){await client.load(id);await client.selectAccount(buyer);emitWallet(snapshot().selectedAccount);}
