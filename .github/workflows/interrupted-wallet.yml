@@ -2,6 +2,8 @@ name: Verify selected quantity through wallet approval
 on:
   push:
     branches: ['qa/wallet-interruption-v36']
+env:
+  QA_WORKER_VERSION: 2fcb063e-56ab-4d7b-b0a2-e96117e88b33
 permissions:
   contents: read
 jobs:

@@ -55,14 +55,23 @@ async function approve(page,expected){
   assert.equal(calls,expected,'approval must open the wallet exactly once');
 }
 try{
-  const transport=await ctx.request.get(origin+'/public-mainnet/modules/0f88c0f8d9df04ab8953.mjs');
-  assert.equal(createHash('sha256').update(await transport.body()).digest('hex'),'486f0fe130a26640816cdc9d6e9c62b5b2d843a9359c9d375f0833c022d49644');
+  const transport=await ctx.request.get(origin+'/public-mainnet/modules/4b03b537b1daf8c91c30.mjs');
+  assert.equal(createHash('sha256').update(await transport.body()).digest('hex'),'61d0d1eb045689939fdf0f7bd90d30723298626b070700c927fe040fe3c272ea');
   const versionCheck=await ctx.request.get(origin+'/api/buyer/readiness');
   console.log('readiness',versionCheck.status(),(await versionCheck.json()).status);
-  let page=await openQuantity(1);const first=await ids(page);assert.equal(first.length,1);
+  let page=await openQuantity(1);let first=await ids(page);assert.equal(first.length,1);
+  if(engine==='webkit'){
+    console.log('Awaiting natural blockhash expiry on the displayed one-item quote');
+    await page.waitForTimeout(105000);await press(page.locator(action));
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(Object.keys(localStorage).find(k=>k.startsWith('coolbears:private-buyer-index:')))).orders.length===2,null,{timeout:125000});
+    await page.locator(quote).waitFor({timeout:125000});
+    assert.equal(calls,0);first=await ids(page);assert.equal(first.length,2);
+    assert.ok(traces.some(x=>x[0]==='check'&&x[1]===409),'the expired transaction must actually be refused by Solana checking');
+    console.log('NATURAL_EXPIRY_REQUOTED',JSON.stringify({quantity:1,buyerPrompts:calls}));
+  }
   await page.close();
   const next=await openQuantity(6,undefined,true);const nextIds=await ids(next);
-  assert.equal(nextIds.length,2);assert.equal(nextIds[0],first[0]);assert.notEqual(nextIds[1],first[0]);
+  assert.deepEqual(nextIds.slice(0,-1),first);assert.equal(nextIds.length,first.length+1);assert.ok(!first.includes(nextIds.at(-1)));
   assert.equal(calls,0);await approve(next,1);assert.equal(blocked,0);
   console.log('SELECTED_SIX_PASS',JSON.stringify({engine,prompts:calls,submitted:0}));
 }finally{await browser.close();}
