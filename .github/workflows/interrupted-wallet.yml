@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      QA_WORKER_VERSION: '7e696e27-d7db-40ad-89e8-db55e5d70287'
+      QA_WORKER_VERSION: 'ec0dfdc4-4a1a-445a-a5bf-fc146c8a166b'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -21,6 +21,8 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
           node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium webkit firefox
           echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
-      - run: QA_ENGINE=chromium QA_INTERRUPTED=1 node tests/live-selected-quantity.qa.mjs
       - run: QA_ENGINE=webkit node tests/live-selected-quantity.qa.mjs
-      - run: QA_ENGINE=firefox node tests/live-selected-quantity.qa.mjs
+      - if: ${{ !cancelled() }}
+        run: QA_ENGINE=chromium QA_INTERRUPTED=1 node tests/live-selected-quantity.qa.mjs
+      - if: ${{ !cancelled() }}
+        run: QA_ENGINE=firefox node tests/live-selected-quantity.qa.mjs
