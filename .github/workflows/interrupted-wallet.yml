@@ -1,0 +1,25 @@
+name: Verify interrupted mobile wallet prompt without signing
+on:
+  push:
+    branches: ['qa/wallet-interruption-v36']
+permissions:
+  contents: read
+jobs:
+  recovery:
+    env:
+      QA_WORKER_VERSION: 42c3428d-1da9-4772-a97d-f69239c88eb6
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: |
+          npm install --prefix "$RUNNER_TEMP/coolbears-browser" --ignore-scripts --no-audit --no-fund --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/coolbears-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          echo "COOLBEARS_PLAYWRIGHT=$RUNNER_TEMP/coolbears-browser/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+      - name: Recover after closing the tab during an unanswered wallet prompt
+        run: node tests/live-wallet-interruption.qa.mjs
