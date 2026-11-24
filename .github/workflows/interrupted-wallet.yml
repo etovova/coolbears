@@ -1,40 +1,41 @@
-name: Check staged public checkout files
+name: Verify local checkout on mobile and desktop
 on:
   push:
     branches: ['qa/verify-saved-purchase-v41']
 permissions:
   contents: read
 jobs:
-  verify:
+  local-checkout:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [firefox, chromium, webkit]
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: a7f135f3faa88131948bec53fd864401951b1aa6
           persist-credentials: false
+          sparse-checkout: tests/local-purchase-cap.qa.mjs
+          sparse-checkout-cone-mode: false
+          path: fixture
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: a7f135f3faa88131948bec53fd864401951b1aa6
+          path: release
       - uses: actions/setup-node@v4
         with:
           node-version: '24.19.0'
-      - name: Compare staged public assets without making purchase or RPC requests
+      - name: Install selected browser
         run: |
-          node --input-type=module <<'JS'
-          import assert from 'node:assert/strict';
-          import {readFile} from 'node:fs/promises';
-          const routes = JSON.parse(await readFile('scripts/public-files.json','utf8'));
-          const files = routes.filter(path => path.startsWith('public-mainnet/') || path.startsWith('assets/collection/') || path.startsWith('assets/brand/'));
-          const targets = [...files.map(file => [file, '/'+file]),['index.html','/'],['index.html','/index.html'],['app.js','/app.js?v=public-mainnet-20261018-1']];
-          assert.equal(targets.length,223);
-          const headers = {'Cloudflare-Workers-Version-Overrides':'coolbears-site-candidate="8e3dc641-5a90-4c2c-b9ad-5c8974139001"'};
-          for (let pass=1;pass<=2;pass++) {
-            let index=0;
-            await Promise.all(Array.from({length:4},async()=>{
-              while(index<targets.length){
-                const [file,path]=targets[index++];
-                const r=await fetch('https://coolbears-nfts.com'+path,{headers,redirect:'error',signal:AbortSignal.timeout(18000)});
-                assert.equal(r.status,200,path);assert.ok(Buffer.from(await r.arrayBuffer()).equals(await readFile(file)),path);
-              }
-            }));
-            console.log('Pass '+pass+': all '+targets.length+' staged asset responses match the release bytes.');
-          }
-          JS
+          npm install --prefix "$RUNNER_TEMP/browser" --no-fund --no-audit --ignore-scripts --package-lock=false playwright@1.62.1
+          node "$RUNNER_TEMP/browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.engine }}
+      - name: Verify two independent sessions per language
+        working-directory: release
+        env:
+          QA_ENGINE: ${{ matrix.engine }}
+        run: |
+          export COOLBEARS_PLAYWRIGHT="$RUNNER_TEMP/browser/node_modules/playwright/index.mjs"
+          node ../fixture/tests/local-purchase-cap.qa.mjs
+          node ../fixture/tests/local-purchase-cap.qa.mjs
