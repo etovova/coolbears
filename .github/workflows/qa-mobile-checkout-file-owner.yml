@@ -1,0 +1,24 @@
+name: Verify foreign file ownership on an isolated fixture
+on:
+  push:
+    branches: ['qa/mobile-checkout-v22-coverage']
+permissions:
+  contents: read
+jobs:
+  fixture:
+    runs-on: ubuntu-latest
+    container: node:24.19.0-bookworm
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - name: Verify different file owner is rejected
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(id -u)" = 0
+          node --test --test-reporter=tap --test-name-pattern="^files owned by a different user" operator/tests/deployment-vault-store.test.mjs | tee /tmp/ownership.tap
+          grep -Eq '^ok [0-9]+ - files owned by a different user' /tmp/ownership.tap
+          grep -Eq '^# pass 1$' /tmp/ownership.tap
