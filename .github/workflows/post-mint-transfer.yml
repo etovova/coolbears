@@ -1,0 +1,22 @@
+name: Two independent rehearsals of a two-NFT order and a holder transfer
+on:
+  push:
+    branches: ['qa/post-mint-lifecycle-v36']
+permissions:
+  contents: read
+jobs:
+  signed-replica:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
+      - name: First fresh buyer and recipient
+        run: node operator/tests/independent-transfer.qa.mjs
+      - name: Second fresh buyer and recipient
+        run: node operator/tests/independent-transfer.qa.mjs
