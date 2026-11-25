@@ -1,0 +1,9 @@
+name = "coolbears-mainnet-signer"
+main = "worker.mjs"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+
+# MAINNET_SIGNER_PKCS8 is provisioned as a Worker secret.
+[vars]
+MAINNET_SIGNER_PUBLIC_KEY = "EDE2F56C9595706A1C6DDD0C7C748DFBB982C23D4779A0B8267467099A115273BA"
