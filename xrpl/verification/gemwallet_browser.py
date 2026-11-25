@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 from xrpl.wallet import Wallet
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -57,7 +57,7 @@ def configure(page, buyer, password):
         unlock.click()
     indicator.click()
     page.get_by_text("Testnet", exact=True).click()
-    page.wait_for_function("document.querySelector('[data-testid=network-indicator]')?.textContent === 'Testnet'", timeout=45000)
+    expect(indicator).to_have_text("Testnet", timeout=45000)
 
 
 def checkout(context, base, buyer, password):
