@@ -11,6 +11,7 @@ const publicFiles = new Map([
   ['/assets/brand/hero-20261003.png',['hero.png','image/png']],
   ['/xrpl/', ['home.html', 'text/html; charset=utf-8']],
   ['/xrpl/site.css', ['site.css', 'text/css']],
+  ['/xrpl/xaman.mjs', ['xaman.mjs', 'text/javascript']],
   ['/xrpl/app.js', ['app.js', 'text/javascript']],
   ['/xrpl/wallet.js', ['wallet.js', 'text/javascript']],
   ['/xrpl/crossmark.js', ['crossmark.js','text/javascript']],
@@ -23,7 +24,7 @@ const publicFiles = new Map([
   ['/terms.html', ['terms.html', 'text/html; charset=utf-8']]
 ]);
 const security = {'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
-  'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"};
+  'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://oauth2.xumm.app https://xumm.app; frame-ancestors 'none'; base-uri 'none'"};
 
 function response(data, type, status = 200) {
   return new Response(data, {status, headers:{...security,'Content-Type':type,'Cache-Control':'no-store'}});
@@ -205,7 +206,7 @@ export async function handle(request,env,now=Date.now()) {
       const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',png)),b=>b.toString(16).padStart(2,'0')).join('');
       result=json({verified:fingerprint===row.sha256},fingerprint===row.sha256?200:503);
     } else if (path==='/xrpl/api/status') {
-      const net=network(env); result=json({network:net.name,issuer:net.issuer,open:env.SALES_OPEN==='yes',price:PRICE,revealAt:new Date(REVEAL_AT).toISOString()});
+      const net=network(env); result=json({network:net.name,issuer:net.issuer,xamanClientId:/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(env.XAMAN_CLIENT_ID || '') ? env.XAMAN_CLIENT_ID : null,open:env.SALES_OPEN==='yes',price:PRICE,revealAt:new Date(REVEAL_AT).toISOString()});
     } else if (path==='/xrpl/api/offer' || path==='/xrpl/api/receipt' || path==='/xrpl/api/reconcile') {
       const buyer=url.searchParams.get('buyer') || '', id=url.searchParams.get('offer');
       if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(buyer) || (id!==null && !ID.test(id))) return json({error:'Invalid request'},400);

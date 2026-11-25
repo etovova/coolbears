@@ -24,3 +24,12 @@ node --test xrpl/worker.test.mjs
 The Worker needs the ASSETS binding, asset routing set to run the Worker first, and a secret ASSET_KEY whose base64 value is the storage_key output in prepare.py. The Testnet host uses NETWORK=testnet, a distinct TEST_ISSUER and SALES_OPEN=yes. The main domain uses the project address and has purchases disabled until a separate Mainnet release. Activating and minting from the project account requires its owner's authorization. No signing key is needed by this Worker.
 
 The GemWallet browser bundle and its license are taken from @gemwallet/api 3.8.0. The cover and logo use the original collection assets.
+
+### Xaman
+
+Set the public application UUID as the Worker's `XAMAN_CLIENT_ID`. Register both callback URLs under **Origin/Redirect URIs** in the Xaman Developer Console:
+
+- https://coolbears-nfts.com/xrpl/
+- https://testnet.coolbears-nfts.com/xrpl/
+
+The browser uses OAuth authorization code with PKCE, keeps the short-lived token in the same tab, and opens the signing link returned by Xaman. Each purchase requires one NFTokenAcceptOffer signature on the selected network. After the buyer returns, the storefront verifies the transaction on the validated ledger. A missing client ID leaves Xaman visibly unavailable.

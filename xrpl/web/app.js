@@ -1,3 +1,4 @@
+import * as xaman from './xaman.mjs';
 import translations from './translations.mjs';
 const el=id=>document.getElementById(id);
 const buy=el('buy'), message=el('message'), dialog=el('walletDialog'), receipt=el('receipt');
@@ -16,6 +17,13 @@ const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
 const quantity=()=>Math.max(1,Math.min(50,Math.floor(Number(el('qty').value)||1)));
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
+ const xamanButton=el('xamanWallet'), resume=el('xamanResume');
+ xamanButton.disabled=!status?.xamanClientId;
+ xamanButton.textContent=xamanButton.disabled?{en:'Xaman · coming soon',ru:'Xaman · скоро',zh:'Xaman · 即将开放'}[lang]:'Xaman';
+ const link=xaman.signingUrl(pending?.xaman?.id,pending?.xaman?.url);
+ resume.hidden=!link || !!pending?.hash;
+ if(link){resume.href=link;resume.textContent={en:'Open Xaman',ru:'Открыть Xaman',zh:'打开 Xaman'}[lang];}
+ else resume.removeAttribute('href');
  el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
  buy.disabled=busy || !status || (!status.open && !pending);
  buy.textContent=pending?text(2):!status?text(8):!status.open?text(0):
@@ -44,7 +52,12 @@ async function api(name,params={}){
 }
 async function connect(kind) {
  if(!status)throw Error(text(8));
- if(kind==='gem'){
+ if(kind==='xaman'){
+   if(!status.xamanClientId)throw Error('Xaman · '+text(8));
+   const session=xaman.session(status);
+   if(!session){await xaman.authorize(status);return false;}
+   account=session.account;
+ }else if(kind==='gem'){
    const sdk=window.GemWalletApi;
    if(!(await sdk?.isInstalled())?.result?.isInstalled)throw Error('GemWallet · '+text(8));
    const net=(await sdk.getNetwork()).result;
@@ -61,12 +74,22 @@ async function connect(kind) {
    account=sdk.methods.getAddress() || res?.response?.data?.address;
  }
  if(!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(account||''))throw Error(text(8));
- wallet=kind;storage.set('coolbears.xrpl.wallet',kind);dialog.close();render();
+ wallet=kind;storage.set('coolbears.xrpl.wallet',kind);dialog.close();render();return true;
 }
 function pick(){el('walletInfo').textContent='';if(!dialog.open)dialog.showModal();}
 el('walletBtn').onclick=pick;el('closeWallet').onclick=()=>dialog.close();
 document.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=async()=>{try{await connect(b.dataset.wallet)}catch(e){el('walletInfo').textContent=e.message}});
 async function check(){
+ if(pending.xaman && !pending.hash){
+   // A ledger lookup also recovers a signed transaction if the provider session expired.
+   const result=await xaman.signatureResult(status,pending).catch(()=>null);
+   if(result?.declined){
+     pending=null;storage.set(txKey(),null);
+     if(!order?.done){order=null;storage.set(objKey(),null);}
+     message.textContent=text(10);return;
+   }
+   if(result?.hash){pending.hash=result.hash;storage.set(txKey(),pending);}
+ }
  const r=await api(pending.hash?'receipt':'reconcile',pending);
  if(r.state==='pending'){message.textContent=text(5);return;}
  if(r.state==='complete'){
@@ -84,13 +107,24 @@ buy.onclick=async()=>{
  try{
    if(pending){await check();return;}
    if(!wallet||!account){pick();return;}
-   const buyer=account;await connect(wallet);if(account!==buyer)throw Error(text(4)+' '+status.network);
+   const buyer=account;if(!await connect(wallet))return;if(account!==buyer)throw Error(text(4)+' '+status.network);
    if(order && buyer!==order.buyer)throw Error('Select the wallet for this order.');
    let q=await api('offer',{buyer});q=await api('offer',{buyer,offer:q.id});
    if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
    if(!order){order={buyer,target:quantity(),done:0};storage.set(objKey(),order);}
    pending={offer:q.id,buyer,last:q.validThrough,network:status.network};storage.set(txKey(),pending);
    let hash;
+   if(wallet==='xaman'){
+     let signature;
+     try{signature=await xaman.createOfferSignature(status,pending);}
+     catch(e){
+       // No signing link was offered to the buyer.
+       pending=null;storage.set(txKey(),null);
+       if(!order.done){order=null;storage.set(objKey(),null);}
+       throw e;
+     }
+     pending.xaman=signature;storage.set(txKey(),pending);location.assign(signature.url);return;
+   }
    if(wallet==='gem'){hash=(await window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:q.id,lastLedgerSequence:q.validThrough})).result?.hash;}
    else{
      const reply=await window.CoolBearsCrossmark.methods.signAndSubmitAndWait({TransactionType:'NFTokenAcceptOffer',Account:buyer,NFTokenSellOffer:q.id,LastLedgerSequence:q.validThrough});
@@ -101,5 +135,11 @@ buy.onclick=async()=>{
  }catch(e){message.textContent=e.message;}finally{busy=false;render();}
 };
 language();
-try{status=await api('status');pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;if(pending)await check();}
+try{status=await api('status');pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;
+ if(status.xamanClientId){
+   const login=await xaman.finishLogin(status);
+   const user=login || (storage.get('coolbears.xrpl.wallet')==='xaman' && xaman.session(status));
+   if(user){wallet='xaman';account=user.account;storage.set('coolbears.xrpl.wallet',wallet);if(login&&!pending)location.hash='mint';}
+ }
+ if(pending)await check();}
 catch(e){message.textContent=e.message;}render();

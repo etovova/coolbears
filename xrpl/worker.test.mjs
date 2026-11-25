@@ -36,3 +36,16 @@ test('the six collection cards use the original pre-reveal cover', async () => {
   assert.equal((collection.match(/<figcaption>#\?\?\?\?<\/figcaption>/g) || []).length, 6);
   assert.doesNotMatch(collection, /promo-|\/gallery\//);
 });
+
+test('Xaman is available only with an application ID and the site selects the network',async()=>{
+  const client='aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  for(const [value,expected] of [[undefined,null],['bad',null],[client,client]]){
+    const r=await handle(new Request('https://coolbears-nfts.com/xrpl/api/status'),{XAMAN_CLIENT_ID:value});
+    const s=await r.json();
+    assert.equal(s.xamanClientId,expected);
+    assert.equal(s.network,'Mainnet');
+    assert.equal(s.open,false);
+  }
+  const r=await request('/xrpl/api/status',{NETWORK:'testnet',TEST_ISSUER:'test-issuer',XAMAN_CLIENT_ID:client});
+  assert.equal((await r.json()).network,'Testnet');
+});
