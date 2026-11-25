@@ -1,3 +1,4 @@
+import {authenticatedAccount} from './hosted-testnet/xaman.mjs';
 export const REVEAL_AT = Date.parse('2027-02-01T00:00:00Z');
 export const PRICE = '10000000';
 export const TAXON = 20270201;
@@ -197,10 +198,51 @@ async function metadata(env,path,origin,now) {
     external_url:origin+'/xrpl/?slot='+slot+'#rarity',properties:{category:'image',files:[{uri:image,type:'image/png'}],
       collection_size:10000,top_percent:row.rarity.rank/100,rarity:row.rarity}});
 }
+async function ownerStatus(env) {
+  const tx = await (await retrieve(env,'authorize.json')).json();
+  const net = network(env);
+  const ledger = await snapshot(net);
+  if (!Number.isSafeInteger(ledger.seq) || tx.Account !== net.issuer) throw Error('Issuer configuration mismatch');
+  const entry = await objects(net,'account_objects',{type:'delegate'},ledger,page =>
+    page.account_objects.find(item => item.Account === tx.Account && item.Authorize === tx.Authorize));
+  const granted = entry ? entry.Permissions.map(p => p.Permission.PermissionValue).sort() : [];
+  const expected = tx.Permissions.map(p => p.Permission.PermissionValue).sort();
+  const state = !entry ? 'absent' : JSON.stringify(granted) === JSON.stringify(expected) ? 'active' : 'different';
+  return {state,ledger:ledger.seq,tx,signingReady:Boolean(env.XAMAN_CLIENT_ID && env.XAMAN_API_SECRET)};
+}
+
+async function createOwnerRequest(request,env) {
+  if (request.headers.get('Origin') !== 'https://coolbears-nfts.com' || request.body !== null)
+    return json({error:'Запрос должен исходить со страницы владельца CoolBears.'},400);
+  const auth = request.headers.get('Authorization');
+  if (!auth) return json({error:'Войди через Xaman кошельком эмитента.'},401);
+  if (!env.XAMAN_API_SECRET || !env.XAMAN_CLIENT_ID)
+    return json({error:'На сервере CoolBears ещё не настроен API Secret Xaman.'},503);
+  if (!await authenticatedAccount(auth,env.XAMAN_CLIENT_ID,OWNER,'MAINNET'))
+    return json({error:'Войди через Xaman кошельком эмитента в основной сети.'},401);
+  const {state,ledger,tx} = await ownerStatus(env);
+  if (state !== 'absent') return json({state},409);
+  const back = 'https://coolbears-nfts.com/xrpl/owner/';
+  const upstream = await fetch('https://xumm.app/api/v1/platform/payload',{
+    method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),
+    headers:{'X-API-Key':env.XAMAN_CLIENT_ID,'X-API-Secret':env.XAMAN_API_SECRET,'Content-Type':'application/json'},
+    body:JSON.stringify({txjson:{...tx,Fee:'12',LastLedgerSequence:ledger+70},
+      options:{submit:true,expire:3,force_network:'MAINNET',signers:[OWNER],return_url:{web:back,app:back}}})
+  });
+  const data = await upstream.json().catch(() => null);
+  if (!upstream.ok || data?.error || !data?.uuid || typeof data.next?.always !== 'string') {
+    const code = String(data?.error?.code ?? '');
+    return json({error:'Xaman отклонил серверный запрос. HTTP ' + upstream.status +
+      (/^\d{1,8}$/.test(code) ? ' · код '+code : '')},502);
+  }
+  return json({id:data.uuid,url:data.next.always});
+}
+
 export async function handle(request,env,now=Date.now()) {
   const url=new URL(request.url), path=url.pathname;
   env=siteEnvironment(url.hostname,env);
-  if (!['GET','HEAD'].includes(request.method)) return response('','text/plain',405);
+  const ownerSign = url.origin === 'https://coolbears-nfts.com' && path === '/xrpl/owner/sign';
+  if (ownerSign ? request.method !== 'POST' : !['GET','HEAD'].includes(request.method)) return response('','text/plain',405);
   if (url.hostname==='coolbears-nfts.com' && path==='/.well-known/xrp-ledger.toml') {
     const issuerFile='[[ACCOUNTS]]\naddress = "'+OWNER+'"\nnetwork = "main"\ndesc = "CoolBears NFTs issuer"\n';
     return new Response(request.method==='HEAD'?null:issuerFile,{headers:{
@@ -225,16 +267,9 @@ export async function handle(request,env,now=Date.now()) {
       if (!file.ok) throw Error('Owner page unavailable');
       result = response(file.body,type);
     } else if (ownerHost && path === '/xrpl/owner/status') {
-      const tx = await (await retrieve(env,'authorize.json')).json();
-      const net = network(env);
-      const ledger = await snapshot(net);
-      if (!Number.isSafeInteger(ledger.seq) || tx.Account !== net.issuer) throw Error('Issuer configuration mismatch');
-      const entry = await objects(net,'account_objects',{type:'delegate'},ledger,page =>
-        page.account_objects.find(item => item.Account === tx.Account && item.Authorize === tx.Authorize));
-      const granted = entry ? entry.Permissions.map(p => p.Permission.PermissionValue).sort() : [];
-      const expected = tx.Permissions.map(p => p.Permission.PermissionValue).sort();
-      const state = !entry ? 'absent' : JSON.stringify(granted) === JSON.stringify(expected) ? 'active' : 'different';
-      result = json({state,ledger:ledger.seq,tx});
+      result = json(await ownerStatus(env));
+    } else if (ownerSign) {
+      result = await createOwnerRequest(request,env);
     } else if (publicFiles.has(path)) {
       const [name,type]=publicFiles.get(path);const a=await retrieve(env,name);
       if (a.status!==200) throw Error('Site asset unavailable');

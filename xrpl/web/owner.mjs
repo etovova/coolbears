@@ -33,6 +33,10 @@ async function load() {
   }
   if (ledger.state !== 'absent' || ledger.tx.Account !== config.issuer)
     throw Error('Права или адрес эмитента отличаются от ожидаемых. Создание запроса остановлено.');
+  if (!ledger.signingReady) {
+    status.textContent = 'Разрешение ещё не выдано. Для подписи требуется API Secret приложения Xaman в настройках Cloudflare. После его сохранения нажми «Проверить состояние».';
+    return;
+  }
   const user = session(config);
   if (user && user.account !== config.issuer) {
     status.textContent = 'Выбран другой кошелёк. Выбери кошелёк эмитента при входе.';
@@ -55,31 +59,24 @@ async function load() {
 }
 
 async function createRequest() {
-  const current = await read(ownerPath + 'status');
-  if (current.state !== 'absent' || JSON.stringify(current.tx) !== JSON.stringify(ledger.tx)) return load();
   const user = session(config);
-  if (!user || user.account !== current.tx.Account) return load();
-  const back = location.origin + ownerPath;
-  const r = await fetch('https://xumm.app/api/v1/jwt/payload',{
-    method:'POST', credentials:'omit', cache:'no-store', redirect:'error', referrerPolicy:'no-referrer',
-    signal:AbortSignal.timeout(18000),
-    headers:{Authorization:'Bearer ' + user.token,'Content-Type':'application/json'},
-    body:JSON.stringify({txjson:{...current.tx,Fee:'12',LastLedgerSequence:current.ledger+70},
-      options:{submit:true,expire:3,force_network:'MAINNET',signers:[user.account],return_url:{web:back,app:back}}})
+  if (!user || user.account !== config.issuer) return load();
+  const r = await fetch(ownerPath+'sign',{
+    method:'POST', credentials:'omit', cache:'no-store', redirect:'error', referrerPolicy:'same-origin',
+    signal:AbortSignal.timeout(55000),headers:{Authorization:'Bearer '+user.token}
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok || data.error) {
+  if (r.status === 409) return load();
+  if (!r.ok) {
     if (r.status === 401) {
       action.textContent = 'Войти через Xaman ещё раз';
       action.onclick = () => run(() => authorize(config,true));
     }
-    throw Error('Xaman отклонил запрос DelegateSet. HTTP ' + r.status +
-      (data.error?.code ? ' · код ' + String(data.error.code).slice(0,80) : '') +
-      (typeof data.error?.message === 'string' ? ' · ' + data.error.message.slice(0,240) : ''));
+    throw Error(data.error || 'Сервер CoolBears не смог подготовить запрос.');
   }
-  const url = signingUrl(data.uuid,data.next?.always);
+  const url = signingUrl(data.id,data.url);
   if (!url) throw Error('Xaman не вернул ссылку для подписи.');
-  localStorage.setItem(pendingKey,JSON.stringify({id:data.uuid,url,until:Date.now()+180000}));
+  localStorage.setItem(pendingKey,JSON.stringify({id:data.id,url,until:Date.now()+180000}));
   location.assign(url);
 }
 

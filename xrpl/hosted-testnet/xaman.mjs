@@ -1,5 +1,9 @@
 // Xaman SDK maps the OAuth JWT ping's client_id to the application's public UUID.
-export async function authenticatedBuyer(bearer, clientId, buyer, fetchProvider=fetch) {
+export function authenticatedBuyer(bearer, clientId, buyer, fetchProvider=fetch) {
+  return authenticatedAccount(bearer,clientId,buyer,'TESTNET',fetchProvider);
+}
+
+export async function authenticatedAccount(bearer, clientId, account, network, fetchProvider=fetch) {
   if (!/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(clientId || '') ||
       typeof bearer !== 'string' || bearer.length>8192 ||
       !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(bearer)) return false;
@@ -14,6 +18,6 @@ export async function authenticatedBuyer(bearer, clientId, buyer, fetchProvider=
   };
   const [ping,profile]=await Promise.all([read('https://xumm.app/api/v1/jwt/ping'),read('https://oauth2.xumm.app/userinfo')]);
   return ping?.client_id?.toLowerCase()===clientId.toLowerCase() &&
-    Number.isFinite(ping.exp) && ping.exp>Date.now()/1000 && profile?.account===buyer &&
-    profile.networkType?.toUpperCase()==='TESTNET' && !profile.blocked;
+    Number.isFinite(ping.exp) && ping.exp>Date.now()/1000 && profile?.account===account &&
+    profile.networkType?.toUpperCase()===network && !profile.blocked;
 }

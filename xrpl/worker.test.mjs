@@ -116,3 +116,56 @@ test('the public ranking and private encrypted file stay closed before reveal',a
   assert.equal((await request('/internal/leaders.bin',env,REVEAL_AT)).status,404);
   assert.equal(reads,0);
 });
+
+test('only the authenticated Mainnet issuer can prepare the fixed platform sign request',async()=>{
+  const base='https://coolbears-nfts.com', path='/xrpl/owner/sign';
+  const client='617d091e-46b6-4918-b5c6-da929d661070', jwt='Bearer mock.token.value';
+  const {readFile}=await import('node:fs/promises');
+  const template=JSON.parse(await readFile(new URL('./launch/mainnet-signer/authorize.json',import.meta.url)));
+  const env={XAMAN_CLIENT_ID:client,XAMAN_API_SECRET:'for-local-test-only',ASSETS:{fetch:async()=>Response.json(template)}};
+  const send=(extra={},bindings=env)=>handle(new Request(base+path,{method:'POST',headers:{Origin:base,Authorization:jwt},...extra}),bindings);
+  const original=globalThis.fetch;
+  let submits=0,profileNetwork='MAINNET',account=OWNER,granted=[],audience=client,upstreamError=false;
+  const hash='A'.repeat(64), id='15c06d2d-7568-4984-8a92-3835463fe195';
+  globalThis.fetch=async(url,options)=>{
+    if(url==='https://xumm.app/api/v1/platform/payload'){
+      submits++;
+      assert.equal(options.headers['X-API-Secret'],env.XAMAN_API_SECRET);
+      assert.equal(options.headers['X-API-Key'],client);
+      assert.equal(options.headers.Authorization,undefined);
+      assert.equal(options.redirect,'manual');
+      assert.deepEqual(JSON.parse(options.body),{
+        txjson:{...template,Fee:'12',LastLedgerSequence:90070},
+        options:{submit:true,expire:3,force_network:'MAINNET',signers:[OWNER],
+          return_url:{web:base+'/xrpl/owner/',app:base+'/xrpl/owner/'}}
+      });
+      if(upstreamError)return Response.json({error:{code:999,message:'private diagnostics'}},{status:403});
+      return Response.json({uuid:id,next:{always:'https://xumm.app/sign/'+id}});
+    }
+    assert.equal(options.headers['X-API-Secret'],undefined);
+    if(url==='https://xumm.app/api/v1/jwt/ping')return Response.json({client_id:audience,exp:Date.now()/1000+300});
+    if(url==='https://oauth2.xumm.app/userinfo')return Response.json({account,networkType:profileNetwork});
+    assert.equal(url,'https://s1.ripple.com:51234/');
+    const {method}=JSON.parse(options.body);
+    if(method==='server_info')return Response.json({result:{info:{network_id:0,validated_ledger:{age:1,hash,seq:90000}}}});
+    assert.equal(method,'account_objects');
+    return Response.json({result:{validated:true,ledger_hash:hash,account_objects:granted}});
+  };
+  try {
+    assert.equal((await handle(new Request(base+path),env)).status,405);
+    assert.equal((await send({headers:{Origin:base}})).status,401);
+    assert.equal((await send({headers:{Origin:'null',Authorization:jwt}})).status,400);
+    assert.equal((await send({body:'{}'})).status,400);
+    assert.equal((await send({},{...env,XAMAN_API_SECRET:undefined})).status,503);
+    profileNetwork='TESTNET';assert.equal((await send()).status,401);profileNetwork='MAINNET';
+    account=template.Authorize;assert.equal((await send()).status,401);account=OWNER;
+    audience=id;assert.equal((await send()).status,401);audience=client;
+    granted=[{Account:OWNER,Authorize:template.Authorize,Permissions:template.Permissions}];
+    assert.equal((await (await send()).json()).state,'active');
+    granted[0].Permissions=[];assert.equal((await (await send()).json()).state,'different');
+    assert.equal(submits,0);granted=[];
+    assert.deepEqual(await (await send()).json(),{id,url:'https://xumm.app/sign/'+id});
+    upstreamError=true;const rejected=await send();assert.equal(rejected.status,502);
+    assert.match((await rejected.json()).error,/HTTP 403 · код 999$/);assert.equal(submits,2);
+  } finally {globalThis.fetch=original;}
+});
