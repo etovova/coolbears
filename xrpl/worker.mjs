@@ -11,8 +11,14 @@ const publicFiles = new Map([
   ['/xrpl/app.js', ['app.js', 'text/javascript']],
   ['/xrpl/wallet.js', ['wallet.js', 'text/javascript']],
   ['/xrpl/cover.gif', ['cover.gif', 'image/gif']],
-  ['/xrpl/logo.png', ['logo.png', 'image/png']]
+  ['/xrpl/logo.png', ['logo.png', 'image/png']],
+  ['/privacy.html', ['privacy.html', 'text/html; charset=utf-8']],
+  ['/terms.html', ['terms.html', 'text/html; charset=utf-8']]
 ]);
+for(let n=2;n<=7;n++){
+ const id=String(n).padStart(2,'0');
+ publicFiles.set('/xrpl/gallery/'+id+'.webp',['gallery'+id+'.webp','image/webp']);
+}
 const security = {'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
   'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"};
 
@@ -35,7 +41,7 @@ function network(env) {
 }
 async function rpc(net, method, params) {
   const r = await fetch(net.rpc,{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({method,params:[{api_version:2,...params}]}),signal:AbortSignal.timeout(8500)});
+    body:JSON.stringify({method,params:[{api_version:2,...params}]}),signal:AbortSignal.timeout(16000)});
   if (!r.ok) throw Error('Ledger unavailable');
   const {result} = await r.json();
   if (!result || result.status === 'error') {
@@ -207,6 +213,6 @@ export async function handle(request,env,now=Date.now()) {
       }
     } else return response('','text/plain',404);
     return request.method==='HEAD'?new Response(null,result):result;
-  } catch {return json({error:'Temporarily unavailable'},503);}
+  } catch (error) {console.error('CoolBears request failed',error.name,error.message);return json({error:'Temporarily unavailable'},503);}
 }
 export default {fetch:(request,env)=>handle(request,env)};

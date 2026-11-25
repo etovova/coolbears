@@ -1,39 +1,49 @@
-name: Publish CoolBears site
+name: Verify CoolBears and publish the official site link
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
-  pages: write
-  id-token: write
-concurrency:
-  group: pages
-  cancel-in-progress: true
 jobs:
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
-          node-version: '24.19.0'
-          cache: npm
-      - run: npm install --global npm@11.9.0 --ignore-scripts --no-audit --no-fund
-      - run: npm ci --no-audit --no-fund
-      - run: npm ci --prefix operator --ignore-scripts --no-audit --no-fund
-      - run: npm run test:devnet
-      - run: npm run build:wallet
-      - run: npm run build:site
-      - run: npm run test:public-mainnet
-      - run: npm run verify
+          node-version: 24
+      - run: node --test xrpl/worker.test.mjs
+      - run: python3 -m py_compile xrpl/*.py
+  pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: verify
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: |
+          mkdir -p build/pages
+          cp index.html build/pages/index.html
+          cp index.html build/pages/404.html
+          cp CNAME build/pages/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: public-site
+          path: build/pages
       - uses: actions/deploy-pages@v4
-        id: deployment
-
+        id: deploy

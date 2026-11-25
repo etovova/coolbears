@@ -74,10 +74,16 @@ def main():
     require(all(h in assets.by_hash for b in batches for h in b),"Unrecognized upload request")
     total=sum(map(len,batches))
     completed=0;token=sess["jwt"] if not batches else None
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+    print(f"Starting {len(batches)} batches, {total} files",flush=True)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
         futures={pool.submit(send,b,assets,sess):len(b) for b in batches}
         for future in concurrent.futures.as_completed(futures):
-            token=future.result() or token
+            try:
+                token=future.result() or token
+            except Exception as exc:
+                print(f"Transfer stopped: {exc}",flush=True)
+                for queued in futures: queued.cancel()
+                raise
             completed+=futures[future]
             print(f"{completed}/{total} assets transferred",flush=True)
     require(token,"Cloudflare did not confirm the complete manifest")

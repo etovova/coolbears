@@ -1,13 +1,13 @@
 # CoolBears
 
-Сайт: https://coolbears-nfts.com
+10,000 original CoolBears on XRP Ledger. The price is 10 XRP per NFT. Reveal begins on 1 February 2027 at 00:00 UTC. All originals are included in the allocation.
 
-Основной сайт и оригинальные изображения. Утверждённые описания и параметры: `metadata/policy.json`.
+[Official site](https://coolbears-nfts.com/) · [Testnet storefront](https://testnet.coolbears-nfts.com/xrpl/) · [Implementation](xrpl/README.md)
 
-Сборка: `npm ci`, `npm run build:wallet`, `npm run build:site`, `npm run verify`.
+The public issuer address is `ra7rAR24tKDsbmaJmikRjgCpoPZtFHsaJr`. The production site reports its current sale status at `/xrpl/api/status`.
 
-21 сентября 2026 по указанию владельца удалены прежний выпуск `release/`, его тесты и экспериментальная страница `phantom-check/`. История остаётся только справочным архивом, старый процесс не возобновлять.
+Run the Worker tests with Node 22 or newer.
 
-Продажи закрыты. Оригинальные слои и готовая приватная коллекция сохранены отдельно. Процесс на официальном Metaplex CLI: [operator/README.md](operator/README.md). Лабораторный выпуск и пользовательский минт в Phantom Android выполнены: отчёт владельца v6 содержит `stage=verified`, затем владелец подтвердил медведя и анимацию. 22 сентября 2026 независимое повторное чтение через Cloudflare RPC подтвердило finalized-транзакцию без ошибки, Core NFT #0001, владельца, коллекцию, имя и URI. Текущая двухпозиционная лабораторная проверка завершена, новый минт не требуется. Подробности и ограничения: [devnet/README.md](devnet/README.md).
-
-22 сентября 2026 общий [Devnet RPC](rpc-proxy/README.md) развёрнут в Cloudflare; независимая проверка только чтением прошла CORS, Devnet genesis и текущие аккаунты машины/guard/коллекции, тираж 2/2. Его публичный адрес без API-ключа записан в `settings.siteRpc`, клиент v7 пересобран. Состояние публикации этой сборки подтверждается workflow GitHub Pages; физический тест v7, Solflare/Backpack и других устройств не подтверждён. Ручной адрес RPC остаётся необязательной временной настройкой.
+```sh
+node --test xrpl/worker.test.mjs
+```
