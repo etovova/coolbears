@@ -14,7 +14,7 @@ let status,account,wallet,busy=false,pending,order,rankingVisible=false;
 const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
-const mintPilot=()=>status?.network==='Testnet' && status.mintMode==='single-slot' && location.hostname==='127.0.0.1';
+const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].includes(status.mintMode) && location.hostname==='127.0.0.1';
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
@@ -52,9 +52,54 @@ async function api(name,params={}){
  const r=await fetch(url,{cache:'no-store'}),data=await r.json();
  if(!r.ok&&!data.state)throw Error(data.error||text(8));return data;
 }
+function requestKey(buyer){return 'coolbears.xrpl.collection.request.'+status.issuer+'.'+buyer}
+async function collectionRequest(buyer){
+ if(!['gem','cross'].includes(wallet))throw Error(text(8));
+ const key=requestKey(buyer);
+ let id=storage.get(key);
+ if(!id){id=crypto.randomUUID();storage.set(key,id);}
+ const send=async(path,data)=>{
+   const tries=path==='mint'?2:1;
+   for(let i=0;i<tries;i++){
+     let r;
+     try{r=await fetch('/xrpl/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
+     catch(e){if(i+1>=tries)throw e;}
+     if((!r||[502,503,504].includes(r.status))&&i+1<tries){
+       await new Promise(resolve=>setTimeout(resolve,900));continue;
+     }
+     const v=await r.json();
+     if(!r.ok){if(v.state==='expired')storage.set(key,null);throw Error(v.error||text(8))}
+     return v;
+   }
+ };
+ const proof=await send('challenge',{buyer,request:id});
+ let pk,signature;
+ if(wallet==='gem'){
+   pk=(await window.GemWalletApi.getPublicKey()).result;
+   if(pk?.address!==buyer)throw Error(text(4)+' Testnet');
+   signature=(await window.GemWalletApi.signMessage(proof.message)).result?.signedMessage;
+ }else{
+   const bytes=new TextEncoder().encode(proof.message);
+   const hex=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');
+   pk=(await window.CoolBearsCrossmark.methods.signInAndWait(hex))?.response?.data;
+   if(pk?.address!==buyer || pk.network?.type?.toLowerCase()!=='testnet' || pk.network?.protocol!=='XRPL')throw Error(text(4)+' Testnet');
+   signature=pk.signature;
+ }
+ if(!signature)throw Error(text(10));
+ return send('mint',{buyer,request:id,expires:proof.expires,nonce:proof.nonce,tag:proof.tag,publicKey:pk.publicKey,signature});
+}
 async function selectOffer(buyer){
  let offer;
- if(mintPilot()){
+ if(mintPilot() && status.mintMode==='collection'){
+   const result=await collectionRequest(buyer);
+   if(!/^[A-F0-9]{64}$/.test(result.id))throw Error(text(8));
+   if(result.state==='sold'){
+     if(!/^[A-F0-9]{64}$/.test(result.hash))throw Error(text(8));
+     pending={offer:result.id,buyer,hash:result.hash,network:status.network};storage.set(txKey(),pending);
+     await check();return null;
+   }
+   offer=result.id;
+ }else if(mintPilot()){
    const reply=await fetch('/xrpl/api/mint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({buyer})});
    const result=await reply.json();
    if(!reply.ok)throw Error(result.error||text(8));
@@ -109,6 +154,7 @@ async function check(){
  if(r.state==='pending'){message.textContent=text(5);return;}
  if(r.state==='complete'){
    const id=r.hash;const explorer=status.network==='Testnet'?'testnet.xrpl.org':'livenet.xrpl.org';
+   if(mintPilot()&&status.mintMode==='collection')storage.set(requestKey(pending.buyer),null);
    receipt.href='https://'+explorer+'/transactions/'+id;receipt.hidden=false;
    if(order && order.lastHash!==id){order.done++;order.lastHash=id;storage.set(objKey(),order);}
    message.textContent=text(6)+(order?' '+order.done+' / '+order.target:'');
@@ -124,7 +170,7 @@ buy.onclick=async()=>{
    if(!wallet||!account){pick();return;}
    const buyer=account;if(!await connect(wallet))return;if(account!==buyer)throw Error(text(4)+' '+status.network);
    if(order && buyer!==order.buyer)throw Error('Select the wallet for this order.');
-   const q=await selectOffer(buyer);
+   const q=await selectOffer(buyer);if(!q)return;
    if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
    if(!order){order={buyer,target:quantity(),done:0};storage.set(objKey(),order);}
    pending={offer:q.id,buyer,last:q.validThrough,network:status.network};storage.set(txKey(),pending);

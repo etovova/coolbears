@@ -61,3 +61,26 @@ A request after expiry cancels the old offer and creates a new buyer-specific of
 The canonical domain serves its Mainnet issuer at `/.well-known/xrp-ledger.toml`. For Bithomp and other readers, GET and HEAD on this exact path must return TOML with `Access-Control-Allow-Origin: *`. The unsigned [account domain template](launch/set-domain.json) contains the matching domain for the issuer to review after account activation. Two-way verification requires the matching Domain on the validated Mainnet account. A marketplace profile or verification badge has its own approval process.
 
 Run `python xrpl/test_reservations.py` with the Testnet pilot dependencies for expiry, contention, recovery and sold-token regression checks.
+
+### Collection orders and recovery on Testnet
+
+The collection pilot manages 10,000 numbered slots in a private SQLite journal. On the dedicated Testnet issuer, slots 0000–0002 belong to the earlier experiments. A wallet signs a short-lived message naming the site, Testnet, price and persistent order ID. The browser stores this ID before the mint request. GemWallet and CROSSMARK can produce the message signature separately from the payment signature. The pilot verifies the address and signature and checks that the master key is enabled. The default permits the two designated test buyers. For an independent funded Testnet wallet, enable CB_PILOT_OPEN_BUYERS=yes on the loopback storefront and start a fresh issuer authorization with --all-test-buyers. Both settings are required. The account still signs the order and the buying transaction.
+
+The allocator records one active order per wallet and slot. Repeating the same order recovers its offer or receipt. It reuses previously issued tokens after a confirmed offer removal. A validated sale permanently consumes the slot. An unsigned draft is saved before requesting a signature. The issuer transaction hash, signed bytes and ledger window are saved before submission. Missing history keeps the order pending. Rebuilding an empty database against an issuer with a different issuance count stops further mints.
+
+The collection storefront requires an issuer agent and runs without an issuer seed. The issuer agent accepts fixed-price Testnet mints, buyer-directed listings of approved tokens and cancellation of expired offers. Its signing budget is an inclusive range of slots. It checks the Testnet account sequence and deadline and records each approval before answering. Requests and responses use a private local inbox. A storefront can validate each response against the exact draft and issuer public key. Host permissions and isolation of the signer must be provided by the operator. A new agent journal permits at most twelve signatures per authorized slot across all transaction types. Keep both journals on durable storage. Each directory and the seed file used in this Testnet example must be private to the operator.
+
+The following example uses paths outside Git. The working state starts with the three prior slots accounted for. On an existing journal, select the verified next unused slot when starting a *new* agent signing journal. Reuse the same journal and budget on restart.
+
+```sh
+# Issuer agent process, sole holder of the disposable Testnet seed.
+CB_SIGNER_INBOX=/private/signing-inbox python xrpl/testnet_signer.py \
+  --state /private/issuer-state --seed /private/testnet-issuer-seed --first 3 --last 8
+
+# Storefront process. Give it its own state and the inbox, without the issuer seed.
+CB_SIGNER_INBOX=/private/signing-inbox CB_PILOT_STATE=/private/storefront-state \
+  CB_PILOT_COLLECTION=yes CB_PILOT_PYTHON=/path/to/venv/bin/python \
+  node --use-env-proxy xrpl/testnet-pilot.mjs
+```
+
+Both services run on the operator's machine. Direct the browser to the loopback URL printed by the storefront. Wallet adapters, the address allowlist and network checks pin this implementation to XRPL Testnet. The public Mainnet Worker has no connection to the signing agent. The [verified Testnet purchases](verification/sales-testnet.json) record the four published mint and sale hashes. Verify a recorded Testnet primary purchase independently with `python xrpl/verify_testnet_sale.py MINT_HASH PAYMENT_HASH`. The collection inventory test uses 16 concurrent writers and synthetic chain events to exercise all 10,000 slots. Live Testnet receipts cover individual NFTs. Run the offline Python checks with `python -m unittest discover -s xrpl -p 'test_*.py'` and the storefront checks with `node --test xrpl/worker.test.mjs`.

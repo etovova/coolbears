@@ -91,12 +91,19 @@ def validated_transaction(tx_hash, blob, deadline):
     raise TimeoutError("Mint awaiting validation. Retry to resume the same transaction")
 
 
-def private_paths():
+def private_state():
     state = Path(os.environ["CB_PILOT_STATE"]).resolve(strict=True)
-    seed = Path(os.environ["CB_PILOT_SEED"]).resolve(strict=True)
-    if not state.is_dir() or state.stat().st_mode & 0o077 or seed.stat().st_mode & 0o077:
-        sys.exit("Pilot state and seed require owner-only permissions")
+    if not state.is_dir() or state.stat().st_mode & 0o077:
+        sys.exit("Pilot state requires owner-only permissions")
     os.umask(0o077)
+    return state
+
+
+def private_paths():
+    state = private_state()
+    seed = Path(os.environ["CB_PILOT_SEED"]).resolve(strict=True)
+    if not seed.is_file() or seed.stat().st_mode & 0o077:
+        sys.exit("Pilot seed requires owner-only permissions")
     return state, seed
 
 

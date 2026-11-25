@@ -1,0 +1,50 @@
+{
+  "network": "XRPL Testnet",
+  "previously_issued": 3,
+  "supply_local_test": 10000,
+  "parallel_local_writers": 16,
+  "issuer_count_after": 7,
+  "verified_ledger": 22604209,
+  "sales": [
+    {
+      "slot": "0003",
+      "mint": "93E07BB3F8F6CB518A41F197A2EE162DA20F9C869F1089FA41F2BF736E0E38A7",
+      "payment": "075D340CA8DEB8DFDEBAD9EC3A3DB421E84D279D93B10ADFA21E37C0AAAD2ADE",
+      "buyer": "rDT2EnyrhJ6hPQfAGnMLfbnqTxeENhB4zr",
+      "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F5C4687B8F0158E35B",
+      "ledger": 22604031,
+      "price_drops": 10000000,
+      "buyer_fee_drops": 10
+    },
+    {
+      "slot": "0004",
+      "mint": "F731F99F5B1CEB2BE41C3698643BD3CE291B4AAA9E528E47D4181F7B1531251A",
+      "payment": "2273CDA0DB414267D95F220D5F960E477298E4E7B73375474306A1851F5AECC9",
+      "buyer": "rf2EoyM9uS2HqjS3ouFTzQrNg88LDLrN8a",
+      "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F5DD76448E0158E35C",
+      "ledger": 22604025,
+      "price_drops": 10000000,
+      "buyer_fee_drops": 10
+    },
+    {
+      "slot": "0005",
+      "mint": "614850BD775AA50AE4D7DD4296CF06E5F10D03C6BEB55D54798D5D4F581A57A9",
+      "payment": "55844175A7038A4EDDF38746B561C77FA5EBD4C5E2E561E63BCF47F3F193ECD1",
+      "buyer": "rDT2EnyrhJ6hPQfAGnMLfbnqTxeENhB4zr",
+      "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F5F21D95810158E35D",
+      "ledger": 22604143,
+      "price_drops": 10000000,
+      "buyer_fee_drops": 10
+    },
+    {
+      "slot": "0006",
+      "mint": "C37E3A6D64E407DF2132F53B2F151378A978293946241BC3CAFE2E5BBCBAC389",
+      "payment": "C79214E10635E95AF2E93DB993BE4D52A34592A06DE09948C48CB6615C90166F",
+      "buyer": "rpsFuNbccuB4vMB4Pw3ch6oqXNZfHnSr7c",
+      "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F50B3BE6800158E35E",
+      "ledger": 22604197,
+      "price_drops": 10000000,
+      "buyer_fee_drops": 10
+    }
+  ]
+}

@@ -95,26 +95,40 @@ def check_effect(meta, draft):
     return offer
 
 
-def stage(db, seed, ledger, fields):
+def build_draft(ledger, fields, expected):
     root = snapshot_read("account_info", ledger["hash"], account=ISSUER)["account_data"]
-    expected = SLOT if fields["TransactionType"] == MINT else SLOT + 1
     if root["Account"] != ISSUER or root.get("MintedNFTokens") != expected:
         raise ValueError("Unexpected Testnet issuer mint count")
     fee = int(get("fee")["drops"]["open_ledger_fee"])
     if not 0 < fee <= 100:
         raise ValueError("Testnet fee outside pilot limits")
-    wallet = Wallet.from_seed(seed.read_text().strip())
-    if wallet.address != ISSUER:
-        raise ValueError("Wrong Testnet issuer")
     draft = {**fields, "Account": ISSUER, "Sequence": root["Sequence"], "Fee": str(fee),
              "LastLedgerSequence": ledger["seq"] + 35}
     sim = get("simulate", tx_json=draft)
     if sim.get("applied") is not False or sim.get("engine_result") != "tesSUCCESS":
-        raise ValueError("Unexpected simulation result")
+        raise ValueError("Testnet simulation did not approve this action: " + str(sim.get("engine_result")))
     check_effect(sim["meta"], draft)
-    tx = sign(Transaction.from_xrpl(draft), wallet)
-    db.execute("INSERT INTO action(hash,blob,draft) VALUES(?,?,?)",
-               (tx.get_hash(), encode(tx.to_xrpl()), json.dumps(draft)))
+    return draft
+
+
+def sign_draft(seed, draft):
+    if callable(seed):
+        tx = seed(draft)
+    else:
+        wallet = Wallet.from_seed(seed.read_text().strip())
+        if wallet.address != ISSUER:
+            raise ValueError("Wrong Testnet issuer")
+        tx = sign(Transaction.from_xrpl(draft), wallet)
+    return tx.get_hash(), encode(tx.to_xrpl()), json.dumps(draft)
+
+
+def prepare_action(seed, ledger, fields, expected):
+    return sign_draft(seed, build_draft(ledger, fields, expected))
+
+
+def stage(db, seed, ledger, fields):
+    expected = SLOT if fields["TransactionType"] == MINT else SLOT + 1
+    db.execute("INSERT INTO action(hash,blob,draft) VALUES(?,?,?)", prepare_action(seed, ledger, fields, expected))
     db.commit()
 
 
