@@ -167,6 +167,15 @@ async function artwork(env, slot, entry) {
   if (bytes.length!==entry.length) throw Error('Incomplete image');
   return openAsset(env,'art/'+slot,bytes);
 }
+async function readRanking(env) {
+  const name='leaders.bin', asset=await retrieve(env,name);
+  if (asset.status!==200) throw Error('Ranking unavailable');
+  const rows=JSON.parse(new TextDecoder().decode(await openAsset(env,name,await asset.arrayBuffer())));
+  if (!Array.isArray(rows) || rows.length!==50 || new Set(rows.map(row=>row.slot)).size!==50 ||
+      !rows.every((row,i)=>row.rank===i+1 && /^\d{4}$/.test(row.slot) && typeof row.score==='string'))
+    throw Error('Invalid ranking');
+  return rows;
+}
 async function metadata(env,path,origin,now) {
   const match=/^\/xrpl\/(metadata|art)\/(\d{4})\.(json|png)$/.exec(path);
   if (!match || (match[1]==='art')!==(match[3]==='png')) return response('','text/plain',404);
@@ -201,12 +210,7 @@ export async function handle(request,env,now=Date.now()) {
       result=await metadata(env,path,url.origin,now);
     } else if (path==='/xrpl/api/top50') {
       if (now<REVEAL_AT) result=json({revealed:false});
-      else {
-        const name='leaders.bin', asset=await retrieve(env,name);
-        if (asset.status!==200) throw Error('Ranking unavailable');
-        const rows=JSON.parse(new TextDecoder().decode(await openAsset(env,name,await asset.arrayBuffer())));
-        result=json({revealed:true,rows});
-      }
+      else result=json({revealed:true,rows:await readRanking(env)});
     } else if (path==='/xrpl/api/storage-check' && env.STORAGE_CHECK &&
                request.headers.get('Authorization')==='Bearer '+env.STORAGE_CHECK) {
       const shard='m00.json', asset=await retrieve(env,shard);
@@ -214,6 +218,7 @@ export async function handle(request,env,now=Date.now()) {
       const [row]=JSON.parse(new TextDecoder().decode(await openAsset(env,shard,await asset.arrayBuffer())));
       const png=await artwork(env,'0000',row);
       const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',png)),b=>b.toString(16).padStart(2,'0')).join('');
+      await readRanking(env);
       const verified=fingerprint===row.sha256 && Number.isInteger(row.rarity?.rank) && typeof row.rarity.score==='string';
       result=json({verified},verified?200:503);
     } else if (path==='/xrpl/api/status') {
