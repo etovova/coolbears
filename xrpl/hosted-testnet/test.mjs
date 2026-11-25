@@ -7,7 +7,9 @@ import {newOffer} from './ledger.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {deflateSync} from 'node:zlib';
 import {initialize,Journal} from './journal.mjs';
-import signer from './issuer.mjs';
+import signer, {MintJournal} from './issuer.mjs';
+import {signingFields, signOrder} from './delegate.mjs';
+import {encode,decode} from 'ripple-binary-codec';
 
 test('reservation binds buyer, request, public site, nonce and lifetime',async()=>{
   const k=deriveKeypair(generateSeed()), buyer=deriveAddress(k.publicKey);
@@ -49,4 +51,74 @@ test('restores completed orders once and reuses released inventory',async()=>{
   await initialize(storage,null);
   j.close(r,null);
   a.equal(j.claim('another','next',500).n,7);
+});
+
+
+test('delegate signs mint and reoffer for issuer and cancels expired offers as itself',async()=>{
+  const pair=await crypto.subtle.generateKey('Ed25519',true,['sign','verify']);
+  const publicKey='ED'+hex(new Uint8Array(await crypto.subtle.exportKey('raw',pair.publicKey)));
+  const privateKey=hex(new Uint8Array(await crypto.subtle.exportKey('pkcs8',pair.privateKey)));
+  const delegate=deriveAddress(publicKey);
+  for (const type of ['NFTokenMint','NFTokenCreateOffer','NFTokenCancelOffer']) {
+    const ids=signingFields(type,publicKey);
+    a.equal(ids.Account,type==='NFTokenCancelOffer'?delegate:ISSUER);
+    a.equal(ids.Delegate,type==='NFTokenCancelOffer'?undefined:delegate);
+    const draft={TransactionType:type,...ids,Sequence:123,LastLedgerSequence:155,Fee:'10'};
+    const signed=await signOrder(draft,privateKey);
+    a.match(signed.TxnSignature,/^[0-9A-F]{128}$/);
+    a.deepEqual(decode(encode(signed)),signed);
+  }
+  a.throws(()=>signingFields('Payment',publicKey));
+  const other=deriveKeypair(generateSeed({algorithm:'ed25519'}));
+  const wrong={TransactionType:'NFTokenMint',...signingFields('NFTokenMint',other.publicKey)};
+  await a.rejects(()=>signOrder(wrong,privateKey),/key mismatch/);
+});
+
+test('a never-applied cancellation recovers using the cancelling account sequence',async t=>{
+  const account='rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb';
+  const draft={Account:account,Sequence:23,LastLedgerSequence:50};
+  const pending={hash:'A'.repeat(64),draft:JSON.stringify(draft),first_ledger:40};
+  const ledger={seq:52,hash:'B'.repeat(64)};
+  t.mock.method(globalThis,'fetch',async (_url,options)=>{
+    const {method,params}=JSON.parse(options.body);
+    if (method==='tx') {
+      a.equal(params[0].min_ledger,40);
+      a.equal(params[0].max_ledger,50);
+      return Response.json({result:{error:'txnNotFound',searched_all:true}});
+    }
+    a.equal(method,'account_info');
+    a.equal(params[0].account,account);
+    return Response.json({result:{status:'success',validated:true,ledger_hash:ledger.hash,account_data:{Sequence:23}}});
+  });
+  const writes=[];
+  const journal={exec(...args){writes.push(args)}};
+  a.equal(await MintJournal.prototype.resume.call({journal},pending,ledger),true);
+  a.equal(writes.length,1);
+  a.match(writes[0][0],/notApplied/);
+  a.equal(writes[0][1],pending.hash);
+});
+
+test('an external cancellation releases the old reservation even if our cancellation finds no offer',async t=>{
+  const row={id:'first',n:11,buyer:'buyer',phase:'open',offer:'1'.repeat(64),
+    token:'2'.repeat(64),ledger:80,expires:400};
+  const pending={request:row.id,hash:'3'.repeat(64),first_ledger:81,
+    draft:JSON.stringify({TransactionType:'NFTokenCancelOffer',Account:'operator',NFTokenOffers:[row.offer],LastLedgerSequence:90})};
+  const ledger={seq:81,hash:'4'.repeat(64)};
+  const removed={DeletedNode:{LedgerIndex:row.offer,LedgerEntryType:'NFTokenOffer',FinalFields:{
+    NFTokenID:row.token, Owner:ISSUER, Flags:1, Amount:PRICE, Destination:row.buyer, Expiration:row.expires}}};
+  t.mock.method(globalThis,'fetch',async (_url,options)=>{
+    const {method}=JSON.parse(options.body);
+    if (method==='tx') return Response.json({result:{status:'success',validated:true,ledger_index:81,hash:pending.hash,
+      tx_json:JSON.parse(pending.draft),meta:{TransactionResult:'tecOBJECT_NOT_FOUND',AffectedNodes:[]}}});
+    if (method==='ledger_entry') return Response.json({result:{error:'entryNotFound'}});
+    a.equal(method,'account_tx');
+    return Response.json({result:{status:'success',validated:true,ledger_index_min:81,ledger_index_max:81,
+      transactions:[{hash:'5'.repeat(64),tx_json:{TransactionType:'NFTokenCancelOffer'},
+        meta:{TransactionResult:'tesSUCCESS',AffectedNodes:[removed]}}]}});
+  });
+  const writes=[];
+  const journal={order:()=>row,storage:{transactionSync:fn=>fn()},exec(...args){writes.push(args)}};
+  a.equal(await MintJournal.prototype.resume.call({journal},pending,ledger),true);
+  a.deepEqual(writes.map(args=>args.slice(1)),[
+    ['expired',null,row.id],['free',row.n],['tecOBJECT_NOT_FOUND',81,pending.hash]]);
 });
