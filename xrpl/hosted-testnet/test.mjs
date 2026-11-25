@@ -130,7 +130,7 @@ test('Xaman reservations require the verified CoolBears Testnet session and an o
   const ping={client_id:clientId,exp:Date.now()/1000+600};
   const profile={account:buyer,networkType:'TESTNET',blocked:false};
   const provider=(p,user)=>async(url,opts)=>{
-    a.equal(opts.headers.Authorization,auth);a.equal(opts.redirect,'error');
+    a.equal(opts.headers.Authorization,auth);a.equal(opts.redirect,'manual');
     if (url==='https://xumm.app/api/v1/jwt/ping') return Response.json(p);
     a.equal(url,'https://oauth2.xumm.app/userinfo');return Response.json(user);
   };
@@ -139,6 +139,8 @@ test('Xaman reservations require the verified CoolBears Testnet session and an o
     [ping,{...profile,networkType:'MAINNET'}],[ping,{...profile,account:ISSUER}],[ping,{...profile,blocked:true}]])
     a.equal(await authenticatedBuyer(auth,clientId,buyer,provider(p,u)),false);
   a.equal(await authenticatedBuyer(auth,clientId,buyer,async()=>new Response(null,{status:401})),false);
+  await a.rejects(authenticatedBuyer(auth,clientId,buyer,async()=>Response.redirect('https://example.invalid/',302)),
+    /Xaman authentication unavailable/);
   a.equal(await authenticatedBuyer(null,clientId,buyer,()=>a.fail()),false);
   const env={CHALLENGE_KEY:secret,JOURNAL:{idFromName:()=>1,get:()=>({fetch:async(u,i)=>{
     a.deepEqual(JSON.parse(i.body),identity);return Response.json({accepted:true});

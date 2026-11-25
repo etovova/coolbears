@@ -3,7 +3,8 @@ export async function authenticatedBuyer(bearer, clientId, buyer, fetchProvider=
   if (!/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(clientId || '') ||
       typeof bearer !== 'string' || bearer.length>8192 ||
       !/^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(bearer)) return false;
-  const options={headers:{Authorization:bearer,Accept:'application/json'},redirect:'error',
+  // Workers supports manual redirects; the non-OK check below rejects a redirect before any token is forwarded.
+  const options={headers:{Authorization:bearer,Accept:'application/json'},redirect:'manual',
     cache:'no-store',signal:AbortSignal.timeout(10000)};
   const read=async url=>{
     const response=await fetchProvider(url,options);
