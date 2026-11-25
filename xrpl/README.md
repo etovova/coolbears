@@ -33,3 +33,9 @@ Set the public application UUID as the Worker's `XAMAN_CLIENT_ID`. Register both
 - https://testnet.coolbears-nfts.com/xrpl/
 
 The browser uses OAuth authorization code with PKCE, keeps the short-lived token in the same tab, and opens the signing link returned by Xaman. Each purchase requires one NFTokenAcceptOffer signature on the selected network. After the buyer returns, the storefront verifies the transaction on the validated ledger. A missing client ID leaves Xaman visibly unavailable.
+
+### First Mainnet mint
+
+The [first NFT template](launch/first-mint.json) mints slot 0000 into the issuer account with a permanent URI. Its hidden artwork uses the same randomized allocation as every other slot. Minting this template creates no sell offer. Publish an offer for 10,000,000 drops as a separate launch action after the owner approves sales.
+
+Run `python3 xrpl/first_mint.py` when preparing the first signature. It reads a validated Mainnet ledger, checks the issuer's lifetime mint count, fixes the sequence, fee and expiry, and simulates the transaction. It emits an unsigned transaction only if the simulation succeeds. A fee above 100 drops pauses preparation for review. This check never signs or submits a transaction. If a previous signature has an unknown outcome, reconcile its hash with the ledger before requesting another signature. Re-run the check when the ledger window expires.

@@ -49,3 +49,16 @@ test('Xaman is available only with an application ID and the site selects the ne
   const r=await request('/xrpl/api/status',{NETWORK:'testnet',TEST_ISSUER:'test-issuer',XAMAN_CLIENT_ID:client});
   assert.equal((await r.json()).network,'Testnet');
 });
+
+test('the first issuer draft matches the storefront and creates no sell offer',async()=>{
+  const {readFile}=await import('node:fs/promises');
+  const {TAXON}=await import('./worker.mjs');
+  const draft=JSON.parse(await readFile(new URL('./launch/first-mint.json',import.meta.url),'utf8'));
+  assert.deepEqual(Object.keys(draft).sort(),['Account','Flags','NFTokenTaxon','TransactionType','TransferFee','URI']);
+  assert.equal(draft.TransactionType,'NFTokenMint');
+  assert.equal(draft.Account,OWNER);
+  assert.equal(draft.NFTokenTaxon,TAXON);
+  assert.equal(draft.TransferFee,7000);
+  assert.equal(draft.Flags,8);
+  assert.equal(Buffer.from(draft.URI,'hex').toString(),'https://coolbears-nfts.com/xrpl/metadata/0000.json');
+});
