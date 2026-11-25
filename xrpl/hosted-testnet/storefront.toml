@@ -1,0 +1,17 @@
+name = "coolbears-testnet-orders"
+main = "build/storefront.js"
+compatibility_date = "2026-10-01"
+workers_dev = false
+preview_urls = false
+routes = [
+  { pattern = "testnet.coolbears-nfts.com/xrpl/api/*", zone_name = "coolbears-nfts.com" },
+  { pattern = "testnet.coolbears-nfts.com/xrpl/app.js", zone_name = "coolbears-nfts.com" }
+]
+
+[[services]]
+binding = "ISSUANCE"
+service = "coolbears-testnet-issuer"
+
+[[services]]
+binding = "LEGACY"
+service = "coolbears-xrpl"

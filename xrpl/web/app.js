@@ -14,7 +14,7 @@ let status,account,wallet,busy=false,pending,order,rankingVisible=false;
 const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
-const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].includes(status.mintMode) && location.hostname==='127.0.0.1';
+const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].includes(status.mintMode) && (location.hostname==='127.0.0.1' || (status.mintMode==='collection' && location.origin==='https://testnet.coolbears-nfts.com'));
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
@@ -53,13 +53,13 @@ async function api(name,params={}){
  if(!r.ok&&!data.state)throw Error(data.error||text(8));return data;
 }
 function requestKey(buyer){return 'coolbears.xrpl.collection.request.'+status.issuer+'.'+buyer}
-async function collectionRequest(buyer){
+async function collectionRequest(buyer,resuming=false){
  if(!['gem','cross'].includes(wallet))throw Error(text(8));
  const key=requestKey(buyer);
  let id=storage.get(key);
  if(!id){id=crypto.randomUUID();storage.set(key,id);}
  const send=async(path,data)=>{
-   const tries=path==='mint'?2:1;
+   const tries=path==='mint'?36:1;
    for(let i=0;i<tries;i++){
      let r;
      try{r=await fetch('/xrpl/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
@@ -68,6 +68,11 @@ async function collectionRequest(buyer){
        await new Promise(resolve=>setTimeout(resolve,900));continue;
      }
      const v=await r.json();
+     if(r.status===202 && v.state==='preparing'){
+       message.textContent={en:'Preparing your NFT on Testnet…',ru:'Выпускаем ваш NFT в тестовой сети…',zh:'正在测试网准备您的 NFT…'}[lang];
+       if(i+1===tries)throw Error(text(5));
+       await new Promise(resolve=>setTimeout(resolve,1800));continue;
+     }
      if(!r.ok){if(v.state==='expired')storage.set(key,null);throw Error(v.error||text(8))}
      return v;
    }
@@ -86,7 +91,12 @@ async function collectionRequest(buyer){
    signature=pk.signature;
  }
  if(!signature)throw Error(text(10));
- return send('mint',{buyer,request:id,expires:proof.expires,nonce:proof.nonce,tag:proof.tag,publicKey:pk.publicKey,signature});
+ const reply=await send('mint',{buyer,request:id,expires:proof.expires,nonce:proof.nonce,tag:proof.tag,publicKey:pk.publicKey,signature});
+ if(reply.state==='resume'){
+   if(resuming || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(reply.request))throw Error(text(8));
+   storage.set(key,reply.request);return collectionRequest(buyer,true);
+ }
+ return reply;
 }
 async function selectOffer(buyer){
  let offer;

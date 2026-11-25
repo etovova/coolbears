@@ -84,3 +84,13 @@ CB_SIGNER_INBOX=/private/signing-inbox CB_PILOT_STATE=/private/storefront-state 
 ```
 
 Both services run on the operator's machine. Direct the browser to the loopback URL printed by the storefront. Wallet adapters, the address allowlist and network checks pin this implementation to XRPL Testnet. The public Mainnet Worker has no connection to the signing agent. The [verified Testnet purchases](verification/sales-testnet.json) record the four published mint and sale hashes. Verify a recorded Testnet primary purchase independently with `python xrpl/verify_testnet_sale.py MINT_HASH PAYMENT_HASH`. The collection inventory test uses 16 concurrent writers and synthetic chain events to exercise all 10,000 slots. Live Testnet receipts cover individual NFTs. Run the offline Python checks with `python -m unittest discover -s xrpl -p 'test_*.py'` and the storefront checks with `node --test xrpl/worker.test.mjs`.
+
+### Public on-demand Testnet storefront
+
+The public test site at https://testnet.coolbears-nfts.com/ issues a reservation after a wallet signs a site- and order-specific challenge. A second signature accepts the personal offer for 10 test XRP. A fresh browser can recover its wallet's active order. Receipts for the previous Testnet issuer still resolve through the original Worker.
+
+The two Worker configurations in `xrpl/hosted-testnet` cover the Testnet API and browser script. The issuing Worker has no public route. Only that Worker has the disposable issuer secret, challenge key and SQLite Durable Object binding. Its order journal keeps the signed transaction bytes before submission. It looks up the same hash after a retry. A replacement requires complete ledger history and an unchanged issuer sequence. Expired offers are reconciled before their NFT returns to inventory.
+
+Build with Node 24 using `npm ci && npm test && npm run build` in that directory. Keep the existing issuer Worker, SQLite namespace, migration tag, object name and secret bindings when updating the deployment. The initial CHECKPOINT secret is a deflated, base64-encoded JSON export of the settled pilot's setup, occupied slots, orders and signed transactions. The bootstrap runs once per fresh database. Recover subsequent orders from the live namespace and its recovery history. The fixed Testnet issuer and network are part of the source.
+
+The [public checkout record](verification/hosted-testnet-sale.json) contains the original mint, confirmed payment and ledger number. The browser test used a disposable wallet adapter. It reserved the NFT, resumed the offer after an issuer deployment in a fresh browser, completed payment and recovered the receipt on replay.

@@ -1,0 +1,33 @@
+{
+  "sale": {
+    "slot": "0007",
+    "mint": "69EA4C70C4FD2FD429F7444A78186D0B64F02638678A6074910939986211E1A2",
+    "payment": "53C2EE9C2477E7AAB420D378FD4CD0C054AEFD524B3812D5EC1F00589906D9E1",
+    "buyer": "raGnZS2ktd4JyftDnHiDUwEMJbnbMZLi2v",
+    "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F521C137830158E35F",
+    "ledger": 22604924,
+    "price_drops": 10000000,
+    "buyer_fee_drops": 10
+  },
+  "site": "https://testnet.coolbears-nfts.com",
+  "network": "XRPL Testnet",
+  "issuer": "rEoKftiFRwknRDkbV2zURNc6KmhJoBxtaC",
+  "before_ledger": 22604882,
+  "after_ledger": 22604939,
+  "issued_before": 7,
+  "issued_after": 8,
+  "offer": "857C4072D6F7453E86C043CAAD1900D00E96EB09B5A56F55905AB1FEB30B4238",
+  "test_wallet": "automated GemWallet adapter",
+  "restored_same_offer_after_service_redeployment": true,
+  "retry": {
+    "same_order_sold": true,
+    "invalid_signature_rejected": true
+  },
+  "legacy_receipt": "FC77119A579063E96CCA33C2C4F5CCE065F3BA8F11F3FAD6F9F0E1406EAFDE40",
+  "main": {
+    "open": false,
+    "metadata_hidden": true,
+    "art_status": 404,
+    "reveal_at": "2027-02-01T00:00:00.000Z"
+  }
+}
