@@ -13,6 +13,15 @@ const copy={
 };
 let status,account,wallet,busy=false,pending,order,rankingVisible=false;
 let updateRarityLanguage;
+// GemWallet 3.8.2 resolves a request before its popup finishes closing.
+// Queue prompts so the close event cannot reject the following wallet request.
+let gemReady=Promise.resolve();
+function gemPrompt(open) {
+ const result=gemReady.then(open);
+ const settle=()=>new Promise(resolve=>setTimeout(resolve,500));
+ gemReady=result.then(settle,settle);
+ return result;
+}
 const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
@@ -83,9 +92,9 @@ async function collectionRequest(buyer,resuming=false){
  const proof=await send('challenge',{buyer,request:id});
  let pk,signature;
  if(wallet==='gem'){
-   pk=(await window.GemWalletApi.getPublicKey()).result;
+   pk=(await gemPrompt(()=>window.GemWalletApi.getPublicKey())).result;
    if(pk?.address!==buyer)throw Error(text(4)+' Testnet');
-   signature=(await window.GemWalletApi.signMessage(proof.message)).result?.signedMessage;
+   signature=(await gemPrompt(()=>window.GemWalletApi.signMessage(proof.message))).result?.signedMessage;
  }else{
    const bytes=new TextEncoder().encode(proof.message);
    const hex=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');
@@ -133,9 +142,9 @@ async function connect(kind) {
  }else if(kind==='gem'){
    const sdk=window.GemWalletApi;
    if(!(await sdk?.isInstalled())?.result?.isInstalled)throw Error('GemWallet · '+text(8));
-   const net=(await sdk.getNetwork()).result;
+   const net=(await gemPrompt(()=>sdk.getNetwork())).result;
    if(net?.chain!=='XRPL'||net.network.toLowerCase()!==status.network.toLowerCase())throw Error(text(4)+' XRPL '+status.network);
-   account=(await sdk.getAddress()).result?.address;
+   account=(await gemPrompt(()=>sdk.getAddress())).result?.address;
  }else{
    const sdk=window.CoolBearsCrossmark;
    if(!sdk?.methods?.isInstalled())throw Error('CROSSMARK · '+text(8));
@@ -199,7 +208,7 @@ buy.onclick=async()=>{
      }
      pending.xaman=signature;storage.set(txKey(),pending);location.assign(signature.url);return;
    }
-   if(wallet==='gem'){hash=(await window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:q.id,lastLedgerSequence:q.validThrough})).result?.hash;}
+   if(wallet==='gem'){hash=(await gemPrompt(()=>window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:q.id,lastLedgerSequence:q.validThrough}))).result?.hash;}
    else{
      const reply=await window.CoolBearsCrossmark.methods.signAndSubmitAndWait({TransactionType:'NFTokenAcceptOffer',Account:buyer,NFTokenSellOffer:q.id,LastLedgerSequence:q.validThrough});
      hash=reply.response?.data?.resp?.result?.hash || reply.response?.data?.resp?.result?.tx_json?.hash;

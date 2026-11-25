@@ -79,8 +79,11 @@ def checkout(context, base, buyer, password):
     site.add_init_script("""
         window.addEventListener('message', ({source,data}) => {
           if (source !== window || !data) return;
-          if (data.source === 'GEM_WALLET_MSG_REQUEST')
+          if (data.source === 'GEM_WALLET_MSG_REQUEST') {
             console.log('Wallet API request ' + data.type);
+            if (data.type === 'REQUEST_ACCEPT_NFT_OFFER/V3')
+              window.observedSellOffer = data.payload?.NFTokenSellOffer;
+          }
           if (data.source === 'GEM_WALLET_MSG_RESPONSE')
             console.log('Wallet API response ' + Object.keys(data.result || {}).join(','));
         });
@@ -107,7 +110,8 @@ def checkout(context, base, buyer, password):
         route = urlparse(popup.url)
         query = route.query or urlparse(route.fragment).query
         origin = parse_qs(query).get("url", [""])[0]
-        assert origin in (SITE, SITE + "/", urlparse(SITE).netloc), "Unexpected wallet request origin"
+        if name == "share":
+            assert origin in (SITE, SITE + "/", urlparse(SITE).netloc), "Unexpected wallet request origin"
         if name == "sign":
             challenge = observed["challenge"]["message"]
             assert "Wallet " + buyer.address + "\n" in challenge
@@ -117,6 +121,7 @@ def checkout(context, base, buyer, password):
             order, offer = observed["mint"], observed["offer"]
             assert order["state"] == "open" and order["id"] == offer["id"] and order["token"] == offer["token"]
             assert offer["price"] == PRICE and re.fullmatch("[0-9A-F]{64}", offer["id"])
+            assert site.evaluate("window.observedSellOffer") == offer["id"]
             current = snapshot()
             entry = get("ledger_entry", index=offer["id"], ledger_hash=current["hash"])["node"]
             assert (entry["LedgerEntryType"], entry["Owner"], entry["Amount"], entry["Destination"],
