@@ -26,3 +26,13 @@ test('the public sale remains closed on the main domain',async()=>{
  const r=await handle(new Request('https://coolbears-nfts.com/xrpl/api/status'),{NETWORK:'testnet',SALES_OPEN:'yes',TEST_ISSUER:'fixture'});
  const s=await r.json();assert.equal(s.issuer,OWNER);assert.equal(s.open,false);assert.equal(s.network,'Mainnet');assert.equal(s.price,'10000000');
 });
+
+test('the six collection cards use the original pre-reveal cover', async () => {
+  const {readFile} = await import('node:fs/promises');
+  const page = await readFile(new URL('./web/index.html', import.meta.url), 'utf8');
+  const collection = page.match(/<section id="collection"[\s\S]*?<\/section>/)[0];
+  assert.equal((collection.match(/<figure>/g) || []).length, 6);
+  assert.equal((collection.match(/src="\/assets\/brand\/gallery-20261003.png"/g) || []).length, 6);
+  assert.equal((collection.match(/<figcaption>#\?\?\?\?<\/figcaption>/g) || []).length, 6);
+  assert.doesNotMatch(collection, /promo-|\/gallery\//);
+});

@@ -1,83 +1,104 @@
-const buy=document.querySelector('#buy'), message=document.querySelector('#message'), receipt=document.querySelector('#receipt');
-const key='coolbears.xrpl.pending.v1';
-let status, pending;
-const dictionary={
-  en:{tagline:'Everyone gets a bear. Not everyone gets a legend.',collection:'Collection',price:'Mint price',reveal:'Reveal',terms:'Terms',privacy:'Privacy',closed:'Sales closed',test:'Buy for 10 test XRP',buy:'Buy for 10 XRP',check:'Check transaction',unavailable:'Unavailable',view:'View transaction',disclaimer:'No real value. No financial returns. No celebrity backing. Don’t buy expecting profit. CoolBears is just for fun.'},
-  ru:{tagline:'Каждому достанется медведь. Легенда достанется не каждому.',collection:'Коллекция',price:'Цена минта',reveal:'Раскрытие',terms:'Условия',privacy:'Конфиденциальность',closed:'Продажи закрыты',test:'Купить за 10 тестовых XRP',buy:'Купить за 10 XRP',check:'Проверить транзакцию',unavailable:'Недоступно',view:'Посмотреть транзакцию',disclaimer:'CoolBears — коллекция для развлечения. Финансовая доходность не обещается. Не покупайте в расчёте на прибыль.'},
-  zh:{tagline:'每个人都能得到一只熊，但不是每个人都能得到传奇。',collection:'藏品总量',price:'铸造价格',reveal:'揭晓时间',terms:'条款',privacy:'隐私',closed:'暂未开售',test:'用 10 个测试 XRP 购买',buy:'用 10 XRP 购买',check:'查看交易',unavailable:'暂不可用',view:'查看交易详情',disclaimer:'CoolBears 仅供娱乐，不保证收益。请勿以获利为目的购买。'}
+import translations from './translations.mjs';
+const el=id=>document.getElementById(id);
+const buy=el('buy'), message=el('message'), dialog=el('walletDialog'), receipt=el('receipt');
+const storage={get(k){try{return JSON.parse(localStorage.getItem(k))}catch{return null}},set(k,v){localStorage.setItem(k,JSON.stringify(v))}};
+let lang=storage.get('coolbears.xrpl.language') || navigator.language.slice(0,2);
+if(!translations[lang])lang='en';
+const copy={
+ en:['Sales closed','Buy for','Check transaction','Connect wallet','Select a wallet on','Waiting for ledger confirmation.','Purchase confirmed.','Next NFT','Unavailable','Network fee applies.','Transaction declined or expired.'],
+ ru:['Продажи закрыты','Купить за','Проверить транзакцию','Подключить кошелёк','Выберите кошелёк в сети','Ожидаем подтверждения сети.','Покупка подтверждена.','Следующий NFT','Недоступно','Также взимается комиссия сети.','Транзакция отклонена или срок истёк.'],
+ zh:['暂未开售','购买价格','查看交易','连接钱包','选择钱包网络','等待账本确认。','购买已确认。','下一个 NFT','暂不可用','另收网络费用。','交易已拒绝或过期。']
 };
-const selector=document.querySelector('#language');
-selector.value=localStorage.getItem('coolbears.language') || (dictionary[navigator.language.slice(0,2)]?navigator.language.slice(0,2):'en');
-const strings=()=>dictionary[selector.value]||dictionary.en;
-function language(){
- const t=strings();
- document.documentElement.lang=selector.value;
- for(const item of document.querySelectorAll('[data-t]'))item.textContent=t[item.dataset.t];
- document.querySelector('time').textContent=new Intl.DateTimeFormat(selector.value,{dateStyle:'long',timeStyle:'short',timeZone:'UTC'}).format(new Date('2027-02-01T00:00:00Z'))+' UTC';
- receipt.textContent=t.view;render();
-}
-selector.addEventListener('change',()=>{localStorage.setItem('coolbears.language',selector.value);language();});
-function setText(text){ message.textContent=text; }
-async function call(path,params={}){
-  const url=new URL('/xrpl/api/'+path,location.origin);
-  for(const [name,value] of Object.entries(params)) url.searchParams.set(name,value);
-  const response=await fetch(url,{cache:'no-store'}), data=await response.json();
-  if (!response.ok && !data.state) throw Error(data.error || 'Service unavailable');
-  return data;
-}
+let status,account,wallet,busy=false,pending,order;
+const text=i=>copy[lang][i];
+const objKey=()=> 'coolbears.xrpl.order.'+status.network;
+const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
+const quantity=()=>Math.max(1,Math.min(50,Math.floor(Number(el('qty').value)||1)));
 function render(){
-  buy.disabled=!status || (!pending && !status.open);
-  const t=strings();
-  buy.textContent=pending?t.check:!status?t.unavailable:!status.open?t.closed:status.network==='Testnet'?t.test:t.buy;
+ const q=quantity();el('qty').value=q;el('total').textContent=q*10;
+ el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
+ buy.disabled=busy || !status || (!status.open && !pending);
+ buy.textContent=pending?text(2):!status?text(8):!status.open?text(0):
+   order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
+ el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):text(0)):'';
+ el('qty').disabled=busy||!!pending||!!order;el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
 }
+function language(){
+ document.documentElement.lang=lang;
+ for(const node of document.querySelectorAll('[data-i18n]')){
+   const value=translations[lang][node.dataset.i18n];if(!value)continue;
+   node.replaceChildren();
+   value.split(/<br\s*\/?>/i).forEach((part,i)=>{if(i)node.append(document.createElement('br'));node.append(document.createTextNode(part));});
+ }
+ document.querySelectorAll('[data-lang]').forEach(x=>x.classList.toggle('active',x.dataset.lang===lang));
+ el('walletTitle').textContent=text(3);render();
+}
+document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{lang=b.dataset.lang;storage.set('coolbears.xrpl.language',lang);language();});
+el('minus').onclick=()=>{el('qty').value=quantity()-1;render()};el('plus').onclick=()=>{el('qty').value=quantity()+1;render()};
+el('qty').onchange=render;el('backTop').onclick=()=>scrollTo({top:0,behavior:'smooth'});
+addEventListener('scroll',()=>el('backTop').classList.toggle('show',scrollY>400),{passive:true});
+async function api(name,params={}){
+ const url=new URL('/xrpl/api/'+name,location.origin);for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);
+ const r=await fetch(url,{cache:'no-store'}),data=await r.json();
+ if(!r.ok&&!data.state)throw Error(data.error||text(8));return data;
+}
+async function connect(kind) {
+ if(!status)throw Error(text(8));
+ if(kind==='gem'){
+   const sdk=window.GemWalletApi;
+   if(!(await sdk?.isInstalled())?.result?.isInstalled)throw Error('GemWallet · '+text(8));
+   const net=(await sdk.getNetwork()).result;
+   if(net?.chain!=='XRPL'||net.network.toLowerCase()!==status.network.toLowerCase())throw Error(text(4)+' XRPL '+status.network);
+   account=(await sdk.getAddress()).result?.address;
+ }else{
+   const sdk=window.CoolBearsCrossmark;
+   if(!sdk?.methods?.isInstalled())throw Error('CROSSMARK · '+text(8));
+   const res=await sdk.methods.signInAndWait();
+   const net=sdk.methods.getNetwork() || res.response?.data?.network;
+   if(!net || String(net.label).toLowerCase()!==status.network.toLowerCase() ||
+      !['xrpl','xrp'].includes(String(net.protocol).toLowerCase()))throw Error(text(4)+' XRPL '+status.network);
+   account=res.response?.data?.address;
+ }
+ if(!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(account||''))throw Error(text(8));
+ wallet=kind;storage.set('coolbears.xrpl.wallet',kind);dialog.close();render();
+}
+function pick(){el('walletInfo').textContent='';if(!dialog.open)dialog.showModal();}
+el('walletBtn').onclick=pick;el('closeWallet').onclick=()=>dialog.close();
+document.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=async()=>{try{await connect(b.dataset.wallet)}catch(e){el('walletInfo').textContent=e.message}});
 async function check(){
-  const result=await call(pending.hash?'receipt':'reconcile',pending);
-  if(result.state==='pending'){setText('Waiting for ledger confirmation. You can check again.');return;}
-  if(result.state==='complete'){
-    setText('Purchase confirmed. The CoolBear is in your wallet.');
-    const host=status.network==='Testnet'?'testnet.xrpl.org':'livenet.xrpl.org';
-    receipt.href='https://'+host+'/transactions/'+result.hash;receipt.hidden=false;
-  } else if(result.state==='expired'){setText('The signing window expired. No matching purchase was found.');}
-  else if(result.state==='failed'){setText('The ledger declined this purchase. '+result.result);}
-  else {setText('This transaction does not match this purchase. Check your wallet history.');return;}
-  pending=null; localStorage.removeItem(key);
+ const r=await api(pending.hash?'receipt':'reconcile',pending);
+ if(r.state==='pending'){message.textContent=text(5);return;}
+ if(r.state==='complete'){
+   const id=r.hash;const explorer=status.network==='Testnet'?'testnet.xrpl.org':'livenet.xrpl.org';
+   receipt.href='https://'+explorer+'/transactions/'+id;receipt.hidden=false;
+   if(order && order.lastHash!==id){order.done++;order.lastHash=id;storage.set(objKey(),order);}
+   message.textContent=text(6)+(order?' '+order.done+' / '+order.target:'');
+   if(order && order.done>=order.target){order=null;storage.set(objKey(),null);}
+ }else if(r.state==='expired'||r.state==='failed'){message.textContent=text(10);order=null;storage.set(objKey(),null);}
+ else{message.textContent=text(8);return;}
+ pending=null;storage.set(txKey(),null);
 }
-async function walletAccount(){
-  const wallet=window.GemWalletApi;
-  if(!wallet || !(await wallet.isInstalled())?.result?.isInstalled) throw Error('Open this page in a browser with the GemWallet extension.');
-  const net=(await wallet.getNetwork()).result;
-  if(net?.chain!=='XRPL' || net.network.toLowerCase()!==status.network.toLowerCase()) throw Error('Select XRPL '+status.network+' in GemWallet.');
-  const address=(await wallet.getAddress()).result?.address;
-  if(!address) throw Error('Wallet connection cancelled.');
-  return address;
-}
-buy.addEventListener('click',async()=>{
-  if(buy.disabled)return;
-  buy.disabled=true;receipt.hidden=true;
-  try{
-    if(pending){await check();return;}
-    const buyer=await walletAccount();
-    setText('Checking a 10 XRP sell offer on the ledger…');
-    let quote=await call('offer',{buyer});
-    quote=await call('offer',{buyer,offer:quote.id});
-    if(quote.price!=='10000000' || !/^[A-F0-9]{64}$/.test(quote.id)) throw Error('Invalid sell offer.');
-    if(await walletAccount()!==buyer) throw Error('Wallet account changed. Please try again.');
-    setText('Confirm the 10 XRP purchase in GemWallet.');
-    pending={buyer,offer:quote.id,last:quote.validThrough,network:status.network};
-    localStorage.setItem(key,JSON.stringify(pending));
-    const signed=await window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:quote.id,lastLedgerSequence:quote.validThrough});
-    if(!signed.result?.hash){setText('Wallet returned no transaction hash. Check your wallet before retrying.');return;}
-    pending.hash=signed.result.hash.toUpperCase();
-    localStorage.setItem(key,JSON.stringify(pending));
-    await check();
-  } catch(error){setText(error.message || 'Service unavailable.');}
-  finally{render();}
-});
+buy.onclick=async()=>{
+ if(busy||buy.disabled)return;busy=true;render();
+ try{
+   if(pending){await check();return;}
+   if(!wallet||!account){pick();return;}
+   const buyer=account;await connect(wallet);if(account!==buyer)throw Error(text(4)+' '+status.network);
+   if(order && buyer!==order.buyer)throw Error('Select the wallet for this order.');
+   let q=await api('offer',{buyer});q=await api('offer',{buyer,offer:q.id});
+   if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
+   if(!order){order={buyer,target:quantity(),done:0};storage.set(objKey(),order);}
+   pending={offer:q.id,buyer,last:q.validThrough,network:status.network};storage.set(txKey(),pending);
+   let hash;
+   if(wallet==='gem'){hash=(await window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:q.id,lastLedgerSequence:q.validThrough})).result?.hash;}
+   else{
+     const reply=await window.CoolBearsCrossmark.methods.signAndSubmitAndWait({TransactionType:'NFTokenAcceptOffer',Account:buyer,NFTokenSellOffer:q.id,LastLedgerSequence:q.validThrough});
+     hash=reply.response?.data?.resp?.result?.hash || reply.response?.data?.resp?.result?.tx_json?.hash;
+   }
+   if(hash && /^[a-f\d]{64}$/i.test(hash)){pending.hash=hash.toUpperCase();storage.set(txKey(),pending);}
+   await check();
+ }catch(e){message.textContent=e.message;}finally{busy=false;render();}
+};
 language();
-try{
-  status=await call('status');
-  document.querySelector('#network').textContent='XRP Ledger · '+status.network;
-  const saved=JSON.parse(localStorage.getItem(key) || 'null');
-  if(saved?.network===status.network){pending=saved;await check();}
-} catch(error){setText(error.message);}
-render();
+try{status=await api('status');pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;if(pending)await check();}
+catch(e){message.textContent=e.message;}render();

@@ -1,6 +1,6 @@
 # CoolBears on XRP Ledger
 
-The collection contains 10,000 slots numbered 0000 through 9999. A canonical NFT has the issuer configured in worker.mjs, taxon 20270201, the transferable flag (8) and a permanent HTTPS URI ending in /xrpl/metadata/NNNN.json. A sale offer must ask exactly 10000000 drops. The buyer accepts that offer in GemWallet. The application checks the validated ledger before signing and verifies the final transaction before displaying a receipt.
+The collection contains 10,000 slots numbered 0000 through 9999. A canonical NFT has the issuer configured in worker.mjs, taxon 20270201, the transferable flag (8), TransferFee 7000 (7%) and a permanent HTTPS URI ending in /xrpl/metadata/NNNN.json. A sale offer must ask exactly 10000000 drops. The buyer accepts that offer in GemWallet or CROSSMARK. The application checks the validated ledger before signing and verifies the final transaction before displaying a receipt.
 
 Artwork becomes available at 2027-02-01T00:00:00Z. The Worker checks its own clock on every metadata and image request. A hidden response uses Cache-Control no-store. The new endpoint uses one immutable reference per token and requires no wallet signature at reveal time. Wallets may independently cache the cover.
 

@@ -6,21 +6,24 @@ const ID = /^[A-F0-9]{64}$/;
 const internalOrigin = 'https://private.invalid/internal/';
 const encoder = new TextEncoder();
 const publicFiles = new Map([
+  ['/', ['home.html', 'text/html; charset=utf-8']],
+  ['/assets/brand/gallery-20261003.png',['gallery.png','image/png']],
+  ['/assets/brand/hero-20261003.png',['hero.png','image/png']],
   ['/xrpl/', ['home.html', 'text/html; charset=utf-8']],
   ['/xrpl/site.css', ['site.css', 'text/css']],
   ['/xrpl/app.js', ['app.js', 'text/javascript']],
   ['/xrpl/wallet.js', ['wallet.js', 'text/javascript']],
+  ['/xrpl/crossmark.js', ['crossmark.js','text/javascript']],
+  ['/xrpl/translations.mjs', ['translations.mjs','text/javascript']],
+  ['/xrpl/hero.png',['hero.png','image/png']],
+  ['/xrpl/brand-logo.png',['brand-logo.png','image/png']],
   ['/xrpl/cover.gif', ['cover.gif', 'image/gif']],
   ['/xrpl/logo.png', ['logo.png', 'image/png']],
   ['/privacy.html', ['privacy.html', 'text/html; charset=utf-8']],
   ['/terms.html', ['terms.html', 'text/html; charset=utf-8']]
 ]);
-for(let n=2;n<=7;n++){
- const id=String(n).padStart(2,'0');
- publicFiles.set('/xrpl/gallery/'+id+'.webp',['gallery'+id+'.webp','image/webp']);
-}
 const security = {'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
-  'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"};
+  'Content-Security-Policy':"default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"};
 
 function response(data, type, status = 200) {
   return new Response(data, {status, headers:{...security,'Content-Type':type,'Cache-Control':'no-store'}});
@@ -101,7 +104,7 @@ async function quote(net, buyer, origin, wanted) {
   return await objects(net,'account_nfts',{},ledger,page=>{
     for (const token of page.account_nfts) {
       const offer=offers.get(token.NFTokenID);
-      if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.Flags!==8) continue;
+      if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.Flags!==8 || token.TransferFee!==7000) continue;
       const uri=decodeURI(token.URI);
       const prefix=origin+'/xrpl/metadata/';
       if (!uri.startsWith(prefix) || !/^\d{4}\.json$/.test(uri.slice(prefix.length))) continue;
@@ -186,13 +189,21 @@ export async function handle(request,env,now=Date.now()) {
   if (!['GET','HEAD'].includes(request.method)) return response('','text/plain',405);
   try {
     let result;
-    if (path==='/' || path==='/xrpl') return new Response(null,{status:302,headers:{Location:'/xrpl/','Cache-Control':'no-store'}});
+    if (path==='/xrpl') return new Response(null,{status:302,headers:{Location:'/xrpl/','Cache-Control':'no-store'}});
     if (publicFiles.has(path)) {
       const [name,type]=publicFiles.get(path);const a=await retrieve(env,name);
       if (a.status!==200) throw Error('Site asset unavailable');
       result=response(a.body,type);
     } else if (path.startsWith('/xrpl/metadata/') || path.startsWith('/xrpl/art/')) {
       result=await metadata(env,path,url.origin,now);
+    } else if (path==='/xrpl/api/storage-check' && env.STORAGE_CHECK &&
+               request.headers.get('Authorization')==='Bearer '+env.STORAGE_CHECK) {
+      const shard='m00.json', asset=await retrieve(env,shard);
+      if (asset.status!==200) throw Error('Storage unavailable');
+      const [row]=JSON.parse(new TextDecoder().decode(await openAsset(env,shard,await asset.arrayBuffer())));
+      const png=await artwork(env,'0000',row);
+      const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',png)),b=>b.toString(16).padStart(2,'0')).join('');
+      result=json({verified:fingerprint===row.sha256},fingerprint===row.sha256?200:503);
     } else if (path==='/xrpl/api/status') {
       const net=network(env); result=json({network:net.name,issuer:net.issuer,open:env.SALES_OPEN==='yes',price:PRICE,revealAt:new Date(REVEAL_AT).toISOString()});
     } else if (path==='/xrpl/api/offer' || path==='/xrpl/api/receipt' || path==='/xrpl/api/reconcile') {

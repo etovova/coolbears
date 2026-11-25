@@ -5,12 +5,11 @@ from pathlib import Path
 base=Path(__file__).resolve().parent
 public={name:(base/path).read_text() for name,path in {
     "home.html":"web/index.html","app.js":"web/app.js","site.css":"web/site.css",
-    "wallet.js":"vendor/gemwallet.js","privacy.html":"web/privacy.html","terms.html":"web/terms.html"}.items()}
+    "wallet.js":"vendor/gemwallet.js","crossmark.js":"vendor/crossmark.js","translations.mjs":"web/translations.mjs","privacy.html":"web/privacy.html","terms.html":"web/terms.html"}.items()}
 print("import {handle} from './worker.mjs';")
 print("const pages="+json.dumps(public,ensure_ascii=False)+";")
-print("""const brand='https://raw.githubusercontent.com/etovova/coolbears/1f9ea06db224e03e3c221b7a1af549ea90a8b4b7/assets/';
-const originals={'cover.gif':'collection/gif.gif','logo.png':'collection/logo.png'};
-for(let i=2;i<=7;i++){const n=String(i).padStart(2,'0');originals['gallery'+n+'.webp']='nft/promo-'+n+'.webp';}
+print("""const brand='https://raw.githubusercontent.com/etovova/coolbears/4e6bb2764b02772da79dfe2752ca09d33889a114/assets/';
+const originals={'cover.gif':'collection/gif.gif','logo.png':'collection/logo.png','hero.png':'brand/hero-20261003.png','gallery.png':'brand/gallery-20261003.png','brand-logo.png':'brand/logo-20261003.png'};
 export default {fetch(request,env){
   const binding=env.ASSETS;
   const assets={async fetch(req){
