@@ -1,16 +1,9 @@
-node_modules
-public-site/
+node_modules/
 private/
 build/
 *.PRIVATE.*
-__pycache__/
-
-# Local Worker state and credentials
-.wrangler/
+*.seed
+.env*
 .dev.vars*
-rpc-proxy/.env*
-
-# Build diagnostics and compatibility alias are not site inputs.
-public-mainnet/browser-assets-binding.SAFE.json
-public-mainnet/site-entry.built.mjs
-
+.wrangler/
+__pycache__/
