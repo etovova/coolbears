@@ -1,0 +1,48 @@
+{
+  "purpose": "Public XRPL Testnet comparison using separate disposable accounts and sample NFTs outside the CoolBears collection.",
+  "authorized_minter": {
+    "network": "XRPL Testnet",
+    "separate_from_collection": true,
+    "issuer": "rHe9SD9s8LGN5U6XFsEiKxpu9NJ47ADdLv",
+    "operator": "rwzHgZAay82Px6J5qHStyc8FM5jRLPQCP7",
+    "buyer": "rLpLJJYCyQAPyYSzqLqm1xfkXQNfoN6M2D",
+    "authorize": "F3A928BC6A635243AB38CB3DE6DA1C800096831BE3B6260C1849935BDB514AEB",
+    "mint": "C9B0706C3617AA6EF4DB7E5F804E361A4273F299580DE63884208210FCAC3A72",
+    "purchase": "D61623FEBF9EE36A42C027E823112572FF974181F39AEF0284B03948A6437823",
+    "ledger": 22606288,
+    "revoke": "7B4551922CAAAA8545D7A6D3F253A93A7F0839A8801CD9A7E0681306DADFF7C1",
+    "post_revocation_simulation": "tecNO_PERMISSION",
+    "royalty": 7000,
+    "issuer_received_drops": 700000,
+    "operator_received_drops": 9300000,
+    "buyer_fee_drops": 10,
+    "token": "00081B58B68871AAC4C1DBCA6A78F966DC4A7A24B13F42457A7C91510158F1B6"
+  },
+  "delegated_mint": {
+    "network": "XRPL Testnet",
+    "separate_from_collection": true,
+    "issuer": "rHe9SD9s8LGN5U6XFsEiKxpu9NJ47ADdLv",
+    "delegate": "rwzHgZAay82Px6J5qHStyc8FM5jRLPQCP7",
+    "buyer": "rLpLJJYCyQAPyYSzqLqm1xfkXQNfoN6M2D",
+    "granted_permissions": [
+      "NFTokenMint"
+    ],
+    "authorize": "55A36C0EF47F8C046DC59316834C6B95E517B0386EB8D8F9C8386C9DB009263A",
+    "mint": "DF9C9FC15E2A4B148F2612285BE65F076E7DD6D6796F8A62FD7F18C640362D94",
+    "purchase": "52521867CAE09E8581459109635470A4DFD16AC50E5FC60D718B7E8E549B5570",
+    "ledger": 22606352,
+    "revoke": "4A54C593BA16E5C180B98B3C76012A00717D60D1D8A5791503B01E1F160B758E",
+    "payment_simulation": "terNO_DELEGATE_PERMISSION",
+    "post_revocation_mint_simulation": "terNO_DELEGATE_PERMISSION",
+    "royalty": 7000,
+    "issuer_received_drops": 10000000,
+    "delegate_received_drops": 0,
+    "buyer_fee_drops": 10,
+    "token": "00081B58B68871AAC4C1DBCA6A78F966DC4A7A24B13F4245916262520158F1B7"
+  },
+  "delegation_amendment": {
+    "name": "PermissionDelegationV1_1",
+    "enabled_mainnet_ledger": 108566054,
+    "enabled_testnet_ledger": 22606302
+  }
+}
