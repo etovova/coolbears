@@ -2,7 +2,6 @@
 import hashlib
 import io
 import json
-import os
 from pathlib import Path
 import re
 import secrets
@@ -84,7 +83,9 @@ def checkout(context, base, buyer, password):
             popup.locator('input[type="password"]').fill(password)
             action.first.click()
             return
-        origin = parse_qs(urlparse(popup.url).query).get("url", [""])[0]
+        route = urlparse(popup.url)
+        query = route.query or urlparse(route.fragment).query
+        origin = parse_qs(query).get("url", [""])[0]
         assert origin in (SITE, SITE + "/", urlparse(SITE).netloc), "Unexpected wallet request origin"
         if name == "sign":
             challenge = observed["challenge"]["message"]
@@ -119,6 +120,7 @@ def checkout(context, base, buyer, password):
             requested = True
         if "receipt" in observed and observed["receipt"].get("state") == "complete":
             receipt = observed["receipt"]
+            site.locator("#receipt").wait_for(state="visible", timeout=6000)
             assert site.locator("#receipt").get_attribute("href") == "https://testnet.xrpl.org/transactions/" + receipt["hash"]
             assert "sign" in stages and "submit" in stages
             return verify(observed["mint"]["mint"], receipt["hash"])
