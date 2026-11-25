@@ -47,6 +47,14 @@ def configure(page, buyer, password):
     button(page, "Next").click()
     button(page, "Finish").click()
     indicator = page.get_by_test_id("network-indicator")
+    # A first import may return to Welcome before the wallet context is reloaded.
+    page.goto("chrome-extension://" + urlparse(page.url).netloc + "/index.html")
+    unlock = button(page, "Unlock")
+    indicator.or_(unlock).first.wait_for(timeout=20000)
+    if unlock.is_visible():
+        page.locator('input[type="password"]').fill(password)
+        page.get_by_label("Keep me logged in for 30 minutes").check()
+        unlock.click()
     indicator.click()
     page.get_by_text("Testnet", exact=True).click()
     page.wait_for_function("document.querySelector('[data-testid=network-indicator]')?.textContent === 'Testnet'", timeout=45000)
@@ -75,7 +83,7 @@ def checkout(context, base, buyer, password):
     def handle_popup(popup):
         if not popup.url.startswith(base + "/") or popup in clicked:
             return
-        action = popup.get_by_role("button", name=re.compile("^(Share|Sign|Submit|Unlock)$"))
+        action = popup.get_by_role("button", name=re.compile("^(Share|Sign|Submit|Unlock)$", re.I))
         if not action.count() or not action.first.is_visible() or not action.first.is_enabled():
             return
         name = action.first.inner_text().strip().lower()
@@ -150,7 +158,12 @@ def main():
             base = "chrome-extension://" + urlparse(worker.url).netloc
             wallet = context.new_page()
             wallet.goto(base + "/index.html")
-            configure(wallet, buyer, password)
+            try:
+                configure(wallet, buyer, password)
+            except Exception:
+                print("Wallet setup screen:", urlparse(wallet.url).path,
+                      wallet.locator("h1,h2,button").all_text_contents(), flush=True)
+                raise
             print("Installed GemWallet", version, "on Testnet", flush=True)
             preflight = context.new_page()
             result = preflight.goto(SITE, wait_until="domcontentloaded")
