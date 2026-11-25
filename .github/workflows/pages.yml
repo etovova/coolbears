@@ -17,6 +17,13 @@ jobs:
         with:
           node-version: 24
       - run: node --test xrpl/worker.test.mjs
+      - name: Build and test the hosted Testnet signer
+        if: ${{ hashFiles('xrpl/hosted-testnet/package-lock.json') != '' }}
+        working-directory: xrpl/hosted-testnet
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

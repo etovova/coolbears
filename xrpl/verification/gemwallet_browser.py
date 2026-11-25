@@ -155,7 +155,14 @@ def checkout(context, base, buyer, password):
             site.locator("#receipt").wait_for(state="visible", timeout=6000)
             assert site.locator("#receipt").get_attribute("href") == "https://testnet.xrpl.org/transactions/" + receipt["hash"]
             assert "sign" in stages and "submit" in stages
-            return verify(observed["mint"]["mint"], receipt["hash"])
+            reservation = observed["mint"]
+            assert reservation["id"] == observed["offer"]["id"]
+            assert reservation["token"] == receipt["token"]
+            settlement = verify(reservation["mint"], receipt["hash"])
+            assert settlement["token"] == reservation["token"] and settlement["buyer"] == buyer.address
+            accepted = get("tx", transaction=receipt["hash"])
+            assert accepted["validated"] and accepted["tx_json"]["NFTokenSellOffer"] == reservation["id"]
+            return {**settlement, "offer": reservation["id"]}
         if not requested and time.monotonic() >= connect_deadline:
             break
         if requested and site.locator("#buy").is_enabled() and site.locator("#buy").inner_text() == "Check transaction":
