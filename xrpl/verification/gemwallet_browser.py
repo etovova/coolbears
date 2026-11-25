@@ -75,8 +75,21 @@ def checkout(context, base, buyer, password):
             observed[endpoint] = response.json()
 
     site.on("response", observe)
+    site.on("console", lambda line: print(line.text, flush=True) if line.text.startswith("Wallet API ") else None)
+    site.add_init_script("""
+        window.addEventListener('message', ({source,data}) => {
+          if (source !== window || !data) return;
+          if (data.source === 'GEM_WALLET_MSG_REQUEST')
+            console.log('Wallet API request ' + data.type);
+          if (data.source === 'GEM_WALLET_MSG_RESPONSE')
+            console.log('Wallet API response ' + Object.keys(data.result || {}).join(','));
+        });
+    """)
+    context.on("page", lambda page: page.on("framenavigated", lambda frame:
+               print("Wallet screen", urlparse(frame.url).path, flush=True) if frame.url.startswith(base) else None))
     site.goto(SITE, wait_until="domcontentloaded")
     button(site, "Mint · 10 test XRP").wait_for()
+    site.bring_to_front()
     site.locator("#walletBtn").click()
     site.locator("[data-wallet=gem]").click()
 
@@ -119,6 +132,7 @@ def checkout(context, base, buyer, password):
 
     deadline = time.monotonic() + 155
     requested = False
+    connect_deadline = time.monotonic() + 25
     while time.monotonic() < deadline:
         for popup in context.pages:
             if popup != site and not popup.is_closed():
@@ -137,6 +151,8 @@ def checkout(context, base, buyer, password):
             assert site.locator("#receipt").get_attribute("href") == "https://testnet.xrpl.org/transactions/" + receipt["hash"]
             assert "sign" in stages and "submit" in stages
             return verify(observed["mint"]["mint"], receipt["hash"])
+        if not requested and time.monotonic() >= connect_deadline:
+            break
         if requested and site.locator("#buy").is_enabled() and site.locator("#buy").inner_text() == "Check transaction":
             site.locator("#buy").click()
         site.wait_for_timeout(180)
