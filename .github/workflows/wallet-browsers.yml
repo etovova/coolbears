@@ -1,7 +1,7 @@
 name: Wallet browser compatibility
 on:
   pull_request:
-    paths: ['app.js', 'index.html', 'public-mainnet/**', 'scripts/**', 'tests/main.browser.mjs', 'tests/public-*.checks.mjs', 'package.json', 'package-lock.json', 'operator/orders/**', 'operator/package-lock.json', '.github/workflows/wallet-browsers.yml']
+    paths: ['app.js', 'index.html', 'public-mainnet/**', 'scripts/**', 'tests/main.browser.mjs', 'tests/public-*.checks.mjs', 'package.json', 'package-lock.json', 'operator/orders/**', 'operator/tests/order-wallet.browser.mjs', 'operator/tests/fixtures/buyer-*-browser.mjs', 'operator/package-lock.json', '.github/workflows/wallet-browsers.yml']
   push:
     branches: [main, 'rpc-wallet-additions-*']
   workflow_dispatch:
@@ -43,6 +43,13 @@ jobs:
       - name: Main site and wallet picker
         id: main
         run: node tests/main.browser.mjs
+      - name: Verify buyer and asset signatures in the browser
+        run: node operator/tests/order-wallet.browser.mjs
+      - name: Verify signed checkout through the HTTP gateway
+        if: matrix.engine == 'chromium'
+        env:
+          COOLBEARS_BUYER_FIXTURE_CLUSTER: mainnet-beta
+        run: node operator/tests/hidden-buyer-console-integration.browser.mjs
       - name: Devnet failures and recovery
         if: ${{ !cancelled() && steps.install-browser.outcome == 'success' && steps.main.outcome == 'success' }}
         run: node tests/devnet-matrix.browser.mjs

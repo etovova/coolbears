@@ -5,7 +5,7 @@ import {assertCurrentItem} from '/public-mainnet/modules/a194ea6bf24e2ca920fe.mj
 import policy from '/public-mainnet/modules/9753b87c4a3cad84685d.mjs';
 import {VersionedTransaction} from '/public-mainnet/modules/60139917f8765411c2c3.mjs';
 import {createProtocolOrderModel} from '/public-mainnet/modules/c2e57714b2d49f910e34.mjs';
-import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse,buyerRequestId} from '/public-mainnet/modules/8c19f4e554421cc56f55.mjs';
+import {validateAssetClaim,validateAssetRequest,finalizeAssetRequest,verifyBuyerSigningResponse,buyerRequestId,WALLET_FIRST_REQUEST} from '/public-mainnet/modules/8c19f4e554421cc56f55.mjs';
 import {validateHistoricalFailure} from '/public-mainnet/modules/fb248243e0e0233a3fe9.mjs';
 import {signedBytesId,submissionBinding,validateBuyerResult} from '/public-mainnet/modules/9a2a0f7c701f6f0f8bae.mjs';
 import {anchorKey} from '/public-mainnet/modules/59a7d0a819a7f7dfbf79.mjs';
@@ -32,7 +32,8 @@ export function prewalletSubmission(input,response){
   const tx=VersionedTransaction.deserialize(bytes);need(Buffer.from(tx.serialize()).equals(bytes));
   // Reconstruct the partial from the observed asset signature, never a signing operation.
   const request=finalizeAssetRequest(input.order,input.claim,tx.signatures[1]);
-  need(input.request===null||same(input.request,request),'PREWALLET_NATIVE_CONFLICT');
+  if (input.request?.kind === WALLET_FIRST_REQUEST) verifyBuyerSigningResponse(input.order,input.claim,input.request,response);
+  else need(input.request===null||same(input.request,request),'PREWALLET_NATIVE_CONFLICT');
   const signed=verifyBuyerSigningResponse(input.order,input.claim,request,response);
   // Internal receipt-verifier projection only; these are not wallet claims/events.
   let order=model.transitionOrder(input.order,{type:'unknown',revision:input.order.revision,index:input.claim.itemIndex,attempt:input.claim.attempt});

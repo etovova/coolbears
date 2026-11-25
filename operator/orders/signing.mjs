@@ -14,6 +14,7 @@ const need = (ok, code) => { if (!ok) throw Error(code); };
 const same = (a, b) => a.length === b.length && a.every((byte, index) => byte === b[index]);
 const digest = value => bytesToHex(sha256(new TextEncoder().encode(JSON.stringify(value))));
 const CLAIM = 'coolbears-buyer-asset-claim', PARTIAL = 'coolbears-buyer-asset-partial';
+export const WALLET_FIRST_REQUEST = 'coolbears-buyer-unsigned';
 const BINDING = ['version','kind','orderId','orderRevision','orderIdentitySha256','cluster','buyer','machine','collection','guard','itemIndex','asset','attempt','blockhash','lastValidBlockHeight','messageSha256','transactionBase64'];
 function exact(value, names) {
   need(value && [Object.prototype, null].includes(Object.getPrototypeOf(value))
@@ -107,13 +108,42 @@ export function finalizeAssetRequest(order, claim, assetSignature) {
 }
 export function validateAssetRequest(order, claim, request) {
   const message = validateAssetClaim(order, claim); exact(request, BINDING);
-  need(request.kind === PARTIAL && BINDING.filter(key => !['kind','transactionBase64'].includes(key)).every(key => request[key] === claim[key]), 'ASSET_REQUEST_BINDING');
+  need(BINDING.filter(key => !['kind','transactionBase64'].includes(key)).every(key => request[key] === claim[key]), 'ASSET_REQUEST_BINDING');
+  if (request.kind === WALLET_FIRST_REQUEST) {
+    need(request.transactionBase64 === claim.transactionBase64, 'ORDER_MESSAGE_MISMATCH');
+    return request;
+  }
+  need(request.kind === PARTIAL, 'ASSET_REQUEST_BINDING');
   const parsed = VersionedTransaction.deserialize(bytes(request.transactionBase64));
   need(same(parsed.message.serialize(), message), 'ORDER_MESSAGE_MISMATCH');
   const verified = internalRequest(request);
   need(verified.messageSha256 === claim.messageSha256 && verified.requiredSigners.length === 2
     && verified.requiredSigners[1] === claim.asset, 'ASSET_SIGNATURE_INVALID');
   return request;
+}
+// Only a buyer signature over the exact quoted message may authorize asset co-signing.
+export function verifyWalletFirstResponse(order, claim, request, transactionBase64) {
+  validateAssetRequest(order, claim, request);
+  need(request.kind === WALLET_FIRST_REQUEST, 'ASSET_REQUEST_BINDING');
+  const wire = bytes(transactionBase64);
+  const tx = VersionedTransaction.deserialize(wire);
+  const unsigned = VersionedTransaction.deserialize(bytes(claim.transactionBase64));
+  const message = tx.message.serialize();
+  need(same(tx.serialize(), wire) && same(message, unsigned.message.serialize()), 'ORDER_MESSAGE_MISMATCH');
+  need(tx.signatures.length === 2 && tx.signatures[1].every(byte => byte === 0)
+    && ed25519.verify(tx.signatures[0], message, new PublicKey(order.buyer).toBytes(), { zip215:false }), 'BUYER_SIGNATURE_INVALID');
+  return tx;
+}
+
+// The established receipt verifier takes a transaction with the asset signature.
+// For wallet-first orders derive that evidence only from the final signed wire.
+export function receiptSigningRequest(request, response) {
+  if (request.kind !== WALLET_FIRST_REQUEST) return internalRequest(request);
+  const final = VersionedTransaction.deserialize(bytes(response.transactionBase64));
+  const expected = VersionedTransaction.deserialize(bytes(request.transactionBase64));
+  need(same(final.message.serialize(), expected.message.serialize()), 'ORDER_MESSAGE_MISMATCH');
+  expected.signatures[1] = final.signatures[1];
+  return internalRequest({...request, transactionBase64:Buffer.from(expected.serialize()).toString('base64')});
 }
 export function verifyBuyerSigningResponse(order, claim, request, response) {
   const item=assertCurrentItem(order,claim.itemIndex),attempt=item.attempts.at(-1);
@@ -124,7 +154,7 @@ export function verifyBuyerSigningResponse(order, claim, request, response) {
 export function verifyBuyerEvidence(order,claim,request,response){
   validateAssetRequest(order, claim, request);
   const attempt=order.items[claim.itemIndex].attempts[claim.attempt-1];
-  const verified = verifySigningResponse(internalRequest(request), response);
+  const verified = verifySigningResponse(receiptSigningRequest(request, response), response);
   need(attempt.signature === null || attempt.signature === verified.signature, 'BUYER_SIGNATURE_CONFLICT');
   return { ...verified, orderId:order.id, orderRevision:order.revision, itemIndex:claim.itemIndex, attempt:claim.attempt,
     // A valid signature is neither a fresh preflight nor an execution proof.

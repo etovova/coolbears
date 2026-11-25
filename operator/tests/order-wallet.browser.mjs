@@ -7,8 +7,10 @@ import path from 'node:path';
 import { build } from 'esbuild';
 import { Keypair, VersionedTransaction } from '@solana/web3.js';
 const playwright=await import(process.env.COOLBEARS_PLAYWRIGHT||'playwright');
+const engine=process.env.COOLBEARS_ENGINE || 'chromium';
+assert.ok(['chromium','firefox','webkit'].includes(engine));
 const parent=await mkdtemp(path.join(tmpdir(),'coolbears-wallet-handoff-fixture-'));
-const output=path.resolve('operator/build/buyer-wallet-chromium');await mkdir(output,{recursive:true});
+const output=path.resolve('operator/build/buyer-wallet-'+engine);await mkdir(output,{recursive:true});
 const bundle=path.join(parent,'fixture.js');
 await build({entryPoints:['operator/tests/fixtures/buyer-wallet-browser.mjs'],bundle:true,platform:'browser',format:'esm',target:'es2022',outfile:bundle,inject:['scripts/browser-buffer.mjs']});
 const bytes=await readFile(bundle);
@@ -17,10 +19,10 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const origin=`h
 const key=n=>Keypair.fromSeed(new Uint8Array(32).fill(n)),address=n=>key(n).publicKey.toBase58();
 const buyer=key(1),scope={id:'partial',cluster:'devnet',buyer:address(1),machine:address(2),collection:address(3),guard:address(4)};
 const block={blockhash:address(5),lastValidBlockHeight:2000};
-const report={passed:false,engine:'chromium',realWallets:false,physicalPhones:false,liveRpc:false,transactionsSent:0,trustedCheck:'fixture; real RPC adapter tested separately',persistencePermission:'fixture only',cases:[],pageErrors:[],externalRequests:0};
+const report={passed:false,engine,realWallets:false,physicalPhones:false,liveRpc:false,transactionsSent:0,trustedCheck:'fixture; real RPC adapter tested separately',persistencePermission:'fixture only',cases:[],pageErrors:[],externalRequests:0};
 let context,page;
 async function tab(){const p=await context.newPage();p.on('pageerror',e=>report.pageErrors.push(e.message));await p.goto(origin);await p.waitForFunction(()=>window.openClient);return p;}
-async function launch(){context=await playwright.chromium.launchPersistentContext(path.join(parent,'profile'),{headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==origin){report.externalRequests++;return route.abort();}return route.continue();});page=await tab();}
+async function launch(){context=await playwright[engine].launchPersistentContext(path.join(parent,'profile'),{headless:true,args:engine==='chromium'?['--no-sandbox','--disable-dev-shm-usage']:[]});await context.route('**/*',route=>{if(new URL(route.request().url()).origin!==origin){report.externalRequests++;return route.abort();}return route.continue();});page=await tab();}
 async function create(s,quantity=1){return page.evaluate(async({s,quantity,block})=>{window.auditScope=s;const order=await store.create({...s,quantity,available:9999});return candidate(order,block);},{s,quantity,block});}
 async function prepare(s,c){return page.evaluate(({s,c})=>{window.auditScope=s;return store.prepareAssetSigning(s,c);},{s,c});}
 async function stats(){return page.evaluate(()=>({attempts:assetSignAttempts,signatures:assetSignatures,observations:persistedBeforeSign}));}
@@ -163,6 +165,31 @@ try{
   assert.equal(await page.evaluate(s=>code(store.claimBuyerSubmission(s,{orderRevision:3,transactionSha256:'x'})),legacy),'COST_APPROVAL_REQUIRED');
   assert.equal((await read(page,legacy,'read')).revision,3);assert.ok((await read(page,legacy,'readBuyerResponse')).response.transactionBase64);
   report.cases.push('legacy v1 wallet evidence remains readable without inventing consent; no new send claim is allowed');
+  const oldReceipt=await read(page,legacy,'readBuyerResponse');
+  await page.evaluate(()=>{ window.store=makeStore(true); });
+  assert.deepEqual(await read(page,legacy,'readBuyerResponse'),oldReceipt);
+  assert.notEqual(await page.evaluate(s=>code(store.readBuyerResponse(s)),good),'UNEXPECTED_SUCCESS');
+  for (const mode of ['reject','tamper','success']) {
+    await page.evaluate(mode=>{ window.walletReturned=false; window.walletMode=mode; },mode);
+    const before=await stats(), scope=await setup('wallet-first-'+mode);
+    assert.equal((await read(page,scope)).status,'unsigned-request-saved');
+    assert.equal((await stats()).attempts,before.attempts);
+    if (mode==='success') {
+      const saved=await page.evaluate(()=>client.signOnly(costConsent));
+      assert.equal(saved.status,'buyer-response-saved');
+      assert.equal((await stats()).signatures,before.signatures+1);
+      const full=VersionedTransaction.deserialize(Buffer.from(saved.response.transactionBase64,'base64'));
+      assert.ok(full.signatures.every(signature=>signature.some(Boolean)));
+      assert.equal(await failure(),'NOT_READY');
+      await context.close();context=null;await launch();
+      assert.equal((await read(page,scope,'readBuyerResponse')).response.transactionBase64,saved.response.transactionBase64);
+    } else {
+      assert.notEqual(await failure(),'UNEXPECTED_SUCCESS');
+      assert.equal((await stats()).attempts,before.attempts);
+      assert.equal((await read(page,scope,'readBuyerResponse')).status,'wallet-response-unknown');
+    }
+  }
+  report.cases.push('wallet first with unchanged mint bytes, no asset signature on rejection or mutation, both signatures verified after acceptance and retained after restart');
   assert.equal(report.externalRequests,0);assert.deepEqual(report.pageErrors,[]);report.passed=true;
 }finally{
   report.completedAt=new Date().toISOString();await writeFile(path.join(output,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report,null,2));

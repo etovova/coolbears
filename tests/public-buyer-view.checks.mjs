@@ -71,6 +71,14 @@ try{
  const reviewAfterWait=client.reviewExpiry;let busyOnce=true;client.reviewExpiry=async opts=>{if(busyOnce){busyOnce=false;events.push('cooldown');throw Object.assign(Error('UNSIGNED_REVIEW_COOLDOWN'),{code:'UNSIGNED_REVIEW_COOLDOWN',status:429,retryAfter:1});}return await reviewAfterWait(opts);};
  events.length=0;verifiedExpiry=true;await primary.click();assert.deepEqual(events,['quote','cooldown','expiry','review','replace','quote']);assert.ok(cost().includes('0.203010000 SOL'));assert.equal(counts.sign,1);assert.equal(counts.send,1);ok('expired-unsigned-order-reuses-the-same-order-and-presents-a-new-total-before-signature');
  stale();events.length=0;reject=true;client.quoteCost=async()=>{throw Object.assign(Error('CHECK_HTTP'),{reason:'INSUFFICIENT_BALANCE',status:409});};await primary.click();assert.deepEqual(events,[]);assert.match(msg(),/недостаточно/);ok('balance-refusal-never-initiates-replacement');
+ // A daily capacity refusal ends the unsigned quote immediately in every supported language.
+ for(const [locale,pattern] of [['en',/limit has been reached/],['zh',/已达上限/],['ru',/лимит проверок покупки исчерпан/]]){
+   stale();lang=locale;let reads=0;const beforeSign=counts.sign,beforeSend=counts.send;
+   client.quoteCost=async()=>{reads++;throw Object.assign(Error('CHECK_HTTP'),{reason:'DAILY_LIMIT',status:429,retryAfter:27091});};
+   await primary.click();assert.match(msg(),pattern);assert.match(msg(),/00:00/);
+   assert.equal(reads,1);assert.equal(counts.sign,beforeSign);assert.equal(counts.send,beforeSend);
+ }
+ ok('daily-limit-explains-UTC-reset-in-all-languages-without-retry-sign-or-send');
  stale();events.length=0;let firstRead=true;client.quoteCost=async()=>{events.push('read');if(firstRead){firstRead=false;throw Object.assign(Error('CHECK_HTTP'),{reason:'QUOTE_FRESHNESS_RPC',status:409});}await oldQ();state={...state,canSign:false,salesOpen:false,readiness:{expiredOpen:true},recheckActions:{canSign:true}};emit();};
  await primary.click();assert.deepEqual(events,['read','read']);assert.ok(cost().includes('0.203010000 SOL'));assert.equal(counts.sign,1);assert.equal(counts.send,1);
  ok('expired-status-during-slow-unsigned-quote-still-displays-valid-total-and-never-signs');
@@ -83,6 +91,11 @@ try{
  state.canLeaveDraft=true;state.canChooseQuantity=true;
  client.startNew=async opts=>{assert.equal(opts.nextQuantity,2);state={...state,scope:null,quantity:null,canChooseQuantity:false,canLeaveDraft:false};emit();};
  client.create=async opts=>{assert.deepEqual([opts.quantity,opts.newPurchase],[2,true]);state={...state,scope:{id:'selected-two',buyer},quantity:2,canPrepare:true};emit();};
+ let limitedPreparationReads=0;const beforeLimitedPrepare=[counts.quote,counts.sign,counts.send];
+ client.prepare=async()=>{limitedPreparationReads++;throw Object.assign(Error('CHECK_HTTP'),{reason:'DAILY_LIMIT',status:429,retryAfter:27091});};
+ await card.click();assert.match(msg(),/лимит проверок покупки исчерпан/);
+ assert.equal(limitedPreparationReads,1);assert.deepEqual([counts.quote,counts.sign,counts.send],beforeLimitedPrepare);
+ await action('close').click();ok('daily-limit-on-preparation-stops-before-quote-and-wallet');
  client.prepare=async()=>{state={...state,salesOpen:false,saleStatus:'unavailable',canPrepare:false,canQuote:false,readiness:{expiredOpen:true},recheckActions:{canQuote:true},items:[{index:0,state:'wallet-pending',attempt:1}]};emit();};
  client.quoteCost=async()=>{await oldQ();state={...state,salesOpen:true,saleStatus:'open',canSign:true};emit();};
  const qBefore=counts.quote,sBefore=counts.sign;

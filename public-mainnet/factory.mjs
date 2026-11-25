@@ -35,7 +35,7 @@ export function createPublicBuyerConsole(input,{onChange=()=>{}}={}){
     async save(scope){try{if(indexUnavailable||!nativeIndex)throw Error();await nativeIndex.save(scope);}catch(error){indexUnavailable=true;throw Error('STORAGE_UNAVAILABLE');}}};
   const emit=()=>{try{onChange(state());}catch{}};
   const readiness=createPublicReadinessClient(deployment,{onChange:emit});
-  const storage=createBuyerStorage({cluster:'mainnet-beta',authorizeMainnet:true,storageOptions:consoleStorageOptions(config)});
+  const storage=createBuyerStorage({cluster:'mainnet-beta',authorizeMainnet:true,walletFirst:true,storageOptions:consoleStorageOptions(config)});
   const consentKey='coolbears:public-recovery:v1:'+deployment.profileSha256;
   const recoveryStorage={
     async authorize(){

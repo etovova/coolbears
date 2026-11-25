@@ -1,3 +1,4 @@
+import { Buffer } from '/public-mainnet/modules/b67364f30402cad4ee1b.mjs';
 // Browser custody, asset signing and durable buyer response evidence. No wallet calls, RPC or dispatch.
 import policy from '/public-mainnet/modules/9753b87c4a3cad84685d.mjs';
 import { base58 } from '/public-mainnet/modules/bd2933183e831418d615.mjs';
@@ -5,7 +6,7 @@ import {sha256} from '/public-mainnet/modules/1b42fa37d934728f30a5.mjs';
 import {bytesToHex} from '/public-mainnet/modules/c2cf7e49c894c8dcefe6.mjs';
 import { createOrderModel } from '/public-mainnet/modules/c2e57714b2d49f910e34.mjs';
 import {validateSequentialOrder,currentItemIndex} from '/public-mainnet/modules/a194ea6bf24e2ca920fe.mjs';
-import { prepareAssetClaim, validateAssetClaim, finalizeAssetRequest, validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId } from '/public-mainnet/modules/8c19f4e554421cc56f55.mjs';
+import { prepareAssetClaim, validateAssetClaim, finalizeAssetRequest, validateAssetRequest, verifyBuyerSigningResponse, buyerRequestId, WALLET_FIRST_REQUEST, verifyWalletFirstResponse } from '/public-mainnet/modules/8c19f4e554421cc56f55.mjs';
 import {signedBytesId,validateBuyerSubmission,validateBuyerResult} from '/public-mainnet/modules/9a2a0f7c701f6f0f8bae.mjs';
 import {validateCostApproval} from '/public-mainnet/modules/496495ca692686787c96.mjs';
 import {validateBuyerExpiryResult,expiryRecord} from '/public-mainnet/modules/a0394860398e5101200d.mjs';
@@ -31,7 +32,7 @@ function keyShape(record, scopeKey, item) {
   requireThat(key instanceof CryptoKey && key.type === 'private' && !key.extractable && key.algorithm.name === 'Ed25519' && equal([...key.usages], ['sign']), 'INVALID_ASSET_KEY');
   requireThat(pub instanceof CryptoKey && pub.type === 'public' && pub.algorithm.name === 'Ed25519' && equal([...pub.usages], ['verify']), 'INVALID_ASSET_KEY');
 }
-export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks, storageOptions = {}, cluster = 'devnet', authorizeMainnet = false } = {}) {
+export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = globalThis.crypto, locks = globalThis.navigator?.locks, storageOptions = {}, cluster = 'devnet', authorizeMainnet = false, walletFirst = false } = {}) {
   const network=networkProfile(cluster);
   requireThat(typeof authorizeMainnet==='boolean','STORAGE_CONFIGURATION');
   requireThat(network.cluster!=='mainnet-beta'||authorizeMainnet,'MAINNET_OPT_IN_REQUIRED');
@@ -282,7 +283,8 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
     requireThat(claimed?.phase === 'claimed' && (!records[1]||ready||closed), 'CORRUPT_ASSET_SIGNING');
     validateAssetClaim(order, claimed.record);
     if (ready) validateAssetRequest(order, claimed.record, ready.record);
-    return { status:closed?'asset-signing-reconciled':ready ? 'asset-partial-saved' : 'asset-signing-unknown',
+    const readyStatus=ready?.record.kind===WALLET_FIRST_REQUEST?'unsigned-request-saved':'asset-partial-saved';
+    return { status:closed?'asset-signing-reconciled':ready ? readyStatus : 'asset-signing-unknown',
       claim: structuredClone(claimed.record), request: ready ? structuredClone(ready.record) : null,
       mode: `offline-${network.cluster}-asset-signing`, networkVerified: false, blockhashVerified: false, guardPriceVerified: false,
       readyToSign: false, readyToSubmit: false, salesOpen: false };
@@ -522,6 +524,7 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         requireThat(number===(report?2:1),'REPLACEMENT_NOT_READY');
         bounded(prepared.order);
         const claimed = { phase: 'claimed', record: prepared.claim,...(report?{replacement:report.record}:{}) };
+        const unsigned = walletFirst ? {phase:'ready',record:{...prepared.claim,kind:WALLET_FIRST_REQUEST}} : null;
         nativeSlots.add(scopeKey);
         try {
           await transaction('readwrite', (tx, resolve, abort) => load(tx, scopeKey, data => {
@@ -529,10 +532,15 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
             tx.objectStore('events').add(prepared.event, [scopeKey, prepared.order.revision]);
             tx.objectStore('orders').put(prepared.order, scopeKey);
             tx.objectStore('signing').add(claimed, [scopeKey, prepared.claim.itemIndex, number, 0]);
+            if (unsigned) tx.objectStore('signing').add(unsigned,[scopeKey, prepared.claim.itemIndex, number, 1]);
             resolve(true);
           }, abort));
           // Native signing starts only after the intent has committed and been read back.
           const saved = await snapshotData(scope, scopeKey);
+          if (unsigned) {
+            requireThat(equal(saved.order,prepared.order) && equal(saved.signing,[...before.signing,claimed,unsigned]),'ASSET_CLAIM_CHANGED');
+            return signingState(saved.order,saved.signing);
+          }
           requireThat(equal(saved.order, prepared.order) && equal(saved.signing, [...before.signing,claimed]), 'ASSET_CLAIM_CHANGED');
           const message = validateAssetClaim(saved.order, prepared.claim);
           let signature;
@@ -678,6 +686,24 @@ export function createBuyerStorage({ indexedDB = globalThis.indexedDB, crypto = 
         const after = await snapshotData(scope, scopeKey);
         requireThat(equal(after.order, order) && equal(after.signing, [...before.signing,claimed]), 'WALLET_CLAIM_NOT_SAVED');
         return walletState(after.order, after.signing, after.events);
+      });
+    },
+    completeBuyerSignature(input, response) {
+      const {claimId,transactionBase64}=structuredClone(response);
+      return locked(input,async(scope,scopeKey)=>{
+        const saved=await snapshotData(scope,scopeKey);
+        const records=current(saved.signing), state=walletState(saved.order,records,saved.events);
+        requireThat(state?.claim.claimId===claimId && state.status!=='response-expired','WALLET_CLAIM_MISMATCH');
+        const claim=records[0].record, request=records[1].record;
+        const tx=verifyWalletFirstResponse(saved.order,claim,request,transactionBase64);
+        if (state.response) {
+          const prior=verifyBuyerSigningResponse(saved.order,claim,request,{transactionBase64:state.response.transactionBase64});
+          requireThat(base58.deserialize(tx.signatures[0])[0]===prior.signature,'BUYER_RESPONSE_CONFLICT');
+          return prior.transactionBase64;
+        }
+        requireThat(records.length===3 && state.status==='wallet-response-unknown','WALLET_CLAIM_REQUIRED');
+        tx.signatures[1]=new Uint8Array(await crypto.subtle.sign('Ed25519',saved.keys[claim.itemIndex].privateKey,tx.message.serialize()));
+        return verifyBuyerSigningResponse(saved.order,claim,request,{transactionBase64:Buffer.from(tx.serialize()).toString('base64')}).transactionBase64;
       });
     },
     saveBuyerResponse(input, response) {
