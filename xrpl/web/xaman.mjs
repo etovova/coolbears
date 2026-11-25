@@ -21,8 +21,8 @@ export function session(config) {
   return entry?.client === config.xamanClientId && entry.expires > Date.now() ? entry : null;
 }
 
-export async function authorize(config) {
-  const verifier = random(), state = random();
+export async function authorize(config, ownerSetup = false) {
+  const verifier = random(), state = (ownerSetup ? 'issuer-' : '') + random();
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
   const params = new URLSearchParams({
     response_type:'code', scope:'XummPkce', client_id:config.xamanClientId, redirect_uri:callback(),

@@ -211,7 +211,31 @@ export async function handle(request,env,now=Date.now()) {
   try {
     let result;
     if (path==='/xrpl') return new Response(null,{status:302,headers:{Location:'/xrpl/','Cache-Control':'no-store'}});
-    if (publicFiles.has(path)) {
+    const ownerHost = url.hostname === 'coolbears-nfts.com';
+    const ownerCallback = path === '/xrpl/' && (url.searchParams.has('code') || url.searchParams.has('error'))
+      && /^issuer-[A-Za-z0-9_-]{43}$/.test(url.searchParams.get('state') || '');
+    const ownerPages = {
+      '/xrpl/owner/': ['owner.html', 'text/html; charset=utf-8'],
+      '/xrpl/owner/owner.css': ['owner.css', 'text/css'],
+      '/xrpl/owner/owner.mjs': ['owner.mjs', 'text/javascript']
+    };
+    if (ownerHost && (ownerCallback || Object.hasOwn(ownerPages,path))) {
+      const [name,type] = ownerPages[ownerCallback ? '/xrpl/owner/' : path];
+      const file = await retrieve(env,name);
+      if (!file.ok) throw Error('Owner page unavailable');
+      result = response(file.body,type);
+    } else if (ownerHost && path === '/xrpl/owner/status') {
+      const tx = await (await retrieve(env,'authorize.json')).json();
+      const net = network(env);
+      const ledger = await snapshot(net);
+      if (!Number.isSafeInteger(ledger.seq) || tx.Account !== net.issuer) throw Error('Issuer configuration mismatch');
+      const entry = await objects(net,'account_objects',{type:'delegate'},ledger,page =>
+        page.account_objects.find(item => item.Account === tx.Account && item.Authorize === tx.Authorize));
+      const granted = entry ? entry.Permissions.map(p => p.Permission.PermissionValue).sort() : [];
+      const expected = tx.Permissions.map(p => p.Permission.PermissionValue).sort();
+      const state = !entry ? 'absent' : JSON.stringify(granted) === JSON.stringify(expected) ? 'active' : 'different';
+      result = json({state,ledger:ledger.seq,tx});
+    } else if (publicFiles.has(path)) {
       const [name,type]=publicFiles.get(path);const a=await retrieve(env,name);
       if (a.status!==200) throw Error('Site asset unavailable');
       result=response(a.body,type);

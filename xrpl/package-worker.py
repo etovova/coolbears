@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 base=Path(__file__).resolve().parent
 public={name:(base/path).read_text() for name,path in {
+    "owner.css":"web/owner.css","owner.html":"web/owner.html","owner.mjs":"web/owner.mjs","authorize.json":"launch/mainnet-signer/authorize.json",
     "home.html":"web/index.html","xaman.mjs":"web/xaman.mjs","app.js":"web/app.js","rarity.mjs":"web/rarity.mjs","site.css":"web/site.css",
     "wallet.js":"vendor/gemwallet.js","crossmark.js":"vendor/crossmark.js","translations.mjs":"web/translations.mjs","privacy.html":"web/privacy.html","terms.html":"web/terms.html"}.items()}
 print("import {handle} from './worker.mjs';")

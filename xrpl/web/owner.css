@@ -1,0 +1,8 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #111; color: #f3efe5; font: 1rem/1.55 system-ui, sans-serif; }
+main { width: min(100%, 40rem); margin: auto; padding: 2rem 1.25rem; }
+h1 { font-size: clamp(1.7rem, 6vw, 2.6rem); line-height: 1.12; }
+code { color: #ffdb45; overflow-wrap: anywhere; }
+button { padding: .8rem 1rem; margin: .25rem .4rem .25rem 0; border: 1px solid #eee; background: #222; color: white; font: inherit; cursor: pointer; }
+#action { background: #ffdb45; color: #111; border-color: #ffdb45; font-weight: 650; }
+button:disabled { opacity: .6; }
