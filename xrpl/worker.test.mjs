@@ -62,3 +62,32 @@ test('the first issuer draft matches the storefront and creates no sell offer',a
   assert.equal(draft.Flags,8);
   assert.equal(Buffer.from(draft.URI,'hex').toString(),'https://coolbears-nfts.com/xrpl/metadata/0000.json');
 });
+
+test('the original rarity report appears at the reveal boundary',async()=>{
+  const {randomBytes,createCipheriv}=await import('node:crypto');
+  const key=randomBytes(32), iv=randomBytes(12);
+  const row={name:'CoolBears #fixture',description:'Original description',attributes:[],
+    rarity:{rank:42,score:'58.13',trait_frequencies:{Body:{count:123}}}};
+  const cipher=createCipheriv('aes-256-gcm',key,iv);
+  cipher.setAAD(Buffer.from('m00.json'));
+  const bytes=Buffer.concat([iv,cipher.update(JSON.stringify([row])),cipher.final(),cipher.getAuthTag()]);
+  const env={ASSET_KEY:key.toString('base64'),ASSETS:{fetch:async()=>new Response(bytes)}};
+  const path='/xrpl/metadata/0000.json';
+  const closed=await (await request(path,env,REVEAL_AT-1)).json();
+  assert.equal(closed.properties,undefined);
+  assert.equal(closed.attributes,undefined);
+  const opened=await (await request(path,env,REVEAL_AT)).json();
+  assert.deepEqual(opened.properties.rarity,row.rarity);
+  assert.equal(opened.description,row.description);
+  assert.equal(opened.properties.files[0].uri,opened.image);
+});
+
+test('the public ranking and private encrypted file stay closed before reveal',async()=>{
+  let reads=0;
+  const env={ASSETS:{fetch(){reads++;throw Error('unexpected read');}}};
+  const r=await request('/xrpl/api/top50?now=9999999999999',env);
+  assert.equal(r.headers.get('cache-control'),'no-store');
+  assert.deepEqual(await r.json(),{revealed:false});
+  assert.equal((await request('/internal/leaders.bin',env,REVEAL_AT)).status,404);
+  assert.equal(reads,0);
+});

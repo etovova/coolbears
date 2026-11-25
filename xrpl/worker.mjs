@@ -181,8 +181,10 @@ async function metadata(env,path,origin,now) {
   const rows=JSON.parse(new TextDecoder().decode(await openAsset(env,shard,await asset.arrayBuffer())));
   const row=rows[Number(slot.slice(2))];
   if (kind==='art') return response(await artwork(env,slot,row),'image/png');
-  return json({name:row.name,description:row.description,attributes:row.attributes,image:origin+'/xrpl/art/'+slot+'.png',
-    external_url:origin+'/xrpl/'});
+  if (!row.rarity || !Number.isInteger(row.rarity.rank)) throw Error('Rarity unavailable');
+  const image=origin+'/xrpl/art/'+slot+'.png';
+  return json({name:row.name,description:row.description,attributes:row.attributes,image,
+    external_url:origin+'/xrpl/',properties:{category:'image',files:[{uri:image,type:'image/png'}],rarity:row.rarity}});
 }
 export async function handle(request,env,now=Date.now()) {
   const url=new URL(request.url), path=url.pathname;
@@ -197,6 +199,14 @@ export async function handle(request,env,now=Date.now()) {
       result=response(a.body,type);
     } else if (path.startsWith('/xrpl/metadata/') || path.startsWith('/xrpl/art/')) {
       result=await metadata(env,path,url.origin,now);
+    } else if (path==='/xrpl/api/top50') {
+      if (now<REVEAL_AT) result=json({revealed:false});
+      else {
+        const name='leaders.bin', asset=await retrieve(env,name);
+        if (asset.status!==200) throw Error('Ranking unavailable');
+        const rows=JSON.parse(new TextDecoder().decode(await openAsset(env,name,await asset.arrayBuffer())));
+        result=json({revealed:true,rows});
+      }
     } else if (path==='/xrpl/api/storage-check' && env.STORAGE_CHECK &&
                request.headers.get('Authorization')==='Bearer '+env.STORAGE_CHECK) {
       const shard='m00.json', asset=await retrieve(env,shard);
@@ -204,9 +214,10 @@ export async function handle(request,env,now=Date.now()) {
       const [row]=JSON.parse(new TextDecoder().decode(await openAsset(env,shard,await asset.arrayBuffer())));
       const png=await artwork(env,'0000',row);
       const fingerprint=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',png)),b=>b.toString(16).padStart(2,'0')).join('');
-      result=json({verified:fingerprint===row.sha256},fingerprint===row.sha256?200:503);
+      const verified=fingerprint===row.sha256 && Number.isInteger(row.rarity?.rank) && typeof row.rarity.score==='string';
+      result=json({verified},verified?200:503);
     } else if (path==='/xrpl/api/status') {
-      const net=network(env); result=json({network:net.name,issuer:net.issuer,xamanClientId:/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(env.XAMAN_CLIENT_ID || '') ? env.XAMAN_CLIENT_ID : null,open:env.SALES_OPEN==='yes',price:PRICE,revealAt:new Date(REVEAL_AT).toISOString()});
+      const net=network(env); result=json({network:net.name,issuer:net.issuer,xamanClientId:/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(env.XAMAN_CLIENT_ID || '') ? env.XAMAN_CLIENT_ID : null,open:env.SALES_OPEN==='yes',price:PRICE,serverTime:now,revealAt:new Date(REVEAL_AT).toISOString()});
     } else if (path==='/xrpl/api/offer' || path==='/xrpl/api/receipt' || path==='/xrpl/api/reconcile') {
       const buyer=url.searchParams.get('buyer') || '', id=url.searchParams.get('offer');
       if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(buyer) || (id!==null && !ID.test(id))) return json({error:'Invalid request'},400);

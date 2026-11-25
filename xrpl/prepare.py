@@ -50,6 +50,15 @@ def seal(key, label, data):
     return nonce + AESGCM(key).encrypt(nonce, data, aad)
 
 
+def save_leaderboard(work, key, manifest, leaders):
+    leaders.sort(key=lambda item: item["rank"])
+    require([row["rank"] for row in leaders] == list(range(1, 51)), "Incomplete top 50")
+    name = "leaders.bin"
+    data = seal(key, name, json_bytes(leaders))
+    (work / name).write_bytes(data)
+    manifest["/internal/" + name] = asset(data)
+
+
 def prepare(source, work, seed):
     key_bytes = storage_key(seed)
     archive = Original(source)
@@ -64,6 +73,7 @@ def prepare(source, work, seed):
     # Independent of rarity and wallet identity; every original occurs exactly once.
     order = sorted(ids, key=lambda n: hmac.digest(seed, b"CoolBears-XRPL-v1/"+n.encode(), "sha256"))
     manifest, packs, checksums = {}, {}, set()
+    leaders = []
     top_count = 0
     shards = []
     for start in range(0, COUNT, PACK_SIZE):
@@ -81,10 +91,16 @@ def prepare(source, work, seed):
             require(meta["name"] == "CoolBears #"+number and meta["image"].endswith("/"+number+".png")
                     and isinstance(meta["description"], str) and isinstance(meta["attributes"], list)
                     and all(isinstance(a,dict) and "trait_type" in a and "value" in a for a in meta["attributes"]), "Metadata mismatch")
-            top_count += meta["properties"]["rarity"]["rank"] == 1
+            rarity = meta["properties"]["rarity"]
+            require(isinstance(rarity["rank"], int) and 1 <= rarity["rank"] <= COUNT
+                    and isinstance(rarity["score"], str) and isinstance(rarity["trait_frequencies"], dict),
+                    "Invalid original rarity")
+            top_count += rarity["rank"] == 1
+            if rarity["rank"] <= 50:
+                leaders.append({"slot":f"{slot:04d}", "name":meta["name"], "rank":rarity["rank"], "score":rarity["score"]})
             sealed = seal(key_bytes, f"art/{slot:04d}", raw)
             shards.append({"name":meta["name"], "description":meta["description"], "attributes":meta["attributes"],
-                           "offset":len(pack), "length":len(sealed), "sha256":digest})
+                           "rarity":rarity, "offset":len(pack), "length":len(sealed), "sha256":digest})
             block_ids.append(cid.hex())
             pack.extend(sealed)
         key = f"/internal/p{start // PACK_SIZE:03d}.bin"
@@ -97,6 +113,7 @@ def prepare(source, work, seed):
             manifest["/internal/"+name] = asset(data)
             shards = []
     require(top_count >= 1 and not shards, "Missing highest-ranked original")
+    save_leaderboard(work, key_bytes, manifest, leaders)
     static = {"cover.gif": BASE.parent/"assets/collection/gif.gif", "logo.png": BASE.parent/"assets/collection/logo.png",
               "wallet.js": BASE/"vendor/gemwallet.js","app.js":BASE/"web/app.js","site.css":BASE/"web/site.css","home.html":BASE/"web/index.html"}
     for name,path in static.items():

@@ -10,7 +10,7 @@ const copy={
  ru:['Продажи закрыты','Купить за','Проверить транзакцию','Подключить кошелёк','Выберите кошелёк в сети','Ожидаем подтверждения сети.','Покупка подтверждена.','Следующий NFT','Недоступно','Также взимается комиссия сети.','Транзакция отклонена или срок истёк.'],
  zh:['暂未开售','购买价格','查看交易','连接钱包','选择钱包网络','等待账本确认。','购买已确认。','下一个 NFT','暂不可用','另收网络费用。','交易已拒绝或过期。']
 };
-let status,account,wallet,busy=false,pending,order;
+let status,account,wallet,busy=false,pending,order,rankingVisible=false;
 const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
@@ -39,6 +39,7 @@ function language(){
    value.split(/<br\s*\/?>/i).forEach((part,i)=>{if(i)node.append(document.createElement('br'));node.append(document.createTextNode(part));});
  }
  document.querySelectorAll('[data-lang]').forEach(x=>x.classList.toggle('active',x.dataset.lang===lang));
+ if(rankingVisible)document.querySelector('[data-i18n=top50Text]').textContent=rankingText();
  el('walletTitle').textContent=text(3);render();
 }
 document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{lang=b.dataset.lang;storage.set('coolbears.xrpl.language',lang);language();});
@@ -134,8 +135,35 @@ buy.onclick=async()=>{
    await check();
  }catch(e){message.textContent=e.message;}finally{busy=false;render();}
 };
+const rankingText=()=>({en:'Ranked by final rarity score.',ru:'Места по итоговой оценке редкости.',zh:'按最终稀有度评分排名。'}[lang]);
+async function loadRanking(){
+ try{
+   const data=await api('top50');
+   if(!data.revealed){setTimeout(loadRanking,60000);return;}
+   if(!Array.isArray(data.rows)||data.rows.length!==50)throw Error('Incomplete ranking');
+   const list=document.createElement('ol');
+   for(const [index,row] of data.rows.entries()){
+     if(row.rank!==index+1||!/^\d{4}$/.test(row.slot))throw Error('Invalid ranking');
+     const item=document.createElement('li'), link=document.createElement('a');
+     link.href='/xrpl/art/'+row.slot+'.png';link.textContent=row.name;
+     item.append(link,document.createTextNode(' · '+row.score));list.append(item);
+   }
+   const details=document.createElement('details'), summary=document.createElement('summary');
+   summary.textContent='TOP 50';details.append(summary,list);
+   document.querySelector('.top50-stamp').replaceWith(details);
+   rankingVisible=true;document.querySelector('[data-i18n=top50Text]').textContent=rankingText();
+ }catch{setTimeout(loadRanking,60000);}
+}
+function scheduleRanking(){
+ const delay=Date.parse(status.revealAt)-status.serverTime;
+ if(!Number.isFinite(delay))return;
+ // Long-running tabs must also wake up on the reveal date.
+ const due=performance.now()+Math.max(0,delay);
+ function wake(){const remaining=due-performance.now();if(remaining<=0)loadRanking();else setTimeout(wake,Math.min(remaining,2147480000));}
+ wake();
+}
 language();
-try{status=await api('status');pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;
+try{status=await api('status');scheduleRanking();pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;
  if(status.xamanClientId){
    const login=await xaman.finishLogin(status);
    const user=login || (storage.get('coolbears.xrpl.wallet')==='xaman' && xaman.session(status));
