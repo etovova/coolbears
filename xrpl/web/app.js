@@ -1,3 +1,4 @@
+import {mountRarity} from './rarity.mjs';
 import * as xaman from './xaman.mjs';
 import translations from './translations.mjs';
 const el=id=>document.getElementById(id);
@@ -11,6 +12,7 @@ const copy={
  zh:['暂未开售','购买价格','查看交易','连接钱包','选择钱包网络','等待账本确认。','购买已确认。','下一个 NFT','暂不可用','另收网络费用。','交易已拒绝或过期。']
 };
 let status,account,wallet,busy=false,pending,order,rankingVisible=false;
+let updateRarityLanguage;
 const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
@@ -34,6 +36,7 @@ function render(){
 }
 function language(){
  document.documentElement.lang=lang;
+ updateRarityLanguage?.(lang);
  for(const node of document.querySelectorAll('[data-i18n]')){
    const value=translations[lang][node.dataset.i18n];if(!value)continue;
    node.replaceChildren();
@@ -215,12 +218,13 @@ async function loadRanking(){
    for(const [index,row] of data.rows.entries()){
      if(row.rank!==index+1||!/^\d{4}$/.test(row.slot))throw Error('Invalid ranking');
      const item=document.createElement('li'), link=document.createElement('a');
-     link.href='/xrpl/art/'+row.slot+'.png';link.textContent=row.name;
+     link.href='/xrpl/?slot='+row.slot+'#rarity';link.textContent=row.name;
      item.append(link,document.createTextNode(' · '+row.score));list.append(item);
    }
    const details=document.createElement('details'), summary=document.createElement('summary');
    summary.textContent='TOP 50';details.append(summary,list);
    document.querySelector('.top50-stamp').replaceWith(details);
+   updateRarityLanguage=mountRarity(el('rarity'),lang);
    rankingVisible=true;document.querySelector('[data-i18n=top50Text]').textContent=rankingText();
  }catch{setTimeout(loadRanking,60000);}
 }

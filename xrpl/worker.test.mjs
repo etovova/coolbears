@@ -100,6 +100,9 @@ test('the original rarity report appears at the reveal boundary',async()=>{
   assert.equal(closed.attributes,undefined);
   const opened=await (await request(path,env,REVEAL_AT)).json();
   assert.deepEqual(opened.properties.rarity,row.rarity);
+  assert.equal(opened.properties.top_percent,0.42);
+  assert.equal(opened.properties.collection_size,10000);
+  assert.equal(opened.external_url,host+'/xrpl/?slot=0000#rarity');
   assert.equal(opened.description,row.description);
   assert.equal(opened.properties.files[0].uri,opened.image);
 });

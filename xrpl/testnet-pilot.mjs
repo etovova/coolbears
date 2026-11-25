@@ -17,7 +17,7 @@ const challengeKey=randomBytes(32);
 const openBuyers=collection && process.env.CB_PILOT_OPEN_BUYERS==='yes';
 const buyers=new Set(reservations||collection?[buyer,'rDT2EnyrhJ6hPQfAGnMLfbnqTxeENhB4zr']:[buyer]);
 const files={'home.html':'web/index.html','app.js':'web/app.js','site.css':'web/site.css',
-  'translations.mjs':'web/translations.mjs','xaman.mjs':'web/xaman.mjs','wallet.js':'vendor/gemwallet.js',
+  'rarity.mjs':'web/rarity.mjs','translations.mjs':'web/translations.mjs','xaman.mjs':'web/xaman.mjs','wallet.js':'vendor/gemwallet.js',
   'crossmark.js':'vendor/crossmark.js','terms.html':'web/terms.html','privacy.html':'web/privacy.html',
   'logo.png':'../assets/collection/logo.png','cover.gif':'../assets/collection/gif.gif',
   'hero.png':'../assets/brand/hero-20261003.png','brand-logo.png':'../assets/brand/logo-20261003.png',

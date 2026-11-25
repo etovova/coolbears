@@ -94,3 +94,8 @@ The two Worker configurations in `xrpl/hosted-testnet` cover the Testnet API and
 Build with Node 24 using `npm ci && npm test && npm run build` in that directory. Keep the existing issuer Worker, SQLite namespace, migration tag, object name and secret bindings when updating the deployment. The initial CHECKPOINT secret is a deflated, base64-encoded JSON export of the settled pilot's setup, occupied slots, orders and signed transactions. The bootstrap runs once per fresh database. Recover subsequent orders from the live namespace and its recovery history. The fixed Testnet issuer and network are part of the source.
 
 The [public checkout record](verification/hosted-testnet-sale.json) contains the original mint, confirmed payment and ledger number. The browser test used a disposable wallet adapter. It reserved the NFT, resumed the offer after an issuer deployment in a fresh browser, completed payment and recovered the receipt on replay.
+
+
+### Rarity after reveal
+
+Each revealed metadata response links to its public card via `external_url`. The card accepts the four-digit mint number from the metadata URI, shows the original artwork and rank, and lists the collection count and percentage for each of the seven traits. The percentage labeled “Top” is the rank divided by 10,000 and expressed as a percentage. For example, rank 100 is in the top 1%. The original rarity score and trait-frequency data are preserved. Before the server's reveal time, metadata contains only the hidden name, description and cover. The card is available in English, Russian and Chinese.

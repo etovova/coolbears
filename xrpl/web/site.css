@@ -54,3 +54,15 @@ body.wallet-open .back-top{display:none!important}
 #walletDialog{background:#181818;color:#fff;border:2px solid #f6c84b;border-radius:16px;max-width:360px;width:90%;padding:22px}#walletDialog::backdrop{background:#000a}.wallet-head,.wallet-options{display:flex;align-items:center;justify-content:space-between;gap:8px}.wallet-options{margin:18px 0}.wallet-head button{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}#walletInfo,#message{overflow-wrap:anywhere}#receipt{color:inherit}.legal{max-width:850px;padding:70px 5vw;margin:auto}.legal h1{font-size:clamp(32px,6vw,62px)}
 
 .wallet-options{flex-wrap:wrap}.wallet-options button{flex:1 1 auto}.wallet-options button:disabled{opacity:.6;cursor:default}#xamanResume{color:inherit}
+
+.rarity-lookup{margin-top:2rem}
+.rarity-lookup form{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem}
+.rarity-lookup input,.rarity-lookup button{padding:.65rem .85rem;font:inherit;border:1px solid currentColor;border-radius:.35rem}
+.rarity-lookup input{width:6rem;background:#fff;color:#161616}
+.rarity-lookup button{background:#ffe04b;color:#161616;cursor:pointer}
+.rarity-result{display:flex;align-items:flex-start;flex-wrap:wrap;gap:1.5rem}
+.rarity-result>div{min-width:0;max-width:100%;overflow-x:auto}
+.rarity-result img{max-width:100%;height:auto;border-radius:.5rem}
+.rarity-result h4{font-size:1.25rem;margin:0}
+.rarity-result table{border-collapse:collapse;font-variant-numeric:tabular-nums}
+.rarity-result th,.rarity-result td{padding:.45rem .55rem;text-align:start;border-bottom:1px solid currentColor}

@@ -1,0 +1,85 @@
+{
+  "site": "https://testnet.coolbears-nfts.com",
+  "network": "XRPL Testnet",
+  "issuer": "rEoKftiFRwknRDkbV2zURNc6KmhJoBxtaC",
+  "simultaneous_requests": 2,
+  "same_order_returned_same_offer": true,
+  "paid_first": {
+    "slot": "0008",
+    "mint": "040E2910C7A35975B1C696671347F8FFFA25B6B4202FCAA0DA23A1B6C80432FF",
+    "payment": "091602DDE2E337463A945F40DA2485C881E3BCA6E3759DBFF77FE0E1A9DAC452",
+    "buyer": "rpsFuNbccuB4vMB4Pw3ch6oqXNZfHnSr7c",
+    "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F536EF00820158E360",
+    "ledger": 22605318,
+    "price_drops": 10000000,
+    "buyer_fee_drops": 10
+  },
+  "unpaid_initial_offer": {
+    "state": "open",
+    "id": "2748FEC7D6F6AD1B7E4F8D45B40059E3A5603A6AA7ABF84075196D858641D896",
+    "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F54FF551850158E361",
+    "mint": "6A0BFE22D7D98A4367122FA009EF2DAF588311A3DCB9AB92C7CBDA716E21B94A",
+    "slot": 9
+  },
+  "expiration_check": {
+    "expiration": 848938672,
+    "validated_close": 848938681,
+    "ledger": 22605482,
+    "simulation": "tecEXPIRED"
+  },
+  "expired_order_http": 410,
+  "original_buyer_balance_change_drops": 0,
+  "cancel": {
+    "hash": "BB9702182680049CB081D575CC82681336F38AD1A76A0D58ABA85F50EF9EBC7F",
+    "ledger": 22605490
+  },
+  "personal_offer_reissued": {
+    "hash": "F907EA8B93BA54B7A279ED7A8C5BFD91E7F2587B2CF83A9C3654DBD92D251A4F",
+    "ledger": 22605492
+  },
+  "reassigned_sale": {
+    "slot": "0009",
+    "mint": "6A0BFE22D7D98A4367122FA009EF2DAF588311A3DCB9AB92C7CBDA716E21B94A",
+    "payment": "C9E8FAA3561B5E43D2347F3EEF0FCEBCF825F8B243080D2A16C82AC3023097DB",
+    "buyer": "rpsFuNbccuB4vMB4Pw3ch6oqXNZfHnSr7c",
+    "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F54FF551850158E361",
+    "ledger": 22605502,
+    "price_drops": 10000000,
+    "buyer_fee_drops": 10
+  },
+  "minted_before": 8,
+  "minted_after": 10,
+  "after_ledger": 22605502,
+  "sales_verified": 2,
+  "rarity": {
+    "items": 10000,
+    "ranks": 10000,
+    "attribute_values_checked": 70000,
+    "distinct_type_value_pairs": 265,
+    "errors": {},
+    "pre_reveal_records_checked": 10000,
+    "revealed_records_checked": 10000,
+    "top_percent_formula": "100 * rank / 10000",
+    "browser_locales": [
+      "ru",
+      "en",
+      "zh"
+    ],
+    "browser_widths": [
+      390,
+      1920,
+      820
+    ]
+  },
+  "mainnet": {
+    "network": "XRPL Mainnet",
+    "issuer": "ra7rAR24tKDsbmaJmikRjgCpoPZtFHsaJr",
+    "validated_ledger": 108565292,
+    "ledger_hash": "A7AD5CCA0D0750477C49BEBA62E83A350E5C8BEA7D016AE6BFA1C8B71052E6FC",
+    "account_status": "actNotFound",
+    "endpoints": [
+      "https://s1.ripple.com:51234/",
+      "https://s2.ripple.com:51234/"
+    ]
+  }
+}

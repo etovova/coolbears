@@ -11,6 +11,7 @@ const publicFiles = new Map([
   ['/assets/brand/hero-20261003.png',['hero.png','image/png']],
   ['/xrpl/', ['home.html', 'text/html; charset=utf-8']],
   ['/xrpl/site.css', ['site.css', 'text/css']],
+  ['/xrpl/rarity.mjs', ['rarity.mjs', 'text/javascript']],
   ['/xrpl/xaman.mjs', ['xaman.mjs', 'text/javascript']],
   ['/xrpl/app.js', ['app.js', 'text/javascript']],
   ['/xrpl/wallet.js', ['wallet.js', 'text/javascript']],
@@ -190,10 +191,11 @@ async function metadata(env,path,origin,now) {
   const rows=JSON.parse(new TextDecoder().decode(await openAsset(env,shard,await asset.arrayBuffer())));
   const row=rows[Number(slot.slice(2))];
   if (kind==='art') return response(await artwork(env,slot,row),'image/png');
-  if (!row.rarity || !Number.isInteger(row.rarity.rank)) throw Error('Rarity unavailable');
+  if (!row.rarity || !Number.isInteger(row.rarity.rank) || row.rarity.rank<1 || row.rarity.rank>10000) throw Error('Rarity unavailable');
   const image=origin+'/xrpl/art/'+slot+'.png';
   return json({name:row.name,description:row.description,attributes:row.attributes,image,
-    external_url:origin+'/xrpl/',properties:{category:'image',files:[{uri:image,type:'image/png'}],rarity:row.rarity}});
+    external_url:origin+'/xrpl/?slot='+slot+'#rarity',properties:{category:'image',files:[{uri:image,type:'image/png'}],
+      collection_size:10000,top_percent:row.rarity.rank/100,rarity:row.rarity}});
 }
 export async function handle(request,env,now=Date.now()) {
   const url=new URL(request.url), path=url.pathname;
