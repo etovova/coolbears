@@ -16,7 +16,7 @@ from playwright.sync_api import expect, sync_playwright
 from xrpl.wallet import Wallet
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from testnet_mint import PRICE, ISSUER, get, snapshot
+from testnet_mint import PRICE, ISSUER, RPC, get, rpc, snapshot
 from verify_testnet_sale import verify
 
 SITE = "https://testnet.coolbears-nfts.com"
@@ -174,8 +174,14 @@ def main():
             preflight.close()
             snapshot()
             read_json("https://faucet.altnet.rippletest.net/accounts", {"destination":buyer.address,"usageContext":"CoolBears Testnet browser checkout"})
-            funded = get("account_info", account=buyer.address, ledger_index="validated")
-            assert funded.get("validated") and int(funded["account_data"]["Balance"]) > int(PRICE) + 2000000
+            for attempt in range(20):
+                funded = rpc(RPC, "account_info", account=buyer.address, ledger_index="validated")
+                if funded.get("validated") and int(funded.get("account_data", {}).get("Balance", "0")) > int(PRICE) + 2000000:
+                    break
+                assert funded.get("error") in (None, "actNotFound"), funded.get("error")
+                time.sleep(2)
+            else:
+                raise RuntimeError("Faucet credit did not reach a validated Testnet ledger")
             print("Test buyer", buyer.address, flush=True)
             result = checkout(context, base, buyer, password)
             print(json.dumps({"gemwallet": version, **result}, indent=2), flush=True)
