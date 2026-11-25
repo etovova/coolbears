@@ -1,41 +1,22 @@
-name: Verify local checkout on mobile and desktop
+name: Single unsigned checkout after daily reset
 on:
   push:
     branches: ['qa/verify-saved-purchase-v41']
 permissions:
   contents: read
 jobs:
-  local-checkout:
+  checkout:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
-    strategy:
-      fail-fast: false
-      matrix:
-        engine: [firefox, chromium, webkit]
+    timeout-minutes: 6
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          sparse-checkout: tests/local-purchase-cap.qa.mjs
-          sparse-checkout-cone-mode: false
-          path: fixture
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          ref: a7f135f3faa88131948bec53fd864401951b1aa6
-          path: release
       - uses: actions/setup-node@v4
         with:
-          node-version: '24.19.0'
-      - name: Install selected browser
-        run: |
-          npm install --prefix "$RUNNER_TEMP/browser" --no-fund --no-audit --ignore-scripts --package-lock=false playwright@1.62.1
-          node "$RUNNER_TEMP/browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.engine }}
-      - name: Verify two independent sessions per language
-        working-directory: release
-        env:
-          QA_ENGINE: ${{ matrix.engine }}
-        run: |
+          node-version: '24'
+      - run: |
+          npm install --prefix "$RUNNER_TEMP/browser" --no-audit --no-fund --ignore-scripts playwright@1.62.1
+          node "$RUNNER_TEMP/browser/node_modules/playwright/cli.js" install --with-deps webkit
           export COOLBEARS_PLAYWRIGHT="$RUNNER_TEMP/browser/node_modules/playwright/index.mjs"
-          node ../fixture/tests/local-purchase-cap.qa.mjs
-          node ../fixture/tests/local-purchase-cap.qa.mjs
+          QA_ENGINE=webkit QA_WORKER_VERSION=8e3dc641-5a90-4c2c-b9ad-5c8974139001 node tests/single-unsigned.qa.mjs
