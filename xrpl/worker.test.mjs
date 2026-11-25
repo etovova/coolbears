@@ -27,6 +27,17 @@ test('the public sale remains closed on the main domain',async()=>{
  const s=await r.json();assert.equal(s.issuer,OWNER);assert.equal(s.open,false);assert.equal(s.network,'Mainnet');assert.equal(s.price,'10000000');
 });
 
+test('public hosts have no mint signer endpoint or single-slot pilot mode',async()=>{
+  const env={NETWORK:'testnet',SALES_OPEN:'yes',TEST_ISSUER:'test-issuer'};
+  for(const host of ['coolbears-nfts.com','www.coolbears-nfts.com','testnet.coolbears-nfts.com']){
+    const base='https://'+host+'/xrpl/api/';
+    const status=await (await handle(new Request(base+'status'),env)).json();
+    assert.equal(status.mintMode,undefined);
+    assert.equal((await handle(new Request(base+'mint',{method:'POST'}),env)).status,405);
+    assert.equal((await handle(new Request(base+'mint'),env)).status,404);
+  }
+});
+
 test('the six collection cards use the original pre-reveal cover', async () => {
   const {readFile} = await import('node:fs/promises');
   const page = await readFile(new URL('./web/index.html', import.meta.url), 'utf8');

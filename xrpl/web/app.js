@@ -14,7 +14,8 @@ let status,account,wallet,busy=false,pending,order,rankingVisible=false;
 const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
-const quantity=()=>Math.max(1,Math.min(50,Math.floor(Number(el('qty').value)||1)));
+const mintPilot=()=>status?.network==='Testnet' && status.mintMode==='single-slot' && location.hostname==='127.0.0.1';
+const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
  const xamanButton=el('xamanWallet'), resume=el('xamanResume');
@@ -27,9 +28,9 @@ function render(){
  el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
  buy.disabled=busy || !status || (!status.open && !pending);
  buy.textContent=pending?text(2):!status?text(8):!status.open?text(0):
-   order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
+   mintPilot()?'Mint · 10 test XRP':order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
  el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):text(0)):'';
- el('qty').disabled=busy||!!pending||!!order;el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
+ el('qty').disabled=busy||!!pending||!!order||mintPilot();el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
 }
 function language(){
  document.documentElement.lang=lang;
@@ -50,6 +51,19 @@ async function api(name,params={}){
  const url=new URL('/xrpl/api/'+name,location.origin);for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);
  const r=await fetch(url,{cache:'no-store'}),data=await r.json();
  if(!r.ok&&!data.state)throw Error(data.error||text(8));return data;
+}
+async function selectOffer(buyer){
+ let offer;
+ if(mintPilot()){
+   const reply=await fetch('/xrpl/api/mint',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({buyer})});
+   const result=await reply.json();
+   if(!reply.ok)throw Error(result.error||text(8));
+   offer=result.id;
+ }else{
+   offer=(await api('offer',{buyer})).id;
+ }
+ if(!/^[A-F0-9]{64}$/.test(offer))throw Error(text(8));
+ return api('offer',{buyer,offer});
 }
 async function connect(kind) {
  if(!status)throw Error(text(8));
@@ -110,7 +124,7 @@ buy.onclick=async()=>{
    if(!wallet||!account){pick();return;}
    const buyer=account;if(!await connect(wallet))return;if(account!==buyer)throw Error(text(4)+' '+status.network);
    if(order && buyer!==order.buyer)throw Error('Select the wallet for this order.');
-   let q=await api('offer',{buyer});q=await api('offer',{buyer,offer:q.id});
+   const q=await selectOffer(buyer);
    if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
    if(!order){order={buyer,target:quantity(),done:0};storage.set(objKey(),order);}
    pending={offer:q.id,buyer,last:q.validThrough,network:status.network};storage.set(txKey(),pending);
