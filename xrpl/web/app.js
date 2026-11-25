@@ -53,11 +53,12 @@ async function connect(kind) {
  }else{
    const sdk=window.CoolBearsCrossmark;
    if(!sdk?.methods?.isInstalled())throw Error('CROSSMARK · '+text(8));
-   const res=await sdk.methods.signInAndWait();
-   const net=sdk.methods.getNetwork() || res.response?.data?.network;
-   if(!net || String(net.label).toLowerCase()!==status.network.toLowerCase() ||
-      !['xrpl','xrp'].includes(String(net.protocol).toLowerCase()))throw Error(text(4)+' XRPL '+status.network);
-   account=res.response?.data?.address;
+   const session=wallet===kind && sdk.methods.getAddress();
+   const res=session?null:await sdk.methods.signInAndWait();
+   const net=sdk.methods.getNetwork() || res?.response?.data?.network;
+   if(!net || String(net.type).toLowerCase()!==status.network.toLowerCase() ||
+      net.protocol!=='XRPL' || String(net.label).toLowerCase()!=='xrp ledger')throw Error(text(4)+' XRPL '+status.network);
+   account=sdk.methods.getAddress() || res?.response?.data?.address;
  }
  if(!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(account||''))throw Error(text(8));
  wallet=kind;storage.set('coolbears.xrpl.wallet',kind);dialog.close();render();
