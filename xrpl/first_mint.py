@@ -1,6 +1,8 @@
 """Read-only preflight for the issuer's first NFT. No wallet credentials required."""
 import json
 import sys
+from datetime import datetime, timedelta, timezone
+from ipfs_nft import HIDDEN, ISSUER, choose_root, check_gateway, encode_uri, metadata_uri
 from pathlib import Path
 from urllib.request import Request, urlopen
 
@@ -21,14 +23,16 @@ def successful(result):
     return result
 
 
-def prepare(template, endpoint=MAINNET_RPC, network_id=0):
+def prepare(template, endpoint=MAINNET_RPC, network_id=0, reveal_report=None):
     """Return an unsigned transaction only after simulating a mint with no sale."""
     if set(template) != {"TransactionType", "Account", "Flags", "NFTokenTaxon", "TransferFee", "URI"}:
         raise ValueError("Unexpected mint fields")
     if (template["TransactionType"], template["Flags"], template["NFTokenTaxon"], template["TransferFee"]) != (
-        "NFTokenMint", 8, 20270201, 7000
+        "NFTokenMint", 24, 20270201, 7000
     ):
         raise ValueError("Unexpected collection settings")
+    if template["Account"] != ISSUER or template["URI"] != encode_uri(metadata_uri(HIDDEN, 0)):
+        raise ValueError("Unexpected Mainnet issuer or metadata")
     info = successful(rpc(endpoint, "server_info"))["info"]
     ledger = info["validated_ledger"]
     if info["network_id"] != network_id or ledger["age"] > 30:
@@ -48,7 +52,13 @@ def prepare(template, endpoint=MAINNET_RPC, network_id=0):
     fee = int(successful(rpc(endpoint, "fee"))["drops"]["open_ledger_fee"])
     if not 0 < fee <= 100:
         return {**summary, "status": "review_network_fee", "fee_drops": fee}
-    tx = {**template, "Sequence": root["Sequence"], "LastLedgerSequence": ledger["seq"] + 20, "Fee": str(fee)}
+    header = successful(rpc(endpoint, "ledger", ledger_hash=ledger["hash"]))
+    if not header.get("validated") or header["ledger"]["ledger_hash"] != ledger["hash"]:
+        raise ValueError("Unconfirmed ledger close time")
+    when = datetime(2000, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=header["ledger"]["close_time"])
+    directory = choose_root(when, reveal_report)
+    check_gateway(directory, 0)
+    tx = {**template, "Flags": 24 if directory == HIDDEN else 8, "URI": encode_uri(metadata_uri(directory, 0)), "Sequence": root["Sequence"], "LastLedgerSequence": ledger["seq"] + 20, "Fee": str(fee)}
     sim = successful(rpc(endpoint, "simulate", tx_json=tx))
     if sim.get("applied") is not False or sim.get("engine_result") != "tesSUCCESS":
         return {**summary, "status": "simulation_failed", "result": sim.get("engine_result")}
@@ -64,7 +74,10 @@ def prepare(template, endpoint=MAINNET_RPC, network_id=0):
 
 if __name__ == "__main__":
     try:
-        report = prepare(json.loads(TEMPLATE.read_text()))
+        import argparse
+        parser = argparse.ArgumentParser(description=__doc__)
+        parser.add_argument("--reveal-report", type=Path)
+        report = prepare(json.loads(TEMPLATE.read_text()), reveal_report=parser.parse_args().reveal_report)
     except (OSError, ValueError, KeyError) as error:
         sys.exit(str(error))
     print(json.dumps(report, indent=2))

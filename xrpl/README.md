@@ -1,8 +1,8 @@
 # CoolBears on XRP Ledger
 
-The collection contains 10,000 slots numbered 0000 through 9999. A canonical NFT has the issuer configured in worker.mjs, taxon 20270201, the transferable flag (8), TransferFee 7000 (7%) and a permanent HTTPS URI ending in /xrpl/metadata/NNNN.json. A sale offer must ask exactly 10000000 drops. The buyer accepts that offer in GemWallet or CROSSMARK. The application checks the validated ledger before signing and verifies the final transaction before displaying a receipt.
+The collection contains 10,000 slots numbered 0000 through 9999. A canonical NFT has the issuer configured in worker.mjs, taxon 20270201, TransferFee 7000 (7%) and a transferable NFT. Earlier Testnet tokens use HTTPS. The Mainnet candidate uses a per-slot ipfs:// URI. Before reveal its flags are 24 (transferable and URI-mutable). Tokens first minted after reveal use the final directory with flags 8 (transferable). A sale offer must ask exactly 10000000 drops. The buyer accepts that offer in GemWallet or CROSSMARK. The application checks the validated ledger before signing and verifies the final transaction before displaying a receipt.
 
-Artwork becomes available at 2027-02-01T00:00:00Z. The Worker checks its own clock on every metadata and image request. A hidden response uses Cache-Control no-store. The new endpoint uses one immutable reference per token and requires no wallet signature at reveal time. Wallets may independently cache the cover.
+Artwork becomes available at 2027-02-01T00:00:00Z. The Worker checks its own clock on every metadata and image request. A hidden response uses Cache-Control no-store. The existing HTTPS endpoint reveals automatically. For pre-reveal IPFS mints, the issuer must update each URI on ledger. The existing Xaman mint and offer grant does not authorize that update. Confirm the issuer signing and scheduling arrangement before enabling Mainnet sales. Wallets may independently cache the cover.
 
 ## Preparing private assets
 
@@ -36,7 +36,7 @@ The browser uses OAuth authorization code with PKCE, keeps the short-lived token
 
 ### First Mainnet mint
 
-The [first NFT template](launch/first-mint.json) mints slot 0000 into the issuer account with a permanent URI. Its hidden artwork uses the same randomized allocation as every other slot. Minting this template creates no sell offer. Publish an offer for 10,000,000 drops as a separate launch action after the owner approves sales.
+The [first NFT template](launch/first-mint.json) prepares slot 0000 with the hidden IPFS URI. Run the preflight before signing so the correct phase and content availability are checked. Its hidden artwork uses the same randomized allocation as every other slot. Minting this template creates no sell offer. Publish an offer for 10,000,000 drops as a separate launch action after the owner approves sales.
 
 Run `python3 xrpl/first_mint.py` when preparing the first signature. It reads a validated Mainnet ledger, checks the issuer's lifetime mint count, fixes the sequence, fee and expiry, and simulates the transaction. It emits an unsigned transaction only if the simulation succeeds. A fee above 100 drops pauses preparation for review. This check never signs or submits a transaction. If a previous signature has an unknown outcome, reconcile its hash with the ledger before requesting another signature. Re-run the check when the ledger window expires.
 
@@ -101,3 +101,24 @@ The [public checkout record](verification/hosted-testnet-sale.json) contains the
 ### Rarity after reveal
 
 Each revealed metadata response links to its public card via `external_url`. The card accepts the four-digit mint number from the metadata URI, shows the original artwork and rank, and lists the collection count and percentage for each of the seven traits. The percentage labeled “Top” is the rank divided by 10,000 and expressed as a percentage. For example, rank 100 is in the top 1%. The original rarity score and trait-frequency data are preserved. Before the server's reveal time, metadata contains only the hidden name, description and cover. The card is available in English, Russian and Chinese.
+
+### Pinata and IPFS release
+
+Build with Python, the same allocation seed used by the Worker, the verified original archive, and ipfs-car 3.1.0. All output belongs outside Git. Each build writes a CAR archive and its single-root CID in a local report.
+
+```sh
+python xrpl/ipfs_release.py hidden /private/release
+python xrpl/ipfs_release.py revealed /private/release --originals /private/parts --allocation /private/allocation
+```
+
+Before reveal, only `hidden.car` is public material. It contains all numbered placeholder files and the original GIF. Importing it as a CAR pins the directory and its cover. Check that Pinata finishes importing the expected root, then retrieve a numbered JSON and its image by CID. Uploading a CAR as an ordinary binary produces a different CID. Pinata's documented CAR import requires a paid plan and the public network.
+
+Keep the final metadata CAR, manifest, original CAR and assignment private until the reveal boundary. At reveal, pin the original CAR root (the 28 ZIP parts carry a single CAR stream) and the final metadata root. JSON image references are strings; pin both roots independently. Maintain a second independent pin or node for availability. After public retrieval succeeds, set IPFS_REVEALED_ROOT for the storefront offer check. Before signing each URI update, fetch current token state and simulate:
+
+```sh
+python xrpl/ipfs_nft.py NFT_ID SLOT /private/release/revealed.json
+```
+
+This command prepares an unsigned NFTokenModify for the current owner and skips tokens already updated. Transferring a token during signing can invalidate the draft; reread its owner before retrying. The issuer can change a mutable token's URI again. The Mainnet first-mint preflight accepts `--reveal-report /private/release/revealed.json` for an initial mint after reveal.
+
+[XRPL NFT storage](https://xrpl.org/docs/concepts/tokens/nfts/payload-storage) · [Dynamic NFTs](https://xrpl.org/docs/concepts/tokens/nfts/dynamic-nfts) · [IPFS persistence](https://docs.ipfs.tech/how-to/best-practices-for-nft-data/) · [Pinata CAR import](https://docs.pinata.cloud/files/uploading-files#upload-by-car-file)

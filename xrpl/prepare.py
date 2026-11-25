@@ -59,6 +59,12 @@ def save_leaderboard(work, key, manifest, leaders):
     manifest["/internal/" + name] = asset(data)
 
 
+def slot_order(seed):
+    require(len(seed) == 32, "Expected the existing 32-byte allocation seed")
+    ids = (f"{n:04d}" for n in range(COUNT))
+    return sorted(ids, key=lambda n: hmac.digest(seed, b"CoolBears-XRPL-v1/"+n.encode(), "sha256"))
+
+
 def prepare(source, work, seed):
     key_bytes = storage_key(seed)
     archive = Original(source)
@@ -71,7 +77,7 @@ def prepare(source, work, seed):
         names = {p.split("/")[-1].split(".")[0] for p in files if p.startswith("/"+kind+"/") and p.endswith("."+ext)}
         require(names == expected, "Missing or extra originals")
     # Independent of rarity and wallet identity; every original occurs exactly once.
-    order = sorted(ids, key=lambda n: hmac.digest(seed, b"CoolBears-XRPL-v1/"+n.encode(), "sha256"))
+    order = slot_order(seed)
     manifest, packs, checksums = {}, {}, set()
     leaders = []
     top_count = 0

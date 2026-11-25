@@ -81,8 +81,14 @@ test('the first issuer draft matches the storefront and creates no sell offer',a
   assert.equal(draft.Account,OWNER);
   assert.equal(draft.NFTokenTaxon,TAXON);
   assert.equal(draft.TransferFee,7000);
-  assert.equal(draft.Flags,8);
-  assert.equal(Buffer.from(draft.URI,'hex').toString(),'https://coolbears-nfts.com/xrpl/metadata/0000.json');
+  assert.equal(draft.Flags,24);
+  const uri=Buffer.from(draft.URI,'hex').toString();
+  assert.equal(uri,'ipfs://bafybeia6ru6nvpgyzbab7gnp4ne7l7652s4q5mk4cvqh7evump5ifcf7eu/0000.json');
+  const {collectionURI}=await import('./worker.mjs');
+  assert.ok(collectionURI(uri,24,host,null));
+  assert.ok(collectionURI(host+'/xrpl/metadata/0012.json',8,host,null));
+  assert.equal(collectionURI(uri,8,host,null),false);
+  assert.equal(collectionURI(uri.replace('/0000','/other/0000'),24,host,null),false);
 });
 
 test('the original rarity report appears at the reveal boundary',async()=>{

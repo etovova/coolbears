@@ -85,7 +85,17 @@ function decodeURI(hex) {
   if (!/^(?:[0-9a-fA-F]{2}){1,256}$/.test(hex)) return '';
   return new TextDecoder().decode(Uint8Array.from(hex.match(/../g),c=>parseInt(c,16)));
 }
-async function quote(net, buyer, origin, wanted) {
+export function collectionURI(uri, flags, origin, revealedRoot) {
+  const hidden = 'ipfs://bafybeia6ru6nvpgyzbab7gnp4ne7l7652s4q5mk4cvqh7evump5ifcf7eu';
+  if (flags === 8 && uri.startsWith(origin+'/xrpl/metadata/'))
+    return /^[0-9]{4}\.json$/.test(uri.slice((origin+'/xrpl/metadata/').length));
+  const slash=uri.lastIndexOf('/');
+  if (slash < 0 || !/^\/[0-9]{4}\.json$/.test(uri.slice(slash))) return false;
+  const prefix=uri.slice(0,slash);
+  if (prefix===hidden) return flags===24;
+  return (flags===8 || flags===24) && /^bafybei[a-z2-7]{52}$/.test(revealedRoot || '') && prefix==='ipfs://'+revealedRoot;
+}
+async function quote(net, buyer, origin, wanted, revealedRoot) {
   const ledger=await snapshot(net);
   const l=await rpc(net,'ledger',{ledger_hash:ledger.hash,transactions:false});
   if (!l.validated || l.ledger.ledger_hash!==ledger.hash) throw Error('Invalid ledger');
@@ -107,10 +117,9 @@ async function quote(net, buyer, origin, wanted) {
   return await objects(net,'account_nfts',{},ledger,page=>{
     for (const token of page.account_nfts) {
       const offer=offers.get(token.NFTokenID);
-      if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.Flags!==8 || token.TransferFee!==7000) continue;
+      if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.TransferFee!==7000) continue;
       const uri=decodeURI(token.URI);
-      const prefix=origin+'/xrpl/metadata/';
-      if (!uri.startsWith(prefix) || !/^\d{4}\.json$/.test(uri.slice(prefix.length))) continue;
+      if (!collectionURI(uri,token.Flags,origin,revealedRoot)) continue;
       return {id:offer.index,token:token.NFTokenID,price:PRICE,ledger:ledger.seq,validThrough:ledger.seq+15};
     }
   }) || null;
@@ -315,7 +324,7 @@ export async function handle(request,env,now=Date.now()) {
         result=await receipt(net,hash,id,buyer);
       } else {
         if (env.SALES_OPEN!=='yes') return json({error:'Sales closed'},409);
-        const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id);
+        const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id,now>=REVEAL_AT ? env.IPFS_REVEALED_ROOT : null);
         result=q?json(q):json({error:'No eligible offer'},404);
       }
     } else return response('','text/plain',404);
