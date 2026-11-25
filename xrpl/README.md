@@ -49,3 +49,15 @@ The loopback storefront exercises one new NFT requested by one designated dispos
 The pilot uses Node.js 24, Python 3 with `xrpl-py==5.2.0`, the isolated issuer and buyer addresses in `testnet_mint.py`, and the issuer's previously validated slot 0000. The operator supplies `CB_PILOT_PYTHON`, `CB_PILOT_SEED` (the disposable Testnet issuer's owner-readable seed file) and `CB_PILOT_STATE` (a private directory outside Git). Run `node --use-env-proxy xrpl/testnet-pilot.mjs` and open `http://127.0.0.1:18840`. The separate server accepts local same-origin requests only. It uses the ordinary storefront to recheck the validated offer and receipt. The public Worker has no mint endpoint.
 
 Each retry uses the signed bytes and transaction hash committed to the pilot's SQLite journal before submission. An expired, unresolved transaction stops issuance. Preserve the journal across restarts. The pilot has no automatic reassignment or cancellation of abandoned offers. A public rollout requires an issuer signing arrangement, authenticated requests, limits on outstanding offers and a policy for returning abandoned tokens to sale.
+
+### Expiring Testnet reservations
+
+Set `CB_PILOT_RESERVATIONS=yes` on the loopback storefront to use slot 0002 with two allowlisted test wallets. It issues the slot once against a three-minute offer. A repeat request by the same wallet recovers its existing offer. During the reservation the second wallet receives HTTP 409. In the last 60 seconds the storefront stops initiating new signatures for that offer. The ledger close time governs expiry.
+
+A request after expiry cancels the old offer and creates a new buyer-specific offer for the same NFT after confirmation. The service checks validated ownership and the original URI, price and transfer settings. If an offer was removed externally it checks the ledger history before offering that token again. A purchase exhausts the slot. The isolated test has a lifetime budget of six offers, serializes issuer operations across processes and saves each signed transaction before submitting it. Keep the private journal. Public hosts expose no issuer signer. Public rollout still requires buyer authentication, a production signing arrangement and collection-wide inventory controls.
+
+### Marketplace domain identity
+
+The canonical domain serves its Mainnet issuer at `/.well-known/xrp-ledger.toml`. For Bithomp and other readers, GET and HEAD on this exact path must return TOML with `Access-Control-Allow-Origin: *`. The unsigned [account domain template](launch/set-domain.json) contains the matching domain for the issuer to review after account activation. Two-way verification requires the matching Domain on the validated Mainnet account. A marketplace profile or verification badge has its own approval process.
+
+Run `python xrpl/test_reservations.py` with the Testnet pilot dependencies for expiry, contention, recovery and sold-token regression checks.

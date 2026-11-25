@@ -3,6 +3,17 @@ import assert from 'node:assert/strict';
 import {handle,REVEAL_AT,OWNER} from './worker.mjs';
 const host='https://preview.invalid';
 const request=(path,env={},when=REVEAL_AT-1,method='GET')=>handle(new Request(host+path,{method}),env,when);
+test('the canonical domain publishes its Mainnet issuer as a CORS-readable TOML file',async()=>{
+ const path='/.well-known/xrp-ledger.toml',url='https://coolbears-nfts.com'+path;
+ const file=await handle(new Request(url),{}),head=await handle(new Request(url,{method:'HEAD'}),{});
+ assert.equal(file.status,200);
+ assert.equal(file.headers.get('Access-Control-Allow-Origin'),'*');
+ assert.match(file.headers.get('Content-Type'),/^application\/toml/);
+ assert.equal(await file.text(),'[[ACCOUNTS]]\naddress = "'+OWNER+'"\nnetwork = "main"\ndesc = "CoolBears NFTs issuer"\n');
+ assert.equal(head.status,200);assert.equal(head.body,null);
+ assert.equal((await handle(new Request(url,{method:'POST'}),{})).status,405);
+ assert.equal((await request(path)).status,404);
+});
 test('all slots stay closed before the exact UTC boundary',async()=>{
   assert.equal(new Date(REVEAL_AT).toISOString(),'2027-02-01T00:00:00.000Z');
   let reads=0;const env={ASSETS:{fetch(){reads++;throw Error();}}};

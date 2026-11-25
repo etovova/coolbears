@@ -199,6 +199,13 @@ export async function handle(request,env,now=Date.now()) {
   const url=new URL(request.url), path=url.pathname;
   env=siteEnvironment(url.hostname,env);
   if (!['GET','HEAD'].includes(request.method)) return response('','text/plain',405);
+  if (url.hostname==='coolbears-nfts.com' && path==='/.well-known/xrp-ledger.toml') {
+    const issuerFile='[[ACCOUNTS]]\naddress = "'+OWNER+'"\nnetwork = "main"\ndesc = "CoolBears NFTs issuer"\n';
+    return new Response(request.method==='HEAD'?null:issuerFile,{headers:{
+      ...security,'Content-Type':'application/toml; charset=utf-8','Access-Control-Allow-Origin':'*',
+      'Cache-Control':'public, max-age=300'
+    }});
+  }
   try {
     let result;
     if (path==='/xrpl') return new Response(null,{status:302,headers:{Location:'/xrpl/','Cache-Control':'no-store'}});

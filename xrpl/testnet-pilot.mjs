@@ -1,4 +1,4 @@
-// One local browser, one disposable Testnet issuer, one designated buyer and one NFT.
+// Isolated Testnet storefront. The expiring-slot pilot allows two designated test buyers.
 import {createServer} from 'node:http';
 import {readFile} from 'node:fs/promises';
 import {execFile} from 'node:child_process';
@@ -10,6 +10,8 @@ const run=promisify(execFile);
 const origin='http://127.0.0.1:18840';
 const issuer='rEoKftiFRwknRDkbV2zURNc6KmhJoBxtaC';
 const buyer='rf2EoyM9uS2HqjS3ouFTzQrNg88LDLrN8a';
+const reservations=process.env.CB_PILOT_RESERVATIONS==='yes';
+const buyers=new Set(reservations?[buyer,'rDT2EnyrhJ6hPQfAGnMLfbnqTxeENhB4zr']:[buyer]);
 const files={'home.html':'web/index.html','app.js':'web/app.js','site.css':'web/site.css',
   'translations.mjs':'web/translations.mjs','xaman.mjs':'web/xaman.mjs','wallet.js':'vendor/gemwallet.js',
   'crossmark.js':'vendor/crossmark.js','terms.html':'web/terms.html','privacy.html':'web/privacy.html',
@@ -22,7 +24,7 @@ const env={NETWORK:'testnet',SALES_OPEN:'yes',TEST_ISSUER:issuer,METADATA_ORIGIN
     return Object.hasOwn(files,name)?new Response(await readFile(new URL(files[name],import.meta.url))):new Response(null,{status:404});
   }}};
 const json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
-let inFlight;
+const inFlight=new Map();
 async function reserve(req){
   if(req.method!=='POST')return json({error:'POST required'},405);
   if(req.headers.origin!==origin || req.headers['content-type']!=='application/json')return json({error:'Local origin required'},403);
@@ -33,13 +35,15 @@ async function reserve(req){
   }
   let input;
   try{input=JSON.parse(body)}catch{return json({error:'Invalid JSON'},400)}
-  if(input?.buyer!==buyer || Object.keys(input).length!==1)return json({error:'Reserved Testnet buyer only'},403);
-  if(!inFlight){
-    const script=fileURLToPath(new URL('./testnet_mint.py',import.meta.url));
-    inFlight=run(process.env.CB_PILOT_PYTHON || 'python3',[script,buyer],{timeout:180000})
-      .then(({stdout})=>JSON.parse(stdout)).finally(()=>{inFlight=undefined});
+  if(!buyers.has(input?.buyer) || Object.keys(input).length!==1)return json({error:'Reserved Testnet buyer only'},403);
+  const who=input.buyer;
+  if(!inFlight.has(who)){
+    const script=fileURLToPath(new URL(reservations?'./testnet_reservations.py':'./testnet_mint.py',import.meta.url));
+    inFlight.set(who,run(process.env.CB_PILOT_PYTHON || 'python3',[script,who],{timeout:180000})
+      .then(({stdout})=>JSON.parse(stdout)).finally(()=>inFlight.delete(who)));
   }
-  return json(await inFlight);
+  const result=await inFlight.get(who);
+  return json(result,result.status||200);
 }
 async function route(req){
   if(req.headers.host!==new URL(origin).host || !req.url.startsWith('/') || req.url.startsWith('//'))return json({error:'Unknown host'},403);

@@ -32,13 +32,13 @@ def snapshot():
     return ledger
 
 
-def directed_offer(meta):
+def directed_offer(meta, buyer=BUYER):
     offers = [n["CreatedNode"] for n in meta["AffectedNodes"]
               if n.get("CreatedNode", {}).get("LedgerEntryType") == "NFTokenOffer"]
     if len(offers) != 1:
         raise ValueError("Expected one offer")
     fields = offers[0]["NewFields"]
-    if (fields["Owner"], fields["Destination"], fields["Amount"], fields["Flags"]) != (ISSUER, BUYER, PRICE, 1):
+    if (fields["Owner"], fields["Destination"], fields["Amount"], fields["Flags"]) != (ISSUER, buyer, PRICE, 1):
         raise ValueError("Unexpected sale terms")
     return {"id": offers[0]["LedgerIndex"], "token": fields["NFTokenID"]}
 
@@ -74,14 +74,13 @@ def prepare(db, seed):
     return saved
 
 
-def issue(db, seed):
-    tx_hash, blob, deadline = prepare(db, seed)
+def validated_transaction(tx_hash, blob, deadline):
     for attempt in range(16):
         tx = rpc(RPC, "tx", transaction=tx_hash)
         if tx.get("validated"):
             if tx.get("hash") != tx_hash or tx["meta"]["TransactionResult"] != "tesSUCCESS":
                 raise ValueError("Testnet mint did not succeed")
-            return {**directed_offer(tx["meta"]), "mint": tx_hash, "ledger": tx["ledger_index"]}
+            return tx
         if tx.get("error") and tx["error"] != "txnNotFound":
             successful(tx)
         if attempt % 4 == 0:
@@ -92,14 +91,24 @@ def issue(db, seed):
     raise TimeoutError("Mint awaiting validation. Retry to resume the same transaction")
 
 
-def main():
-    if sys.argv[1:] != [BUYER]:
-        sys.exit("Unknown pilot buyer")
+def private_paths():
     state = Path(os.environ["CB_PILOT_STATE"]).resolve(strict=True)
     seed = Path(os.environ["CB_PILOT_SEED"]).resolve(strict=True)
     if not state.is_dir() or state.stat().st_mode & 0o077 or seed.stat().st_mode & 0o077:
         sys.exit("Pilot state and seed require owner-only permissions")
     os.umask(0o077)
+    return state, seed
+
+
+def issue(db, seed):
+    tx = validated_transaction(*prepare(db, seed))
+    return {**directed_offer(tx["meta"]), "mint": tx["hash"], "ledger": tx["ledger_index"]}
+
+
+def main():
+    if sys.argv[1:] != [BUYER]:
+        sys.exit("Unknown pilot buyer")
+    state, seed = private_paths()
     with sqlite3.connect(state / "on-demand.sqlite", timeout=90) as db:
         db.execute("CREATE TABLE IF NOT EXISTS mint(slot INTEGER PRIMARY KEY CHECK(slot=1),"
                    "hash TEXT NOT NULL,blob TEXT NOT NULL,deadline INTEGER NOT NULL)")
