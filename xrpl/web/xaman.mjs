@@ -29,7 +29,8 @@ export async function authorize(config) {
     code_challenge:base64url(new Uint8Array(hash)), code_challenge_method:'S256', state,
     force_network:config.network.toUpperCase()
   });
-  sessionStorage.setItem(key(config.network, 'login'), JSON.stringify({state, verifier, client:config.xamanClientId, started:Date.now()}));
+  // A mobile deep link may return to another tab in the same browser.
+  localStorage.setItem(key(config.network, 'login'), JSON.stringify({state, verifier, client:config.xamanClientId, started:Date.now()}));
   location.assign(oauth + '/auth?' + params);
 }
 
@@ -37,9 +38,10 @@ export async function finishLogin(config) {
   const params = new URLSearchParams(location.search);
   if (location.pathname !== '/xrpl/' || !(params.has('code') || params.has('error'))) return null;
   history.replaceState(null, '', '/xrpl/');
-  const login = saved(config.network, 'login');
+  const login = JSON.parse(localStorage.getItem(key(config.network, 'login')) || 'null') || saved(config.network,'login');
   if (!login || login.client !== config.xamanClientId || !login.state || login.state !== params.get('state') || Date.now() - login.started > 15*60*1000)
     throw Error('Xaman · Invalid sign-in session');
+  localStorage.removeItem(key(config.network, 'login'));
   sessionStorage.removeItem(key(config.network, 'login'));
   if (params.has('error') || !params.get('code')) throw Error('Xaman · Sign-in cancelled');
   const token = await request(oauth + '/token', {method:'POST', body:new URLSearchParams({
@@ -48,7 +50,7 @@ export async function finishLogin(config) {
   })});
   if (!token.access_token) throw Error('Xaman · Missing access token');
   const profile = await request(oauth + '/userinfo', {headers:{Authorization:'Bearer ' + token.access_token}});
-  if (!address.test(profile.account) || (profile.networkType && profile.networkType.toUpperCase() !== config.network.toUpperCase()))
+  if (!address.test(profile.account) || profile.blocked || profile.networkType?.toUpperCase() !== config.network.toUpperCase())
     throw Error('Xaman · Select XRPL ' + config.network);
   const seconds = Math.min(Number(token.expires_in ?? 86400), 86400);
   if (!(seconds > 0)) throw Error('Xaman · Expired sign-in');
@@ -86,7 +88,7 @@ export async function signatureResult(config, pending) {
   const result = await request(payloadApi + '/' + pending.xaman.id, {headers:{Authorization:'Bearer ' + user.token}});
   const {meta, response} = result;
   if (meta?.uuid !== pending.xaman.id) throw Error('Xaman · Unexpected request');
-  if (!meta.signed) return meta.resolved || meta.cancelled ? {declined:true} : null;
+  if (!meta.signed) return meta.resolved || meta.cancelled || meta.expired ? {declined:true} : null;
   if (meta.resolved && response?.account === user.account && response.dispatched_nodetype?.toUpperCase() === config.network.toUpperCase()
       && /^[A-Fa-f0-9]{64}$/.test(response.txid)) return {hash:response.txid.toUpperCase()};
   return null;

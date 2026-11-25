@@ -1,3 +1,4 @@
+import {authenticatedBuyer} from './xaman.mjs';
 import {handle} from '../worker.mjs';
 import app from '../web/app.js';
 import {ISSUER, METADATA, ORIGIN, json} from './common.mjs';
@@ -28,11 +29,21 @@ export default {
         return json({error:'Use the Testnet storefront'},403);
       const body=await shortBody(req);
       if (body===null) return json({error:'Invalid request size'},413);
-      try {JSON.parse(body);} catch {return json({error:'Invalid JSON'},400);}
+      let input;
+      try {input=JSON.parse(body);} catch {return json({error:'Invalid JSON'},400);}
+      if (path==='/xrpl/api/challenge' && input?.provider==='xaman') {
+        if (!env.XAMAN_CLIENT_ID) return json({error:'Xaman is not configured.'},503);
+        try {
+          if (!await authenticatedBuyer(req.headers.get('Authorization'),env.XAMAN_CLIENT_ID,input.buyer))
+            return json({error:'Sign in with Xaman on XRPL Testnet.'},403);
+        } catch { return json({error:'Xaman sign-in temporarily unavailable.'},503); }
+        return env.ISSUANCE.fetch('https://orders.internal/xaman-challenge',{method:'POST',
+          body:JSON.stringify({buyer:input.buyer,request:input.request})});
+      }
       return env.ISSUANCE.fetch('https://orders.internal/'+path.split('/').pop(),{method:'POST',body});
     }
     if (path==='/xrpl/api/status' && ['GET','HEAD'].includes(req.method)) {
-      const status=await (await handle(new Request(url),statusEnv)).json();
+      const status=await (await handle(new Request(url),{...statusEnv,XAMAN_CLIENT_ID:env.XAMAN_CLIENT_ID})).json();
       const response=json({...status,mintMode:'collection'});
       return req.method==='HEAD'?new Response(null,response):response;
     }

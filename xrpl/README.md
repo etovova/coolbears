@@ -32,7 +32,7 @@ Set the public application UUID as the Worker's `XAMAN_CLIENT_ID`. Register both
 - https://coolbears-nfts.com/xrpl/
 - https://testnet.coolbears-nfts.com/xrpl/
 
-The browser uses OAuth authorization code with PKCE, keeps the short-lived token in the same tab, and opens the signing link returned by Xaman. Each purchase requires one NFTokenAcceptOffer signature on the selected network. After the buyer returns, the storefront verifies the transaction on the validated ledger. A missing client ID leaves Xaman visibly unavailable.
+The browser uses OAuth authorization code with PKCE, keeps the short-lived token in the same tab, and opens the signing link returned by Xaman. Each purchase requires one NFTokenAcceptOffer signature on the selected network. After the buyer returns, the storefront verifies the transaction on the validated ledger. A missing client ID leaves Xaman visibly unavailable. For on-demand Testnet issuance, set the public ID on the orders storefront. When the buyer presses Mint, it checks the OAuth session against Xaman's JWT ping and userinfo endpoints for this application, buyer and Testnet. The private issuer returns a short-lived reservation proof bound to that order. The payment is signed separately in Xaman. Register the exact callback paths above, including the trailing slash. The site keeps the OAuth token in the browser tab and sends it only during session verification and calls to Xaman.
 
 ### First Mainnet mint
 

@@ -66,15 +66,15 @@ async function api(name,params={}){
 }
 function requestKey(buyer){return 'coolbears.xrpl.collection.request.'+status.issuer+'.'+buyer}
 async function collectionRequest(buyer,resuming=false){
- if(!['gem','cross'].includes(wallet))throw Error(text(8));
+ if(!['gem','cross','xaman'].includes(wallet))throw Error(text(8));
  const key=requestKey(buyer);
  let id=storage.get(key);
  if(!id){id=crypto.randomUUID();storage.set(key,id);}
- const send=async(path,data)=>{
+ const send=async(path,data,bearer)=>{
    const tries=path==='mint'?36:1;
    for(let i=0;i<tries;i++){
      let r;
-     try{r=await fetch('/xrpl/api/'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)})}
+     try{r=await fetch('/xrpl/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer '+bearer}:{})},body:JSON.stringify(data)})}
      catch(e){if(i+1>=tries)throw e;}
      if((!r||[502,503,504].includes(r.status))&&i+1<tries){
        await new Promise(resolve=>setTimeout(resolve,900));continue;
@@ -89,21 +89,26 @@ async function collectionRequest(buyer,resuming=false){
      return v;
    }
  };
- const proof=await send('challenge',{buyer,request:id});
+ const isXaman=wallet==='xaman';
+ const user=isXaman?xaman.session(status):null;
+ if(isXaman && (!user || user.account!==buyer))throw Error('Xaman · '+text(3));
+ const identity={buyer,request:id,...(isXaman?{provider:'xaman'}:{})};
+ const proof=await send('challenge',identity,user?.token);
  let pk,signature;
  if(wallet==='gem'){
    pk=(await gemPrompt(()=>window.GemWalletApi.getPublicKey())).result;
    if(pk?.address!==buyer)throw Error(text(4)+' Testnet');
    signature=(await gemPrompt(()=>window.GemWalletApi.signMessage(proof.message))).result?.signedMessage;
- }else{
+ }else if(wallet==='cross'){
    const bytes=new TextEncoder().encode(proof.message);
    const hex=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');
    pk=(await window.CoolBearsCrossmark.methods.signInAndWait(hex))?.response?.data;
    if(pk?.address!==buyer || pk.network?.type?.toLowerCase()!=='testnet' || pk.network?.protocol!=='XRPL')throw Error(text(4)+' Testnet');
    signature=pk.signature;
  }
- if(!signature)throw Error(text(10));
- const reply=await send('mint',{buyer,request:id,expires:proof.expires,nonce:proof.nonce,tag:proof.tag,publicKey:pk.publicKey,signature});
+ if(!isXaman && !signature)throw Error(text(10));
+ const reply=await send('mint',{...identity,expires:proof.expires,nonce:proof.nonce,tag:proof.tag,
+   ...(isXaman?{}:{publicKey:pk.publicKey,signature})});
  if(reply.state==='resume'){
    if(resuming || !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(reply.request))throw Error(text(8));
    storage.set(key,reply.request);return collectionRequest(buyer,true);

@@ -122,3 +122,34 @@ test('an external cancellation releases the old reservation even if our cancella
   a.deepEqual(writes.map(args=>args.slice(1)),[
     ['expired',null,row.id],['free',row.n],['tecOBJECT_NOT_FOUND',81,pending.hash]]);
 });
+
+test('Xaman reservations require the verified CoolBears Testnet session and an order-specific ticket',async()=>{
+  const {authenticatedBuyer}=await import('./xaman.mjs');
+  const clientId=crypto.randomUUID(), buyer=deriveAddress(deriveKeypair(generateSeed()).publicKey);
+  const auth='Bearer one.two.three', identity={buyer,request:crypto.randomUUID()}, secret='reservation-key';
+  const ping={client_id:clientId,exp:Date.now()/1000+600};
+  const profile={account:buyer,networkType:'TESTNET',blocked:false};
+  const provider=(p,user)=>async(url,opts)=>{
+    a.equal(opts.headers.Authorization,auth);a.equal(opts.redirect,'error');
+    if (url==='https://xumm.app/api/v1/jwt/ping') return Response.json(p);
+    a.equal(url,'https://oauth2.xumm.app/userinfo');return Response.json(user);
+  };
+  a.equal(await authenticatedBuyer(auth,clientId,buyer,provider(ping,profile)),true);
+  for(const [p,u] of [[{...ping,client_id:crypto.randomUUID()},profile],[{...ping,exp:10},profile],
+    [ping,{...profile,networkType:'MAINNET'}],[ping,{...profile,account:ISSUER}],[ping,{...profile,blocked:true}]])
+    a.equal(await authenticatedBuyer(auth,clientId,buyer,provider(p,u)),false);
+  a.equal(await authenticatedBuyer(auth,clientId,buyer,async()=>new Response(null,{status:401})),false);
+  a.equal(await authenticatedBuyer(null,clientId,buyer,()=>a.fail()),false);
+  const env={CHALLENGE_KEY:secret,JOURNAL:{idFromName:()=>1,get:()=>({fetch:async(u,i)=>{
+    a.deepEqual(JSON.parse(i.body),identity);return Response.json({accepted:true});
+  }})}};
+  const call=(path,data)=>signer.fetch(new Request('https://orders.internal/'+path,{method:'POST',body:JSON.stringify(data)}),env);
+  const regular=await (await call('challenge',{...identity,provider:'xaman'})).json();
+  a.equal((await call('mint',{...regular,...identity,provider:'xaman'})).status,403);
+  const ticket=await (await call('xaman-challenge',identity)).json();
+  const input={...identity,...ticket,provider:'xaman'};
+  a.deepEqual(await (await call('mint',input)).json(),{accepted:true});
+  for(const change of [{request:crypto.randomUUID()},{buyer:deriveAddress(deriveKeypair(generateSeed()).publicKey)},
+    {tag:'0'.repeat(64)},{provider:'gem'},{expires:1}])
+    a.equal((await call('mint',{...input,...change})).status,403);
+});

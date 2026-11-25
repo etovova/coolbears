@@ -181,7 +181,7 @@ export default {
   async fetch(req,env) {
     try {
       const u=new URL(req.url);
-      if (u.origin !== 'https://orders.internal' || !['/mint','/challenge','/receipt'].includes(u.pathname) || req.method !== 'POST')
+      if (u.origin !== 'https://orders.internal' || !['/mint','/challenge','/xaman-challenge','/receipt'].includes(u.pathname) || req.method !== 'POST')
         return json({error:'Unknown endpoint'},404);
       const data=await req.json();
       const actor=env.JOURNAL.get(env.JOURNAL.idFromName(ISSUER));
@@ -189,7 +189,8 @@ export default {
         return actor.fetch('https://journal.internal/receipt',{method:'POST',body:JSON.stringify(data)});
       if (!validIdentity(data)) return json({error:'Invalid wallet or order'},400);
       const now=Math.floor(Date.now()/1000);
-      if (u.pathname==='/challenge') return json(await challenge(data,env.CHALLENGE_KEY,now));
+      if (u.pathname==='/challenge' || u.pathname==='/xaman-challenge')
+        return json(await challenge(data,env.CHALLENGE_KEY,now,u.pathname==='/xaman-challenge'));
       if (!await proof(data,env.CHALLENGE_KEY,now)) return json({error:'A fresh wallet signature is required.'},403);
       return await actor.fetch('https://journal.internal/reserve',{method:'POST',body:JSON.stringify({buyer:data.buyer,request:data.request})});
     } catch (err) {

@@ -13,17 +13,20 @@ function message({buyer,request,expires,nonce}) {
 async function key(secret) {
   return crypto.subtle.importKey('raw', utf8(secret), {name:'HMAC',hash:'SHA-256'}, false, ['sign','verify']);
 }
-export async function challenge(input, secret, now) {
+export async function challenge(input, secret, now, xaman=false) {
   const expires = now+240, nonce = hex(crypto.getRandomValues(new Uint8Array(16))).toLowerCase();
-  const msg = message({...input,expires,nonce});
+  const msg = (xaman?'Xaman OAuth verified\n':'')+message({...input,expires,nonce});
   const tag = hex(new Uint8Array(await crypto.subtle.sign('HMAC', await key(secret), utf8(msg)))).toLowerCase();
   return {message:msg,expires,nonce,tag};
 }
 export async function proof(input, secret, now) {
   const {expires,nonce,tag,publicKey,signature} = input;
   if (!Number.isSafeInteger(expires) || expires <= now || expires > now+240 ||
-    !/^[a-f0-9]{32}$/.test(nonce) || !/^[a-f0-9]{64}$/.test(tag) ||
-    !/^(ED|02|03)[A-F0-9]{64}$/i.test(publicKey) || !/^[A-F0-9]{100,150}$/i.test(signature)) return false;
+    !/^[a-f0-9]{32}$/.test(nonce) || !/^[a-f0-9]{64}$/.test(tag)) return false;
+  if (input.provider==='xaman') {
+    return crypto.subtle.verify('HMAC',await key(secret),bytes(tag),utf8('Xaman OAuth verified\n'+message(input)));
+  }
+  if (!/^(ED|02|03)[A-F0-9]{64}$/i.test(publicKey) || !/^[A-F0-9]{100,150}$/i.test(signature)) return false;
   try {
     const msg = utf8(message(input));
     return await crypto.subtle.verify('HMAC', await key(secret), bytes(tag), msg) &&
