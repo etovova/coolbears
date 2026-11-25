@@ -1,0 +1,18 @@
+{
+  "slot": "0010",
+  "mint": "5BC89DBAFECB909FC8EEECE84A20400D88061FC68A01B02D203AEE5E716153D4",
+  "payment": "7B5B232B961693F517B59BA28330B063850E9EDA0C81E414A7A83E2B1AAD249B",
+  "buyer": "r3RUcBodLpWacJSTZGiZhTY89MkkpT4zkY",
+  "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F56490A2840158E362",
+  "ledger": 22606513,
+  "price_drops": 10000000,
+  "buyer_fee_drops": 12,
+  "gemwallet": "3.8.2",
+  "run": "https://github.com/etovova/coolbears/actions/runs/45662919748",
+  "verified_rpc": [
+    "https://s.altnet.rippletest.net:51234/",
+    "https://testnet.honeycluster.io/"
+  ],
+  "site": "https://testnet.coolbears-nfts.com/",
+  "network": "XRPL Testnet"
+}
