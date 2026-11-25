@@ -1,0 +1,77 @@
+{
+  "network": "XRPL Testnet",
+  "site": "https://testnet.coolbears-nfts.com/",
+  "grant": {
+    "hash": "6B9024FCD521756DB7D0B351F9AD5DB3BB89BB89432DDDE00738D46BF862F24F",
+    "ledger": 22606807,
+    "issuer": "rEoKftiFRwknRDkbV2zURNc6KmhJoBxtaC",
+    "delegate": "rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb",
+    "permissions": [
+      {
+        "Permission": {
+          "PermissionValue": "NFTokenMint"
+        }
+      },
+      {
+        "Permission": {
+          "PermissionValue": "NFTokenCreateOffer"
+        }
+      }
+    ]
+  },
+  "rights": {
+    "entry": "BB7AD2FF1EC03CCF55838F8ADCE85681323765EED15D050312D3E0D923F181BF",
+    "ledger": 22606894,
+    "rpc": [
+      "https://s.altnet.rippletest.net:51234/",
+      "https://testnet.honeycluster.io/"
+    ],
+    "ordinary_payment_simulation": "terNO_DELEGATE_PERMISSION"
+  },
+  "original_reservation": {
+    "hash": "4275A85057615CA53B176E42A8B0C6ABE6089116EE7930110B4FB930A4B25DB9",
+    "ledger": 22606862,
+    "delegate": "rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb",
+    "expires": 848944040,
+    "original_buyer": "raGnZS2ktd4JyftDnHiDUwEMJbnbMZLi2v",
+    "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F57DBEF3870158E363",
+    "slot": 11,
+    "offer": "CAB24FEF19AD991A06E4104116F17F1981B8F8519987CBF023E779C8B999D5FC"
+  },
+  "expiry": {
+    "expiration": 848944040,
+    "validated_close": 848944050,
+    "ledger": 22607038,
+    "simulation": "tecEXPIRED"
+  },
+  "old_order_replay_http": 410,
+  "paid_after_reassignment": {
+    "gemwallet": "3.8.2",
+    "slot": "0011",
+    "mint": "4275A85057615CA53B176E42A8B0C6ABE6089116EE7930110B4FB930A4B25DB9",
+    "payment": "FBAB36E84FE7201095338401B10EB9ECCB56F78DC418981EC4565A85FF91DFD1",
+    "buyer": "rKUC6MXJcAUz2qYXPafT9sy6NfuwVHUXaj",
+    "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F57DBEF3870158E363",
+    "ledger": 22607087,
+    "price_drops": 10000000,
+    "buyer_fee_drops": 12,
+    "offer": "28346F58F22D002923F104E57E3873B6114AA43A2C051A06A9C4E87811C81EC5",
+    "run": "https://github.com/etovova/coolbears/actions/runs/45668510748"
+  },
+  "verified_rpc": [
+    "https://s.altnet.rippletest.net:51234/",
+    "https://testnet.honeycluster.io/"
+  ],
+  "delegate_fees_drops": {
+    "NFTokenMint": 10,
+    "NFTokenCancelOffer": 10,
+    "NFTokenCreateOffer": 10
+  },
+  "cancel": "5683CEB0B98F4E542DB8104C5D1E4886472C40C31365D47ACF5A634ABADEFC95",
+  "new_offer_transaction": "8008CB3D4A975540A7012176431317529A727D3487156EBFCF6D9AE37F5437F5",
+  "initial_mint_count": 11,
+  "final_mint_count": 12,
+  "issuer_received_drops": 10000000,
+  "unpaid_buyer_balance_change_drops": 0,
+  "buyer_fee_drops": 12
+}
