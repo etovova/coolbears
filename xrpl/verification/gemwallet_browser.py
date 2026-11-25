@@ -132,9 +132,6 @@ def checkout(context, base, buyer, password):
 
 
 def main():
-    status = read_json(SITE + "/xrpl/api/status")
-    assert (status["network"], status["issuer"], status["open"], status["price"]) == ("Testnet", ISSUER, True, PRICE)
-    snapshot()
     buyer = Wallet.create()
     password = secrets.token_urlsafe(32)
     with tempfile.TemporaryDirectory() as root, sync_playwright() as p:
@@ -155,6 +152,14 @@ def main():
             wallet.goto(base + "/index.html")
             configure(wallet, buyer, password)
             print("Installed GemWallet", version, "on Testnet", flush=True)
+            preflight = context.new_page()
+            result = preflight.goto(SITE, wait_until="domcontentloaded")
+            print("Storefront", result.status, preflight.title(), flush=True)
+            assert result.ok, f"Storefront returned {result.status} to Chromium"
+            status = preflight.evaluate("async () => (await fetch('/xrpl/api/status')).json()")
+            assert (status["network"], status["issuer"], status["open"], status["price"]) == ("Testnet", ISSUER, True, PRICE)
+            preflight.close()
+            snapshot()
             read_json("https://faucet.altnet.rippletest.net/accounts", {"destination":buyer.address,"usageContext":"CoolBears Testnet browser checkout"})
             funded = get("account_info", account=buyer.address, ledger_index="validated")
             assert funded.get("validated") and int(funded["account_data"]["Balance"]) > int(PRICE) + 2000000
