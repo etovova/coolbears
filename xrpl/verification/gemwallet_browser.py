@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
-from playwright.sync_api import expect, sync_playwright
+from playwright.sync_api import Error as BrowserError, expect, sync_playwright
 from xrpl.wallet import Wallet
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -121,8 +121,13 @@ def checkout(context, base, buyer, password):
     requested = False
     while time.monotonic() < deadline:
         for popup in context.pages:
-            if popup != site and popup.url != base + "/index.html":
-                handle_popup(popup)
+            if popup != site and not popup.is_closed():
+                try:
+                    handle_popup(popup)
+                except BrowserError:
+                    # Permission prompts close themselves after sharing or approving.
+                    if not popup.is_closed():
+                        raise
         if not requested and buyer.address[:6] in site.locator("#walletBtn").inner_text():
             site.locator("#buy").click()
             requested = True
