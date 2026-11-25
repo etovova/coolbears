@@ -154,9 +154,10 @@ test('only the authenticated Mainnet issuer can prepare the fixed platform sign 
   try {
     assert.equal((await handle(new Request(base+path),env)).status,405);
     assert.equal((await send({headers:{Origin:base}})).status,401);
-    assert.equal((await send({headers:{Origin:'null',Authorization:jwt}})).status,400);
+    assert.equal((await send({headers:{Origin:'null',Authorization:jwt}})).status,403);
     assert.equal((await send({body:'{}'})).status,400);
     assert.equal((await send({},{...env,XAMAN_API_SECRET:undefined})).status,503);
+    assert.equal((await send({body:''},{...env,XAMAN_API_SECRET:undefined})).status,503);
     profileNetwork='TESTNET';assert.equal((await send()).status,401);profileNetwork='MAINNET';
     account=template.Authorize;assert.equal((await send()).status,401);account=OWNER;
     audience=id;assert.equal((await send()).status,401);audience=client;

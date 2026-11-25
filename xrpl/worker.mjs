@@ -212,8 +212,19 @@ async function ownerStatus(env) {
 }
 
 async function createOwnerRequest(request,env) {
-  if (request.headers.get('Origin') !== 'https://coolbears-nfts.com' || request.body !== null)
-    return json({error:'Запрос должен исходить со страницы владельца CoolBears.'},400);
+  const origin = request.headers.get('Origin');
+  const sameSite = (!origin || origin === 'null') && request.headers.get('Sec-Fetch-Site') === 'same-origin';
+  if (origin !== 'https://coolbears-nfts.com' && !sameSite)
+    return json({error:'Запрос должен исходить со страницы владельца CoolBears.'},403);
+  // An empty POST can arrive as a stream at the edge. Never accept transaction input.
+  if (request.body) {
+    const reader = request.body.getReader();
+    const first = await reader.read();
+    if (!first.done) {
+      await reader.cancel();
+      return json({error:'Параметры транзакции определяет сервер.'},400);
+    }
+  }
   const auth = request.headers.get('Authorization');
   if (!auth) return json({error:'Войди через Xaman кошельком эмитента.'},401);
   if (!env.XAMAN_API_SECRET || !env.XAMAN_CLIENT_ID)
