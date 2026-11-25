@@ -1,16 +1,5 @@
 # CoolBears
 
-## Новый старт — 21 сентября 2026
+Preserve the original artwork and descriptions for all 10,000 slots. Keep final assets, allocation material, private archives and access credentials out of Git. Verify the UTC reveal boundary, the production and test network settings and the exact 10 XRP sell offer before releasing changes. Mainnet spending and issuing require the owner’s wallet authorization.
 
-Последнее указание владельца: снова удалить прежнюю реализацию и начать другим способом. Старый `release/` и `phantom-check/`, их тесты и зависимости удалены. Не восстанавливать их для нового выпуска. История Git сохраняет предыдущие результаты и источники; они не подтверждают новый процесс.
-
-- Сохранять основной сайт, оформление, домен, оригинальные изображения, лого, баннер, GIF, 454 слоя и готовые 10000 PNG. Не изменять, не сжимать, не перерисовывать оригиналы.
-- Утверждённые тексты и параметры: `metadata/policy.json`. Не дописывать публичные тексты от себя.
-- Приватные изображения, финальные CID, атрибуты, редкость и план раскрытия не публиковать. Раскрытие не раньше 2027-01-01.
-- Продажи закрыты. Не открывать без нового указания владельца.
-- Новый подход: отдельный официальный Metaplex CLI для подготовки и выпуска, сайт для подключения кошелька и минта. Использовать Core и Core Candy Machine, не legacy Candy Machine.
-- До повторной попытки владельца проверить сетевой путь и симуляцию. Не предлагать снова нажимать прежние кнопки при известном RPC-блокере.
-- Проверять каждый изменённый этап и связку этапов, часто сохранять завершённую работу в GitHub и актуальную точку `CoolBears_Collection.md`. Локальные проверки не выдавать за Devnet, телефон или проверку Magic Eden.
-- Сайт публикуется через GitHub Pages. После изменения: `npm run build:wallet`, `npm run build:site`, `npm run verify`. Сохранять собранные wallet-standard.js и LEGAL.txt.
-- Не удалять оригиналы, историю Git или данные неопределённых блокчейн-операций. При очистке не выполнять новых блокчейн-транзакций.
-- Сверяться с официальными материалами Solana, Metaplex, Phantom и Solflare; вести честную карту покрытия, не выдавать каталог ссылок за полное изучение. Предыдущая карта источников сохранена в истории Git на коммите ec15d36b14c4b9cde66501f5cb9fb8f403f9c3f8.
+Run the XRPL Worker tests for changes to the storefront or metadata. Distinguish local time-boundary checks, public Testnet transactions and confirmed Mainnet activity in release records.

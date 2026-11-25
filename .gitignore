@@ -1,11 +1,9 @@
-node_modules
-public-site/
+node_modules/
 private/
 build/
 *.PRIVATE.*
-__pycache__/
-
-# Local Worker state and credentials
-.wrangler/
+*.seed
+.env*
 .dev.vars*
-rpc-proxy/.env*
+.wrangler/
+__pycache__/

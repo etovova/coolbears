@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://coolbears-nfts.com/sitemap.xml
