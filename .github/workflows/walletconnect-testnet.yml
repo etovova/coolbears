@@ -11,7 +11,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [xrpl/walletconnect-testnet-check, xrpl/royalty-testnet-check]
+    branches: [xrpl/walletconnect-testnet-check, xrpl/royalty-testnet-check, xrpl/wallet-recovery-check]
     paths:
       - xrpl/verification/testnet_resale.py
       - xrpl/verification/walletconnect_checkout.py
@@ -22,6 +22,7 @@ concurrency: coolbears-walletconnect-testnet
 jobs:
   checkout:
     env:
+      CHECK_RECOVERY: ${{ github.event_name == 'push' && github.ref_name == 'xrpl/wallet-recovery-check' }}
       CHECK_RESALE: ${{ inputs.resale || (github.event_name == 'push' && github.ref_name == 'xrpl/royalty-testnet-check') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -46,3 +47,11 @@ jobs:
       - name: Recheck recorded royalty settlement
         if: ${{ env.CHECK_RESALE == 'true' && !inputs.resale && hashFiles('xrpl/verification/testnet-resale.json') != '' }}
         run: python -u xrpl/verification/testnet_resale.py --receipt xrpl/verification/testnet-resale.json
+      - name: Exercise both mobile storefronts and verify the recorded resale
+        if: ${{ env.CHECK_RECOVERY == 'true' }}
+        run: |
+          python -u xrpl/verification/mobile_wallet_links.py
+          python -u xrpl/verification/testnet_resale.py --receipt xrpl/verification/testnet-resale.json
+      - name: Purchase and wait for the automatic Testnet receipt
+        if: ${{ env.CHECK_RECOVERY == 'true' && hashFiles('xrpl/verification/recovered-testnet-sale.json') == '' }}
+        run: python -u xrpl/verification/walletconnect_checkout.py
