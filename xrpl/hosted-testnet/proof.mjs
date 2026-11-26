@@ -1,4 +1,6 @@
 import {deriveAddress, verify} from 'ripple-keypairs';
+import {encodeForSigning} from 'ripple-binary-codec';
+import {reservationEnvelope} from '../web/reservation-envelope.mjs';
 import {isValidClassicAddress} from 'ripple-address-codec';
 import {bytes, hex, ISSUER, ORIGIN, utf8} from './common.mjs';
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -29,7 +31,12 @@ export async function proof(input, secret, now) {
   if (!/^(ED|02|03)[A-F0-9]{64}$/i.test(publicKey) || !/^[A-F0-9]{100,150}$/i.test(signature)) return false;
   try {
     const msg = utf8(message(input));
-    return await crypto.subtle.verify('HMAC', await key(secret), bytes(tag), msg) &&
-      deriveAddress(publicKey) === input.buyer && verify(hex(msg),signature,publicKey);
+    if (!await crypto.subtle.verify('HMAC',await key(secret),bytes(tag),msg) || deriveAddress(publicKey)!==input.buyer) return false;
+    if (input.provider==='walletconnect') {
+      const tx={...reservationEnvelope(input.buyer,message(input)),SigningPubKey:publicKey};
+      // Some wallets add the canonical-signature flag when signing.
+      return [tx,{...tx,Flags:0x80000000}].some(fields=>verify(encodeForSigning(fields),signature,publicKey));
+    }
+    return verify(hex(msg),signature,publicKey);
   } catch { return false; }
 }

@@ -14,6 +14,7 @@ const publicFiles = new Map([
   ['/xrpl/site.css', ['site.css', 'text/css']],
   ['/xrpl/rarity.mjs', ['rarity.mjs', 'text/javascript']],
   ['/xrpl/xaman.mjs', ['xaman.mjs', 'text/javascript']],
+  ...['walletconnect.mjs','reservation-envelope.mjs','walletconnect-sdk.mjs'].map(name=>['/xrpl/'+name,[name,'text/javascript']]),
   ['/xrpl/app.js', ['app.js', 'text/javascript']],
   ['/xrpl/wallet.js', ['wallet.js', 'text/javascript']],
   ['/xrpl/crossmark.js', ['crossmark.js','text/javascript']],
@@ -285,6 +286,8 @@ export async function handle(request,env,now=Date.now()) {
       const [name,type]=publicFiles.get(path);const a=await retrieve(env,name);
       if (a.status!==200) throw Error('Site asset unavailable');
       result=response(a.body,type);
+      if (name==='home.html') result.headers.set('Content-Security-Policy',security['Content-Security-Policy'].replace('https://xumm.app;',
+        'https://xumm.app wss://relay.walletconnect.org wss://relay.walletconnect.com https://verify.walletconnect.com https://verify.walletconnect.org; frame-src https://verify.walletconnect.com https://verify.walletconnect.org;'));
     } else if (path.startsWith('/xrpl/metadata/') || path.startsWith('/xrpl/art/')) {
       result=await metadata(env,path,url.origin,now);
     } else if (path==='/xrpl/api/top50') {
@@ -301,7 +304,7 @@ export async function handle(request,env,now=Date.now()) {
       const verified=fingerprint===row.sha256 && Number.isInteger(row.rarity?.rank) && typeof row.rarity.score==='string';
       result=json({verified},verified?200:503);
     } else if (path==='/xrpl/api/status') {
-      const net=network(env); result=json({network:net.name,issuer:net.issuer,xamanClientId:/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(env.XAMAN_CLIENT_ID || '') ? env.XAMAN_CLIENT_ID : null,open:env.SALES_OPEN==='yes',price:PRICE,serverTime:now,revealAt:new Date(REVEAL_AT).toISOString()});
+      const net=network(env); result=json({network:net.name,issuer:net.issuer,walletConnectProjectId:/^[a-f0-9]{32}$/i.test(env.WALLETCONNECT_PROJECT_ID || '') ? env.WALLETCONNECT_PROJECT_ID : null,xamanClientId:/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(env.XAMAN_CLIENT_ID || '') ? env.XAMAN_CLIENT_ID : null,open:env.SALES_OPEN==='yes',price:PRICE,serverTime:now,revealAt:new Date(REVEAL_AT).toISOString()});
     } else if (path==='/xrpl/api/offer' || path==='/xrpl/api/receipt' || path==='/xrpl/api/reconcile') {
       const buyer=url.searchParams.get('buyer') || '', id=url.searchParams.get('offer');
       if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(buyer) || (id!==null && !ID.test(id))) return json({error:'Invalid request'},400);

@@ -25,6 +25,12 @@ The Worker needs the ASSETS binding, asset routing set to run the Worker first, 
 
 The GemWallet browser bundle and its license are taken from @gemwallet/api 3.8.0. The cover and logo use the original collection assets.
 
+### WalletConnect for buyers
+
+Build the self-hosted signing client before packaging the storefront (`cd xrpl/hosted-testnet && npm ci && npm run build`). Set `WALLETCONNECT_PROJECT_ID` to the public CoolBears app project ID on the storefront Worker and the Testnet orders Worker. Allow the two storefront origins in WalletConnect Dashboard. The additional wallet option stays disabled until a valid project ID is configured. Buyers can scan the local QR code in Joey or Bifrost. Only Testnet collection reservations request an offline proof before the NFT purchase prompt.
+
+Portions © 2025 Reown, Inc. All Rights Reserved. The SDK bundle includes the WalletConnect Community License.
+
 ### Xaman
 
 Set the public application UUID as the Worker's `XAMAN_CLIENT_ID`. Register both callback URLs under **Origin/Redirect URIs** in the Xaman Developer Console:
