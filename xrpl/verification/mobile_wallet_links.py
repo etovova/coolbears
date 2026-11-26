@@ -7,10 +7,14 @@ from playwright.sync_api import sync_playwright
 SHOPS = (
     ("https://testnet.coolbears-nfts.com/#mint", "Testnet", 320, "ru-RU", "Открыть"),
     ("https://coolbears-nfts.com/xrpl/#mint", "Mainnet", 390, "en-US", "Open"),
+    ("https://testnet.coolbears-nfts.com/#mint", "Testnet", 375, "zh-CN", "打开"),
 )
 
 
 def check_page(page, url, network, label):
+    posts = []
+    page.on("request", lambda req: posts.append(urlparse(req.url).path)
+            if req.method == "POST" and "/xrpl/api/" in req.url else None)
     page.goto(url, wait_until="domcontentloaded")
     status = page.evaluate("async () => (await fetch('/xrpl/api/status')).json()")
     assert status["network"] == network
@@ -44,11 +48,12 @@ def check_page(page, url, network, label):
     assert field.input_value() == links[0]
     assert field.evaluate("n => n.selectionStart === 0 && n.selectionEnd === n.value.length")
     page.locator("#closeWallet").click()
-    page.wait_for_function("!document.getElementById('wcJoey').hasAttribute('href')")
+    page.locator("#wcJoey[href]").wait_for(state="detached")
     assert field.input_value() == "" and page.locator("#wcOpen").get_attribute("href") is None
     page.locator("#walletBtn").click()
     assert page.locator("#wcWallet").is_enabled() and page.locator("#wcPair").is_hidden()
-    print(f"{network}: both mobile links, QR, manual copy, cancellation and existing wallet options passed", flush=True)
+    assert not posts, posts
+    print(f"{network} {label}: both mobile links, QR, manual copy, cancellation and existing wallet options passed", flush=True)
 
 
 def verify(browser):
