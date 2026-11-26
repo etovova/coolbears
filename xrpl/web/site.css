@@ -54,7 +54,12 @@ body.wallet-open .back-top{display:none!important}
 #walletDialog{background:#181818;color:#fff;border:2px solid #f6c84b;border-radius:16px;max-width:360px;width:90%;padding:22px}#walletDialog::backdrop{background:#000a}.wallet-head,.wallet-options{display:flex;align-items:center;justify-content:space-between;gap:8px}.wallet-options{margin:18px 0}.wallet-head button{font:inherit;color:inherit;background:transparent;border:0;cursor:pointer}#walletInfo,#message{overflow-wrap:anywhere}#receipt{color:inherit}.legal{max-width:850px;padding:70px 5vw;margin:auto}.legal h1{font-size:clamp(32px,6vw,62px)}
 
 .wallet-options{flex-wrap:wrap}.wallet-options button{flex:1 1 auto}.wallet-options button:disabled{opacity:.6;cursor:default}#xamanResume{color:inherit}
-#wcPair{text-align:center}#wcQR{max-width:100%;height:auto}#wcPair>div{display:flex;justify-content:center;gap:1em;align-items:center}#wcOpen,#wcCopy{color:inherit}#wcCopy{font:inherit;background:transparent;border:0;text-decoration:underline;cursor:pointer}
+#wcPair{text-align:center}#wcQR{max-width:100%;height:auto}#wcPair>div{display:flex;flex-wrap:wrap;justify-content:center;gap:0 1em;align-items:center}
+#wcPair a,#wcCopy{display:inline-flex;align-items:center;min-height:44px;color:inherit}
+#wcJoey:not([href]){display:none}
+#wcCopy{font:inherit;background:transparent;border:0;text-decoration:underline;cursor:pointer}
+#wcManual:not([hidden]){display:block;margin-top:.5em}
+#wcLink{width:100%;box-sizing:border-box;font:inherit}
 
 .rarity-lookup{margin-top:2rem}
 .rarity-lookup form{display:flex;flex-wrap:wrap;align-items:center;gap:.65rem}

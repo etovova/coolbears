@@ -18,22 +18,46 @@ const wc=walletAdapter({origin:location.origin,onChange(buyer){
  if(wallet==='wc'){account=buyer;if(!buyer)wallet=null;render();}
 }});
 const wcText={
- en:['Scan with Joey or Bifrost, or copy the pairing link.','Copy link','Copied','Coming soon'],
- ru:['Отсканируйте QR в Joey или Bifrost либо скопируйте ссылку.','Скопировать ссылку','Скопировано','Скоро'],
- zh:['使用 Joey 或 Bifrost 扫描二维码，或复制配对链接。','复制链接','已复制','即将开放']
+ en:{hint:'On this phone, open your wallet below. On another device, scan the QR code.',copy:'Copy link',copied:'Copied',soon:'Coming soon',open:'Open',manual:'Select and copy the pairing link'},
+ ru:{hint:'На этом телефоне нажмите кнопку своего кошелька. С другого устройства отсканируйте QR-код.',copy:'Скопировать ссылку',copied:'Скопировано',soon:'Скоро',open:'Открыть',manual:'Выделите и скопируйте ссылку для подключения'},
+ zh:{hint:'在本机上，点击下方的钱包按钮。在其他设备上，请扫描二维码。',copy:'复制链接',copied:'已复制',soon:'即将开放',open:'打开',manual:'请选择并复制配对链接'}
 };
 function closePairing(){
  pairing?.abort();pairing=null;pairingUri=null;
  if(!el('wcPair'))return;
- el('wcPair').hidden=true;el('wcQR').removeAttribute('src');el('wcOpen').removeAttribute('href');
+ el('wcPair').hidden=true;
+ el('wcQR').removeAttribute('src');
+ el('wcOpen').removeAttribute('href');
+ el('wcJoey')?.removeAttribute('href');
+ if(el('wcManual')){
+   el('wcManual').hidden=true;
+   el('wcLink').value='';
+ }
 }
 function showPairing(uri,image){
  if(!dialog.open)dialog.showModal();
  pairingUri=uri;el('wcQR').src=image;
- el('wcOpen').href='bifrostwallet://wc?uri='+encodeURIComponent(uri);
- el('wcCopy').textContent=wcText[lang][1];el('wcPair').hidden=false;
+ const encoded=encodeURIComponent(uri);
+ el('wcOpen').href='bifrostwallet://wc?uri='+encoded;
+ if(el('wcJoey'))el('wcJoey').href='joey://settings/wc?uri='+encoded;
+ el('wcCopy').textContent=wcText[lang].copy;
+ el('wcPair').hidden=false;
 }
-if(el('wcCopy'))el('wcCopy').onclick=async()=>{if(pairingUri)try{await navigator.clipboard.writeText(pairingUri);el('wcCopy').textContent=wcText[lang][2];}catch{el('walletInfo').textContent=wcText[lang][0];}};
+if(el('wcCopy'))el('wcCopy').onclick=async()=>{
+ const uri=pairingUri;
+ if(!uri)return;
+ try{
+   await navigator.clipboard.writeText(uri);
+   if(pairingUri===uri)el('wcCopy').textContent=wcText[lang].copied;
+ }catch{
+   if(pairingUri!==uri || !el('wcManual'))return;
+   el('wcManual').hidden=false;
+   const field=el('wcLink');
+   field.value=uri;
+   field.focus();
+   field.select();
+ }
+};
 dialog.addEventListener('close',()=>{closePairing();render();});
 // GemWallet 3.8.2 resolves a request before its popup finishes closing.
 // Queue prompts so the close event cannot reject the following wallet request.
@@ -54,8 +78,12 @@ function render(){
  const wcButton=el('wcWallet');
  if(wcButton){
    wcButton.disabled=!status?.walletConnectProjectId || !!pairing;
-   wcButton.textContent='WalletConnect · Joey / Bifrost'+(status&&!status.walletConnectProjectId?' · '+wcText[lang][3]:'');
-   el('wcHint').textContent=wcText[lang][0];
+   wcButton.textContent='WalletConnect · Joey / Bifrost'+(status&&!status.walletConnectProjectId?' · '+wcText[lang].soon:'');
+   const words=wcText[lang];
+   el('wcHint').textContent=words.hint;
+   el('wcOpen').textContent=words.open+' Bifrost';
+   if(el('wcJoey'))el('wcJoey').textContent=words.open+' Joey';
+   if(el('wcManualLabel'))el('wcManualLabel').textContent=words.manual;
  }
  const xamanButton=el('xamanWallet'), resume=el('xamanResume');
  xamanButton.disabled=!status?.xamanClientId;
