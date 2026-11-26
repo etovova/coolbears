@@ -54,7 +54,7 @@ export default {
     if (['/xrpl/api/offer','/xrpl/api/receipt','/xrpl/api/reconcile'].includes(path)) {
       if (path.endsWith('/offer') && !url.searchParams.get('offer'))
         return json({error:'Reserve a personal offer using the Mint button.'},409);
-      const result=await handle(req,statusEnv);
+      const result=await handle(req,{...statusEnv,REVEALED_METADATA_CID:env.REVEALED_METADATA_CID});
       // Existing purchases from the preceding issuer keep their receipts and recovery windows.
       if (path.endsWith('/offer') && result.status===404) return env.LEGACY.fetch(req);
       if (result.status===409 && !path.endsWith('/offer')) return env.LEGACY.fetch(req);

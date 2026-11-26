@@ -13,7 +13,7 @@ def prepare(action, delegate):
         raise ValueError("Use the separate signing account's public XRPL address.")
     if action not in ("authorize", "revoke"):
         raise ValueError("Choose authorize or revoke.")
-    types = ("NFTokenMint", "NFTokenCreateOffer") if action == "authorize" else ()
+    types = ("NFTokenMint", "NFTokenCreateOffer", "NFTokenModify") if action == "authorize" else ()
     return {
         "TransactionType": "DelegateSet",
         "Account": issuer,

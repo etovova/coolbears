@@ -4,7 +4,7 @@ const ownerPath = '/xrpl/owner/';
 const action = document.querySelector('#action');
 const refresh = document.querySelector('#refresh');
 const status = document.querySelector('#status');
-const pendingKey = 'coolbears.xaman.Mainnet.ownerRequest';
+const pendingKey = 'coolbears.xaman.Mainnet.ownerRequest.v2';
 let config;
 let ledger;
 let busy = false;
@@ -28,13 +28,13 @@ async function load() {
   document.querySelector('#delegate').textContent = ledger.tx.Authorize;
   if (ledger.state === 'active') {
     localStorage.removeItem(pendingKey);
-    status.textContent = 'Оба разрешения подтверждены в Mainnet. Реестр № ' + ledger.ledger + '.';
+    status.textContent = 'Все три разрешения подтверждены в Mainnet. Реестр № ' + ledger.ledger + '.';
     return;
   }
-  if (ledger.state !== 'absent' || ledger.tx.Account !== config.issuer)
+  if (!['absent','upgrade'].includes(ledger.state) || ledger.tx.Account !== config.issuer)
     throw Error('Права или адрес эмитента отличаются от ожидаемых. Создание запроса остановлено.');
   if (!ledger.signingReady) {
-    status.textContent = 'Разрешение ещё не выдано. Для подписи требуется API Secret приложения Xaman в настройках Cloudflare. После его сохранения нажми «Проверить состояние».';
+    status.textContent = 'Для запроса подписи требуется настроить отдельное серверное приложение Xaman для делегирования.';
     return;
   }
   const user = session(config);
@@ -51,7 +51,7 @@ async function load() {
       action.hidden = false;
       return;
     }
-    status.textContent = 'Разрешение ещё не выдано. Проверен реестр № ' + ledger.ledger + '.';
+    status.textContent = (ledger.state === 'upgrade' ? 'Выданы два права. Для раскрытия требуется добавить NFTokenModify. ' : 'Разрешения ещё не выданы. ') + 'Проверен реестр № ' + ledger.ledger + '.';
     action.textContent = user ? 'Проверить и подписать в Xaman' : 'Войти через Xaman';
   }
   action.hidden = false;

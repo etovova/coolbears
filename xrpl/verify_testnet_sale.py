@@ -4,10 +4,11 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import re
 
+from ipfs_nft import HIDDEN, choose_root
 from testnet_mint import ISSUER, PRICE, directed_offer, get
 
 
-def verify(mint_hash, payment_hash):
+def verify(mint_hash, payment_hash, reveal_report=None):
     if not all(re.fullmatch("[A-F0-9]{64}", h) for h in (mint_hash,payment_hash)):
         raise ValueError("Expected two transaction hashes")
     with ThreadPoolExecutor(max_workers=2) as pool:
@@ -19,12 +20,19 @@ def verify(mint_hash, payment_hash):
             raise ValueError("Unconfirmed or unsuccessful transaction")
     source,buy=mint["tx_json"],pay["tx_json"]
     buyer=buy["Account"]
-    if (source["TransactionType"],source["Account"],source["NFTokenTaxon"],source["Flags"],source["TransferFee"])!=(
-        "NFTokenMint",ISSUER,20270201,8,7000
+    if (source["TransactionType"],source["Account"],source["NFTokenTaxon"],source["TransferFee"])!=(
+        "NFTokenMint",ISSUER,20270201,7000
     ) or source["Amount"]!=PRICE or buy["TransactionType"]!="NFTokenAcceptOffer" or buy.get("NFTokenBuyOffer"):
         raise ValueError("Unexpected collection or checkout terms")
     metadata=bytes.fromhex(source["URI"]).decode("ascii")
-    match=re.fullmatch(r"https://coolbears-nfts\.com/xrpl/metadata/([0-9]{4})\.json",metadata)
+    flags=source["Flags"]
+    prefixes={8:["https://coolbears-nfts.com/xrpl/metadata/"],24:[f"ipfs://{HIDDEN}/"]}.get(flags,[])
+    if reveal_report and flags in (8,24):
+        from datetime import datetime
+        root=choose_root(datetime.fromisoformat(mint["close_time_iso"].replace("Z","+00:00")),reveal_report)
+        if root != HIDDEN:
+            prefixes.append(f"ipfs://{root}/")
+    match=next((m for p in prefixes if (m:=re.fullmatch(re.escape(p)+r"([0-9]{4})\.json",metadata))),None)
     if not match:
         raise ValueError("Unexpected metadata address")
     original=directed_offer(mint["meta"],source["Destination"])
@@ -65,5 +73,6 @@ if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("mint")
     p.add_argument("payment")
+    p.add_argument("--reveal-report")
     args=p.parse_args()
-    print(json.dumps(verify(args.mint,args.payment),indent=2))
+    print(json.dumps(verify(args.mint,args.payment,args.reveal_report),indent=2))

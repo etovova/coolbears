@@ -140,7 +140,19 @@ test('an external cancellation releases the old reservation even if our cancella
     ['expired',null,row.id],['free',row.n],['tecOBJECT_NOT_FOUND',81,pending.hash]]);
 });
 
-test('Xaman reservations require the verified CoolBears Testnet session and an order-specific ticket',async()=>{
+import {RESET_HASH,inspectTestnet} from './readiness.mjs';
+const currentHash='B'.repeat(64);
+function readyReply(method) {
+  if(method==='server_info') return {info:{network_id:1,validated_ledger:{seq:20000,age:1,hash:currentHash}}};
+  if(method==='ledger') return {validated:true,ledger:{ledger_index:9418,ledger_hash:RESET_HASH}};
+  a.equal(method,'ledger_entry');
+  return {validated:true,ledger_hash:currentHash,node:{LedgerEntryType:'Delegate',Account:ISSUER,
+    Authorize:'rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb',
+    Permissions:['NFTokenMint','NFTokenCreateOffer','NFTokenModify'].map(PermissionValue=>({Permission:{PermissionValue}}))}};
+}
+
+test('Xaman reservations require the verified CoolBears Testnet session and an order-specific ticket',async t=>{
+  t.mock.method(globalThis,'fetch',async (_url,options)=>Response.json({result:{status:'success',...readyReply(JSON.parse(options.body).method)}}));
   const {authenticatedBuyer}=await import('./xaman.mjs');
   const clientId=crypto.randomUUID(), buyer=deriveAddress(deriveKeypair(generateSeed()).publicKey);
   const auth='Bearer one.two.three', identity={buyer,request:crypto.randomUUID()}, secret='reservation-key';
@@ -173,47 +185,32 @@ test('Xaman reservations require the verified CoolBears Testnet session and an o
     a.equal((await call('mint',{...input,...change})).status,403);
 });
 
-import {inspectTestnet} from './readiness.mjs';
-test('Testnet purchases require a fresh validated ledger from the journal network and its exact delegation', async()=>{
-  const hash='B'.repeat(64);
-  const fresh={network_id:1,validated_ledger:{seq:22614600,hash,age:3}};
-  const entry={validated:true,ledger_hash:hash,node:{LedgerEntryType:'Delegate',Account:ISSUER,
-    Authorize:'rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb',
-    PreviousTxnID:'6B9024FCD521756DB7D0B351F9AD5DB3BB89BB89432DDDE00738D46BF862F24F',
-    Permissions:['NFTokenMint','NFTokenCreateOffer'].map(PermissionValue=>({Permission:{PermissionValue}}))}};
-  const observed=[];
-  const state=(info,grant)=>inspectTestnet(async(method,params)=>{
-    observed.push(method);if(method==='server_info')return {info};
-    a.equal(method,'ledger_entry');a.equal(params.ledger_hash,hash);return grant;
-  });
-  a.equal(await state(fresh,entry),'ready');
-  a.equal(await state(fresh,{...entry,node:{...entry.node,PreviousTxnID:'D'.repeat(64)}}),'collection-unavailable');
-  for(const info of [{...fresh,network_id:0},{...fresh,validated_ledger:{...fresh.validated_ledger,age:60}},
-    {...fresh,validated_ledger:{...fresh.validated_ledger,age:null}}]){
-    observed.length=0;a.equal(await state(info,entry),'network-unavailable');a.deepEqual(observed,['server_info']);
-  }
-  a.equal(await state({...fresh,validated_ledger:{...fresh.validated_ledger,seq:600}},entry),'collection-unavailable');
-  a.equal(await state(fresh,{error:'entryNotFound'}),'collection-unavailable');
-  a.equal(await state(fresh,{...entry,validated:false}),'network-unavailable');
-  a.equal(await state(fresh,{...entry,node:{...entry.node,Permissions:[]}}),'collection-unavailable');
+
+test('storefront requires the post-reset ledger history and all three validated rights',async()=>{
+  const call=(overrides={})=>async(method,params)=>{
+    if (method==='ledger_entry') a.equal(params.ledger_hash,currentHash);
+    if (method==='ledger') a.equal(params.ledger_index,9418);
+    return overrides[method] ?? readyReply(method);
+  };
+  a.equal(await inspectTestnet(call()),'ready');
+  const grant=readyReply('ledger_entry');
+  for(const node of [{...grant.node,Authorize:ISSUER},{...grant.node,Permissions:grant.node.Permissions.slice(0,2)},
+      {...grant.node,Permissions:[...grant.node.Permissions,...grant.node.Permissions]}])
+    a.equal(await inspectTestnet(call({ledger_entry:{...grant,node}})),'collection-unavailable');
+  a.equal(await inspectTestnet(call({ledger_entry:{error:'entryNotFound'}})),'collection-unavailable');
+  a.equal(await inspectTestnet(call({ledger_entry:{...grant,validated:false}})),'network-unavailable');
+  a.equal(await inspectTestnet(call({ledger:{validated:true,ledger:{ledger_index:9418,ledger_hash:currentHash}}})),'collection-unavailable');
+  a.equal(await inspectTestnet(call({server_info:{info:{network_id:0}}})),'network-unavailable');
   a.equal(await inspectTestnet(async()=>{throw Error('Offline')}),'network-unavailable');
 });
 
-
-test('reset signer requires the new validated grant before opening its namespace', async()=>{
-  const fresh={network_id:1,validated_ledger:{seq:9500,age:2,hash:'C'.repeat(64)}};
-  const hash='D'.repeat(64);
-  const grant={validated:true,ledger_hash:fresh.validated_ledger.hash,node:{LedgerEntryType:'Delegate',
-    Account:ISSUER,Authorize:'rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb',PreviousTxnID:hash,
-    Permissions:['NFTokenMint','NFTokenCreateOffer'].map(PermissionValue=>({Permission:{PermissionValue}}))}};
-  const call=async method=>method==='server_info'?{info:fresh}:grant;
-  a.equal(await inspectTestnet(call,hash),'ready');
-  a.equal(await inspectTestnet(call),'collection-unavailable');
-  a.equal(await inspectTestnet(call,'E'.repeat(64)),'collection-unavailable');
-  a.equal(await inspectTestnet(call,''),'collection-unavailable');
-  const env={RESET_JOURNAL:{idFromName(){a.fail('opened journal before grant')}}};
-  const req=new Request('https://orders.internal/mint',{method:'POST',body:'{}'});
-  a.equal((await signer.fetch(req,env)).status,503);
+test('post-reset journal uses a separate object with an empty inventory',async()=>{
+  const id={equals:other=>other===id};
+  const ctx={id,storage:newStorage(),blockConcurrencyWhile(fn){this.ready=fn()}};
+  const env={JOURNAL:{idFromName(name){a.equal(name,ISSUER+':'+RESET_HASH);return id;}}};
+  const journal=new MintJournal(ctx,env).journal;
+  await ctx.ready;
+  a.equal(journal.claim('buyer','post-reset',1).n,0);
 });
 
 test('first mint allows an omitted zero NFT counter and rejects an inventory mismatch',async t=>{
@@ -230,4 +227,30 @@ test('first mint allows an omitted zero NFT counter and rejects an inventory mis
   await a.rejects(stage(0),/fee is above/);
   await a.rejects(stage(1),/inventory changed/);
   a.deepEqual(methods,['account_info','fee','account_info']);
+});
+
+test('a fresh hosted order reaches simulation with the exact mint, URI and directed price',async t=>{
+  const {HIDDEN_ROOT}=await import('../worker.mjs');
+  const ledger={seq:20000,hash:currentHash,close:848000000};
+  const env={TESTNET_DELEGATE_PUBLIC_KEY:deriveKeypair(generateSeed({algorithm:'ed25519'})).publicKey};
+  const buyer=deriveAddress(deriveKeypair(generateSeed()).publicKey);
+  let simulated;
+  t.mock.method(globalThis,'fetch',async (_url,options)=>{
+    const {method,params}=JSON.parse(options.body);
+    let result;
+    if (method==='account_info') result={validated:true,ledger_hash:ledger.hash,account_data:{Account:ISSUER,Sequence:9360}};
+    else if (method==='fee') result={drops:{open_ledger_fee:'10'}};
+    else {
+      a.equal(method,'simulate');
+      simulated=params[0].tx_json;
+      result={applied:false,engine_result:'terNO_DELEGATE_PERMISSION'};
+    }
+    return Response.json({result:{status:'success',...result}});
+  });
+  await a.rejects(MintJournal.prototype.stage.call({env,journal:{first:()=>({n:0})}},
+    {phase:'held',n:42,buyer},ledger),/terNO_DELEGATE_PERMISSION/);
+  a.deepEqual([simulated.TransactionType,simulated.Flags,simulated.Account,simulated.Destination,simulated.Amount,
+    simulated.TransferFee,simulated.NFTokenTaxon,simulated.Delegate,Buffer.from(simulated.URI,'hex').toString()],
+    ['NFTokenMint',24,ISSUER,buyer,'10000000',7000,20270201,deriveAddress(env.TESTNET_DELEGATE_PUBLIC_KEY),
+      'ipfs://'+HIDDEN_ROOT+'/0042.json']);
 });
