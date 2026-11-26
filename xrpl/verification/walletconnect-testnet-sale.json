@@ -1,0 +1,15 @@
+{
+  "slot": "0013",
+  "mint": "0B8776B82D21572C2AD5977D8FC708DF39635233A02791250AB0CCCDAF90D8A6",
+  "payment": "59DAC0065DF1BC484691DAE6923295E2A75D4A776B4A5D2DADE128029D91F04D",
+  "buyer": "raxeFiH8CN5vLAMqyKypqLByF4YzWsS8Hh",
+  "token": "00081B58A25405240C06F525820B01001AD646F1CDF7B0F5AB622E790158E365",
+  "ledger": 22614196,
+  "price_drops": 10000000,
+  "buyer_fee_drops": 12,
+  "offer": "095AC2ED0349092DAB660D2B6E1444AFE7F172B2E218D196465D564495256C8E",
+  "network": "XRPL Testnet",
+  "site": "https://testnet.coolbears-nfts.com",
+  "client": "Independent WalletConnect SignClient",
+  "checkout_run": "https://github.com/etovova/coolbears/actions/runs/45729565615"
+}
