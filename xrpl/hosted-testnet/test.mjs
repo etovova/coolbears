@@ -155,3 +155,27 @@ test('Xaman reservations require the verified CoolBears Testnet session and an o
     {tag:'0'.repeat(64)},{provider:'gem'},{expires:1}])
     a.equal((await call('mint',{...input,...change})).status,403);
 });
+
+import {inspectTestnet} from './readiness.mjs';
+test('Testnet purchases require a fresh validated ledger from the journal network and its exact delegation', async()=>{
+  const hash='B'.repeat(64);
+  const fresh={network_id:1,validated_ledger:{seq:22614600,hash,age:3}};
+  const entry={validated:true,ledger_hash:hash,node:{LedgerEntryType:'Delegate',Account:ISSUER,
+    Authorize:'rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb',
+    Permissions:['NFTokenMint','NFTokenCreateOffer'].map(PermissionValue=>({Permission:{PermissionValue}}))}};
+  const observed=[];
+  const state=(info,grant)=>inspectTestnet(async(method,params)=>{
+    observed.push(method);if(method==='server_info')return {info};
+    a.equal(method,'ledger_entry');a.equal(params.ledger_hash,hash);return grant;
+  });
+  a.equal(await state(fresh,entry),'ready');
+  for(const info of [{...fresh,network_id:0},{...fresh,validated_ledger:{...fresh.validated_ledger,age:60}},
+    {...fresh,validated_ledger:{...fresh.validated_ledger,age:null}}]){
+    observed.length=0;a.equal(await state(info,entry),'network-unavailable');a.deepEqual(observed,['server_info']);
+  }
+  a.equal(await state({...fresh,validated_ledger:{...fresh.validated_ledger,seq:600}},entry),'collection-unavailable');
+  a.equal(await state(fresh,{error:'entryNotFound'}),'collection-unavailable');
+  a.equal(await state(fresh,{...entry,validated:false}),'network-unavailable');
+  a.equal(await state(fresh,{...entry,node:{...entry.node,Permissions:[]}}),'collection-unavailable');
+  a.equal(await inspectTestnet(async()=>{throw Error('Offline')}),'network-unavailable');
+});

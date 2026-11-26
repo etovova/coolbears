@@ -73,6 +73,13 @@ const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
 const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].includes(status.mintMode) && (location.hostname==='127.0.0.1' || (status.mintMode==='collection' && location.origin==='https://testnet.coolbears-nfts.com'));
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
+function salesLabel(){
+ if(status?.serviceState==='network-unavailable')
+   return {en:'Testnet temporarily unavailable',ru:'Тестовая сеть временно недоступна',zh:'测试网暂时不可用'}[lang];
+ if(status?.serviceState==='collection-unavailable')
+   return {en:'Test collection temporarily unavailable',ru:'Тестовая коллекция временно недоступна',zh:'测试系列暂时不可用'}[lang];
+ return text(0);
+}
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
  const wcButton=el('wcWallet');
@@ -95,9 +102,9 @@ function render(){
  else resume.removeAttribute('href');
  el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
  buy.disabled=busy || !status || (!status.open && !pending);
- buy.textContent=pending?text(2):!status?text(8):!status.open?text(0):
+ buy.textContent=pending?text(2):!status?text(8):!status.open?salesLabel():
    mintPilot()?'Mint · 10 test XRP':order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
- el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):text(0)):'';
+ el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):salesLabel()):'';
  el('qty').disabled=busy||!!pending||!!order||mintPilot();el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
 }
 function language(){
@@ -133,10 +140,13 @@ async function collectionRequest(buyer,resuming=false){
      let r;
      try{r=await fetch('/xrpl/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer '+bearer}:{})},body:JSON.stringify(data)})}
      catch(e){if(i+1>=tries)throw e;}
+     const v=r ? await r.json().catch(()=>({})) : {};
+     if(r?.status===503 && v.state==='maintenance'){
+       status.open=false;status.serviceState=v.serviceState;render();throw Error(salesLabel());
+     }
      if((!r||[502,503,504].includes(r.status))&&i+1<tries){
        await new Promise(resolve=>setTimeout(resolve,900));continue;
      }
-     const v=await r.json();
      if(r.status===202 && v.state==='preparing'){
        message.textContent={en:'Preparing your NFT on Testnet…',ru:'Выпускаем ваш NFT в тестовой сети…',zh:'正在测试网准备您的 NFT…'}[lang];
        if(i+1===tries)throw Error(text(5));

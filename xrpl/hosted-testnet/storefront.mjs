@@ -1,4 +1,5 @@
 import {authenticatedBuyer} from './xaman.mjs';
+import {testnetState} from './readiness.mjs';
 import {handle} from '../worker.mjs';
 import app from '../web/app.js';
 import {ISSUER, METADATA, ORIGIN, json} from './common.mjs';
@@ -31,6 +32,8 @@ export default {
       if (body===null) return json({error:'Invalid request size'},413);
       let input;
       try {input=JSON.parse(body);} catch {return json({error:'Invalid JSON'},400);}
+      const serviceState=await testnetState();
+      if (serviceState!=='ready') return json({state:'maintenance',serviceState},503);
       if (path==='/xrpl/api/challenge' && input?.provider==='xaman') {
         if (!env.XAMAN_CLIENT_ID) return json({error:'Xaman is not configured.'},503);
         try {
@@ -44,7 +47,8 @@ export default {
     }
     if (path==='/xrpl/api/status' && ['GET','HEAD'].includes(req.method)) {
       const status=await (await handle(new Request(url),{...statusEnv,XAMAN_CLIENT_ID:env.XAMAN_CLIENT_ID,WALLETCONNECT_PROJECT_ID:env.WALLETCONNECT_PROJECT_ID})).json();
-      const response=json({...status,mintMode:'collection'});
+      const serviceState=await testnetState();
+      const response=json({...status,open:status.open && serviceState==='ready',serviceState,mintMode:'collection'});
       return req.method==='HEAD'?new Response(null,response):response;
     }
     if (['/xrpl/api/offer','/xrpl/api/receipt','/xrpl/api/reconcile'].includes(path)) {
