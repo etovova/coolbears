@@ -11,9 +11,10 @@ on:
         type: boolean
         default: false
   push:
-    branches: [xrpl/walletconnect-testnet-check, xrpl/royalty-testnet-check]
+    branches: [xrpl/walletconnect-testnet-check, xrpl/royalty-testnet-check, xrpl/wallet-recovery-check]
     paths:
       - xrpl/verification/testnet_resale.py
+      - xrpl/verification/checkout_recovery.py
       - xrpl/verification/walletconnect_checkout.py
       - .github/workflows/walletconnect-testnet.yml
 permissions:
@@ -22,6 +23,7 @@ concurrency: coolbears-walletconnect-testnet
 jobs:
   checkout:
     env:
+      CHECK_RECOVERY: ${{ github.event_name == 'push' && github.ref_name == 'xrpl/wallet-recovery-check' }}
       CHECK_RESALE: ${{ inputs.resale || (github.event_name == 'push' && github.ref_name == 'xrpl/royalty-testnet-check') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -34,11 +36,18 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install 'playwright==1.56.0' 'xrpl-py==5.2.0'
       - run: python -m playwright install --with-deps chromium
+      - name: Check published transaction gate and browser receipt recovery
+        if: ${{ env.CHECK_RECOVERY == 'true' }}
+        id: readiness
+        run: python -u xrpl/verification/checkout_recovery.py
+      - name: Check mobile wallet links on both published storefronts
+        if: ${{ env.CHECK_RECOVERY == 'true' }}
+        run: python -u xrpl/verification/mobile_wallet_links.py
       - name: Verify published checkout
-        if: ${{ env.CHECK_RESALE != 'true' && (inputs.new_purchase || hashFiles('xrpl/verification/walletconnect-testnet-sale.json') == '') }}
+        if: ${{ (env.CHECK_RECOVERY != 'true' || steps.readiness.outputs.ready == 'true') && env.CHECK_RESALE != 'true' && (inputs.new_purchase || hashFiles('xrpl/verification/walletconnect-testnet-sale.json') == '') }}
         run: python -u xrpl/verification/walletconnect_checkout.py
       - name: Reopen the saved receipt and verify settlement
-        if: ${{ env.CHECK_RESALE != 'true' && !inputs.new_purchase && hashFiles('xrpl/verification/walletconnect-testnet-sale.json') != '' }}
+        if: ${{ (env.CHECK_RECOVERY != 'true' || steps.readiness.outputs.ready == 'true') && env.CHECK_RESALE != 'true' && !inputs.new_purchase && hashFiles('xrpl/verification/walletconnect-testnet-sale.json') != '' }}
         run: python -u xrpl/verification/walletconnect_checkout.py --receipt xrpl/verification/walletconnect-testnet-sale.json
       - name: Verify primary sale and secondary royalties
         if: ${{ env.CHECK_RESALE == 'true' && (inputs.resale || hashFiles('xrpl/verification/testnet-resale.json') == '') }}
@@ -46,3 +55,9 @@ jobs:
       - name: Recheck recorded royalty settlement
         if: ${{ env.CHECK_RESALE == 'true' && !inputs.resale && hashFiles('xrpl/verification/testnet-resale.json') != '' }}
         run: python -u xrpl/verification/testnet_resale.py --receipt xrpl/verification/testnet-resale.json
+      - name: Reopen the resale receipt on the active Testnet
+        if: ${{ env.CHECK_RECOVERY == 'true' && steps.readiness.outputs.ready == 'true' }}
+        run: python -u xrpl/verification/testnet_resale.py --receipt xrpl/verification/testnet-resale.json
+      - name: Purchase and wait for the automatic Testnet receipt
+        if: ${{ env.CHECK_RECOVERY == 'true' && steps.readiness.outputs.ready == 'true' && hashFiles('xrpl/verification/recovered-testnet-sale.json') == '' }}
+        run: python -u xrpl/verification/walletconnect_checkout.py

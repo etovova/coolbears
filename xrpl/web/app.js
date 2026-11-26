@@ -73,6 +73,13 @@ const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
 const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].includes(status.mintMode) && (location.hostname==='127.0.0.1' || (status.mintMode==='collection' && location.origin==='https://testnet.coolbears-nfts.com'));
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
+function salesLabel(){
+ if(status?.serviceState==='network-unavailable')
+   return {en:'Testnet temporarily unavailable',ru:'Тестовая сеть временно недоступна',zh:'测试网暂时不可用'}[lang];
+ if(status?.serviceState==='collection-unavailable')
+   return {en:'Test collection temporarily unavailable',ru:'Тестовая коллекция временно недоступна',zh:'测试系列暂时不可用'}[lang];
+ return text(0);
+}
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
  const wcButton=el('wcWallet');
@@ -80,7 +87,8 @@ function render(){
    wcButton.disabled=!status?.walletConnectProjectId || !!pairing;
    wcButton.textContent='WalletConnect · Joey / Bifrost'+(status&&!status.walletConnectProjectId?' · '+wcText[lang].soon:'');
    const words=wcText[lang];
-   el('wcHint').textContent=words.hint;
+   const bifrostTestnet={en:'Use testnet mode in Bifrost.',ru:'Для Bifrost включите тестовый режим.',zh:'请在 Bifrost 中启用测试网模式。'};
+   el('wcHint').textContent=words.hint+(status?.network==='Testnet'?' '+bifrostTestnet[lang]:'');
    el('wcOpen').textContent=words.open+' Bifrost';
    if(el('wcJoey'))el('wcJoey').textContent=words.open+' Joey';
    if(el('wcManualLabel'))el('wcManualLabel').textContent=words.manual;
@@ -94,9 +102,9 @@ function render(){
  else resume.removeAttribute('href');
  el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
  buy.disabled=busy || !status || (!status.open && !pending);
- buy.textContent=pending?text(2):!status?text(8):!status.open?text(0):
+ buy.textContent=pending?text(2):!status?text(8):!status.open?salesLabel():
    mintPilot()?'Mint · 10 test XRP':order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
- el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):text(0)):'';
+ el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):salesLabel()):'';
  el('qty').disabled=busy||!!pending||!!order||mintPilot();el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
 }
 function language(){
@@ -132,10 +140,13 @@ async function collectionRequest(buyer,resuming=false){
      let r;
      try{r=await fetch('/xrpl/api/'+path,{method:'POST',headers:{'Content-Type':'application/json',...(bearer?{Authorization:'Bearer '+bearer}:{})},body:JSON.stringify(data)})}
      catch(e){if(i+1>=tries)throw e;}
+     const v=r ? await r.json().catch(()=>({})) : {};
+     if(r?.status===503 && v.state==='maintenance'){
+       status.open=false;status.serviceState=v.serviceState;render();throw Error(salesLabel());
+     }
      if((!r||[502,503,504].includes(r.status))&&i+1<tries){
        await new Promise(resolve=>setTimeout(resolve,900));continue;
      }
-     const v=await r.json();
      if(r.status===202 && v.state==='preparing'){
        message.textContent={en:'Preparing your NFT on Testnet…',ru:'Выпускаем ваш NFT в тестовой сети…',zh:'正在测试网准备您的 NFT…'}[lang];
        if(i+1===tries)throw Error(text(5));
@@ -152,6 +163,9 @@ async function collectionRequest(buyer,resuming=false){
  const proof=await send('challenge',identity,user?.token);
  let pk,signature;
  if(wallet==='wc'){
+   message.textContent={en:'Open your wallet to sign the reservation. This step costs no XRP.',
+     ru:'Откройте кошелёк и подпишите бронь. На этом шаге XRP не списываются.',
+     zh:'请打开钱包签署预订。本步骤无需支付 XRP。'}[lang];
    pk=await wc.signReservation(status.network,buyer,proof.message);signature=pk.signature;
  }else if(wallet==='gem'){
    pk=(await gemPrompt(()=>window.GemWalletApi.getPublicKey())).result;
@@ -229,7 +243,30 @@ async function connect(kind) {
 function pick(){el('walletInfo').textContent='';if(!dialog.open)dialog.showModal();}
 el('walletBtn').onclick=()=>{if(!busy)pick()};el('closeWallet').onclick=()=>dialog.close();
 document.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=async()=>{try{closePairing();render();await connect(b.dataset.wallet)}catch(e){if(e.name!=='AbortError')el('walletInfo').textContent=e.message}});
-async function check(){
+let checkingReceipt, receiptTimer, watchingReceipt=false, receiptDelay=4000;
+function backgroundReceipt(){
+ if(!pending || document.hidden)return;
+ check().catch(error=>{message.textContent=error.message;});
+}
+function check(){
+ if(checkingReceipt)return checkingReceipt;
+ clearTimeout(receiptTimer);
+ watchingReceipt=true;
+ checkingReceipt=readReceipt().finally(()=>{
+   checkingReceipt=null;
+   if(pending && !document.hidden){
+     receiptTimer=setTimeout(backgroundReceipt,receiptDelay);
+     receiptDelay=Math.min(receiptDelay*2,30000);
+   }
+   if(!pending){receiptDelay=4000;watchingReceipt=false;receiptTimer=null;}
+   render();
+ });
+ return checkingReceipt;
+}
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden && pending && !busy && watchingReceipt)backgroundReceipt();
+});
+async function readReceipt(){
  if(pending.xaman && !pending.hash){
    // A ledger lookup also recovers a signed transaction if the provider session expired.
    const result=await xaman.signatureResult(status,pending).catch(()=>null);
@@ -240,7 +277,10 @@ async function check(){
    }
    if(result?.hash){pending.hash=result.hash;storage.set(txKey(),pending);}
  }
- const r=await api(pending.hash?'receipt':'reconcile',pending);
+ const {buyer,offer,last,hash}=pending;
+ const search={buyer,offer,...(last?{last}:{})};
+ let r=await api(hash?'receipt':'reconcile',hash?{...search,hash}:search);
+ if(r.state==='mismatch' && hash && last)r=await api('reconcile',search);
  if(r.state==='pending'){message.textContent=text(5);return;}
  if(r.state==='complete'){
    const id=r.hash;const explorer=status.network==='Testnet'?'testnet.xrpl.org':'livenet.xrpl.org';
@@ -262,6 +302,7 @@ buy.onclick=async()=>{
    if(order && buyer!==order.buyer)throw Error('Select the wallet for this order.');
    const q=await selectOffer(buyer);if(!q)return;
    if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
+   receipt.hidden=true;receipt.removeAttribute('href');
    if(!order){order={buyer,target:quantity(),done:0};storage.set(objKey(),order);}
    pending={offer:q.id,buyer,last:q.validThrough,network:status.network};storage.set(txKey(),pending);
    let hash;
@@ -277,6 +318,7 @@ buy.onclick=async()=>{
      pending.xaman=signature;storage.set(txKey(),pending);location.assign(signature.url);return;
    }
    if(wallet==='wc'){
+     message.textContent={en:'Confirm the NFT purchase in your wallet.',ru:'Подтвердите покупку NFT в кошельке.',zh:'请在钱包中确认购买 NFT。'}[lang];
      try{hash=await wc.acceptOffer(status.network,buyer,q);}
      catch(e){
        if([4001,5000].includes(e?.code)){
@@ -292,7 +334,10 @@ buy.onclick=async()=>{
    }
    if(hash && /^[a-f\d]{64}$/i.test(hash)){pending.hash=hash.toUpperCase();storage.set(txKey(),pending);}
    await check();
- }catch(e){message.textContent=e.message;}finally{busy=false;render();}
+ }catch(e){message.textContent=e.message;}finally{
+   busy=false;render();
+   if(pending && !watchingReceipt && !pending.xaman?.id)backgroundReceipt();
+ }
 };
 const rankingText=()=>({en:'Ranked by final rarity score.',ru:'Места по итоговой оценке редкости.',zh:'按最终稀有度评分排名。'}[lang]);
 async function loadRanking(){
