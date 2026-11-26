@@ -14,3 +14,20 @@ new_sqlite_classes = ["MintJournal"]
 
 [vars]
 TESTNET_DELEGATE_PUBLIC_KEY = "EDBAC205805AD07EA31A2A14F9605B8FADE5B13E72EA48764051C8D44248C5430F"
+
+# A separate private service for the ledger history after the November reset.
+[env.reset]
+name = "coolbears-testnet-issuer-20261125"
+workers_dev = false
+preview_urls = false
+
+[[env.reset.durable_objects.bindings]]
+name = "RESET_JOURNAL"
+class_name = "ResetMintJournal"
+
+[[env.reset.migrations]]
+tag = "v1"
+new_sqlite_classes = ["ResetMintJournal"]
+
+[env.reset.vars]
+TESTNET_DELEGATE_PUBLIC_KEY = "EDBAC205805AD07EA31A2A14F9605B8FADE5B13E72EA48764051C8D44248C5430F"
