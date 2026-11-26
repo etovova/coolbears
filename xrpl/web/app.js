@@ -130,9 +130,9 @@ document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{lang=b.datase
 el('minus').onclick=()=>{el('qty').value=quantity()-1;render()};el('plus').onclick=()=>{el('qty').value=quantity()+1;render()};
 el('qty').onchange=render;el('backTop').onclick=()=>scrollTo({top:0,behavior:'smooth'});
 addEventListener('scroll',()=>el('backTop').classList.toggle('show',scrollY>400),{passive:true});
-async function api(name,params={}){
+async function api(name,params={},signal){
  const url=new URL('/xrpl/api/'+name,location.origin);for(const [k,v] of Object.entries(params))url.searchParams.set(k,v);
- const r=await fetch(url,{cache:'no-store'}),data=await r.json();
+ const r=await fetch(url,{cache:'no-store',signal}),data=await r.json();
  if(!r.ok&&!data.state)throw Error(data.error||text(8));return data;
 }
 function requestKey(buyer){return 'coolbears.xrpl.collection.request.'+status.issuer+'.'+buyer}
@@ -374,12 +374,33 @@ function scheduleRanking(){
  function wake(){const remaining=due-performance.now();if(remaining<=0)loadRanking();else setTimeout(wake,Math.min(remaining,2147480000));}
  wake();
 }
+async function loadStatus(){
+ let delay=2000;
+ for(;;){
+   try{
+     const info=await api('status',{},globalThis.AbortSignal?.timeout?.(30000));
+     if(!['Testnet','Mainnet'].includes(info.network) || typeof info.open!=='boolean')throw Error();
+     message.textContent='';
+     return info;
+   }catch{
+     message.textContent={en:'Reconnecting to the site…',ru:'Восстанавливаем связь с сайтом…',zh:'正在重新连接网站…'}[lang];
+     await new Promise(resolve=>setTimeout(resolve,delay));
+     delay=Math.min(delay*2,30000);
+   }
+ }
+}
 language();
-try{status=await api('status');language();scheduleRanking();pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;
- if(status.xamanClientId){
+status=await loadStatus();
+pending=storage.get(txKey());
+order=storage.get(objKey());
+if(order)el('qty').value=order.target;
+language();scheduleRanking();
+if(status.xamanClientId){
+ try{
    const login=await xaman.finishLogin(status);
    const user=login || (storage.get('coolbears.xrpl.wallet')==='xaman' && xaman.session(status));
    if(user){wallet='xaman';account=user.account;storage.set('coolbears.xrpl.wallet',wallet);if(login&&!pending)location.hash='mint';}
- }
- if(pending)await check();}
-catch(e){message.textContent=e.message;}render();
+ }catch(e){message.textContent=e.message;}
+}
+if(pending)await check().catch(e=>{message.textContent=e.message;});
+render();

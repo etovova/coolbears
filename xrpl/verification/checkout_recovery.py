@@ -2,6 +2,7 @@
 import json
 import os
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -74,6 +75,60 @@ def check_browser(browser, sale, outcome):
         print("Live storefront, simulated receipt responses: 503 then", outcome, "without clicks or writes.")
 
 
+def check_startup_recovery(browser, sale, config, scenario):
+    pending = {"network": "Testnet", "buyer": sale["buyer"], "offer": sale["offer"]}
+    if scenario == "unknown-hash":
+        pending["last"] = sale["ledger"] + 5
+    else:
+        pending["hash"] = sale["payment"]
+    callback = scenario == "login-cancelled"
+    url = SITE + ("/xrpl/?error=access_denied&state=buyer-test" if callback else "/#mint")
+    with browser.new_context(locale="ru-RU") as ctx:
+        page = ctx.new_page()
+        page.add_init_script("localStorage.setItem('coolbears.xrpl.pending.Testnet'," +
+                             json.dumps(json.dumps(pending)) + ")")
+        if callback:
+            assert config["xamanClientId"]
+            login = {"state": "buyer-test", "client": config["xamanClientId"]}
+            page.add_init_script("localStorage.setItem('coolbears.xaman.Testnet.login', JSON.stringify(" +
+                                 "Object.assign(" + json.dumps(login) + ", {started: Date.now()})))")
+        status_reads, receipt_reads, writes = [], [], []
+
+        def status(route):
+            status_reads.append(route.request.method)
+            if scenario == "status-offline" and len(status_reads) == 1:
+                route.abort("internetdisconnected")
+            else:
+                route.fulfill(json=config)
+
+        def receipt(route):
+            receipt_reads.append(route.request.url)
+            if scenario == "unknown-hash" and len(receipt_reads) == 1:
+                route.fulfill(status=202, json={"state": "pending"})
+            else:
+                route.fulfill(json={"state": "complete", "token": sale["token"], "hash": sale["payment"]})
+
+        page.on("request", lambda req: writes.append(req.url)
+                if req.method == "POST" and "/xrpl/api/" in req.url else None)
+        page.route("**/xrpl/api/**", lambda route: route.abort())
+        page.route("**/xrpl/api/status", status)
+        path = "reconcile" if scenario == "unknown-hash" else "receipt"
+        page.route("**/xrpl/api/" + path + "?*", receipt)
+        page.goto(url, wait_until="domcontentloaded")
+        expected = "https://testnet.xrpl.org/transactions/" + sale["payment"]
+        expect(page.locator("#receipt")).to_have_attribute("href", expected, timeout=18000)
+        assert len(status_reads) == (2 if scenario == "status-offline" else 1), status_reads
+        assert len(receipt_reads) == (2 if scenario == "unknown-hash" else 1), receipt_reads
+        expected_query = {"buyer": [sale["buyer"]], "offer": [sale["offer"]]}
+        if scenario == "unknown-hash":
+            expected_query["last"] = [str(pending["last"])]
+        else:
+            expected_query["hash"] = [sale["payment"]]
+        assert all(parse_qs(urlsplit(url).query) == expected_query for url in receipt_reads)
+        assert not writes and page.locator("#receipt").is_visible()
+        assert page.evaluate("JSON.parse(localStorage.getItem('coolbears.xrpl.pending.Testnet'))") is None
+
+
 if __name__ == "__main__":
     record = json.loads(Path(__file__).with_name("walletconnect-testnet-sale.json").read_text())
     with sync_playwright() as p:
@@ -82,6 +137,9 @@ if __name__ == "__main__":
         state = check_gate(page)
         for outcome in ("complete", "expired"):
             check_browser(browser, record, outcome)
+        config = page.evaluate("async () => (await fetch('/xrpl/api/status')).json()")
+        for scenario in ("status-offline", "login-cancelled", "unknown-hash"):
+            check_startup_recovery(browser, record, config, scenario)
         if state != "ready":
             expect(page.locator("#buy")).to_contain_text("временно недоступна", timeout=35000)
             expect(page.locator("#buy")).to_be_disabled()
