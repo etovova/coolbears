@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test test.mjs"
+    "test": "node --test test.mjs walletconnect.test.mjs"
   },
   "type": "module",
   "dependencies": {
@@ -12,7 +12,9 @@
     "ripple-keypairs": "2.1.0"
   },
   "devDependencies": {
-    "esbuild": "0.25.12"
+    "@walletconnect/sign-client": "2.26.0",
+    "esbuild": "0.25.12",
+    "qrcode": "1.5.4"
   },
   "private": true
 }

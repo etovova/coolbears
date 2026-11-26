@@ -43,7 +43,7 @@ export default {
       return env.ISSUANCE.fetch('https://orders.internal/'+path.split('/').pop(),{method:'POST',body});
     }
     if (path==='/xrpl/api/status' && ['GET','HEAD'].includes(req.method)) {
-      const status=await (await handle(new Request(url),{...statusEnv,XAMAN_CLIENT_ID:env.XAMAN_CLIENT_ID})).json();
+      const status=await (await handle(new Request(url),{...statusEnv,XAMAN_CLIENT_ID:env.XAMAN_CLIENT_ID,WALLETCONNECT_PROJECT_ID:env.WALLETCONNECT_PROJECT_ID})).json();
       const response=json({...status,mintMode:'collection'});
       return req.method==='HEAD'?new Response(null,response):response;
     }

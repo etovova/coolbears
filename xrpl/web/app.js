@@ -1,4 +1,5 @@
 import {mountRarity} from './rarity.mjs';
+import {walletAdapter} from './walletconnect.mjs';
 import * as xaman from './xaman.mjs';
 import translations from './translations.mjs';
 const el=id=>document.getElementById(id);
@@ -12,7 +13,28 @@ const copy={
  zh:['暂未开售','购买价格','查看交易','连接钱包','选择钱包网络','等待账本确认。','购买已确认。','下一个 NFT','暂不可用','另收网络费用。','交易已拒绝或过期。']
 };
 let status,account,wallet,busy=false,pending,order,rankingVisible=false;
-let updateRarityLanguage;
+let updateRarityLanguage, pairing, pairingUri;
+const wc=walletAdapter({origin:location.origin,onChange(buyer){
+ if(wallet==='wc'){account=buyer;if(!buyer)wallet=null;render();}
+}});
+const wcText={
+ en:['Scan with Joey or Bifrost, or copy the pairing link.','Copy link','Copied','Coming soon'],
+ ru:['Отсканируйте QR в Joey или Bifrost либо скопируйте ссылку.','Скопировать ссылку','Скопировано','Скоро'],
+ zh:['使用 Joey 或 Bifrost 扫描二维码，或复制配对链接。','复制链接','已复制','即将开放']
+};
+function closePairing(){
+ pairing?.abort();pairing=null;pairingUri=null;
+ if(!el('wcPair'))return;
+ el('wcPair').hidden=true;el('wcQR').removeAttribute('src');el('wcOpen').removeAttribute('href');
+}
+function showPairing(uri,image){
+ if(!dialog.open)dialog.showModal();
+ pairingUri=uri;el('wcQR').src=image;
+ el('wcOpen').href='bifrostwallet://wc?uri='+encodeURIComponent(uri);
+ el('wcCopy').textContent=wcText[lang][1];el('wcPair').hidden=false;
+}
+if(el('wcCopy'))el('wcCopy').onclick=async()=>{if(pairingUri)try{await navigator.clipboard.writeText(pairingUri);el('wcCopy').textContent=wcText[lang][2];}catch{el('walletInfo').textContent=wcText[lang][0];}};
+dialog.addEventListener('close',()=>{closePairing();render();});
 // GemWallet 3.8.2 resolves a request before its popup finishes closing.
 // Queue prompts so the close event cannot reject the following wallet request.
 let gemReady=Promise.resolve();
@@ -29,6 +51,12 @@ const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
 function render(){
  const q=quantity();el('qty').value=q;el('total').textContent=q*10;
+ const wcButton=el('wcWallet');
+ if(wcButton){
+   wcButton.disabled=!status?.walletConnectProjectId || !!pairing;
+   wcButton.textContent='WalletConnect · Joey / Bifrost'+(status&&!status.walletConnectProjectId?' · '+wcText[lang][3]:'');
+   el('wcHint').textContent=wcText[lang][0];
+ }
  const xamanButton=el('xamanWallet'), resume=el('xamanResume');
  xamanButton.disabled=!status?.xamanClientId;
  xamanButton.textContent=xamanButton.disabled?{en:'Xaman · coming soon',ru:'Xaman · скоро',zh:'Xaman · 即将开放'}[lang]:'Xaman';
@@ -66,7 +94,7 @@ async function api(name,params={}){
 }
 function requestKey(buyer){return 'coolbears.xrpl.collection.request.'+status.issuer+'.'+buyer}
 async function collectionRequest(buyer,resuming=false){
- if(!['gem','cross','xaman'].includes(wallet))throw Error(text(8));
+ if(!['gem','cross','xaman','wc'].includes(wallet))throw Error(text(8));
  const key=requestKey(buyer);
  let id=storage.get(key);
  if(!id){id=crypto.randomUUID();storage.set(key,id);}
@@ -92,10 +120,12 @@ async function collectionRequest(buyer,resuming=false){
  const isXaman=wallet==='xaman';
  const user=isXaman?xaman.session(status):null;
  if(isXaman && (!user || user.account!==buyer))throw Error('Xaman · '+text(3));
- const identity={buyer,request:id,...(isXaman?{provider:'xaman'}:{})};
+ const identity={buyer,request:id,...(isXaman?{provider:'xaman'}:wallet==='wc'?{provider:'walletconnect'}:{})};
  const proof=await send('challenge',identity,user?.token);
  let pk,signature;
- if(wallet==='gem'){
+ if(wallet==='wc'){
+   pk=await wc.signReservation(status.network,buyer,proof.message);signature=pk.signature;
+ }else if(wallet==='gem'){
    pk=(await gemPrompt(()=>window.GemWalletApi.getPublicKey())).result;
    if(pk?.address!==buyer)throw Error(text(4)+' Testnet');
    signature=(await gemPrompt(()=>window.GemWalletApi.signMessage(proof.message))).result?.signedMessage;
@@ -139,7 +169,12 @@ async function selectOffer(buyer){
 }
 async function connect(kind) {
  if(!status)throw Error(text(8));
- if(kind==='xaman'){
+ if(kind==='wc'){
+   if(!status.walletConnectProjectId)throw Error('WalletConnect · '+text(8));
+   closePairing();const attempt=new AbortController();pairing=attempt;render();
+   try{account=await wc.connect(status.walletConnectProjectId,status.network,showPairing,attempt.signal);}
+   finally{if(pairing===attempt){closePairing();render();}}
+ }else if(kind==='xaman'){
    if(!status.xamanClientId)throw Error('Xaman · '+text(8));
    const session=xaman.session(status);
    if(!session){await xaman.authorize(status);return false;}
@@ -164,8 +199,8 @@ async function connect(kind) {
  wallet=kind;storage.set('coolbears.xrpl.wallet',kind);dialog.close();render();return true;
 }
 function pick(){el('walletInfo').textContent='';if(!dialog.open)dialog.showModal();}
-el('walletBtn').onclick=pick;el('closeWallet').onclick=()=>dialog.close();
-document.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=async()=>{try{await connect(b.dataset.wallet)}catch(e){el('walletInfo').textContent=e.message}});
+el('walletBtn').onclick=()=>{if(!busy)pick()};el('closeWallet').onclick=()=>dialog.close();
+document.querySelectorAll('[data-wallet]').forEach(b=>b.onclick=async()=>{try{closePairing();render();await connect(b.dataset.wallet)}catch(e){if(e.name!=='AbortError')el('walletInfo').textContent=e.message}});
 async function check(){
  if(pending.xaman && !pending.hash){
    // A ledger lookup also recovers a signed transaction if the provider session expired.
@@ -213,7 +248,16 @@ buy.onclick=async()=>{
      }
      pending.xaman=signature;storage.set(txKey(),pending);location.assign(signature.url);return;
    }
-   if(wallet==='gem'){hash=(await gemPrompt(()=>window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:q.id,lastLedgerSequence:q.validThrough}))).result?.hash;}
+   if(wallet==='wc'){
+     try{hash=await wc.acceptOffer(status.network,buyer,q);}
+     catch(e){
+       if([4001,5000].includes(e?.code)){
+         pending=null;storage.set(txKey(),null);
+         if(!order.done){order=null;storage.set(objKey(),null);}throw Error(text(10));
+       }
+       throw e;
+     }
+   }else if(wallet==='gem'){hash=(await gemPrompt(()=>window.GemWalletApi.acceptNFTOffer({NFTokenSellOffer:q.id,lastLedgerSequence:q.validThrough}))).result?.hash;}
    else{
      const reply=await window.CoolBearsCrossmark.methods.signAndSubmitAndWait({TransactionType:'NFTokenAcceptOffer',Account:buyer,NFTokenSellOffer:q.id,LastLedgerSequence:q.validThrough});
      hash=reply.response?.data?.resp?.result?.hash || reply.response?.data?.resp?.result?.tx_json?.hash;
