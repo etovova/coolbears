@@ -52,7 +52,7 @@ async function rpc(net, method, params) {
   if (!r.ok) throw Error('Ledger unavailable');
   const {result} = await r.json();
   if (!result || result.status === 'error') {
-    if (method==='tx' && result?.error==='txnNotFound') return null;
+    if (method==='tx' && result?.error==='txnNotFound') return result;
     if (method==='ledger_entry' && result?.error==='entryNotFound') return null;
     throw Error('Ledger request failed');
   }
@@ -62,7 +62,7 @@ async function snapshot(net) {
   const {info} = await rpc(net,'server_info',{});
   if (info.network_id !== net.id || !ID.test(info.validated_ledger?.hash) ||
       info.validated_ledger.age > 30) throw Error('Unconfirmed ledger');
-  return info.validated_ledger;
+  return {...info.validated_ledger,completeLedgers:info.complete_ledgers};
 }
 async function objects(net, method, options, ledger, check) {
   let marker;
@@ -116,9 +116,14 @@ async function quote(net, buyer, origin, wanted) {
     }
   }) || null;
 }
-async function receipt(net, hash, offer, buyer) {
+async function receipt(net, hash, offer, buyer, last) {
   const tx=await rpc(net,'tx',{transaction:hash,binary:false});
-  if (!tx || !tx.validated) return json({state:'pending'},202);
+  if (tx.error==='txnNotFound' && Number.isSafeInteger(last) && last>=16)
+    return reconcile(net,buyer,offer,last,hash);
+  return transactionReceipt(net,tx,hash,offer,buyer);
+}
+function transactionReceipt(net,tx,hash,offer,buyer) {
+  if (!tx.validated) return json({state:'pending'},202);
   const body=tx.tx_json;
   if (tx.hash!==hash || body?.TransactionType!=='NFTokenAcceptOffer' || body.Account!==buyer ||
       body.NFTokenSellOffer!==offer || body.NFTokenBuyOffer || body.NFTokenBrokerFee) return json({state:'mismatch'},409);
@@ -128,25 +133,47 @@ async function receipt(net, hash, offer, buyer) {
       sale.FinalFields.Amount!==PRICE || !(sale.FinalFields.Flags&1)) return json({state:'mismatch'},409);
   return json({state:'complete',hash,token:sale.FinalFields.NFTokenID,ledger:tx.ledger_index});
 }
-async function reconcile(net,buyer,offer,last) {
+async function reconcile(net,buyer,offer,last,missingHash) {
   if (!Number.isSafeInteger(last) || last < 16) return json({error:'Invalid ledger window'},400);
   const ledger=await snapshot(net);
   if (last>ledger.seq+16) return json({error:'Invalid ledger window'},400);
   const min=last-15, max=Math.min(last,ledger.seq);
   if (max<min) return json({state:'pending'},202);
+  if (missingHash) {
+    if (ledger.seq<last) return json({state:'pending'},202);
+    const result=await rpc(net,'tx',{transaction:missingHash,binary:false,min_ledger:min,max_ledger:last});
+    if (result.error!=='txnNotFound') return transactionReceipt(net,result,missingHash,offer,buyer);
+    if (result.searched_all!==true) return json({state:'pending'},202);
+  }
+  const seen=new Set();
   let marker;
   do {
     const page=await rpc(net,'account_tx',{account:buyer,ledger_index_min:min,ledger_index_max:max,
       forward:true,limit:200,marker});
-    if (!page.validated || page.ledger_index_min>min || page.ledger_index_max<max)
+    if (page.validated!==true || !Number.isSafeInteger(page.ledger_index_min) || !Number.isSafeInteger(page.ledger_index_max)
+        || page.ledger_index_min>min || page.ledger_index_max<max)
       return json({state:'pending'},202);
     for (const item of page.transactions) {
-      if (item.tx_json?.NFTokenSellOffer===offer && item.tx_json?.Account===buyer && ID.test(item.hash))
+      if (item.tx_json?.Account!==buyer || item.tx_json?.NFTokenSellOffer!==offer) continue;
+      if (!item.meta?.TransactionResult) return json({state:'pending'},202);
+      if (item.meta.TransactionResult==='tesSUCCESS') {
+        if (!ID.test(item.hash)) return json({state:'pending'},202);
         return receipt(net,item.hash,offer,buyer);
+      }
     }
     marker=page.marker;
+    if (marker) {
+      const cursor=JSON.stringify(marker);
+      if (seen.has(cursor)) return json({state:'pending'},202);
+      seen.add(cursor);
+    }
   } while (marker);
-  return ledger.seq>last ? json({state:'expired'}) : json({state:'pending'},202);
+  // account_tx may return an empty page even when the server has a gap in its history.
+  const covered=ledger.completeLedgers?.split(',').some(range=>{
+    const [first,end=first]=range.split('-').map(Number);
+    return first>0 && first<=min && end>=last;
+  });
+  return ledger.seq>=last && covered ? json({state:'expired'}) : json({state:'pending'},202);
 }
 async function openAsset(env,label,bytes) {
   const raw=Uint8Array.from(atob(env.ASSET_KEY),x=>x.charCodeAt(0));
@@ -315,7 +342,7 @@ export async function handle(request,env,now=Date.now()) {
       } else if (path.endsWith('/receipt')) {
         const hash=url.searchParams.get('hash');
         if (!ID.test(hash) || !id) return json({error:'Invalid receipt'},400);
-        result=await receipt(net,hash,id,buyer);
+        result=await receipt(net,hash,id,buyer,Number(url.searchParams.get('last')));
       } else {
         if (env.SALES_OPEN!=='yes') return json({error:'Sales closed'},409);
         const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id);

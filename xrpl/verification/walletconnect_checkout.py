@@ -9,7 +9,7 @@ import sys
 import time
 from urllib.parse import parse_qs, urlparse
 
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import expect, sync_playwright
 from xrpl.core.binarycodec import encode, encode_for_signing
 from xrpl.core.keypairs import sign
 from xrpl.wallet import Wallet
@@ -127,7 +127,7 @@ def checkout(browser, wallet):
     peer.evaluate(START_PEER, {"projectId": status["walletConnectProjectId"], "address": wallet.address, "uri": uri})
     peer.wait_for_function("window.approvedTopic || window.pairError", timeout=45000)
     assert not peer.evaluate("window.pairError"), "Peer could not approve the storefront proposal"
-    buyer.wait_for_function("prefix => document.querySelector('#walletBtn').textContent.startsWith(prefix)", arg=wallet.address[:6])
+    expect(buyer.locator("#walletBtn")).to_contain_text(wallet.address[:6], timeout=45000)
     print("Testnet wallet paired", wallet.address, flush=True)
     fund(wallet.address)
     buyer.locator("#buy").click()
@@ -159,15 +159,10 @@ def checkout(browser, wallet):
 
 def confirm_in_storefront(page, payment):
     link = page.locator("#receipt")
-    buy = page.locator("#buy")
-    deadline = time.monotonic() + 75
-    while not link.is_visible() and time.monotonic() < deadline:
-        # CSS uppercases the label for display. text_content reads the underlying text.
-        if buy.is_enabled() and buy.text_content() == "Check transaction":
-            buy.click()
-        page.wait_for_timeout(1000)
     expected = "https://testnet.xrpl.org/transactions/" + payment
-    assert link.is_visible() and link.get_attribute("href") == expected, page.locator("#message").inner_text()
+    expect(link).to_have_attribute("href", expected, timeout=100000)
+    assert link.is_visible()
+
 
 
 def check_saved_receipt(browser, record):
@@ -182,10 +177,20 @@ def check_saved_receipt(browser, record):
     # Restore exactly the public transaction pointer saved by the checkout before its first receipt check.
     page.add_init_script("localStorage.setItem('coolbears.xrpl.pending.Testnet', " +
                          json.dumps(json.dumps(pending)) + ")")
+    # Interrupt the first read after reopening the tab. The site must recover without a second click.
+    interrupted = []
+    def interrupt_first(route):
+        interrupted.append(True)
+        route.fulfill(status=503, json={"error": "Temporarily unavailable"})
+    page.route("**/xrpl/api/receipt?*", interrupt_first, times=1)
+    writes = []
+    page.on("request", lambda req: writes.append(req.url)
+            if req.method == "POST" and "/xrpl/api/" in req.url else None)
     with page.expect_response(lambda r: r.url.startswith(SITE + "/xrpl/api/receipt?") and r.status == 200,
                               timeout=75000) as response:
         page.goto(SITE + "/#mint", wait_until="domcontentloaded")
         confirm_in_storefront(page, sale["payment"])
+    assert interrupted == [True] and not writes
     receipt = response.value.json()
     assert (receipt["state"], receipt["hash"], receipt["token"]) == ("complete", sale["payment"], sale["token"])
     assert page.evaluate("JSON.parse(localStorage.getItem('coolbears.xrpl.pending.Testnet'))") is None

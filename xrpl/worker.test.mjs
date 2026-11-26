@@ -170,3 +170,45 @@ test('only the authenticated Mainnet issuer can prepare the fixed platform sign 
     assert.match((await rejected.json()).error,/HTTP 403 · код 999$/);assert.equal(submits,2);
   } finally {globalThis.fetch=original;}
 });
+
+test('an unvalidated payment is recovered or expires only with complete validated history',async t=>{
+  const buyer='raxeFiH8CN5vLAMqyKypqLByF4YzWsS8Hh', offer='A'.repeat(64);
+  const missing='B'.repeat(64), accepted='C'.repeat(64), token='D'.repeat(64);
+  const env={NETWORK:'mainnet'};
+  let closed=199, history='150-201', searched=true, rows=[], marker;
+  const record={hash:accepted,validated:true,ledger_index:198,tx_json:{
+    TransactionType:'NFTokenAcceptOffer',Account:buyer,NFTokenSellOffer:offer},
+    meta:{TransactionResult:'tesSUCCESS',AffectedNodes:[{DeletedNode:{LedgerEntryType:'NFTokenOffer',
+      LedgerIndex:offer,FinalFields:{Owner:OWNER,Amount:'10000000',Flags:1,NFTokenID:token}}}]}};
+  const lookup=t.mock.method(globalThis,'fetch',async(_url,{body})=>{
+    const {method,params:[p]}=JSON.parse(body);
+    if(method==='server_info')return Response.json({result:{info:{network_id:0,complete_ledgers:history,
+      validated_ledger:{hash:token,age:1,seq:closed}}}});
+    if(method==='tx'){
+      if(p.transaction===accepted)return Response.json({result:record});
+      if(p.min_ledger!==undefined){assert.equal(p.min_ledger,185);assert.equal(p.max_ledger,200);}
+      return Response.json({result:{status:'error',error:'txnNotFound',searched_all:p.min_ledger!==undefined && searched}});
+    }
+    assert.equal(method,'account_tx');
+    return Response.json({result:{validated:true,ledger_index_min:185,ledger_index_max:Math.min(200,closed),
+      transactions:rows,marker}});
+  });
+  const query='?buyer='+buyer+'&offer='+offer;
+  const check=async(path)=> (await request('/xrpl/api/'+path,env)).json();
+  const known='receipt'+query+'&hash='+missing+'&last=200';
+  assert.equal((await check(known)).state,'pending');
+  closed=200;searched=false;
+  assert.equal((await check(known)).state,'pending');
+  searched=true;history='150-189,191-201';
+  assert.equal((await check(known)).state,'pending');
+  history='150-201';marker='repeated';
+  assert.equal((await check(known)).state,'pending');
+  marker=undefined;
+  assert.equal((await check(known)).state,'expired');
+  assert.equal((await check('receipt'+query+'&hash='+missing)).state,'pending');
+  assert.equal((await check('reconcile'+query+'&last=200')).state,'expired');
+  rows=[{...record,hash:missing,meta:{TransactionResult:'tecFAILED_PROCESSING'}},record];
+  assert.equal((await check(known)).hash,accepted);
+  assert.equal((await check('receipt'+query+'&hash='+accepted)).state,'complete');
+  assert.ok(lookup.mock.callCount()>0);
+});
