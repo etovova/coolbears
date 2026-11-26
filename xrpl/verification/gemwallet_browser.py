@@ -165,7 +165,7 @@ def checkout(context, base, buyer, password):
             return {**settlement, "offer": reservation["id"]}
         if not requested and time.monotonic() >= connect_deadline:
             break
-        if requested and site.locator("#buy").is_enabled() and site.locator("#buy").inner_text() == "Check transaction":
+        if requested and site.locator("#buy").is_enabled() and site.locator("#buy").text_content() == "Check transaction":
             site.locator("#buy").click()
         site.wait_for_timeout(180)
     details = [(urlparse(p.url).path, p.get_by_role("button").all_text_contents()) for p in context.pages if not p.is_closed()]

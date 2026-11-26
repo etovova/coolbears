@@ -100,8 +100,7 @@ def handle_request(wallet, request, seen, purchase):
     return {"tx_json": signed}
 
 
-def checkout(browser):
-    wallet = Wallet.create()
+def checkout(browser, wallet):
     buyer = browser.new_context(locale="en-US").new_page()
     peer = browser.new_context(locale="en-US").new_page()
     seen = {}
@@ -200,7 +199,7 @@ if __name__ == "__main__":
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=os.environ.get("CHROMIUM_BIN"))
         try:
-            result = check_saved_receipt(browser, args.receipt) if args.receipt else checkout(browser)
+            result = check_saved_receipt(browser, args.receipt) if args.receipt else checkout(browser, Wallet.create())
             print(json.dumps(result, indent=2), flush=True)
         finally:
             browser.close()
