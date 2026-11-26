@@ -5,7 +5,7 @@ from pathlib import Path
 
 from playwright.sync_api import expect, sync_playwright
 
-from walletconnect_checkout import SITE, confirm_in_storefront
+from walletconnect_checkout import ISSUER, PRICE, SITE, confirm_in_storefront
 
 
 def check_gate(page):
@@ -19,7 +19,7 @@ def check_gate(page):
           return [r.status,await r.json()];
         }""", [name, post])
     http, status = endpoint("status")
-    assert http == 200 and status["network"] == "Testnet"
+    assert http == 200 and (status["network"], status["issuer"], status["price"]) == ("Testnet", ISSUER, PRICE)
     state = status["serviceState"]
     assert state in ("ready", "network-unavailable", "collection-unavailable"), state
     assert status["open"] is (state == "ready")

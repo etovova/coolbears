@@ -179,6 +179,7 @@ test('Testnet purchases require a fresh validated ledger from the journal networ
   const fresh={network_id:1,validated_ledger:{seq:22614600,hash,age:3}};
   const entry={validated:true,ledger_hash:hash,node:{LedgerEntryType:'Delegate',Account:ISSUER,
     Authorize:'rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb',
+    PreviousTxnID:'6B9024FCD521756DB7D0B351F9AD5DB3BB89BB89432DDDE00738D46BF862F24F',
     Permissions:['NFTokenMint','NFTokenCreateOffer'].map(PermissionValue=>({Permission:{PermissionValue}}))}};
   const observed=[];
   const state=(info,grant)=>inspectTestnet(async(method,params)=>{
@@ -186,6 +187,7 @@ test('Testnet purchases require a fresh validated ledger from the journal networ
     a.equal(method,'ledger_entry');a.equal(params.ledger_hash,hash);return grant;
   });
   a.equal(await state(fresh,entry),'ready');
+  a.equal(await state(fresh,{...entry,node:{...entry.node,PreviousTxnID:'D'.repeat(64)}}),'collection-unavailable');
   for(const info of [{...fresh,network_id:0},{...fresh,validated_ledger:{...fresh.validated_ledger,age:60}},
     {...fresh,validated_ledger:{...fresh.validated_ledger,age:null}}]){
     observed.length=0;a.equal(await state(info,entry),'network-unavailable');a.deepEqual(observed,['server_info']);

@@ -24,7 +24,7 @@ export async function inspectTestnet(call = rpc, postResetGrant) {
     if (grant.error === 'entryNotFound') return 'collection-unavailable';
     if (!grant.validated || grant.ledger_hash !== ledger.hash) return 'network-unavailable';
     const node = grant.node;
-    if (postResetGrant !== undefined && node?.PreviousTxnID !== postResetGrant) return 'collection-unavailable';
+    if (node?.PreviousTxnID !== (postResetGrant ?? archivedGrant)) return 'collection-unavailable';
     const rights = node?.Permissions?.map(p => p.Permission?.PermissionValue);
     if (node?.LedgerEntryType !== 'Delegate' || node.Account !== ISSUER || node.Authorize !== delegate ||
         rights?.length !== 2 || !rights.includes('NFTokenMint') || !rights.includes('NFTokenCreateOffer'))

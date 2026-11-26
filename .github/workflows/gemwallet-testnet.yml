@@ -20,4 +20,9 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install 'playwright==1.56.0' 'xrpl-py==5.2.0'
       - run: python -m playwright install --with-deps chromium
-      - run: xvfb-run -a python -u xrpl/verification/gemwallet_browser.py
+      - name: Check published transaction gate and browser receipt recovery
+        id: readiness
+        run: python -u xrpl/verification/checkout_recovery.py
+      - name: Verify installed GemWallet checkout
+        if: ${{ steps.readiness.outputs.ready == 'true' }}
+        run: xvfb-run -a python -u xrpl/verification/gemwallet_browser.py
