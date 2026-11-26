@@ -1,5 +1,7 @@
 """Buy a CoolBears Testnet NFT, then verify a direct resale between two fresh wallets."""
+import argparse
 import json
+from pathlib import Path
 import os
 import time
 
@@ -11,6 +13,7 @@ from xrpl.wallet import Wallet
 
 from walletconnect_checkout import checkout, fund
 from testnet_mint import ISSUER, PRICE, RPC, get, rpc, snapshot
+from verify_testnet_sale import verify
 
 
 def submit(wallet, **fields):
@@ -76,7 +79,7 @@ def verify_resale(primary, listing, payment):
             "buyer_fee_drops": network_fee, "listing_fee_drops": int(listing["tx_json"]["Fee"])}
 
 
-def main():
+def buy_and_resell():
     seller, buyer = Wallet.create(), Wallet.create()
     assert len({ISSUER, seller.address, buyer.address}) == 3
     with sync_playwright() as playwright:
@@ -96,8 +99,20 @@ def main():
               if n.get("CreatedNode", {}).get("LedgerEntryType") == "NFTokenOffer"]
     assert offer_fields(offer["NewFields"], seller.address, buyer.address, primary["token"])
     payment = submit(buyer, TransactionType="NFTokenAcceptOffer", NFTokenSellOffer=offer["LedgerIndex"])
-    print(json.dumps(verify_resale(primary, listing, payment), indent=2), flush=True)
+    return verify_resale(primary, listing, payment)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--receipt", type=Path, help="Verify an existing Testnet resale without signing")
+    args = parser.parse_args()
+    if args.receipt:
+        record = json.loads(args.receipt.read_text())
+        primary = verify(record["mint"], record["primary_purchase"])
+        listing = get("tx", transaction=record["sell_offer_transaction"])
+        payment = get("tx", transaction=record["resale"])
+        result = verify_resale(primary, listing, payment)
+        assert all(record[k] == value for k, value in result.items()), "Saved settlement differs from the ledger"
+    else:
+        result = buy_and_resell()
+    print(json.dumps(result, indent=2), flush=True)

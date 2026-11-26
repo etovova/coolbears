@@ -21,6 +21,8 @@ permissions:
 concurrency: coolbears-walletconnect-testnet
 jobs:
   checkout:
+    env:
+      CHECK_RESALE: ${{ inputs.resale || (github.event_name == 'push' && github.ref_name == 'xrpl/royalty-testnet-check') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -33,11 +35,14 @@ jobs:
       - run: python -m pip install 'playwright==1.56.0' 'xrpl-py==5.2.0'
       - run: python -m playwright install --with-deps chromium
       - name: Verify published checkout
-        if: ${{ github.ref_name != 'xrpl/royalty-testnet-check' && !inputs.resale && (inputs.new_purchase || hashFiles('xrpl/verification/walletconnect-testnet-sale.json') == '') }}
+        if: ${{ env.CHECK_RESALE != 'true' && (inputs.new_purchase || hashFiles('xrpl/verification/walletconnect-testnet-sale.json') == '') }}
         run: python -u xrpl/verification/walletconnect_checkout.py
       - name: Reopen the saved receipt and verify settlement
-        if: ${{ github.ref_name != 'xrpl/royalty-testnet-check' && !inputs.resale && !inputs.new_purchase && hashFiles('xrpl/verification/walletconnect-testnet-sale.json') != '' }}
+        if: ${{ env.CHECK_RESALE != 'true' && !inputs.new_purchase && hashFiles('xrpl/verification/walletconnect-testnet-sale.json') != '' }}
         run: python -u xrpl/verification/walletconnect_checkout.py --receipt xrpl/verification/walletconnect-testnet-sale.json
       - name: Verify primary sale and secondary royalties
-        if: ${{ inputs.resale || (github.event_name == 'push' && github.ref_name == 'xrpl/royalty-testnet-check') }}
+        if: ${{ env.CHECK_RESALE == 'true' && (inputs.resale || hashFiles('xrpl/verification/testnet-resale.json') == '') }}
         run: python -u xrpl/verification/testnet_resale.py
+      - name: Recheck recorded royalty settlement
+        if: ${{ env.CHECK_RESALE == 'true' && !inputs.resale && hashFiles('xrpl/verification/testnet-resale.json') != '' }}
+        run: python -u xrpl/verification/testnet_resale.py --receipt xrpl/verification/testnet-resale.json
