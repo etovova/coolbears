@@ -1,0 +1,24 @@
+name: Mobile wallet links on the published storefronts
+on:
+  workflow_dispatch:
+  push:
+    branches: [xrpl/mobile-wallet-handoff]
+    paths:
+      - .github/workflows/mobile-wallet-links.yml
+      - xrpl/verification/mobile_wallet_links.py
+permissions:
+  contents: read
+jobs:
+  mobile-pairing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'playwright==1.56.0'
+      - run: python -m playwright install --with-deps chromium
+      - run: python -u xrpl/verification/mobile_wallet_links.py
