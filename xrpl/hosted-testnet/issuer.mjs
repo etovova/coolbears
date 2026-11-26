@@ -1,11 +1,13 @@
 import {encode} from 'ripple-binary-codec';
 import {signingFields, signOrder} from './delegate.mjs';
-import {assert, bytes, hex, ID, ISSUER, json, METADATA, PRICE, utf8} from './common.mjs';
+import {assert, bytes, hex, ID, ISSUER, json, PRICE, utf8} from './common.mjs';
 import {entry, matchOffer, newOffer, read, removal, rpc, snapshot} from './ledger.mjs';
 import {Journal, initialize} from './journal.mjs';
-import {inspectTestnet} from './readiness.mjs';
+import {mintMetadata} from '../worker.mjs';
+import {RESET_HASH, testnetState} from './readiness.mjs';
 import {challenge, proof, validIdentity} from './proof.mjs';
 
+const journalName = ISSUER + ':' + RESET_HASH;
 const waiting = () => json({state:'preparing'},202);
 export class MintJournal {
   constructor(ctx,env,afterReset = false) {
@@ -13,7 +15,8 @@ export class MintJournal {
     this.env=env;
     this.queue=Promise.resolve();
     this.queued=0;
-    ctx.blockConcurrencyWhile(() => initialize(ctx.storage,env.CHECKPOINT,afterReset));
+    const resetObject = ctx.id && env.JOURNAL && ctx.id.equals(env.JOURNAL.idFromName(journalName));
+    ctx.blockConcurrencyWhile(() => initialize(ctx.storage,env.CHECKPOINT,afterReset || resetObject));
     this.journal=new Journal(ctx.storage);
   }
   async fetch(req) {
@@ -57,9 +60,11 @@ export class MintJournal {
       fields={TransactionType:'NFTokenCancelOffer',NFTokenOffers:[row.offer]};
     } else {
       assert(row.phase === 'held' && row.n >= 0 && row.n < 10000);
-      fields=row.token ? {TransactionType:'NFTokenCreateOffer',Flags:1,NFTokenID:row.token} :
-        {TransactionType:'NFTokenMint',Flags:8,TransferFee:7000,NFTokenTaxon:20270201,
-          URI:hex(utf8(METADATA+'/xrpl/metadata/'+String(row.n).padStart(4,'0')+'.json'))};
+      if (row.token) fields={TransactionType:'NFTokenCreateOffer',Flags:1,NFTokenID:row.token};
+      else {
+        const metadata=mintMetadata(row.n,(ledger.close+946684800)*1000,this.env.REVEALED_METADATA_CID);
+        fields={TransactionType:'NFTokenMint',Flags:metadata.flags,TransferFee:7000,NFTokenTaxon:20270201,URI:hex(utf8(metadata.uri))};
+      }
       Object.assign(fields,{Amount:PRICE,Destination:row.buyer,Expiration:ledger.close+600});
     }
     const signer=signingFields(fields.TransactionType,this.env.TESTNET_DELEGATE_PUBLIC_KEY);
@@ -192,12 +197,11 @@ export default {
       const data=await req.json();
       const namespace = env.RESET_JOURNAL ?? env.JOURNAL;
       assert(!(env.JOURNAL && env.RESET_JOURNAL),'Ambiguous Testnet journal configuration');
-      if (env.RESET_JOURNAL && u.pathname !== '/receipt') {
-        const serviceState = ID.test(env.TESTNET_GRANT_HASH)
-          ? await inspectTestnet(rpc,env.TESTNET_GRANT_HASH) : 'collection-unavailable';
+      if (u.pathname !== '/receipt') {
+        const serviceState = await testnetState();
         if (serviceState !== 'ready') return json({state:'maintenance',serviceState},503);
       }
-      const actor=namespace.get(namespace.idFromName(ISSUER));
+      const actor=namespace.get(namespace.idFromName(journalName));
       if (u.pathname==='/receipt')
         return actor.fetch('https://journal.internal/receipt',{method:'POST',body:JSON.stringify(data)});
       if (!validIdentity(data)) return json({error:'Invalid wallet or order'},400);

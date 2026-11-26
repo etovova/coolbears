@@ -12,6 +12,11 @@
       "Permission": {
         "PermissionValue": "NFTokenCreateOffer"
       }
+    },
+    {
+      "Permission": {
+        "PermissionValue": "NFTokenModify"
+      }
     }
   ]
 }

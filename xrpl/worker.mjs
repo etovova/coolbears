@@ -1,5 +1,25 @@
 import {authenticatedAccount} from './hosted-testnet/xaman.mjs';
 export const REVEAL_AT = Date.parse('2027-02-01T00:00:00Z');
+export const HIDDEN_ROOT = 'bafybeia6ru6nvpgyzbab7gnp4ne7l7652s4q5mk4cvqh7evump5ifcf7eu';
+function publishedRoot(root) {
+  return typeof root === 'string' && /^bafybei[a-z2-7]{52}$/.test(root) && root !== HIDDEN_ROOT;
+}
+export function mintMetadata(slot, time, finalRoot) {
+  if (!Number.isSafeInteger(slot) || slot < 0 || slot >= 10000 || !Number.isFinite(time))
+    throw Error('Invalid mint slot or ledger time');
+  const revealed = time >= REVEAL_AT;
+  if (revealed && !publishedRoot(finalRoot)) throw Error('Verified reveal metadata is required');
+  const root = revealed ? finalRoot : HIDDEN_ROOT;
+  return {flags:revealed ? 8 : 24,uri:'ipfs://'+root+'/'+String(slot).padStart(4,'0')+'.json'};
+}
+export function eligibleMetadata(flags,uri,origin,time,finalRoot) {
+  let prefixes=[];
+  if (flags === 24) prefixes=['ipfs://'+HIDDEN_ROOT+'/'];
+  if (flags === 8) prefixes=[origin+'/xrpl/metadata/'];
+  if ((flags === 8 || flags === 24) && time >= REVEAL_AT && publishedRoot(finalRoot))
+    prefixes.push('ipfs://'+finalRoot+'/');
+  return prefixes.some(prefix => uri.startsWith(prefix) && /^\d{4}\.json$/.test(uri.slice(prefix.length)));
+}
 export const PRICE = '10000000';
 export const TAXON = 20270201;
 export const OWNER = 'ra7rAR24tKDsbmaJmikRjgCpoPZtFHsaJr';
@@ -86,7 +106,7 @@ function decodeURI(hex) {
   if (!/^(?:[0-9a-fA-F]{2}){1,256}$/.test(hex)) return '';
   return new TextDecoder().decode(Uint8Array.from(hex.match(/../g),c=>parseInt(c,16)));
 }
-async function quote(net, buyer, origin, wanted) {
+async function quote(net, buyer, origin, wanted, finalRoot) {
   const ledger=await snapshot(net);
   const l=await rpc(net,'ledger',{ledger_hash:ledger.hash,transactions:false});
   if (!l.validated || l.ledger.ledger_hash!==ledger.hash) throw Error('Invalid ledger');
@@ -108,10 +128,9 @@ async function quote(net, buyer, origin, wanted) {
   return await objects(net,'account_nfts',{},ledger,page=>{
     for (const token of page.account_nfts) {
       const offer=offers.get(token.NFTokenID);
-      if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.Flags!==8 || token.TransferFee!==7000) continue;
+      if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.TransferFee!==7000) continue;
       const uri=decodeURI(token.URI);
-      const prefix=origin+'/xrpl/metadata/';
-      if (!uri.startsWith(prefix) || !/^\d{4}\.json$/.test(uri.slice(prefix.length))) continue;
+      if (!eligibleMetadata(token.Flags,uri,origin,(close+946684800)*1000,finalRoot)) continue;
       return {id:offer.index,token:token.NFTokenID,price:PRICE,ledger:ledger.seq,validThrough:ledger.seq+15};
     }
   }) || null;
@@ -226,6 +245,10 @@ async function metadata(env,path,origin,now) {
     external_url:origin+'/xrpl/?slot='+slot+'#rarity',properties:{category:'image',files:[{uri:image,type:'image/png'}],
       collection_size:10000,top_percent:row.rarity.rank/100,rarity:row.rarity}});
 }
+function ownerSigningReady(env) {
+  return Boolean(env.XAMAN_CLIENT_ID && env.XAMAN_DELEGATION_API_KEY && env.XAMAN_API_SECRET &&
+    env.XAMAN_DELEGATION_API_KEY !== env.XAMAN_CLIENT_ID);
+}
 async function ownerStatus(env) {
   const tx = await (await retrieve(env,'authorize.json')).json();
   const net = network(env);
@@ -235,8 +258,13 @@ async function ownerStatus(env) {
     page.account_objects.find(item => item.Account === tx.Account && item.Authorize === tx.Authorize));
   const granted = entry ? entry.Permissions.map(p => p.Permission.PermissionValue).sort() : [];
   const expected = tx.Permissions.map(p => p.Permission.PermissionValue).sort();
-  const state = !entry ? 'absent' : JSON.stringify(granted) === JSON.stringify(expected) ? 'active' : 'different';
-  return {state,ledger:ledger.seq,tx,signingReady:Boolean(env.XAMAN_CLIENT_ID && env.XAMAN_API_SECRET)};
+  let state = 'absent';
+  if (entry) {
+    state = 'different';
+    if (JSON.stringify(granted) === JSON.stringify(expected)) state = 'active';
+    else if (JSON.stringify(granted) === JSON.stringify(['NFTokenCreateOffer','NFTokenMint'])) state = 'upgrade';
+  }
+  return {state,ledger:ledger.seq,tx,signingReady:ownerSigningReady(env)};
 }
 
 async function createOwnerRequest(request,env) {
@@ -255,16 +283,16 @@ async function createOwnerRequest(request,env) {
   }
   const auth = request.headers.get('Authorization');
   if (!auth) return json({error:'Войди через Xaman кошельком эмитента.'},401);
-  if (!env.XAMAN_API_SECRET || !env.XAMAN_CLIENT_ID)
-    return json({error:'На сервере CoolBears ещё не настроен API Secret Xaman.'},503);
+  if (!ownerSigningReady(env))
+    return json({error:'На сервере CoolBears требуется настроить отдельное серверное приложение Xaman для делегирования.'},503);
   if (!await authenticatedAccount(auth,env.XAMAN_CLIENT_ID,OWNER,'MAINNET'))
     return json({error:'Войди через Xaman кошельком эмитента в основной сети.'},401);
   const {state,ledger,tx} = await ownerStatus(env);
-  if (state !== 'absent') return json({state},409);
+  if (state !== 'absent' && state !== 'upgrade') return json({state},409);
   const back = 'https://coolbears-nfts.com/xrpl/owner/';
   const upstream = await fetch('https://xumm.app/api/v1/platform/payload',{
     method:'POST',redirect:'manual',signal:AbortSignal.timeout(15000),
-    headers:{'X-API-Key':env.XAMAN_CLIENT_ID,'X-API-Secret':env.XAMAN_API_SECRET,'Content-Type':'application/json'},
+    headers:{'X-API-Key':env.XAMAN_DELEGATION_API_KEY,'X-API-Secret':env.XAMAN_API_SECRET,'Content-Type':'application/json'},
     body:JSON.stringify({txjson:{...tx,Fee:'12',LastLedgerSequence:ledger+70},
       options:{submit:true,expire:3,force_network:'MAINNET',signers:[OWNER],return_url:{web:back,app:back}}})
   });
@@ -345,7 +373,7 @@ export async function handle(request,env,now=Date.now()) {
         result=await receipt(net,hash,id,buyer,Number(url.searchParams.get('last')));
       } else {
         if (env.SALES_OPEN!=='yes') return json({error:'Sales closed'},409);
-        const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id);
+        const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id,env.REVEALED_METADATA_CID);
         result=q?json(q):json({error:'No eligible offer'},404);
       }
     } else return response('','text/plain',404);

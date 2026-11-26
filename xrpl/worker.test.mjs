@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {handle,REVEAL_AT,OWNER} from './worker.mjs';
+import {handle,REVEAL_AT,OWNER,HIDDEN_ROOT,mintMetadata,eligibleMetadata} from './worker.mjs';
 const host='https://preview.invalid';
 const request=(path,env={},when=REVEAL_AT-1,method='GET')=>handle(new Request(host+path,{method}),env,when);
 test('the canonical domain publishes its Mainnet issuer as a CORS-readable TOML file',async()=>{
@@ -81,8 +81,8 @@ test('the first issuer draft matches the storefront and creates no sell offer',a
   assert.equal(draft.Account,OWNER);
   assert.equal(draft.NFTokenTaxon,TAXON);
   assert.equal(draft.TransferFee,7000);
-  assert.equal(draft.Flags,8);
-  assert.equal(Buffer.from(draft.URI,'hex').toString(),'https://coolbears-nfts.com/xrpl/metadata/0000.json');
+  assert.equal(draft.Flags,24);
+  assert.equal(Buffer.from(draft.URI,'hex').toString(),'ipfs://'+HIDDEN_ROOT+'/0000.json');
 });
 
 test('the original rarity report appears at the reveal boundary',async()=>{
@@ -122,7 +122,7 @@ test('only the authenticated Mainnet issuer can prepare the fixed platform sign 
   const client='617d091e-46b6-4918-b5c6-da929d661070', jwt='Bearer mock.token.value';
   const {readFile}=await import('node:fs/promises');
   const template=JSON.parse(await readFile(new URL('./launch/mainnet-signer/authorize.json',import.meta.url)));
-  const env={XAMAN_CLIENT_ID:client,XAMAN_API_SECRET:'for-local-test-only',ASSETS:{fetch:async()=>Response.json(template)}};
+  const env={XAMAN_CLIENT_ID:client,XAMAN_DELEGATION_API_KEY:'server-only-fixture',XAMAN_API_SECRET:'for-local-test-only',ASSETS:{fetch:async()=>Response.json(template)}};
   const send=(extra={},bindings=env)=>handle(new Request(base+path,{method:'POST',headers:{Origin:base,Authorization:jwt},...extra}),bindings);
   const original=globalThis.fetch;
   let submits=0,profileNetwork='MAINNET',account=OWNER,granted=[],audience=client,upstreamError=false;
@@ -131,7 +131,7 @@ test('only the authenticated Mainnet issuer can prepare the fixed platform sign 
     if(url==='https://xumm.app/api/v1/platform/payload'){
       submits++;
       assert.equal(options.headers['X-API-Secret'],env.XAMAN_API_SECRET);
-      assert.equal(options.headers['X-API-Key'],client);
+      assert.equal(options.headers['X-API-Key'],env.XAMAN_DELEGATION_API_KEY);
       assert.equal(options.headers.Authorization,undefined);
       assert.equal(options.redirect,'manual');
       assert.deepEqual(JSON.parse(options.body),{
@@ -158,16 +158,23 @@ test('only the authenticated Mainnet issuer can prepare the fixed platform sign 
     assert.equal((await send({body:'{}'})).status,400);
     assert.equal((await send({},{...env,XAMAN_API_SECRET:undefined})).status,503);
     assert.equal((await send({body:''},{...env,XAMAN_API_SECRET:undefined})).status,503);
+    assert.equal((await send({},{...env,XAMAN_DELEGATION_API_KEY:client})).status,503);
     profileNetwork='TESTNET';assert.equal((await send()).status,401);profileNetwork='MAINNET';
     account=template.Authorize;assert.equal((await send()).status,401);account=OWNER;
     audience=id;assert.equal((await send()).status,401);audience=client;
     granted=[{Account:OWNER,Authorize:template.Authorize,Permissions:template.Permissions}];
     assert.equal((await (await send()).json()).state,'active');
     granted[0].Permissions=[];assert.equal((await (await send()).json()).state,'different');
-    assert.equal(submits,0);granted=[];
+    assert.equal(submits,0);
+    granted[0].Permissions=template.Permissions.slice(0,2);
+    const upgrade=await (await handle(new Request(base+'/xrpl/owner/status'),env)).json();
+    assert.equal(upgrade.state,'upgrade');
+    assert.deepEqual(upgrade.tx.Permissions.map(p=>p.Permission.PermissionValue),['NFTokenMint','NFTokenCreateOffer','NFTokenModify']);
+    assert.equal((await send()).status,200);
+    granted=[];
     assert.deepEqual(await (await send()).json(),{id,url:'https://xumm.app/sign/'+id});
     upstreamError=true;const rejected=await send();assert.equal(rejected.status,502);
-    assert.match((await rejected.json()).error,/HTTP 403 · код 999$/);assert.equal(submits,2);
+    assert.match((await rejected.json()).error,/HTTP 403 · код 999$/);assert.equal(submits,3);
   } finally {globalThis.fetch=original;}
 });
 
@@ -211,4 +218,24 @@ test('an unvalidated payment is recovered or expires only with complete validate
   assert.equal((await check(known)).hash,accepted);
   assert.equal((await check('receipt'+query+'&hash='+accepted)).state,'complete');
   assert.ok(lookup.mock.callCount()>0);
+});
+
+test('all 10000 mint URIs pass the sale verifier only with the correct flag, root and phase',()=>{
+  const origin='https://coolbears-nfts.com', final='bafybei'+'a'.repeat(52);
+  for (let slot=0;slot<10000;slot++) {
+    const number=String(slot).padStart(4,'0');
+    const hidden=mintMetadata(slot,REVEAL_AT-1,final);
+    assert.deepEqual(hidden,{flags:24,uri:'ipfs://'+HIDDEN_ROOT+'/'+number+'.json'});
+    assert.ok(eligibleMetadata(hidden.flags,hidden.uri,origin,REVEAL_AT-1,final));
+    assert.equal(eligibleMetadata(8,hidden.uri,origin,REVEAL_AT-1,final),false);
+    const revealed=mintMetadata(slot,REVEAL_AT,final);
+    assert.equal(revealed.flags,8);
+    assert.ok(eligibleMetadata(8,revealed.uri,origin,REVEAL_AT,final));
+    assert.equal(eligibleMetadata(8,revealed.uri,origin,REVEAL_AT-1,final),false);
+  }
+  assert.throws(()=>mintMetadata(0,REVEAL_AT,HIDDEN_ROOT));
+  assert.throws(()=>mintMetadata(0,REVEAL_AT));
+  assert.throws(()=>mintMetadata(10000,REVEAL_AT-1));
+  assert.ok(eligibleMetadata(8,origin+'/xrpl/metadata/0000.json',origin,REVEAL_AT-1));
+  assert.equal(eligibleMetadata(24,'ipfs://'+HIDDEN_ROOT+'/../0000.json',origin,REVEAL_AT-1),false);
 });
