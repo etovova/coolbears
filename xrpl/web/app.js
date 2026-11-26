@@ -72,6 +72,11 @@ const text=i=>copy[lang][i];
 const objKey=()=> 'coolbears.xrpl.order.'+status.network;
 const txKey=()=> 'coolbears.xrpl.pending.'+status.network;
 const mintPilot=()=>status?.network==='Testnet' && ['single-slot','collection'].includes(status.mintMode) && (location.hostname==='127.0.0.1' || (status.mintMode==='collection' && location.origin==='https://testnet.coolbears-nfts.com'));
+const testMintCopy={
+ en:{mintText:'On Testnet you can buy one NFT at a time.',mintFeeNote:'Each NFT costs 10 test XRP plus the Testnet transaction fee.',button:'Mint · 10 test XRP'},
+ ru:{mintText:'В тестовой сети можно купить один NFT за раз.',mintFeeNote:'Один NFT стоит 10 тестовых XRP плюс комиссия тестовой сети.',button:'Минт · 10 тестовых XRP'},
+ zh:{mintText:'在测试网上每次可购买 1 个 NFT。',mintFeeNote:'每个 NFT 的价格为 10 测试 XRP，另加测试网交易费。',button:'铸造 · 10 测试 XRP'}
+};
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
 function salesLabel(){
  if(status?.serviceState==='network-unavailable')
@@ -103,15 +108,17 @@ function render(){
  el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
  buy.disabled=busy || !status || (!status.open && !pending);
  buy.textContent=pending?text(2):!status?text(8):!status.open?salesLabel():
-   mintPilot()?'Mint · 10 test XRP':order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
+   mintPilot()?testMintCopy[lang].button:order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
  el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):salesLabel()):'';
  el('qty').disabled=busy||!!pending||!!order||mintPilot();el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
 }
 function language(){
  document.documentElement.lang=lang;
  updateRarityLanguage?.(lang);
+ const overrides=mintPilot()?testMintCopy[lang]:{};
  for(const node of document.querySelectorAll('[data-i18n]')){
-   const value=translations[lang][node.dataset.i18n];if(!value)continue;
+   const key=node.dataset.i18n;
+   const value=overrides[key] ?? translations[lang][key];if(!value)continue;
    node.replaceChildren();
    value.split(/<br\s*\/?>/i).forEach((part,i)=>{if(i)node.append(document.createElement('br'));node.append(document.createTextNode(part));});
  }
@@ -368,7 +375,7 @@ function scheduleRanking(){
  wake();
 }
 language();
-try{status=await api('status');scheduleRanking();pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;
+try{status=await api('status');language();scheduleRanking();pending=storage.get(txKey());order=storage.get(objKey());if(order)el('qty').value=order.target;
  if(status.xamanClientId){
    const login=await xaman.finishLogin(status);
    const user=login || (storage.get('coolbears.xrpl.wallet')==='xaman' && xaman.session(status));

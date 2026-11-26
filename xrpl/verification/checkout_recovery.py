@@ -20,6 +20,18 @@ def check_gate(page):
         }""", [name, post])
     http, status = endpoint("status")
     assert http == 200 and (status["network"], status["issuer"], status["price"]) == ("Testnet", ISSUER, PRICE)
+    quantities = {"en": "one NFT at a time", "ru": "один NFT за раз", "zh": "每次可购买 1 个 NFT"}
+    fees = {"en": "10 test XRP", "ru": "10 тестовых XRP", "zh": "10 测试 XRP"}
+    original_language = page.locator("html").get_attribute("lang")
+    for language, quantity in quantities.items():
+        page.locator(f"[data-lang={language}]").click()
+        expect(page.locator("[data-i18n=mintText]")).to_contain_text(quantity)
+        expect(page.locator("[data-i18n=mintFeeNote]")).to_contain_text(fees[language])
+        expect(page.locator("#qty")).to_have_value("1")
+        expect(page.locator("#plus")).to_be_disabled()
+        if status["open"]:
+            expect(page.locator("#buy")).to_contain_text(fees[language])
+    page.locator(f"[data-lang={original_language}]").click()
     state = status["serviceState"]
     assert state in ("ready", "network-unavailable", "collection-unavailable"), state
     assert status["open"] is (state == "ready")
