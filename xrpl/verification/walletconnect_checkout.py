@@ -1,4 +1,5 @@
 """Buy one NFT on the published Testnet site using an independent WalletConnect peer."""
+import argparse
 import hashlib
 import json
 import os
@@ -147,18 +148,9 @@ def checkout(browser):
         peer.evaluate("""async ({topic, id, result}) => await peer.respond({
             topic, response:{id, jsonrpc:'2.0', result}})""", {"topic": req["topic"], "id": req["id"], "result": response})
         print("WalletConnect accepted", "purchase" if purchase else "reservation proof", flush=True)
-    deadline = time.monotonic() + 55
-    while time.monotonic() < deadline:
-        if seen.get("receipt", {}).get("state") == "complete":
-            break
-        buy = buyer.locator("#buy")
-        if buy.is_enabled() and buy.inner_text() == "Check transaction":
-            buy.click()
-        buyer.wait_for_timeout(1200)
-    receipt = seen.get("receipt", {})
-    assert receipt.get("state") == "complete" and receipt["hash"] == payment
-    buyer.locator("#receipt").wait_for(state="visible")
-    assert buyer.locator("#receipt").get_attribute("href") == "https://testnet.xrpl.org/transactions/" + payment
+    confirm_in_storefront(buyer, payment)
+    receipt = seen["receipt"]
+    assert receipt["state"] == "complete" and receipt["hash"] == payment
     assert peer.evaluate("requests.length") == 0
     settlement = verify(seen["mint"]["mint"], payment)
     assert settlement["buyer"] == wallet.address and settlement["token"] == receipt["token"]
@@ -166,10 +158,49 @@ def checkout(browser):
             "network": "XRPL Testnet", "site": SITE}
 
 
+def confirm_in_storefront(page, payment):
+    link = page.locator("#receipt")
+    buy = page.locator("#buy")
+    deadline = time.monotonic() + 75
+    while not link.is_visible() and time.monotonic() < deadline:
+        # CSS uppercases the label for display. text_content reads the underlying text.
+        if buy.is_enabled() and buy.text_content() == "Check transaction":
+            buy.click()
+        page.wait_for_timeout(1000)
+    expected = "https://testnet.xrpl.org/transactions/" + payment
+    assert link.is_visible() and link.get_attribute("href") == expected, page.locator("#message").inner_text()
+
+
+def check_saved_receipt(browser, record):
+    sale = json.loads(record.read_text())
+    settlement = verify(sale["mint"], sale["payment"])
+    assert all(sale[key] == value for key, value in settlement.items())
+    tx = get("tx", transaction=sale["payment"])["tx_json"]
+    assert tx["NFTokenSellOffer"] == sale["offer"]
+    pending = {"network": "Testnet", "buyer": sale["buyer"], "offer": sale["offer"],
+               "hash": sale["payment"], "last": tx["LastLedgerSequence"]}
+    page = browser.new_context(locale="en-US").new_page()
+    # Restore exactly the public transaction pointer saved by the checkout before its first receipt check.
+    page.add_init_script("localStorage.setItem('coolbears.xrpl.pending.Testnet', " +
+                         json.dumps(json.dumps(pending)) + ")")
+    with page.expect_response(lambda r: r.url.startswith(SITE + "/xrpl/api/receipt?") and r.status == 200,
+                              timeout=75000) as response:
+        page.goto(SITE + "/#mint", wait_until="domcontentloaded")
+        confirm_in_storefront(page, sale["payment"])
+    receipt = response.value.json()
+    assert (receipt["state"], receipt["hash"], receipt["token"]) == ("complete", sale["payment"], sale["token"])
+    assert page.evaluate("JSON.parse(localStorage.getItem('coolbears.xrpl.pending.Testnet'))") is None
+    return settlement
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--receipt", type=Path, help="Reopen an existing Testnet receipt without making a purchase")
+    args = parser.parse_args()
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=os.environ.get("CHROMIUM_BIN"))
         try:
-            print(json.dumps(checkout(browser), indent=2), flush=True)
+            result = check_saved_receipt(browser, args.receipt) if args.receipt else checkout(browser)
+            print(json.dumps(result, indent=2), flush=True)
         finally:
             browser.close()

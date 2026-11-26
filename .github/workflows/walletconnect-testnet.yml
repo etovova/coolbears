@@ -1,6 +1,11 @@
 name: WalletConnect purchase on XRPL Testnet
 on:
   workflow_dispatch:
+    inputs:
+      new_purchase:
+        description: Make a fresh 10 test XRP purchase
+        type: boolean
+        default: false
   push:
     branches: [xrpl/walletconnect-testnet-check]
     paths:
@@ -22,4 +27,9 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install 'playwright==1.56.0' 'xrpl-py==5.2.0'
       - run: python -m playwright install --with-deps chromium
-      - run: python -u xrpl/verification/walletconnect_checkout.py
+      - name: Verify published checkout
+        if: ${{ inputs.new_purchase || hashFiles('xrpl/verification/walletconnect-testnet-sale.json') == '' }}
+        run: python -u xrpl/verification/walletconnect_checkout.py
+      - name: Reopen the saved receipt and verify settlement
+        if: ${{ !inputs.new_purchase && hashFiles('xrpl/verification/walletconnect-testnet-sale.json') != '' }}
+        run: python -u xrpl/verification/walletconnect_checkout.py --receipt xrpl/verification/walletconnect-testnet-sale.json
