@@ -3,16 +3,17 @@ import {signingFields, signOrder} from './delegate.mjs';
 import {assert, bytes, hex, ID, ISSUER, json, METADATA, PRICE, utf8} from './common.mjs';
 import {entry, matchOffer, newOffer, read, removal, rpc, snapshot} from './ledger.mjs';
 import {Journal, initialize} from './journal.mjs';
+import {inspectTestnet} from './readiness.mjs';
 import {challenge, proof, validIdentity} from './proof.mjs';
 
 const waiting = () => json({state:'preparing'},202);
 export class MintJournal {
-  constructor(ctx,env) {
+  constructor(ctx,env,afterReset = false) {
     this.ctx=ctx;
     this.env=env;
     this.queue=Promise.resolve();
     this.queued=0;
-    ctx.blockConcurrencyWhile(() => initialize(ctx.storage,env.CHECKPOINT));
+    ctx.blockConcurrencyWhile(() => initialize(ctx.storage,env.CHECKPOINT,afterReset));
     this.journal=new Journal(ctx.storage);
   }
   async fetch(req) {
@@ -47,7 +48,7 @@ export class MintJournal {
     const j=this.journal;
     const root=(await read('account_info',ledger,{account:ISSUER})).account_data;
     const expected=j.first('SELECT (SELECT previous FROM setup)+COUNT(mint) AS n FROM slot').n;
-    assert(root.Account === ISSUER && root.MintedNFTokens === expected,'Issuer inventory changed');
+    assert(root.Account === ISSUER && (root.MintedNFTokens ?? 0) === expected,'Issuer inventory changed');
     const fee=(await rpc('fee')).drops.open_ledger_fee;
     assert(/^(?:[1-9]\d?|100)$/.test(fee),'Testnet fee is above the limit');
     let fields;
@@ -177,6 +178,11 @@ export class MintJournal {
     return json({state:'open',id:prior.offer,token:prior.token,mint:prior.mint,slot:prior.n});
   }
 }
+// Cloudflare allocates a distinct namespace for each SQLite Durable Object class.
+export class ResetMintJournal extends MintJournal {
+  constructor(ctx,env) { super(ctx,env,true); }
+}
+
 export default {
   async fetch(req,env) {
     try {
@@ -184,7 +190,14 @@ export default {
       if (u.origin !== 'https://orders.internal' || !['/mint','/challenge','/xaman-challenge','/receipt'].includes(u.pathname) || req.method !== 'POST')
         return json({error:'Unknown endpoint'},404);
       const data=await req.json();
-      const actor=env.JOURNAL.get(env.JOURNAL.idFromName(ISSUER));
+      const namespace = env.RESET_JOURNAL ?? env.JOURNAL;
+      assert(!(env.JOURNAL && env.RESET_JOURNAL),'Ambiguous Testnet journal configuration');
+      if (env.RESET_JOURNAL && u.pathname !== '/receipt') {
+        const serviceState = ID.test(env.TESTNET_GRANT_HASH)
+          ? await inspectTestnet(rpc,env.TESTNET_GRANT_HASH) : 'collection-unavailable';
+        if (serviceState !== 'ready') return json({state:'maintenance',serviceState},503);
+      }
+      const actor=namespace.get(namespace.idFromName(ISSUER));
       if (u.pathname==='/receipt')
         return actor.fetch('https://journal.internal/receipt',{method:'POST',body:JSON.stringify(data)});
       if (!validIdentity(data)) return json({error:'Invalid wallet or order'},400);

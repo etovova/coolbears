@@ -1,16 +1,22 @@
 import {assert, ID} from './common.mjs';
 
-// Only settled orders may be imported into a new namespace. Subsequent starts always use durable storage.
-export async function initialize(storage, bootstrap) {
-  const db = storage.sql;
-  db.exec('CREATE TABLE IF NOT EXISTS setup(previous INTEGER NOT NULL)');
-  if (db.exec('SELECT previous FROM setup').toArray().length) return;
+async function readCheckpoint(bootstrap) {
   const decoded = Uint8Array.from(atob(bootstrap), c => c.charCodeAt(0));
   const stream = new Blob([decoded]).stream().pipeThrough(new DecompressionStream('deflate'));
   const snapshot = await new Response(stream).json();
   const {orders,slot,signed,setup} = snapshot;
   assert(setup.length === 1 && setup[0].previous === 3 && orders.length === 4 && signed.length === 4 && slot.length === 7);
   assert(orders.every(o => o.phase === 'sold' && ID.test(o.payment)) && signed.every(t => t.result === 'tesSUCCESS'));
+  return snapshot;
+}
+
+export async function initialize(storage, bootstrap, afterReset = false) {
+  const db = storage.sql;
+  db.exec('CREATE TABLE IF NOT EXISTS setup(previous INTEGER NOT NULL)');
+  if (db.exec('SELECT previous FROM setup').toArray().length) return;
+  const {orders,slot,signed,setup} = afterReset
+    ? {orders:[],slot:[],signed:[],setup:[{previous:0}]}
+    : await readCheckpoint(bootstrap);
   storage.transactionSync(() => {
     db.exec(`CREATE TABLE slot(n INTEGER PRIMARY KEY CHECK(n BETWEEN 0 AND 9999),state TEXT NOT NULL,
       token TEXT UNIQUE,mint TEXT UNIQUE);`);

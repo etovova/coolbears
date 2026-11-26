@@ -7,7 +7,7 @@ import {newOffer} from './ledger.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {deflateSync} from 'node:zlib';
 import {initialize,Journal} from './journal.mjs';
-import signer, {MintJournal} from './issuer.mjs';
+import signer, {MintJournal, ResetMintJournal} from './issuer.mjs';
 import {signingFields, signOrder} from './delegate.mjs';
 import {encode,decode} from 'ripple-binary-codec';
 
@@ -36,10 +36,14 @@ test('mint requires a single personal 10 XRP sell offer',()=>{
   }
 });
 
-test('restores completed orders once and reuses released inventory',async()=>{
+function newStorage() {
   const db=new DatabaseSync(':memory:');
-  const storage={sql:{exec(sql,...args){const stmt=db.prepare(sql);const rows=stmt.all(...args);return {toArray:()=>rows};}},
+  return {sql:{exec(sql,...args){const stmt=db.prepare(sql);const rows=stmt.all(...args);return {toArray:()=>rows};}},
     transactionSync(fn){db.exec('BEGIN');try{const val=fn();db.exec('COMMIT');return val;}catch(e){db.exec('ROLLBACK');throw e;}}};
+}
+
+test('restores completed orders once and reuses released inventory',async()=>{
+  const storage=newStorage();
   const hash=i=>i.toString(16).padStart(64,'0').toUpperCase();
   const slot=Array.from({length:7},(_,n)=>({n,state:n<3?'previous':'sold',token:n<3?null:hash(n),mint:n<3?null:hash(n+10)}));
   const orders=slot.slice(3).map(({n})=>({id:'old'+n,buyer:'buyer'+n,n,phase:'sold',expires:0,offer:hash(n+20),ledger:12,payment:hash(n+30)}));
@@ -51,6 +55,19 @@ test('restores completed orders once and reuses released inventory',async()=>{
   await initialize(storage,null);
   j.close(r,null);
   a.equal(j.claim('another','next',500).n,7);
+
+  const freshStorage=newStorage();
+  const ctx={storage:freshStorage,blockConcurrencyWhile(fn){this.ready=fn();}};
+  const fresh=new ResetMintJournal(ctx,{}).journal;
+  await ctx.ready;
+  a.equal(fresh.order('old6'),undefined);
+  a.equal(fresh.claim('another','new-test-order',600).n,0);
+  const restarted=new ResetMintJournal(ctx,{}).journal;
+  await ctx.ready;
+  a.equal(restarted.order('new-test-order').n,0);
+  a.equal(j.order('old6').payment,hash(36));
+  a.equal(j.order('next').phase,'held');
+  a.equal(j.order('new-test-order'),undefined);
 });
 
 
@@ -178,4 +195,37 @@ test('Testnet purchases require a fresh validated ledger from the journal networ
   a.equal(await state(fresh,{...entry,validated:false}),'network-unavailable');
   a.equal(await state(fresh,{...entry,node:{...entry.node,Permissions:[]}}),'collection-unavailable');
   a.equal(await inspectTestnet(async()=>{throw Error('Offline')}),'network-unavailable');
+});
+
+
+test('reset signer requires the new validated grant before opening its namespace', async()=>{
+  const fresh={network_id:1,validated_ledger:{seq:9500,age:2,hash:'C'.repeat(64)}};
+  const hash='D'.repeat(64);
+  const grant={validated:true,ledger_hash:fresh.validated_ledger.hash,node:{LedgerEntryType:'Delegate',
+    Account:ISSUER,Authorize:'rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb',PreviousTxnID:hash,
+    Permissions:['NFTokenMint','NFTokenCreateOffer'].map(PermissionValue=>({Permission:{PermissionValue}}))}};
+  const call=async method=>method==='server_info'?{info:fresh}:grant;
+  a.equal(await inspectTestnet(call,hash),'ready');
+  a.equal(await inspectTestnet(call),'collection-unavailable');
+  a.equal(await inspectTestnet(call,'E'.repeat(64)),'collection-unavailable');
+  a.equal(await inspectTestnet(call,''),'collection-unavailable');
+  const env={RESET_JOURNAL:{idFromName(){a.fail('opened journal before grant')}}};
+  const req=new Request('https://orders.internal/mint',{method:'POST',body:'{}'});
+  a.equal((await signer.fetch(req,env)).status,503);
+});
+
+test('first mint allows an omitted zero NFT counter and rejects an inventory mismatch',async t=>{
+  const ledger={seq:10000,hash:'5'.repeat(64)};
+  const methods=[];
+  t.mock.method(globalThis,'fetch',async (_url,options)=>{
+    const {method}=JSON.parse(options.body);
+    methods.push(method);
+    const result=method==='account_info'?{status:'success',validated:true,ledger_hash:ledger.hash,
+      account_data:{Account:ISSUER,Sequence:9360}}:{status:'success',drops:{open_ledger_fee:'200'}};
+    return Response.json({result});
+  });
+  const stage=expected=>MintJournal.prototype.stage.call({journal:{first:()=>({n:expected})}},{},ledger);
+  await a.rejects(stage(0),/fee is above/);
+  await a.rejects(stage(1),/inventory changed/);
+  a.deepEqual(methods,['account_info','fee','account_info']);
 });

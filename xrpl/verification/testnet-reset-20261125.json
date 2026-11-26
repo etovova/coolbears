@@ -1,0 +1,46 @@
+{
+  "checked_utc_date": "2026-11-26",
+  "network": "XRPL Testnet",
+  "network_id": 1,
+  "reset_notice": "https://xrpl.org/blog/2026/testnet-devnet-reset",
+  "validated_ledger": {
+    "index": 9418,
+    "hash": "3A0F22236D398D433F8D2F217458A143A95B557B00EE03276D3747E9174725C0",
+    "nodes": ["https://s.altnet.rippletest.net:51234/", "https://testnet.xrpl-labs.com/"],
+    "funding": [
+      {
+        "role": "issuer",
+        "account": "rEoKftiFRwknRDkbV2zURNc6KmhJoBxtaC",
+        "balance_drops": "100000000",
+        "transaction": "158729634E0190F379EE1331360941A886FFDBF8800E285B1379FF8582825CA3",
+        "ledger": 9360
+      },
+      {
+        "role": "delegate",
+        "account": "rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb",
+        "balance_drops": "100000000",
+        "transaction": "3930ECF80A092372C58F7AA51E92BE62ED34A72BA8AD0EE6C96EDD0B32E3EA25",
+        "ledger": 9363
+      }
+    ],
+    "delegation_index": "BB7AD2FF1EC03CCF55838F8ADCE85681323765EED15D050312D3E0D923F181BF",
+    "delegation_result": "entryNotFound"
+  },
+  "unsigned_testnet_simulation": {
+    "ledger_index": 9451,
+    "engine_result": "tesSUCCESS",
+    "applied": false,
+    "tx_json": {
+      "TransactionType": "DelegateSet",
+      "Account": "rEoKftiFRwknRDkbV2zURNc6KmhJoBxtaC",
+      "Authorize": "rERVPWnVB94yk6szLGFpSdxkjwg5oJJ8mb",
+      "Permissions": [
+        {"Permission": {"PermissionValue": "NFTokenMint"}},
+        {"Permission": {"PermissionValue": "NFTokenCreateOffer"}}
+      ]
+    }
+  },
+  "testnet_storefront": {"open": false, "serviceState": "collection-unavailable"},
+  "walletconnect_purchase_attempted": false,
+  "mainnet_read_only": {"ledger": 108581449, "sales_open": false, "issuer_delegations": []}
+}
