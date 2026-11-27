@@ -1,6 +1,6 @@
 export default {
   "en": {
-    "mintFeeNote": "10 XRP per NFT plus the network fee. Your wallet confirms each purchase separately.",
+    "mintFeeNote": "10 XRP per NFT plus the network fee.",
     "navMint": "Mint",
     "navReveal": "Reveal",
     "navCollection": "Collection",
@@ -22,7 +22,7 @@ export default {
     "disclaimer5": "JUST BEARS. JUST ART. JUST FOR FUN.",
     "mintKicker": "PRIMARY MINT",
     "mintTitle": "MINT COOLBEARS",
-    "mintText": "Choose 1–50 NFTs. Confirm each NFT separately in your wallet.",
+    "mintText": "Choose up to 50 NFTs per order. Xaman groups up to 8 NFTs per confirmation. Other wallets confirm one NFT at a time.",
     "mintNoteLine": "NFTs are tradable immediately after mint.",
     "quantity": "QUANTITY",
     "total": "NFT PRICE",
@@ -65,7 +65,7 @@ export default {
     "privacy": "Privacy"
   },
   "ru": {
-    "mintFeeNote": "10 XRP за NFT плюс комиссия сети. Каждая покупка подтверждается в кошельке отдельно.",
+    "mintFeeNote": "10 XRP за NFT плюс комиссия сети.",
     "navMint": "Минт",
     "navReveal": "Раскрытие",
     "navCollection": "Коллекция",
@@ -87,7 +87,7 @@ export default {
     "disclaimer5": "ПРОСТО МЕДВЕДИ. ПРОСТО АРТ. ПРОСТО ДЛЯ УДОВОЛЬСТВИЯ.",
     "mintKicker": "ПЕРВИЧНЫЙ МИНТ",
     "mintTitle": "МИНТ COOLBEARS",
-    "mintText": "Выберите от 1 до 50 NFT. Подтвердите каждый NFT отдельно в кошельке.",
+    "mintText": "Выберите до 50 NFT за заказ. В Xaman за один раз можно подтвердить до 8 NFT. В остальных кошельках — по одному.",
     "mintNoteLine": "NFT можно перепродавать сразу после минта.",
     "quantity": "КОЛИЧЕСТВО",
     "total": "СТОИМОСТЬ NFT",
@@ -130,7 +130,7 @@ export default {
     "privacy": "Конфиденциальность"
   },
   "zh": {
-    "mintFeeNote": "每个 NFT 的价格为 10 XRP，另加网络费用。请逐笔确认。",
+    "mintFeeNote": "每个 NFT 的价格为 10 XRP，另加网络费用。",
     "navMint": "铸造",
     "navReveal": "揭晓",
     "navCollection": "系列",
@@ -152,7 +152,7 @@ export default {
     "disclaimer5": "只是熊。只是艺术。只是为了好玩。",
     "mintKicker": "首次铸造",
     "mintTitle": "铸造 COOLBEARS",
-    "mintText": "可选择 1 至 50 个 NFT，在钱包中逐个确认。",
+    "mintText": "每个订单最多可选 50 个 NFT。Xaman 每次最多确认 8 个 NFT，其他钱包每次确认 1 个。",
     "mintNoteLine": "NFT 铸造后即可立即交易。",
     "quantity": "数量",
     "total": "NFT 价格",

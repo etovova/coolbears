@@ -1,0 +1,54 @@
+{
+  "network": "isolated standalone XRPL",
+  "serverVersion": "3.4.1",
+  "peers": 0,
+  "buyerSignatures": "disposable local buyer",
+  "quantity": 50,
+  "sellerReceivedDrops": 500000000,
+  "buyerPaidDrops": 500000640,
+  "batches": [
+    {
+      "quantity": 8,
+      "ledger": 31,
+      "hash": "8DA721F710EEF1831FB22251D7787D5472F26BB9240CDC3AEADAA8E55669A06A",
+      "feeDrops": 100
+    },
+    {
+      "quantity": 8,
+      "ledger": 32,
+      "hash": "956930E94754354F0387C19276AA3A637BD2D9524DC14E3268D565A671823F41",
+      "feeDrops": 100
+    },
+    {
+      "quantity": 8,
+      "ledger": 33,
+      "hash": "52774360D20DFEF40E6796CDEB392B4A67A0C38970D21801198E26EAA2B82C0C",
+      "feeDrops": 100
+    },
+    {
+      "quantity": 8,
+      "ledger": 34,
+      "hash": "8C6560B4CC3CAECC0A0E46C3EC8CF5146191DB605967B2E995A7F15CF416A02D",
+      "feeDrops": 100
+    },
+    {
+      "quantity": 8,
+      "ledger": 35,
+      "hash": "8368F6F13021B4A4966553CE3DD6014A2DC010CE8A602AF1B1E830CD3E86BC9D",
+      "feeDrops": 100
+    },
+    {
+      "quantity": 8,
+      "ledger": 36,
+      "hash": "907D870CB78CC27CF8E129089E49EF5360173A75BE2B244E0B1672094005860E",
+      "feeDrops": 100
+    },
+    {
+      "quantity": 2,
+      "ledger": 37,
+      "hash": "0368D2929581CB535CDEA218793B3804E684FA03FEEBB6C894306FFCA3C8DF0C",
+      "feeDrops": 40
+    }
+  ],
+  "signedMobileWalletTest": false
+}
