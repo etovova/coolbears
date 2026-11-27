@@ -65,14 +65,33 @@ export function signingUrl(id, url) {
   return allowed.some(prefix => url === prefix + id) ? url : null;
 }
 
+export function confirmationPlan(remaining, grouped) {
+  if (!Number.isInteger(remaining) || remaining<0 || remaining>50) throw Error('Invalid order quantity');
+  const limit=grouped ? 8 : 1;
+  return {next:Math.min(remaining,limit), confirmations:Math.ceil(remaining/limit)};
+}
+
+export function purchaseTransaction(pending) {
+  const common={Account:pending.buyer,LastLedgerSequence:pending.last};
+  if (!pending.offers) return {TransactionType:'NFTokenAcceptOffer',...common,NFTokenSellOffer:pending.offer};
+  const {offers,sequence,fee}=pending;
+  if (!address.test(pending.buyer) || !Number.isSafeInteger(pending.last) || pending.last<16 ||
+      !Array.isArray(offers) || offers.length<2 || offers.length>8 || new Set(offers).size!==offers.length ||
+      offers.some(id=>!/^([A-F0-9]{64})$/.test(id)) || !Number.isSafeInteger(sequence) || sequence<1 ||
+      sequence+offers.length>0xffffffff || !/^[1-9]\d*$/.test(fee) || Number(fee)>(offers.length+2)*100)
+    throw Error('Invalid NFT batch');
+  return {TransactionType:'Batch',...common,Flags:65536,Sequence:sequence,Fee:fee,
+    RawTransactions:offers.map((id,i)=>({RawTransaction:{TransactionType:'NFTokenAcceptOffer',
+      Account:pending.buyer,NFTokenSellOffer:id,Flags:0x40000000,Fee:'0',SigningPubKey:'',Sequence:sequence+i+1}}))};
+}
+
 export async function createOfferSignature(config, pending) {
   const user = session(config);
   if (!user || user.account !== pending.buyer) throw Error('Xaman · Sign in again');
   const result = await request(payloadApi, {method:'POST',
     headers:{Authorization:'Bearer ' + user.token,'Content-Type':'application/json'},
     body:JSON.stringify({
-      txjson:{TransactionType:'NFTokenAcceptOffer', Account:user.account,
-        NFTokenSellOffer:pending.offer, LastLedgerSequence:pending.last},
+      txjson:purchaseTransaction(pending),
       options:{submit:true, expire:1, force_network:config.network.toUpperCase(), signers:[user.account],
         return_url:{web:callback(), app:callback()}}
     })

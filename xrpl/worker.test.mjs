@@ -239,3 +239,68 @@ test('all 10000 mint URIs pass the sale verifier only with the correct flag, roo
   assert.ok(eligibleMetadata(8,origin+'/xrpl/metadata/0000.json',origin,REVEAL_AT-1));
   assert.equal(eligibleMetadata(24,'ipfs://'+HIDDEN_ROOT+'/../0000.json',origin,REVEAL_AT-1),false);
 });
+
+test('each Xaman order of 1 to 50 NFTs uses the fewest valid confirmations',async()=>{
+  const {confirmationPlan,purchaseTransaction}=await import('./web/xaman.mjs');
+  for (let total=1;total<=50;total++) {
+    let remaining=total;
+    const sizes=[];
+    while (remaining) {
+      const {next,confirmations}=confirmationPlan(remaining,true);
+      assert.equal(confirmations,Math.ceil(remaining/8));
+      assert.deepEqual(confirmationPlan(remaining,false),{next:1,confirmations:remaining});
+      const ids=Array.from({length:next},(_,i)=>(i+1).toString().padStart(64,'0'));
+      const pending={buyer:OWNER,last:201,sequence:50,fee:String(10*(next+2))};
+      const tx=purchaseTransaction(next===1 ? {...pending,offer:ids[0]} : {...pending,offers:ids});
+      assert.equal(tx.TransactionType,next===1?'NFTokenAcceptOffer':'Batch');
+      if(next>1){
+        assert.equal(tx.Flags,65536);
+        assert.deepEqual(tx.RawTransactions.map(({RawTransaction:r})=>
+          [r.Account,r.NFTokenSellOffer,r.Sequence,r.Fee,r.SigningPubKey,r.Flags]),
+          ids.map((id,i)=>[OWNER,id,51+i,'0','',0x40000000]));
+      }
+      sizes.push(next);remaining-=next;
+    }
+    if(total===50)assert.deepEqual(sizes,[8,8,8,8,8,8,2]);
+    assert.equal(sizes.length,Math.ceil(total/8));
+  }
+  const offers=['A'.repeat(64),'B'.repeat(64)];
+  for(const extra of [{fee:'9999999'},{offers:[offers[0],offers[0]]},{sequence:-1},{last:0}])
+    assert.throws(()=>purchaseTransaction({offers,buyer:OWNER,sequence:1,last:900,fee:'40',...extra}));
+});
+
+test('a batch receipt requires a validated parent and its exact NFT sales, even after refresh',async t=>{
+  const {purchaseTransaction}=await import('./web/xaman.mjs');
+  const hash='F'.repeat(64), offers=['A'.repeat(64),'B'.repeat(64)], issuer=OWNER;
+  const buyer='rDsbeomae4FXwgQTJp9Rs64Qg9vDiTCdBv', sequence=10, last=115;
+  const parent={hash,ledger_index:108,meta:{TransactionResult:'tesSUCCESS'},tx_json:
+    purchaseTransaction({offers,buyer,sequence,last,fee:'40'})};
+  const children=offers.map((id,i)=>({hash:String(i+1).repeat(64),ledger_index:108,
+    tx_json:parent.tx_json.RawTransactions[i].RawTransaction,meta:{ParentBatchID:hash,TransactionResult:'tesSUCCESS',
+      AffectedNodes:[{DeletedNode:{LedgerEntryType:'NFTokenOffer',LedgerIndex:id,FinalFields:{
+        NFTokenID:String(i+3).repeat(64),Owner:issuer,Flags:1,Amount:'10000000'}}}]}}));
+  let pages=[[parent],[...children]],closed=110,coverage='1-200',validated=true,ledgerHash='8'.repeat(64);
+  t.mock.method(globalThis,'fetch',async(_url,opts)=>{
+    const {method,params:[p]}=JSON.parse(opts.body);
+    if(method==='server_info')return Response.json({result:{info:{network_id:0,complete_ledgers:coverage,
+      validated_ledger:{seq:closed,age:1,hash:ledgerHash}}}});
+    assert.equal(method,'account_tx');
+    const n=p.marker?.page ?? 0;
+    return Response.json({result:{validated,ledger_index_min:100,ledger_index_max:Math.min(closed,last),
+      transactions:pages[n],...(n+1<pages.length && {marker:{page:n+1}})}});
+  });
+  const fetchReceipt=async(tail='')=>(await request('/xrpl/api/batch-receipt?buyer='+buyer+
+    '&offers='+offers.join(',')+'&sequence='+sequence+'&last='+last+tail,{NETWORK:'mainnet'})).json();
+  assert.deepEqual(await fetchReceipt(),{state:'complete',hash,ledger:108,count:2});
+  assert.equal((await fetchReceipt('&hash='+'E'.repeat(64))).state,'mismatch');
+  pages=[[parent]];assert.equal((await fetchReceipt()).state,'failed');
+  coverage='109-120';assert.equal((await fetchReceipt()).state,'pending');
+  pages=[[parent,children[0]]];assert.equal((await fetchReceipt()).state,'pending');
+  coverage='1-200';pages=[[parent,...children.map(c=>({...c,meta:{...c.meta,ParentBatchID:'D'.repeat(64)}}))]];
+  assert.equal((await fetchReceipt()).state,'failed');
+  pages=[[parent,...structuredClone(children)]];pages[0][1].meta.AffectedNodes[0].DeletedNode.FinalFields.Amount='1';
+  assert.equal((await fetchReceipt()).state,'mismatch');
+  pages=[[]];assert.equal((await fetchReceipt()).state,'pending');
+  closed=last;assert.equal((await fetchReceipt()).state,'expired');
+  validated=false;assert.equal((await fetchReceipt()).state,'pending');
+});

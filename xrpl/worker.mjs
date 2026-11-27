@@ -106,7 +106,7 @@ function decodeURI(hex) {
   if (!/^(?:[0-9a-fA-F]{2}){1,256}$/.test(hex)) return '';
   return new TextDecoder().decode(Uint8Array.from(hex.match(/../g),c=>parseInt(c,16)));
 }
-async function quote(net, buyer, origin, wanted, finalRoot) {
+async function quote(net, buyer, origin, wanted, finalRoot, count = 1) {
   const ledger=await snapshot(net);
   const l=await rpc(net,'ledger',{ledger_hash:ledger.hash,transactions:false});
   if (!l.validated || l.ledger.ledger_hash!==ledger.hash) throw Error('Invalid ledger');
@@ -125,15 +125,29 @@ async function quote(net, buyer, origin, wanted, finalRoot) {
   }
   if (!selection.length) return null;
   const offers=new Map(selection.map(row=>[row.NFTokenID,row]));
-  return await objects(net,'account_nfts',{},ledger,page=>{
+  const rows = [];
+  await objects(net,'account_nfts',{},ledger,page=>{
     for (const token of page.account_nfts) {
       const offer=offers.get(token.NFTokenID);
       if (!offer || token.Issuer!==net.issuer || token.NFTokenTaxon!==TAXON || token.TransferFee!==7000) continue;
       const uri=decodeURI(token.URI);
       if (!eligibleMetadata(token.Flags,uri,origin,(close+946684800)*1000,finalRoot)) continue;
-      return {id:offer.index,token:token.NFTokenID,price:PRICE,ledger:ledger.seq,validThrough:ledger.seq+15};
+      rows.push({id:offer.index,token:token.NFTokenID,price:PRICE,ledger:ledger.seq,validThrough:ledger.seq+15});
+      offers.delete(token.NFTokenID);
+      if (rows.length === count) return true;
     }
-  }) || null;
+  });
+  if (rows.length !== count) return null;
+  if (count === 1) return rows[0];
+  const account = await rpc(net,'account_info',{account:buyer,ledger_hash:ledger.hash});
+  if (!account.validated || account.ledger_hash!==ledger.hash || account.account_data?.Account!==buyer)
+    throw Error('Unverified buyer account');
+  const sequence = account.account_data.Sequence;
+  const feeInfo = await rpc(net,'fee',{});
+  const unit = Number(feeInfo.drops.open_ledger_fee);
+  if (!Number.isSafeInteger(sequence) || sequence<1 || sequence+count>0xffffffff ||
+      !Number.isSafeInteger(unit) || unit<1 || unit>100) throw Error('Batch is temporarily unavailable');
+  return {offers:rows,sequence,fee:String((count+2)*unit),validThrough:ledger.seq+15};
 }
 async function receipt(net, hash, offer, buyer, last) {
   const tx=await rpc(net,'tx',{transaction:hash,binary:false});
@@ -193,6 +207,57 @@ async function reconcile(net,buyer,offer,last,missingHash) {
     return first>0 && first<=min && end>=last;
   });
   return ledger.seq>=last && covered ? json({state:'expired'}) : json({state:'pending'},202);
+}
+// A successful outer Batch alone does not prove that its inner purchases happened.
+async function batchReceipt(net,buyer,offers,sequence,last,expectedHash) {
+  const ledger=await snapshot(net), min=last-15, max=Math.min(last,ledger.seq);
+  const pending=()=>json({state:'pending'},202);
+  if (last>ledger.seq+16) return json({error:'Invalid ledger window'},400);
+  if (max<min) return pending();
+  const covered=ledger.completeLedgers?.split(',').some(range=>{
+    const [first,end=first]=range.split('-').map(Number);
+    return first>0 && first<=min && end>=max;
+  });
+  let parent, marker;
+  const children=[], seen=new Set();
+  do {
+    const page=await rpc(net,'account_tx',{account:buyer,ledger_index_min:min,ledger_index_max:max,forward:true,limit:200,marker});
+    if (page.validated!==true || !(page.ledger_index_min<=min && page.ledger_index_max>=max) ||
+        !Array.isArray(page.transactions)) return pending();
+    for (const item of page.transactions) {
+      const tx=item.tx_json;
+      if (!tx || tx.Account!==buyer || item.ledger_index<min || item.ledger_index>max) continue;
+      if (tx.TransactionType==='Batch' && tx.Sequence===sequence && tx.LastLedgerSequence===last &&
+          [65536,0x80010000].includes(tx.Flags) &&
+          ID.test(item.hash) &&
+          tx.RawTransactions?.length===offers.length && tx.RawTransactions.every(({RawTransaction:t},i)=>
+            t?.TransactionType==='NFTokenAcceptOffer' && t.Account===buyer && t.NFTokenSellOffer===offers[i] &&
+            t.Sequence===sequence+i+1 && !t.NFTokenBuyOffer && !t.NFTokenBrokerFee)) parent=item;
+      if (item.meta?.ParentBatchID && offers.includes(tx.NFTokenSellOffer)) children.push(item);
+    }
+    marker=page.marker;
+    if (marker) {
+      const cursor=JSON.stringify(marker);if (seen.has(cursor)) return pending();
+      seen.add(cursor);
+    }
+  } while (marker);
+  if (!parent) return ledger.seq>=last && covered ? json({state:'expired'}) : pending();
+  if (expectedHash && expectedHash!==parent.hash) return json({state:'mismatch'},409);
+  if (!parent.meta?.TransactionResult || !Number.isSafeInteger(parent.ledger_index)) return pending();
+  if (parent.meta.TransactionResult!=='tesSUCCESS') return json({state:'failed'});
+  const members=children.filter(c=>c.meta.ParentBatchID===parent.hash && c.ledger_index===parent.ledger_index);
+  if (members.length===0 && covered) return json({state:'failed'});
+  if (members.length!==offers.length) return pending();
+  const tokens=new Set();
+  for (const offer of offers) {
+    const item=members.find(c=>c.tx_json.NFTokenSellOffer===offer);
+    if (!item || !ID.test(item.hash)) return pending();
+    const proof=await transactionReceipt(net,{...item,validated:true},item.hash,offer,buyer).json();
+    if (proof.state!=='complete' || !ID.test(proof.token) || tokens.has(proof.token))
+      return json({state:'mismatch'},409);
+    tokens.add(proof.token);
+  }
+  return json({state:'complete',hash:parent.hash,ledger:parent.ledger_index,count:tokens.size});
 }
 async function openAsset(env,label,bytes) {
   const raw=Uint8Array.from(atob(env.ASSET_KEY),x=>x.charCodeAt(0));
@@ -360,6 +425,14 @@ export async function handle(request,env,now=Date.now()) {
       result=json({verified},verified?200:503);
     } else if (path==='/xrpl/api/status') {
       const net=network(env); result=json({network:net.name,issuer:net.issuer,walletConnectProjectId:/^[a-f0-9]{32}$/i.test(env.WALLETCONNECT_PROJECT_ID || '') ? env.WALLETCONNECT_PROJECT_ID : null,xamanClientId:/^[a-f\d]{8}-(?:[a-f\d]{4}-){3}[a-f\d]{12}$/i.test(env.XAMAN_CLIENT_ID || '') ? env.XAMAN_CLIENT_ID : null,open:env.SALES_OPEN==='yes',price:PRICE,serverTime:now,revealAt:new Date(REVEAL_AT).toISOString()});
+    } else if (path==='/xrpl/api/batch-receipt') {
+      const params=url.searchParams, buyer=params.get('buyer'), offers=(params.get('offers') || '').split(',');
+      const sequence=Number(params.get('sequence')), last=Number(params.get('last')), hash=params.get('hash');
+      if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(buyer || '') || offers.length<2 || offers.length>8 ||
+          new Set(offers).size!==offers.length || offers.some(id=>!ID.test(id)) ||
+          !Number.isSafeInteger(last) || last<16 || !Number.isSafeInteger(sequence) || sequence<1 ||
+          sequence+offers.length>0xffffffff || (hash!==null && !ID.test(hash))) return json({error:'Invalid batch receipt'},400);
+      result=await batchReceipt(network(env),buyer,offers,sequence,last,hash);
     } else if (path==='/xrpl/api/offer' || path==='/xrpl/api/receipt' || path==='/xrpl/api/reconcile') {
       const buyer=url.searchParams.get('buyer') || '', id=url.searchParams.get('offer');
       if (!/^r[1-9A-HJ-NP-Za-km-z]{24,34}$/.test(buyer) || (id!==null && !ID.test(id))) return json({error:'Invalid request'},400);
@@ -373,7 +446,9 @@ export async function handle(request,env,now=Date.now()) {
         result=await receipt(net,hash,id,buyer,Number(url.searchParams.get('last')));
       } else {
         if (env.SALES_OPEN!=='yes') return json({error:'Sales closed'},409);
-        const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id,env.REVEALED_METADATA_CID);
+        const count=Number(url.searchParams.get('count') ?? 1);
+        if (!Number.isInteger(count) || count<1 || count>8 || (id && count!==1)) return json({error:'Invalid offer count'},400);
+        const q=await quote(net,buyer,env.METADATA_ORIGIN || url.origin,id,env.REVEALED_METADATA_CID,count);
         result=q?json(q):json({error:'No eligible offer'},404);
       }
     } else return response('','text/plain',404);

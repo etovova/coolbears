@@ -77,6 +77,12 @@ const testMintCopy={
  ru:{mintText:'В тестовой сети можно купить один NFT за раз.',mintFeeNote:'Один NFT стоит 10 тестовых XRP плюс комиссия тестовой сети.',button:'Минт · 10 тестовых XRP'},
  zh:{mintText:'在测试网上每次可购买 1 个 NFT。',mintFeeNote:'每个 NFT 的价格为 10 测试 XRP，另加测试网交易费。',button:'铸造 · 10 测试 XRP'}
 };
+const batchCheckout=()=>wallet==='xaman' && !mintPilot() && status?.network==='Mainnet';
+const orderCopy={
+ en:{group:'NFTs in this confirmation',confirm:'Wallet confirmations',others:'other wallets',progress:'Purchased',stop:'Finish with the NFTs already purchased',short:'There are too few available offers for this group. Try again later.'},
+ ru:{group:'NFT в этом подтверждении',confirm:'Подтверждений в кошельке',others:'другие кошельки',progress:'Куплено',stop:'Завершить заказ с уже купленными NFT',short:'Для этого пакета пока недостаточно предложений. Попробуйте позже.'},
+ zh:{group:'本次确认的 NFT 数量',confirm:'钱包确认次数',others:'其他钱包',progress:'已购买',stop:'保留已购买的 NFT 并结束订单',short:'当前可售 NFT 不足，请稍后重试。'}
+};
 const quantity=()=>Math.max(1,Math.min(mintPilot()?1:50,Math.floor(Number(el('qty').value)||1)));
 function salesLabel(){
  if(status?.serviceState==='network-unavailable')
@@ -86,7 +92,22 @@ function salesLabel(){
  return text(0);
 }
 function render(){
- const q=quantity();el('qty').value=q;el('total').textContent=q*10;
+ const q=order?.target ?? quantity();el('qty').value=q;el('total').textContent=q*10;
+ const remaining=q-(order?.done || 0);
+ const grouped=order ? order.mode==='batch' : batchCheckout();
+ const {next,confirmations}=xaman.confirmationPlan(remaining,grouped);
+ const words=orderCopy[lang], plan=el('purchasePlan'), stop=el('finishOrder');
+ if(plan) {
+   const parts=order?.done ? [words.progress+' '+order.done+' / '+q] : [];
+   if(!wallet && !order && q>1 && !mintPilot() && status?.network==='Mainnet'){
+     parts.push(words.confirm+': Xaman — '+Math.ceil(q/8)+', '+words.others+' — '+q);
+   }else if(remaining>0 && (wallet || order) && q>1) {
+     parts.push(words.confirm+': '+confirmations);
+     parts.push(words.group+': '+next+' ('+next*10+' XRP)');
+   }
+   plan.textContent=parts.join(' · ');
+ }
+ if(stop){stop.hidden=!order?.done || !!pending || busy;stop.textContent=words.stop;}
  const wcButton=el('wcWallet');
  if(wcButton){
    wcButton.disabled=!status?.walletConnectProjectId || !!pairing;
@@ -108,7 +129,7 @@ function render(){
  el('walletBtn').textContent=account?account.slice(0,6)+'…'+account.slice(-4):text(3);
  buy.disabled=busy || !status || (!status.open && !pending);
  buy.textContent=pending?text(2):!status?text(8):!status.open?salesLabel():
-   mintPilot()?testMintCopy[lang].button:order && order.done>0?text(7)+' · 10 XRP':text(1)+' '+q*10+(status.network==='Testnet'?' test XRP':' XRP');
+   mintPilot()?testMintCopy[lang].button:text(1)+' '+(!wallet && !order?q:next)*10+(status.network==='Testnet'?' test XRP':' XRP');
  el('minted').textContent=status?status.network+' · '+(status.open?(status.network==='Testnet'?'TEST XRP':'XRP'):salesLabel()):'';
  el('qty').disabled=busy||!!pending||!!order||mintPilot();el('minus').disabled=el('qty').disabled||q<=1;el('plus').disabled=el('qty').disabled||q>=50;
 }
@@ -128,6 +149,11 @@ function language(){
 }
 document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{lang=b.dataset.lang;storage.set('coolbears.xrpl.language',lang);language();});
 el('minus').onclick=()=>{el('qty').value=quantity()-1;render()};el('plus').onclick=()=>{el('qty').value=quantity()+1;render()};
+if(el('finishOrder'))el('finishOrder').onclick=()=>locked(async()=>{
+ syncCheckout();
+ if(!busy && !pending && order?.done){order=null;storage.set(objKey(),null);message.textContent='';render();}
+});
+el('qty').oninput=()=>{if(el('qty').value!=='')render();};
 el('qty').onchange=render;el('backTop').onclick=()=>scrollTo({top:0,behavior:'smooth'});
 addEventListener('scroll',()=>el('backTop').classList.toggle('show',scrollY>400),{passive:true});
 async function api(name,params={},signal){
@@ -274,9 +300,12 @@ document.addEventListener('visibilitychange',()=>{
  if(!document.hidden && pending && !busy && watchingReceipt)backgroundReceipt();
 });
 async function readReceipt(){
+ const starting=pending;
+ if(!starting || !stillCurrent(starting))return;
  if(pending.xaman && !pending.hash){
    // A ledger lookup also recovers a signed transaction if the provider session expired.
    const result=await xaman.signatureResult(status,pending).catch(()=>null);
+   if(!stillCurrent(starting))return;
    if(result?.declined){
      pending=null;storage.set(txKey(),null);
      if(!order?.done){order=null;storage.set(objKey(),null);}
@@ -284,34 +313,83 @@ async function readReceipt(){
    }
    if(result?.hash){pending.hash=result.hash;storage.set(txKey(),pending);}
  }
- const {buyer,offer,last,hash}=pending;
+ const {buyer,offer,last,hash,offers,sequence}=pending;
+
  const search={buyer,offer,...(last?{last}:{})};
- let r=await api(hash?'receipt':'reconcile',hash?{...search,hash}:search);
- if(r.state==='mismatch' && hash && last)r=await api('reconcile',search);
+ let r=offers ? await api('batch-receipt',{buyer,offers:offers.join(','),sequence,last,...(hash && {hash})})
+              : await api(hash?'receipt':'reconcile',hash?{...search,hash}:search);
+ if(offers && hash && r.state==='mismatch')r=await api('batch-receipt',{buyer,offers:offers.join(','),sequence,last});
+ if(!offers && r.state==='mismatch' && hash && last)r=await api('reconcile',search);
+ if(!stillCurrent(starting))return;
  if(r.state==='pending'){message.textContent=text(5);return;}
  if(r.state==='complete'){
    const id=r.hash;const explorer=status.network==='Testnet'?'testnet.xrpl.org':'livenet.xrpl.org';
    if(mintPilot()&&status.mintMode==='collection')storage.set(requestKey(pending.buyer),null);
    receipt.href='https://'+explorer+'/transactions/'+id;receipt.hidden=false;
-   if(order && order.lastHash!==id){order.done++;order.lastHash=id;storage.set(objKey(),order);}
+   const count=offers?.length ?? 1;
+   if(offers && r.count!==count){message.textContent=text(8);return;}
+   if(order && order.lastHash!==id){
+     if(order.buyer!==buyer || order.done+count>order.target){message.textContent=text(8);return;}
+     order.done+=count;order.lastHash=id;storage.set(objKey(),order);
+   }
    message.textContent=text(6)+(order?' '+order.done+' / '+order.target:'');
    if(order && order.done>=order.target){order=null;storage.set(objKey(),null);}
- }else if(r.state==='expired'||r.state==='failed'){message.textContent=text(10);order=null;storage.set(objKey(),null);}
+ }else if(r.state==='expired'||r.state==='failed'){message.textContent=text(10);if(!order?.done){order=null;storage.set(objKey(),null);}}
  else{message.textContent=text(8);return;}
  pending=null;storage.set(txKey(),null);
 }
-buy.onclick=async()=>{
- if(busy||buy.disabled)return;busy=true;render();
+function sameRequest(a,b){
+ if(!a || !b)return !a && !b;
+ return a.buyer===b.buyer && a.last===b.last && a.offer===b.offer && a.sequence===b.sequence &&
+   String(a.offers)===String(b.offers);
+}
+function stillCurrent(request){
+ const onDisk=storage.get(txKey());
+ if(!sameRequest(request,onDisk)){syncCheckout();return false;}
+ order=storage.get(objKey());
+ return true;
+}
+function syncCheckout(){
+ pending=storage.get(txKey());
+ order=storage.get(objKey());
+}
+function locked(fn){
+ return navigator.locks ? navigator.locks.request('coolbears.checkout.'+status.network,fn) : fn();
+}
+buy.onclick=()=>locked(async()=>{
+ if(busy||buy.disabled)return;
+ const previous=pending, progress=order?.done;
+ syncCheckout();
+ if(!sameRequest(previous,pending) || progress!==order?.done){render();return;}
+ busy=true;render();
  try{
    if(pending){await check();return;}
    if(!wallet||!account){pick();return;}
    const buyer=account;if(!await connect(wallet))return;if(account!==buyer)throw Error(text(4)+' '+status.network);
    if(order && buyer!==order.buyer)throw Error('Select the wallet for this order.');
-   const q=await selectOffer(buyer);if(!q)return;
-   if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
+   const target=order?.target ?? quantity();
+   const mode=order ? order.mode : batchCheckout() && target>1 ? 'batch' : 'single';
+   if(mode==='batch' && wallet!=='xaman')throw Error('Xaman · '+text(3));
+   const {next:count}=xaman.confirmationPlan(target-(order?.done || 0),mode==='batch');
+   let q;
+   if(count>1){
+     try{q=await api('offer',{buyer,count});}catch(e){
+       if(e.message==='No eligible offer')throw Error(orderCopy[lang].short);
+       throw e;
+     }
+     if(q.offers?.length!==count || new Set(q.offers.map(o=>o.token)).size!==count ||
+        q.offers.some(o=>o.price!=='10000000' || !/^[A-F0-9]{64}$/.test(o.token) || o.validThrough!==q.validThrough))
+       throw Error(text(8));
+     pending={buyer,offers:q.offers.map(o=>o.id),sequence:q.sequence,fee:q.fee,last:q.validThrough,network:status.network};
+     try{xaman.purchaseTransaction(pending);}catch(e){pending=null;throw e;}
+   }else{
+     q=await selectOffer(buyer);if(!q)return;
+     if(q.price!=='10000000'||!/^[A-F0-9]{64}$/.test(q.id))throw Error(text(8));
+     pending={offer:q.id,buyer,last:q.validThrough,network:status.network};
+   }
    receipt.hidden=true;receipt.removeAttribute('href');
-   if(!order){order={buyer,target:quantity(),done:0};storage.set(objKey(),order);}
-   pending={offer:q.id,buyer,last:q.validThrough,network:status.network};storage.set(txKey(),pending);
+   if(!order){order={buyer,target,done:0,mode};storage.set(objKey(),order);}
+   storage.set(txKey(),pending);
    let hash;
    if(wallet==='xaman'){
      let signature;
@@ -345,7 +423,7 @@ buy.onclick=async()=>{
    busy=false;render();
    if(pending && !watchingReceipt && !pending.xaman?.id)backgroundReceipt();
  }
-};
+});
 const rankingText=()=>({en:'Ranked by final rarity score.',ru:'Места по итоговой оценке редкости.',zh:'按最终稀有度评分排名。'}[lang]);
 async function loadRanking(){
  try{
