@@ -1,0 +1,22 @@
+/* The existing brand text remains the accessible name of each link. */
+@media screen and (forced-colors: none) {
+  .nav .brand, .legal .brand, .footer-mark {
+    font-size: 0 !important;
+    letter-spacing: 0;
+    line-height: 0 !important;
+  }
+
+  .nav .brand::before, .legal .brand::before, .footer-mark::before {
+    content: "";
+    display: inline-block;
+    width: 90px;
+    height: 58px;
+    vertical-align: middle;
+    background: url("/xrpl/brand-logo.png?wordmark") left center / contain no-repeat;
+  }
+
+  .footer-mark::before { width: 120px; height: 78px; }
+  @media (max-width: 500px) {
+    .nav .brand::before { width: 62px; height: 40px; }
+  }
+}
